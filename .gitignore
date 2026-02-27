@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+backend/venv/
+*.so
+.Python
+
+# Node
+node_modules/
+frontend/build/
+frontend/dist/
+
+# Environment variables
+.env
+.env.local
+
+# Database
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads (user files)
+uploads/*
+!uploads/.gitkeep
