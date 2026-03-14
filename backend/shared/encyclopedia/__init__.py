@@ -1,4 +1,5 @@
 from .bestiary import router as bestiary_router
 from .spells import router as spells_router
+from .items import armor_router
 
-__all__ = ["bestiary_router", "spells_router"]
+__all__ = ["bestiary_router", "spells_router", "armor_router"]
