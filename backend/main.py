@@ -4,7 +4,7 @@ from shared.database import engine, Base
 from auth.routes import router as auth_router
 from gm.campaigns.routes import router as campaigns_router
 from players.characters.routes import router as characters_router
-from shared.encyclopedia import bestiary_router, spells_router, armor_router, weapons_router, adventuring_gear_router, potions_router
+from shared.encyclopedia import bestiary_router, spells_router, armor_router, weapons_router, adventuring_gear_router, potions_router, food_drink_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -30,6 +30,7 @@ app.include_router(armor_router)
 app.include_router(weapons_router)
 app.include_router(adventuring_gear_router)
 app.include_router(potions_router)
+app.include_router(food_drink_router)
 
 @app.get("/")
 def read_root():
