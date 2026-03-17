@@ -87,6 +87,18 @@ class CharacterListItem(BaseModel):
     level: int
     campaign_id: int
     
+    # Add ability scores
+    strength: int
+    dexterity: int
+    constitution: int
+    intelligence: int
+    wisdom: int
+    charisma: int
+    
+    # Add these for display
+    user_id: int
+    is_visible_to_players: bool
+    
     class Config:
         from_attributes = True
 

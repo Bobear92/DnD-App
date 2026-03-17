@@ -63,12 +63,12 @@ const loadUserAndCampaigns = async () => {
     }
   };
 
-  const handleEnterCampaign = (campaignId) => {
-    // Store selected campaign
-    localStorage.setItem('selectedCampaignId', campaignId);
-    // TODO: Navigate to main app (we'll build this later)
-    alert(`Entering campaign ${campaignId} - Main app coming soon!`);
-  };
+const handleEnterCampaign = (campaign) => {
+  // Store selected campaign data
+  localStorage.setItem('selectedCampaign', JSON.stringify(campaign));
+  // Navigate to dashboard
+  navigate('/dashboard');
+};
 
   const handleLogout = () => {
     authService.logout();
@@ -164,7 +164,7 @@ const loadUserAndCampaigns = async () => {
                 </div>
                 <div className="campaign-card-footer">
                   <button 
-                    onClick={() => handleEnterCampaign(campaign.id)}
+                    onClick={() => handleEnterCampaign(campaign)}
                     className="enter-campaign-button"
                   >
                     Enter Campaign
