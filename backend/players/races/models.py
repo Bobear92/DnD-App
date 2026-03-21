@@ -1,11 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, JSON, Boolean, DateTime, Enum as SQLEnum
 from sqlalchemy.sql import func
 from shared.database import Base
-import enum
-
-class OwnerType(enum.Enum):
-    system = "system"      # Admin-created base D&D races
-    campaign = "campaign"  # GM-created custom races
+from shared.enums import OwnerType
 
 class Race(Base):
     __tablename__ = "races"

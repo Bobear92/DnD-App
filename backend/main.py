@@ -5,6 +5,8 @@ from auth.routes import router as auth_router
 from gm import campaigns_router, npcs_router, loot_tables_router
 from players.characters.routes import router as characters_router
 from players.races import router as races_router
+from players.backgrounds import router as backgrounds_router
+from players.feats import router as feats_router
 from shared.encyclopedia import bestiary_router, spells_router, armor_router, weapons_router, adventuring_gear_router, potions_router, food_drink_router, magic_items_router
 
 # Create database tables
@@ -26,6 +28,8 @@ app.include_router(auth_router)
 app.include_router(campaigns_router)
 app.include_router(characters_router)
 app.include_router(races_router)
+app.include_router(backgrounds_router)
+app.include_router(feats_router)
 app.include_router(npcs_router)
 app.include_router(loot_tables_router)
 app.include_router(bestiary_router)

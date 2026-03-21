@@ -11,6 +11,8 @@ from gm.campaigns.campaign_tools.npcs.models import NPC
 from gm.tools.loot_tables.models import LootTable
 from players.characters.models import Character
 from players.races.models import Race
+from players.backgrounds.models import Background
+from players.feats.models import Feat
 # Import encyclopedia models
 from shared.encyclopedia.bestiary.models import Creature
 from shared.encyclopedia.spells.models import Spell
