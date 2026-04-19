@@ -5,7 +5,7 @@ A full-stack D&D campaign management app for players and Game Masters.
 Solo developer project. Currently in V1 foundation phase.
 
 - **Backend:** Python 3.12 + FastAPI — `backend/`
-- **Frontend:** React (Vite) — `frontend/` ← IN PROGRESS
+- **Frontend:** React (Vite) + Tailwind CSS v4 + shadcn/ui — `frontend/` ← IN PROGRESS
 - **Database:** PostgreSQL (`dnd_app_dev`) + SQLAlchemy ORM + Alembic migrations
 - **Auth:** JWT tokens via python-jose + bcrypt via passlib
 - **Repo:** https://github.com/Bobear92/DnD-App
@@ -264,11 +264,48 @@ Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs`
 
 ---
 
+## Frontend UI Standards (ALWAYS FOLLOW)
+
+**All frontend work MUST use Tailwind CSS + shadcn/ui. Never write custom CSS for new components.**
+
+### Tailwind CSS v4
+- Installed via `@tailwindcss/vite` plugin — no `tailwind.config.js` needed
+- Use Tailwind utility classes directly on JSX elements: `className="flex items-center gap-4 p-4"`
+- CSS variables for theming are defined in `src/index.css` (light + dark mode)
+- `cn()` helper at `@/lib/utils` — use for conditional class merging:
+  ```js
+  import { cn } from "@/lib/utils"
+  <div className={cn("base-class", isActive && "active-class")} />
+  ```
+
+### shadcn/ui
+- Components live in `src/components/ui/` after installation
+- Install new components: `npx shadcn@latest add <component>` (run from `frontend/`)
+- Common components to reach for: `Button`, `Card`, `Dialog`, `Table`, `Input`, `Label`, `Badge`, `Sheet`
+- Import path: `@/components/ui/<component>`
+- Config file: `components.json` (do not edit manually)
+- Icon library: `lucide-react` — import icons as `import { IconName } from "lucide-react"`
+
+### Path Aliases
+- `@/` resolves to `frontend/src/` — always use this for internal imports
+
+### Existing CSS Files
+- The existing `.css` files in `auth/`, `campaigns/`, `characters/`, `dashboard/`, `shared/` were written before Tailwind was added
+- When touching these pages, migrate styles to Tailwind classes and delete the old CSS file
+- Do NOT write new `.css` files for new components
+
+---
+
 ## Frontend — Current State
 
 ```
 frontend/src/
 ├── App.jsx                      # Router: /login, /campaigns, /dashboard, /characters
+├── index.css                    # Tailwind import + shadcn CSS variables (light/dark)
+├── lib/
+│   └── utils.js                 # cn() helper for class merging
+├── components/
+│   └── ui/                      # shadcn/ui components (auto-generated, do not edit)
 ├── auth/
 │   ├── pages/Login.jsx          # Login + Register (dual-mode toggle) ✅
 │   └── authService.js           # register(), login(), logout(), getCurrentUser()

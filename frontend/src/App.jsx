@@ -1,10 +1,8 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './auth/pages/Login';
 import CampaignSelection from './campaigns/pages/CampaignSelection';
 import Dashboard from './dashboard/Dashboard';
 import CharacterList from './characters/pages/CharacterList';
-import './App.css';
 
 function App() {
   return (
