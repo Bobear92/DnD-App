@@ -1,14 +1,68 @@
 # D&D RPG Application — Project Context
 
 ## What This Is
-A full-stack D&D campaign management app for players and Game Masters.
-Solo developer project. Currently in V1 foundation phase.
+A full-stack D&D campaign organizer and compendium. Users create campaigns, invite players, and manage all campaign content — with a customizable ruleset layered on top of the official D&D base compendium.
 
 - **Backend:** Python 3.12 + FastAPI — `backend/`
 - **Frontend:** React (Vite) + Tailwind CSS v4 + shadcn/ui — `frontend/` ← IN PROGRESS
 - **Database:** PostgreSQL (`dnd_app_dev`) + SQLAlchemy ORM + Alembic migrations
 - **Auth:** JWT tokens via python-jose + bcrypt via passlib
 - **Repo:** https://github.com/Bobear92/DnD-App
+
+---
+
+## User Roles
+
+### Admin (`is_admin = true`)
+- Manages the **base compendium** — the shared D&D rules as written (spells, creatures, items, races, backgrounds, feats, etc.)
+- Base compendium content is read-only for everyone else
+- Not inherently a GM — admin is a separate super-user role
+
+### Game Master (GM)
+- **Any user** can create a campaign; doing so makes them the GM of that campaign
+- A user can be GM of multiple campaigns simultaneously
+- A user can be GM of some campaigns and a player in others
+- GM permissions within a campaign:
+  - Invite and remove players
+  - Create campaign-specific content (NPCs, loot tables, locations, session notes)
+  - Override any base compendium entry for their campaign (spell text, stat blocks, item stats, race traits, etc.)
+  - Create entirely new homebrew content (custom races, spells, items, etc.) scoped to the campaign
+  - Copy custom content from one of their campaigns to another
+  - Control character and NPC visibility to players
+  - View all characters in their campaign
+
+### Player
+- Sees only campaigns they have been invited to
+- Creates and manages their own characters within a campaign
+- Sees the **campaign-modified** version of the compendium (GM overrides apply), not the raw base
+- Can have multiple characters per campaign
+- Cannot create content — requests go through the GM
+
+### Unauthenticated
+- Login and register pages only
+
+---
+
+## Content Hierarchy
+
+```
+Base Compendium (admin-managed, system-owned, D&D rules as written)
+    └── Campaign Layer (GM-managed, campaign-scoped)
+            ├── Overrides: GM modifies a system entry for this campaign
+            │   (e.g. Fireball does different damage, Goblin has extra traits)
+            ├── Homebrew additions: new spells/items/races that don't exist in base
+            └── Campaign tools: NPCs, loot tables, locations, session notes
+                    └── Players consume the merged view (campaign overrides + base)
+```
+
+**Override pattern:** For each content type, `owner_type='campaign'` entries shadow
+`owner_type='system'` entries of the same name within that campaign's context.
+When a campaign queries spells (for example), the service returns campaign overrides
+first, falling back to system entries for anything not overridden.
+
+**Content portability:** A GM can copy any of their campaign's custom/override content
+into another campaign they own. These are always copies — no shared references between
+campaigns.
 
 ---
 
@@ -40,7 +94,7 @@ backend/
 │   │       ├── magic_items/
 │   │       └── food_drink/
 │   ├── database.py              # SQLAlchemy engine + session
-│   ├── dependencies.py          # get_db, get_current_user, require_admin
+│   ├── dependencies.py          # get_db, get_current_user, require_admin, require_gm
 │   ├── security.py              # Password hashing, JWT functions
 │   ├── enums.py                 # OwnerType enum (system/campaign)
 │   └── exceptions.py
@@ -55,17 +109,41 @@ backend/
 
 ## Ownership Model
 
-Many tables support both system-wide and campaign-specific content via `OwnerType`:
+All content tables use `OwnerType` to distinguish base compendium from campaign content:
 
 ```python
 class OwnerType(enum.Enum):
-    system = "system"      # Admin-created base D&D content
-    campaign = "campaign"  # GM-created custom content for a specific campaign
+    system = "system"      # Admin-managed base compendium (D&D rules as written)
+    campaign = "campaign"  # GM-managed content scoped to a specific campaign
 ```
 
-Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`
-- System items: `owner_type='system'`, `owner_id=NULL` — visible to all
-- Campaign items: `owner_type='campaign'`, `owner_id=campaign_id` — visible to that campaign
+Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells`, `creatures`, all item tables
+- System items: `owner_type='system'`, `owner_id=NULL` — visible to all, editable by admin only
+- Campaign items: `owner_type='campaign'`, `owner_id=campaign_id` — visible to campaign members only, editable by that campaign's GM
+
+---
+
+## Business Rules (Enforce These Always)
+
+### Campaigns
+- **Any authenticated user can create a campaign** — they become the GM (`campaign_members` role `'gm'`)
+- **The GM invites players** — no self-service join for players
+- **Players see ONLY campaigns they are assigned to**
+- **Each campaign has exactly ONE GM** — the user who created it
+- **A user can be GM of multiple campaigns** and/or a player in others simultaneously
+
+### Characters
+- **Characters belong to ONE campaign** — no many-to-many
+- **A player can have multiple characters per campaign**
+- **Players see:** own characters + characters where `is_visible_to_players = true`
+- **GM sees:** ALL characters in their campaign (read-only)
+
+### Content
+- **Only admin can create/edit/delete system (`owner_type='system'`) content**
+- **Only the campaign's GM can create/edit/delete campaign (`owner_type='campaign'`) content**
+- **Players consume content but cannot create or modify it**
+- **Campaign queries return overrides first, then fall back to system entries**
+- **Content can be copied between a GM's own campaigns** — always as independent copies
 
 ---
 
@@ -116,50 +194,45 @@ loot_tables
   id, name, description, owner_type (string: 'system'/'campaign'),
   owner_id, loot_items (JSONB), created_at, updated_at
 
--- Encyclopedia (all system-only, admin-managed)
+-- Encyclopedia (system-owned; campaign overrides use same tables with owner_type='campaign')
 spells
-  id, name (unique), level, school, casting_time, range, components,
-  duration, description, classes, created_at, updated_at
+  id, name, level, school, casting_time, range, components,
+  duration, description, classes, owner_type (ENUM), owner_id, created_at, updated_at
 
 creatures
-  id, name (unique), size, type, alignment, challenge_rating, armor_class,
-  hit_points, speed, strength/dex/con/int/wis/cha, description, created_at, updated_at
+  id, name, size, type, alignment, challenge_rating, armor_class,
+  hit_points, speed, strength/dex/con/int/wis/cha, description,
+  owner_type (ENUM), owner_id, created_at, updated_at
 
 weapons
-  id, name (unique), damage, damage_type, weight, cost, weapon_category,
-  range, properties (JSON), description, created_at, updated_at
+  id, name, damage, damage_type, weight, cost, weapon_category,
+  range, properties (JSON), description, owner_type (ENUM), owner_id, created_at, updated_at
 
 armor
-  id, name (unique), armor_type, armor_class, cost, weight,
-  strength_requirement, stealth_disadvantage, description, created_at, updated_at
+  id, name, armor_type, armor_class, cost, weight,
+  strength_requirement, stealth_disadvantage, description,
+  owner_type (ENUM), owner_id, created_at, updated_at
 
 adventuring_gear
-  id, name (unique), category, cost, weight, description, created_at, updated_at
+  id, name, category, cost, weight, description,
+  owner_type (ENUM), owner_id, created_at, updated_at
 
 potions
-  id, name (unique), rarity, effect, cost, description, created_at, updated_at
+  id, name, rarity, effect, cost, description,
+  owner_type (ENUM), owner_id, created_at, updated_at
 
 magic_items
-  id, name (unique), item_type, rarity, attunement (boolean),
-  description, created_at, updated_at
+  id, name, item_type, rarity, attunement (boolean), description,
+  owner_type (ENUM), owner_id, created_at, updated_at
 
 food_drink
-  id, name (unique), category, item_type, cost, weight,
-  description, created_at, updated_at
+  id, name, category, item_type, cost, weight, description,
+  owner_type (ENUM), owner_id, created_at, updated_at
 ```
 
----
-
-## V1 Business Rules (Enforce These Always)
-
-- **Only `is_admin = true` users can create campaigns** — regular users cannot
-- **Only admin can assign players to campaigns** — no self-service join
-- **Players see ONLY campaigns they are assigned to** — cannot browse others
-- **Each campaign has exactly ONE GM** — the admin who created it
-- **Characters belong to ONE campaign** — no many-to-many in V1
-- **Players see:** own characters + characters where `is_visible_to_players = true`
-- **GM sees:** ALL characters in their campaign (read-only)
-- **Unauthenticated users:** login/register pages only
+**Note:** Encyclopedia tables (spells, creatures, items) currently have `UNIQUE` constraints on `name`
+and no `owner_type` column in the DB. These need migrations to support campaign overrides — tracked
+in "What's NOT Built Yet."
 
 ---
 
@@ -181,6 +254,10 @@ food_drink
 - `campaign_members` responses include nested user object: `{id, username, email}`
 - User info is eagerly loaded with member relationships
 
+### GM Authorization
+- A user is "GM of campaign X" if they have a `campaign_members` row with `role='gm'` for that campaign
+- `require_gm(campaign_id)` dependency checks this — do not use `require_admin` for GM actions
+
 ---
 
 ## Working API Endpoints
@@ -197,61 +274,64 @@ Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs`
 ### Campaigns
 | Method | Endpoint | Auth Required |
 |--------|----------|---------------|
-| POST | /api/gm/campaigns | Yes (admin) |
+| POST | /api/gm/campaigns | Yes (any user) |
 | GET | /api/gm/campaigns | Yes |
-| GET | /api/gm/campaigns/{id} | Yes |
-| PUT | /api/gm/campaigns/{id} | Yes (admin) |
-| DELETE | /api/gm/campaigns/{id} | Yes (admin) |
-| POST | /api/gm/campaigns/{id}/players | Yes (admin) |
-| DELETE | /api/gm/campaigns/{id}/players/{user_id} | Yes (admin) |
+| GET | /api/gm/campaigns/{id} | Yes (member) |
+| PUT | /api/gm/campaigns/{id} | Yes (GM of campaign) |
+| DELETE | /api/gm/campaigns/{id} | Yes (GM of campaign) |
+| POST | /api/gm/campaigns/{id}/players | Yes (GM of campaign) |
+| DELETE | /api/gm/campaigns/{id}/players/{user_id} | Yes (GM of campaign) |
+
+**Note:** Campaign creation and member management endpoints currently enforce `is_admin` in the DB.
+These need to be updated to enforce GM-of-campaign instead — tracked in "What's NOT Built Yet."
 
 ### Characters
 | Method | Endpoint | Auth Required |
 |--------|----------|---------------|
 | POST | /api/characters | Yes |
-| GET | /api/characters/campaign/{id} | Yes |
-| GET | /api/characters/{id} | Yes |
+| GET | /api/characters/campaign/{id} | Yes (member) |
+| GET | /api/characters/{id} | Yes (owner or GM) |
 | PUT | /api/characters/{id} | Yes (owner) |
 | DELETE | /api/characters/{id} | Yes (owner) |
-| PATCH | /api/characters/{id}/visibility | Yes (GM) |
+| PATCH | /api/characters/{id}/visibility | Yes (GM of campaign) |
 
 ### Races / Backgrounds / Feats (same pattern each)
 | Method | Endpoint | Auth Required |
 |--------|----------|---------------|
 | GET | /races | Yes |
 | GET | /races/{id} | Yes |
-| POST | /races | Yes (admin) |
-| PUT | /races/{id} | Yes (admin) |
-| DELETE | /races/{id} | Yes (admin) |
+| POST | /races | Yes (admin for system; GM for campaign-scoped) |
+| PUT | /races/{id} | Yes (admin for system; GM for campaign-scoped) |
+| DELETE | /races/{id} | Yes (admin for system; GM for campaign-scoped) |
 *(Replace `/races` with `/backgrounds` or `/feats` for those modules)*
 
 ### NPCs
 | Method | Endpoint | Auth Required |
 |--------|----------|---------------|
-| POST | /api/gm/campaigns/npcs | Yes (GM) |
-| GET | /api/gm/campaigns/npcs/campaign/{id} | Yes |
-| GET | /api/gm/campaigns/npcs/{id} | Yes |
-| PUT | /api/gm/campaigns/npcs/{id} | Yes (GM) |
-| DELETE | /api/gm/campaigns/npcs/{id} | Yes (GM) |
-| PATCH | /api/gm/campaigns/npcs/{id}/visibility | Yes (GM) |
+| POST | /api/gm/campaigns/npcs | Yes (GM of campaign) |
+| GET | /api/gm/campaigns/npcs/campaign/{id} | Yes (member) |
+| GET | /api/gm/campaigns/npcs/{id} | Yes (member) |
+| PUT | /api/gm/campaigns/npcs/{id} | Yes (GM of campaign) |
+| DELETE | /api/gm/campaigns/npcs/{id} | Yes (GM of campaign) |
+| PATCH | /api/gm/campaigns/npcs/{id}/visibility | Yes (GM of campaign) |
 
 ### Loot Tables
 | Method | Endpoint | Auth Required |
 |--------|----------|---------------|
-| POST | /api/gm/tools/loot-tables | Yes (admin/GM) |
+| POST | /api/gm/tools/loot-tables | Yes (admin for system; GM for campaign-scoped) |
 | GET | /api/gm/tools/loot-tables | Yes |
 | GET | /api/gm/tools/loot-tables/{id} | Yes |
-| PUT | /api/gm/tools/loot-tables/{id} | Yes (admin/GM) |
-| DELETE | /api/gm/tools/loot-tables/{id} | Yes (admin/GM) |
+| PUT | /api/gm/tools/loot-tables/{id} | Yes (admin for system; GM for campaign-scoped) |
+| DELETE | /api/gm/tools/loot-tables/{id} | Yes (admin for system; GM for campaign-scoped) |
 
 ### Encyclopedia (Bestiary, Spells — same pattern; Items below)
 | Method | Endpoint | Auth Required |
 |--------|----------|---------------|
 | GET | /api/encyclopedia/bestiary | Yes |
 | GET | /api/encyclopedia/bestiary/{id} | Yes |
-| POST | /api/encyclopedia/bestiary | Yes (admin) |
-| PUT | /api/encyclopedia/bestiary/{id} | Yes (admin) |
-| DELETE | /api/encyclopedia/bestiary/{id} | Yes (admin) |
+| POST | /api/encyclopedia/bestiary | Yes (admin for system; GM for campaign override) |
+| PUT | /api/encyclopedia/bestiary/{id} | Yes (admin for system; GM for campaign override) |
+| DELETE | /api/encyclopedia/bestiary/{id} | Yes (admin for system; GM for campaign override) |
 *(Replace `/bestiary` with `/spells` for spells)*
 
 ### Encyclopedia Items (same 5-method pattern for each)
@@ -310,7 +390,7 @@ frontend/src/
 │   ├── pages/Login.jsx          # Login + Register (dual-mode toggle) ✅
 │   └── authService.js           # register(), login(), logout(), getCurrentUser()
 ├── campaigns/
-│   ├── pages/CampaignSelection.jsx  # List campaigns, create modal (admin only) ✅
+│   ├── pages/CampaignSelection.jsx  # List campaigns, create modal (admin only — needs update) ⚠️
 │   └── campaignService.js
 ├── characters/
 │   ├── pages/CharacterList.jsx  # List characters, visibility toggle (GM) ✅
@@ -328,7 +408,7 @@ frontend/src/
 | Path | Component | Status |
 |------|-----------|--------|
 | `/login` | Login | ✅ Functional |
-| `/campaigns` | CampaignSelection | ✅ Functional |
+| `/campaigns` | CampaignSelection | ⚠️ Works but gated to admin — needs update |
 | `/dashboard` | Dashboard | ⚠️ Static (not fetching data) |
 | `/characters` | CharacterList | ✅ Functional |
 | `/characters/create` | — | ❌ Not built |
@@ -338,11 +418,13 @@ frontend/src/
 - Character creation and detail pages
 - NPC management UI
 - Loot table UI
-- Encyclopedia browsing/editing UI
-- Admin panels (manage races, backgrounds, feats, spells, items, creatures)
+- Encyclopedia browsing UI (players read campaign-merged view)
+- Admin panels (manage base compendium: races, backgrounds, feats, spells, items, creatures)
+- GM panels (campaign overrides + homebrew content management)
 - AuthContext and CampaignContext providers
 - Token refresh / expiration handling
-- `/gm/campaigns/:id/dashboard` and all GM views
+- `/gm/campaigns/:id/dashboard` and all GM campaign views
+- Active campaign context (switching between campaigns a user belongs to)
 
 ---
 
@@ -377,7 +459,14 @@ SECRET_KEY=your-secret-key-change-this-in-production
 
 ## What's NOT Built Yet
 
-### Backend
+### Backend — Design Gaps (Need Schema + Logic Changes)
+- Campaign creation currently requires `is_admin` — must change to allow any user
+- Campaign member management currently requires `is_admin` — must change to require GM-of-campaign
+- Encyclopedia tables (spells, creatures, all items) have no `owner_type`/`owner_id` columns and have `UNIQUE(name)` constraints — need migrations to support campaign overrides
+- `require_gm(campaign_id)` dependency not yet implemented in `shared/dependencies.py`
+- Content copy/export between a GM's campaigns not yet implemented
+
+### Backend — Features Not Yet Started
 - `gm/campaigns/campaign_tools/locations/` — Locations system
 - `gm/campaigns/campaign_tools/session_notes/` — Session notes
 - Classes system (like races/backgrounds but for character classes)

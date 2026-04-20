@@ -1,31 +1,26 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+from shared.enums import OwnerType
 
 
 class MagicItemBase(BaseModel):
-    """Base schema with common fields"""
-    
-    name: str = Field(..., min_length=1, max_length=200, description="Magic item name")
-    item_type: str = Field(..., min_length=1, max_length=100, description="Type: Magic Weapon, Magic Armor, Wondrous Item, Ring, Rod, Staff, Wand, Scroll")
-    rarity: str = Field(..., min_length=1, max_length=50, description="Rarity: Common, Uncommon, Rare, Very Rare, Legendary, Artifact")
-    
-    attunement_required: bool = Field(default=False, description="Requires attunement")
-    effect: str = Field(..., min_length=1, description="What the item does")
-    cost: Optional[str] = Field(None, max_length=50, description="Cost (some items are priceless)")
-    weight: Optional[str] = Field(None, max_length=50, description="Weight (some items are weightless)")
-    
-    description: Optional[str] = Field(None, description="Flavor text and lore")
+    name: str = Field(..., min_length=1, max_length=200)
+    item_type: str = Field(..., min_length=1, max_length=100)
+    rarity: str = Field(..., min_length=1, max_length=50)
+    attunement_required: bool = Field(default=False)
+    effect: str = Field(..., min_length=1)
+    cost: Optional[str] = Field(None, max_length=50)
+    weight: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = None
 
 
 class MagicItemCreate(MagicItemBase):
-    """Schema for creating a new magic item"""
-    pass
+    owner_type: OwnerType = OwnerType.system
+    owner_id: Optional[int] = None
 
 
 class MagicItemUpdate(BaseModel):
-    """Schema for updating a magic item - all fields optional"""
-    
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     item_type: Optional[str] = Field(None, min_length=1, max_length=100)
     rarity: Optional[str] = Field(None, min_length=1, max_length=50)
@@ -37,9 +32,9 @@ class MagicItemUpdate(BaseModel):
 
 
 class MagicItemResponse(MagicItemBase):
-    """Schema for magic item responses (includes database fields)"""
-    
     id: int
+    owner_type: OwnerType
+    owner_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

@@ -1,102 +1,62 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from shared.database import get_db
-from shared.dependencies import get_current_user, require_admin
+from shared.dependencies import get_current_user, check_content_ownership
 from auth.models import User
 from .schemas import ArmorCreate, ArmorUpdate, ArmorResponse
 from . import service
 
-
-router = APIRouter(
-    prefix="/api/encyclopedia/items/armor",
-    tags=["Encyclopedia - Items - Armor"]
-)
+router = APIRouter(prefix="/api/encyclopedia/items/armor", tags=["Encyclopedia - Items - Armor"])
 
 
-@router.post(
-    "",
-    response_model=ArmorResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create new armor"
-)
+@router.post("", response_model=ArmorResponse, status_code=status.HTTP_201_CREATED)
 def create_armor(
     armor_data: ArmorCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
-    """
-    Create new armor in the encyclopedia.
-    Admin only.
-    """
+    check_content_ownership(armor_data.owner_type, armor_data.owner_id, current_user, db)
     return service.create_armor(db, armor_data)
 
 
-@router.get(
-    "",
-    response_model=List[ArmorResponse],
-    summary="Get all armor"
-)
+@router.get("", response_model=List[ArmorResponse])
 def get_all_armor(
+    campaign_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Get all armor from the encyclopedia.
-    Available to all authenticated users.
-    Sorted by armor type, then name.
-    """
-    return service.get_all_armor(db)
+    return service.get_all_armor(db, campaign_id)
 
 
-@router.get(
-    "/{armor_id}",
-    response_model=ArmorResponse,
-    summary="Get specific armor"
-)
+@router.get("/{armor_id}", response_model=ArmorResponse)
 def get_armor(
     armor_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Get a specific armor by ID.
-    Available to all authenticated users.
-    """
     return service.get_armor_by_id(db, armor_id)
 
 
-@router.put(
-    "/{armor_id}",
-    response_model=ArmorResponse,
-    summary="Update armor"
-)
+@router.put("/{armor_id}", response_model=ArmorResponse)
 def update_armor(
     armor_id: int,
     armor_data: ArmorUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
-    """
-    Update existing armor.
-    Admin only.
-    """
+    db_armor = service.get_armor_by_id(db, armor_id)
+    check_content_ownership(db_armor.owner_type, db_armor.owner_id, current_user, db)
     return service.update_armor(db, armor_id, armor_data)
 
 
-@router.delete(
-    "/{armor_id}",
-    status_code=status.HTTP_200_OK,
-    summary="Delete armor"
-)
+@router.delete("/{armor_id}", status_code=status.HTTP_200_OK)
 def delete_armor(
     armor_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
-    """
-    Delete armor from the encyclopedia.
-    Admin only.
-    """
+    db_armor = service.get_armor_by_id(db, armor_id)
+    check_content_ownership(db_armor.owner_type, db_armor.owner_id, current_user, db)
     return service.delete_armor(db, armor_id)
