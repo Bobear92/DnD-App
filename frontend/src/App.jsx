@@ -3,6 +3,8 @@ import Login from './auth/pages/Login';
 import CampaignSelection from './campaigns/pages/CampaignSelection';
 import Dashboard from './dashboard/Dashboard';
 import CharacterList from './characters/pages/CharacterList';
+import LocationList from './locations/pages/LocationList';
+import LocationDetail from './locations/pages/LocationDetail';
 
 function App() {
   return (
@@ -12,8 +14,9 @@ function App() {
         <Route path="/campaigns" element={<CampaignSelection />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/characters" element={<CharacterList />} />
+        <Route path="/locations" element={<LocationList />} />
+        <Route path="/locations/:locationId" element={<LocationDetail />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
-        {/* We'll add more routes later */}
       </Routes>
     </Router>
   );

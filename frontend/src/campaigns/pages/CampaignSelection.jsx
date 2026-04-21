@@ -122,8 +122,8 @@ const handleEnterCampaign = (campaign) => {
           </div>
         )}
 
-        {/* Create Campaign Button (Admin only) */}
-        {user?.is_admin && (
+        {/* Create Campaign Button (any logged-in user) */}
+        {user && (
           <div className="create-campaign-section">
             <button 
               onClick={() => setShowCreateModal(true)}
@@ -145,11 +145,7 @@ const handleEnterCampaign = (campaign) => {
                 <path d="M32 8L40 24H56L44 36L48 52L32 42L16 52L20 36L8 24H24L32 8Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
               </svg>
               <h2>No Campaigns Yet</h2>
-              <p>
-                {user?.is_admin 
-                  ? "Create your first campaign to begin your adventure!"
-                  : "You haven't been assigned to any campaigns yet. Contact your Game Master."}
-              </p>
+              <p>Create your first campaign to begin your adventure, or wait to be invited by a Game Master.</p>
             </div>
           ) : (
             campaigns.map((campaign) => (

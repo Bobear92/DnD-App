@@ -243,8 +243,8 @@ in "What's NOT Built Yet."
 - Expiration: 30 minutes (configured in config.py)
 - Import: use `HTTPAuthorizationCredentials` from `fastapi.security` (NOT `HTTPAuthCredentials`)
 
-### bcrypt Warning
-- bcrypt version mismatch warning is **harmless** — password hashing works correctly, ignore it
+### bcrypt Version
+- **Pin bcrypt to 4.0.1** — bcrypt 5.x breaks passlib 1.7.4 with a `ValueError` on every hash call. `requirements.txt` should specify `bcrypt==4.0.1`. Do not upgrade.
 
 ### Character Data (JSONB)
 - `character_data` stores class-specific fields: spell slots, ki points, fighting style, etc.
@@ -282,8 +282,7 @@ Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs`
 | POST | /api/gm/campaigns/{id}/players | Yes (GM of campaign) |
 | DELETE | /api/gm/campaigns/{id}/players/{user_id} | Yes (GM of campaign) |
 
-**Note:** Campaign creation and member management endpoints currently enforce `is_admin` in the DB.
-These need to be updated to enforce GM-of-campaign instead — tracked in "What's NOT Built Yet."
+Campaign creation uses `get_current_user` (any authenticated user). Member management uses `require_campaign_gm`.
 
 ### Characters
 | Method | Endpoint | Auth Required |
@@ -380,39 +379,56 @@ These need to be updated to enforce GM-of-campaign instead — tracked in "What'
 
 ```
 frontend/src/
-├── App.jsx                      # Router: /login, /campaigns, /dashboard, /characters
+├── App.jsx                      # Router: /login, /campaigns, /dashboard, /characters, /locations/*
 ├── index.css                    # Tailwind import + shadcn CSS variables (light/dark)
 ├── lib/
 │   └── utils.js                 # cn() helper for class merging
 ├── components/
-│   └── ui/                      # shadcn/ui components (auto-generated, do not edit)
+│   └── ui/                      # shadcn/ui components: Button, Card, Dialog, Input, Label,
+│                                #   Badge, Textarea, Select, Tabs (do not edit)
 ├── auth/
 │   ├── pages/Login.jsx          # Login + Register (dual-mode toggle) ✅
-│   └── authService.js           # register(), login(), logout(), getCurrentUser()
+│   └── authService.js
 ├── campaigns/
-│   ├── pages/CampaignSelection.jsx  # List campaigns, create modal (admin only — needs update) ⚠️
+│   ├── pages/CampaignSelection.jsx  # List campaigns, create modal (any user) ✅
 │   └── campaignService.js
 ├── characters/
 │   ├── pages/CharacterList.jsx  # List characters, visibility toggle (GM) ✅
 │   └── characterService.js
+├── locations/
+│   ├── locationService.js       # Full API client: locations, maps, pins, relationships
+│   └── pages/
+│       ├── LocationList.jsx     # Campaign locations grid + create dialog + player view toggle ✅
+│       └── LocationDetail.jsx   # Maps tab (upload, zoom, pins, player view) + Info tab (always editable) ✅
 ├── dashboard/
 │   └── Dashboard.jsx            # Overview cards — static placeholder data ⚠️
 └── shared/
     └── components/layout/
         ├── MainLayout.jsx        # Wraps pages with Header + Sidebar
         ├── Header.jsx
-        └── Sidebar.jsx
+        └── Sidebar.jsx          # "Locations" nav item → /locations
 ```
 
 ### Implemented Routes
 | Path | Component | Status |
 |------|-----------|--------|
 | `/login` | Login | ✅ Functional |
-| `/campaigns` | CampaignSelection | ⚠️ Works but gated to admin — needs update |
+| `/campaigns` | CampaignSelection | ✅ Any authenticated user can create |
 | `/dashboard` | Dashboard | ⚠️ Static (not fetching data) |
 | `/characters` | CharacterList | ✅ Functional |
+| `/locations` | LocationList | ✅ Functional |
+| `/locations/:locationId` | LocationDetail | ✅ Functional |
 | `/characters/create` | — | ❌ Not built |
 | `/characters/:id` | — | ❌ Not built |
+
+### Locations UI — Key Behaviours
+- **Maps tab:** thumbnail strip (left) + scrollable map viewer (right) with zoom (+/−/scroll wheel) and dark background
+- **Pins:** click to open tooltip (toggle), X to close; linked pins are blue and navigate to linked location
+- **Pin dialog:** link to existing location OR create a new one inline
+- **Player view toggle:** filters to `is_visible_to_players=true` locations/maps/pins; auto-selects first visible map
+- **Info tab:** always editable (no pencil-mode toggle); Save/Reset buttons in each card
+- **Map upload:** 100 MB limit; client-side size validation with inline error before upload attempt
+- Maps default to `is_visible_to_players=false` — GM must explicitly show each map to players
 
 ### Frontend Not Yet Built
 - Character creation and detail pages
@@ -460,14 +476,11 @@ SECRET_KEY=your-secret-key-change-this-in-production
 ## What's NOT Built Yet
 
 ### Backend — Design Gaps (Need Schema + Logic Changes)
-- Campaign creation currently requires `is_admin` — must change to allow any user
-- Campaign member management currently requires `is_admin` — must change to require GM-of-campaign
 - Encyclopedia tables (spells, creatures, all items) have no `owner_type`/`owner_id` columns and have `UNIQUE(name)` constraints — need migrations to support campaign overrides
 - `require_gm(campaign_id)` dependency not yet implemented in `shared/dependencies.py`
 - Content copy/export between a GM's campaigns not yet implemented
 
 ### Backend — Features Not Yet Started
-- `gm/campaigns/campaign_tools/locations/` — Locations system
 - `gm/campaigns/campaign_tools/session_notes/` — Session notes
 - Classes system (like races/backgrounds but for character classes)
 - No automated tests (`tests/` directory not yet created)

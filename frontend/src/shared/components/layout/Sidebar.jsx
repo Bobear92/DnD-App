@@ -8,7 +8,7 @@ const Sidebar = ({ collapsed, toggleSidebar, user, campaign }) => {
     { path: '/dashboard', icon: '📊', label: 'Dashboard' },
     { path: '/characters', icon: '👥', label: 'Characters' },
     { path: '/npcs', icon: '🎭', label: 'NPCs' },
-    { path: '/maps', icon: '🗺️', label: 'Maps' },
+    { path: '/locations', icon: '🗺️', label: 'Locations' },
     { path: '/notes', icon: '📝', label: 'Session Notes' },
     { path: '/encounters', icon: '⚔️', label: 'Encounters' },
     { path: '/loot', icon: '💰', label: 'Loot Tables' },
@@ -19,7 +19,7 @@ const Sidebar = ({ collapsed, toggleSidebar, user, campaign }) => {
     { path: '/my-characters', icon: '👤', label: 'My Characters' },
     { path: '/party', icon: '👥', label: 'Party' },
     { path: '/npcs', icon: '🎭', label: 'NPCs' },
-    { path: '/maps', icon: '🗺️', label: 'Maps' },
+    { path: '/locations', icon: '🗺️', label: 'Locations' },
     { path: '/notes', icon: '📝', label: 'Notes' },
   ];
 

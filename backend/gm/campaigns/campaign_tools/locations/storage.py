@@ -7,7 +7,7 @@ _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_BASE_DIR = os.path.normpath(os.path.join(_MODULE_DIR, "..", "..", "..", "..", "uploads", "maps"))
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 
 
 async def save_map_image(file: UploadFile, campaign_id: int, location_id: int) -> str:
@@ -26,7 +26,7 @@ async def save_map_image(file: UploadFile, campaign_id: int, location_id: int) -
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File size exceeds the 20 MB limit"
+            detail="File size exceeds the 100 MB limit"
         )
 
     dir_path = os.path.join(UPLOAD_BASE_DIR, str(campaign_id), str(location_id))
