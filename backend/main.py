@@ -1,8 +1,10 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from shared.database import engine, Base
 from auth.routes import router as auth_router
-from gm import campaigns_router, npcs_router, loot_tables_router
+from gm import campaigns_router, npcs_router, loot_tables_router, locations_router
 from players.characters.routes import router as characters_router
 from players.races import router as races_router
 from players.backgrounds import router as backgrounds_router
@@ -23,6 +25,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Serve uploaded map images
+_uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(_uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
+
 # Include routers
 app.include_router(auth_router)
 app.include_router(campaigns_router)
@@ -32,6 +39,7 @@ app.include_router(backgrounds_router)
 app.include_router(feats_router)
 app.include_router(npcs_router)
 app.include_router(loot_tables_router)
+app.include_router(locations_router)
 app.include_router(bestiary_router)
 app.include_router(spells_router)
 app.include_router(armor_router)
