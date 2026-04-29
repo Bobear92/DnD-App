@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -36,62 +37,46 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  /* ── Backgrounds ── */
+  --background:  #13100e;   /* page background */
+  --card:        #1f1a14;   /* card / panel surface */
+  --popover:     #2a2318;   /* dropdowns, tooltips */
+  --muted:       #252018;   /* muted surface (badges, inputs) */
+  --accent:      #2e2619;   /* hover accent surface */
+  --secondary:   #2a2318;
+  --input:       #2a2318;   /* input background */
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.439 0 0);
+  /* ── Text ── */
+  --foreground:            #f5e6d3;   /* main text — warm cream */
+  --card-foreground:       #f5e6d3;
+  --popover-foreground:    #f5e6d3;
+  --muted-foreground:      #a89375;   /* secondary text — readable warm tan */
+  --secondary-foreground:  #c9b998;
+  --accent-foreground:     #d4af37;
+
+  /* ── Primary — gold ── */
+  --primary:            #d4af37;
+  --primary-foreground: #13100e;    /* dark text on gold button */
+
+  /* ── Borders & rings ── */
+  --border: #3d3020;     /* subtle warm border */
+  --ring:   #d4af37;     /* gold focus ring */
+
+  /* ── Destructive ── */
+  --destructive: #e05252;
+
+  /* ── Radius ── */
+  --radius: 0.5rem;
+
+  /* ── Sidebar (already handled by Sidebar.css, but keep in sync) ── */
+  --sidebar:                    #1a1612;
+  --sidebar-foreground:         #f5e6d3;
+  --sidebar-primary:            #d4af37;
+  --sidebar-primary-foreground: #13100e;
+  --sidebar-accent:             #221d16;
+  --sidebar-accent-foreground:  #c9b998;
+  --sidebar-border:             #3d3020;
+  --sidebar-ring:               #d4af37;
 }
 
 @layer base {
@@ -100,8 +85,32 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Lora', Georgia, serif;
   }
   #root {
     min-height: 100vh;
   }
+
+  /* Inputs sit on dark surface — ensure readable placeholder */
+  input::placeholder,
+  textarea::placeholder {
+    color: #7a6a54;
+  }
+
+  /* Native selects inherit the theme */
+  select {
+    background-color: var(--input);
+    color: var(--foreground);
+    border-color: var(--border);
+  }
+  select option {
+    background-color: var(--popover);
+    color: var(--foreground);
+  }
+
+  /* Scrollbar — warm gold tint */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+  ::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.3); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(212,175,55,0.5); }
 }

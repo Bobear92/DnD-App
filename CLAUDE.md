@@ -444,6 +444,84 @@ frontend/src/
 
 ---
 
+## Testing (Backend)
+
+**Every new backend module MUST have a corresponding test file.** Tests are written before or alongside the feature, not after.
+
+### Running tests
+```bash
+cd backend
+source venv/Scripts/activate
+pytest                        # run all tests
+pytest tests/test_auth.py     # single file
+pytest -k "test_gm"           # by name pattern
+pytest -v                     # verbose (show each test name)
+```
+
+### Test database
+Tests run against `dnd_app_test` (never `dnd_app_dev`). The database is derived automatically from `DATABASE_URL` in `backend/.env`. Tables are created once per session and wiped between each test — no manual setup needed.
+
+### Fixtures and helpers (backend/tests/conftest.py)
+| Helper | Returns | Use for |
+|--------|---------|---------|
+| `client` (fixture) | `TestClient` | Every test |
+| `make_user(client, n)` | `(headers, user_id)` | Regular user |
+| `make_admin(client, n)` | `(headers, user_id)` | Admin user (flips `is_admin` in DB) |
+| `make_campaign(client, gm_headers)` | `campaign_id` | Campaign setup |
+| `invite_player(client, gm_headers, campaign_id, player_user_id)` | — | Add player to campaign |
+| `register(client, ...)` | response | Low-level registration |
+| `auth_headers(client, ...)` | `{"Authorization": ...}` | Low-level auth header |
+
+### Test file naming and location
+```
+backend/tests/
+├── conftest.py                     # shared fixtures + helpers
+├── test_auth.py                    # auth module
+├── test_campaigns.py               # campaign CRUD + member management
+├── test_npcs.py                    # NPC CRUD + visibility
+├── test_characters.py              # character CRUD + visibility
+├── test_loot_tables.py             # loot tables (system/campaign ownership)
+├── test_races_backgrounds_feats.py # admin-only compendium (parametrized)
+├── test_encyclopedia.py            # bestiary + spells + 6 item types (parametrized)
+└── test_locations.py               # locations, maps, pins (not yet written)
+```
+
+### Required coverage for each new module
+
+**Campaign-scoped content** (NPCs, Locations, etc.) — test all of:
+- GM can create / update / delete
+- Player cannot create / update / delete
+- Non-member gets 403
+- Visibility flag: GM sees all, player sees only `is_visible_to_players=true`
+
+**System/campaign owned content** (Encyclopedia, Loot Tables) — test all of:
+- Admin can create/update/delete system content
+- Non-admin gets 403 on system content
+- GM can create/update/delete campaign content for their campaign
+- Non-GM gets 403 on campaign content
+- Non-member cannot access campaign content
+- `?campaign_id` list merges campaign entries over system entries (same name → campaign wins)
+
+**Admin-only compendium** (Races, Backgrounds, Feats) — test all of:
+- Admin can create/update/delete
+- Non-admin gets 403
+- Any authenticated user can list/get
+- `?campaign_id` returns system + campaign entries
+
+**User-owned content** (Characters) — test all of:
+- Owner can create/update/delete
+- Non-owner cannot update/delete
+- GM sees all; player sees own + `is_visible_to_players=true`
+- Only GM can toggle visibility
+
+### Patterns to follow
+- Use `pytest` classes to group related tests (`class TestCreateNPC:`)
+- Use `pytest.mark.parametrize` when the same assertions apply across multiple endpoints (see `test_encyclopedia.py`, `test_races_backgrounds_feats.py`)
+- Do not mock the database — all tests hit `dnd_app_test` via the real ORM
+- Each test is fully self-contained: create all data it needs, assert, done
+
+---
+
 ## Development Commands
 
 ```bash
@@ -483,7 +561,7 @@ SECRET_KEY=your-secret-key-change-this-in-production
 ### Backend — Features Not Yet Started
 - `gm/campaigns/campaign_tools/session_notes/` — Session notes
 - Classes system (like races/backgrounds but for character classes)
-- No automated tests (`tests/` directory not yet created)
+- `tests/test_locations.py` — Location/map/pin tests not yet written
 
 ### Frontend
 - Everything listed in "Frontend Not Yet Built" above

@@ -48,6 +48,12 @@ Create these 5 files following the project's exact patterns:
    alembic upgrade head
    ```
 3. Confirm the table was created
+4. **Write tests** — create `backend/tests/test_$MODULE_NAME.py` following the patterns in CLAUDE.md § Testing. Required coverage depends on the module's ownership model:
+   - Campaign-scoped (NPCs, Locations): use `test_npcs.py` as the template
+   - System/campaign owned (Encyclopedia, Loot Tables): use `test_encyclopedia.py` as the template
+   - Admin-only compendium (Races, Backgrounds, Feats): use `test_races_backgrounds_feats.py` as the template
+   - User-owned (Characters): use `test_characters.py` as the template
+5. Run `pytest` from `backend/` and confirm all tests pass before marking the module complete
 
 ## Arguments
 $ARGUMENTS
