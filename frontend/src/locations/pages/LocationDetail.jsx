@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   ArrowLeft, Eye, EyeOff, Pencil, Trash2, Upload, Plus,
   MapPin, X, Check, Map, Loader2, ZoomIn, ZoomOut,
-  Link, Users, ExternalLink
+  Link, Users, ExternalLink, Move
 } from 'lucide-react';
 
 const ZOOM_MIN = 0.25;
@@ -60,6 +60,7 @@ export default function LocationDetail() {
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [savingPin, setSavingPin] = useState(false);
   const [editingPin, setEditingPin] = useState(null);
+  const [movingPin, setMovingPin] = useState(null);
 
   // Inline new-location creation inside the pin dialog
   const [showNewLocInPin, setShowNewLocInPin] = useState(false);
@@ -109,6 +110,8 @@ export default function LocationDetail() {
     setSelectedMap(map);
     setZoom(1);
     setOpenPinId(null);
+    setMovingPin(null);
+    setAddingPin(false);
     try {
       const pinList = await locationService.getPins(campaignId, locId, map.id);
       setPins(pinList);
@@ -237,18 +240,31 @@ export default function LocationDetail() {
     adjustZoom(e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP);
   }, []);
 
-  // Click on the image wrapper to place a pin
+  const handleMovePin = async (pin, x, y) => {
+    setMovingPin(null);
+    try {
+      await locationService.updatePin(campaign.id, locationId, selectedMap.id, pin.id, { x_percent: x, y_percent: y });
+      await refreshPins();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to move pin');
+    }
+  };
+
+  // Click on the image wrapper to place a pin or move an existing one
   const handleMapClick = useCallback((e) => {
-    // Clicking the map background closes any open pin tooltip
     setOpenPinId(null);
-    if (!addingPin) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setPendingPin({ x_percent: Math.max(0, Math.min(100, x)), y_percent: Math.max(0, Math.min(100, y)) });
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    if (movingPin) {
+      handleMovePin(movingPin, x, y);
+      return;
+    }
+    if (!addingPin) return;
+    setPendingPin({ x_percent: x, y_percent: y });
     setPinForm({ label: '', description: '', is_visible_to_players: false, linked_location_id: '' });
     setShowPinDialog(true);
-  }, [addingPin]);
+  }, [addingPin, movingPin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSavePin = async () => {
     if (!pendingPin || !pinForm.label.trim()) return;
@@ -508,7 +524,7 @@ export default function LocationDetail() {
                         <Button
                           variant={addingPin ? 'default' : 'outline'}
                           size="sm"
-                          onClick={() => setAddingPin(a => !a)}
+                          onClick={() => { setAddingPin(a => !a); setMovingPin(null); }}
                         >
                           <MapPin className="w-3.5 h-3.5 mr-1" />
                           {addingPin ? 'Cancel' : 'Add Pin'}
@@ -520,10 +536,21 @@ export default function LocationDetail() {
                         <MapPin className="w-3 h-3" /> Click anywhere on the map to place a pin
                       </p>
                     )}
+                    {movingPin && (
+                      <p className="text-xs text-amber-500 mb-2 flex items-center gap-1">
+                        <Move className="w-3 h-3" /> Click where you want to move &ldquo;{movingPin.label}&rdquo;
+                        <button
+                          className="ml-auto text-muted-foreground hover:text-foreground"
+                          onClick={() => setMovingPin(null)}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </p>
+                    )}
 
                     {/* Scrollable map container — dark background */}
                     <div
-                      className={`flex-1 overflow-auto rounded-lg border bg-zinc-900 ${addingPin ? 'cursor-crosshair' : ''}`}
+                      className={`flex-1 overflow-auto rounded-lg border bg-zinc-900 ${addingPin || movingPin ? 'cursor-crosshair' : ''}`}
                       onWheel={handleWheel}
                     >
                       <div className="min-h-full flex items-center justify-center p-3">
@@ -600,6 +627,12 @@ export default function LocationDetail() {
                                             className="flex-1 flex items-center justify-center gap-1 text-xs py-1 rounded border hover:bg-muted"
                                           >
                                             <Pencil className="w-3 h-3" /> Edit
+                                          </button>
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); setMovingPin(pin); setAddingPin(false); setOpenPinId(null); }}
+                                            className="flex-1 flex items-center justify-center gap-1 text-xs py-1 rounded border hover:bg-muted"
+                                          >
+                                            <Move className="w-3 h-3" /> Move
                                           </button>
                                           <button
                                             onClick={(e) => { e.stopPropagation(); handleDeletePin(pin.id); }}
