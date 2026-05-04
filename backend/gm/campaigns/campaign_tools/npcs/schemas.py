@@ -11,6 +11,7 @@ class NPCBase(BaseModel):
     occupation: Optional[str] = Field(None, max_length=200, description="Occupation/class (e.g., Blacksmith, Wizard)")
     alignment: Optional[str] = Field(None, max_length=50, description="Alignment (e.g., Lawful Good)")
     
+    summary: Optional[str] = Field(None, description="Brief blurb shown in cards/lists outside the NPC page")
     description: Optional[str] = Field(None, description="Physical appearance and personality")
     backstory: Optional[str] = Field(None, description="History and motivations")
     location: Optional[str] = Field(None, max_length=200, description="Where they're typically found")
@@ -34,6 +35,7 @@ class NPCUpdate(BaseModel):
     race: Optional[str] = Field(None, min_length=1, max_length=100)
     occupation: Optional[str] = Field(None, max_length=200)
     alignment: Optional[str] = Field(None, max_length=50)
+    summary: Optional[str] = None
     description: Optional[str] = None
     backstory: Optional[str] = None
     location: Optional[str] = Field(None, max_length=200)

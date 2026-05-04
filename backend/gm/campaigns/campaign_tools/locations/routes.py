@@ -7,6 +7,7 @@ from shared.dependencies import get_current_user
 from auth.models import User
 from .schemas import (
     LocationCreate, LocationUpdate, LocationResponse, LocationListItem,
+    LocationNPCAdd, LocationNPCResponse,
     LocationRelationshipCreate, LocationRelationshipResponse,
     LocationMapResponse,
     MapPinCreate, MapPinUpdate, MapPinResponse,
@@ -80,6 +81,40 @@ def toggle_visibility(
     current_user: User = Depends(get_current_user),
 ):
     return service.toggle_location_visibility(db, campaign_id, location_id, current_user.id)
+
+
+# ── Location NPCs ─────────────────────────────────────────────────────────────
+
+@router.get("/{location_id}/npcs", response_model=List[LocationNPCResponse])
+def list_location_npcs(
+    campaign_id: int,
+    location_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.get_location_npcs(db, campaign_id, location_id, current_user.id)
+
+
+@router.post("/{location_id}/npcs", response_model=LocationNPCResponse, status_code=status.HTTP_201_CREATED)
+def add_location_npc(
+    campaign_id: int,
+    location_id: int,
+    data: LocationNPCAdd,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.add_location_npc(db, campaign_id, location_id, data, current_user.id)
+
+
+@router.delete("/{location_id}/npcs/{ln_id}", status_code=status.HTTP_200_OK)
+def remove_location_npc(
+    campaign_id: int,
+    location_id: int,
+    ln_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.remove_location_npc(db, campaign_id, location_id, ln_id, current_user.id)
 
 
 # ── Relationships ─────────────────────────────────────────────────────────────

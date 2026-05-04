@@ -22,11 +22,48 @@ class Location(Base):
     location_type = Column(String(100), nullable=True)
     status = Column(String(100), nullable=True)
     is_visible_to_players = Column(Boolean, default=False, nullable=False)
+
+    # Environment
+    weather = Column(Text, nullable=True)
+    plant_life = Column(Text, nullable=True)
+    animal_life = Column(Text, nullable=True)
+    terrain = Column(Text, nullable=True)
+    climate = Column(Text, nullable=True)
+
+    # Lore & Culture
+    history = Column(Text, nullable=True)
+    rumors = Column(Text, nullable=True)
+    government = Column(Text, nullable=True)
+    religion = Column(Text, nullable=True)
+    economy = Column(Text, nullable=True)
+
+    # Adventure
+    threats = Column(Text, nullable=True)
+    available_services = Column(Text, nullable=True)
+    points_of_interest = Column(Text, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     def __repr__(self):
         return f"<Location(id={self.id}, name='{self.name}', campaign_id={self.campaign_id})>"
+
+
+class LocationNPC(Base):
+    __tablename__ = "location_npcs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    location_id = Column(Integer, ForeignKey("locations.id", ondelete="CASCADE"), nullable=False, index=True)
+    npc_id = Column(Integer, ForeignKey("npcs.id", ondelete="CASCADE"), nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("location_id", "npc_id", name="uq_location_npc"),
+    )
+
+    def __repr__(self):
+        return f"<LocationNPC(id={self.id}, location_id={self.location_id}, npc_id={self.npc_id})>"
 
 
 class LocationRelationship(Base):

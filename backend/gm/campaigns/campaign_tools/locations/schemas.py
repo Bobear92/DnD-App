@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
@@ -19,6 +19,22 @@ class LocationCreate(BaseModel):
     location_type: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = Field(None, max_length=100)
     is_visible_to_players: bool = Field(default=False)
+    # Environment
+    weather: Optional[str] = None
+    plant_life: Optional[str] = None
+    animal_life: Optional[str] = None
+    terrain: Optional[str] = None
+    climate: Optional[str] = None
+    # Lore & Culture
+    history: Optional[str] = None
+    rumors: Optional[str] = None
+    government: Optional[str] = None
+    religion: Optional[str] = None
+    economy: Optional[str] = None
+    # Adventure
+    threats: Optional[str] = None
+    available_services: Optional[str] = None
+    points_of_interest: Optional[str] = None
 
 
 class LocationUpdate(BaseModel):
@@ -28,6 +44,22 @@ class LocationUpdate(BaseModel):
     location_type: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = Field(None, max_length=100)
     is_visible_to_players: Optional[bool] = None
+    # Environment
+    weather: Optional[str] = None
+    plant_life: Optional[str] = None
+    animal_life: Optional[str] = None
+    terrain: Optional[str] = None
+    climate: Optional[str] = None
+    # Lore & Culture
+    history: Optional[str] = None
+    rumors: Optional[str] = None
+    government: Optional[str] = None
+    religion: Optional[str] = None
+    economy: Optional[str] = None
+    # Adventure
+    threats: Optional[str] = None
+    available_services: Optional[str] = None
+    points_of_interest: Optional[str] = None
 
 
 class LocationResponse(BaseModel):
@@ -39,6 +71,22 @@ class LocationResponse(BaseModel):
     location_type: Optional[str] = None
     status: Optional[str] = None
     is_visible_to_players: bool
+    # Environment
+    weather: Optional[str] = None
+    plant_life: Optional[str] = None
+    animal_life: Optional[str] = None
+    terrain: Optional[str] = None
+    climate: Optional[str] = None
+    # Lore & Culture
+    history: Optional[str] = None
+    rumors: Optional[str] = None
+    government: Optional[str] = None
+    religion: Optional[str] = None
+    economy: Optional[str] = None
+    # Adventure
+    threats: Optional[str] = None
+    available_services: Optional[str] = None
+    points_of_interest: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -54,6 +102,27 @@ class LocationListItem(BaseModel):
     status: Optional[str] = None
     is_visible_to_players: bool
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── LocationNPC ───────────────────────────────────────────────────────────────
+
+class LocationNPCAdd(BaseModel):
+    npc_id: int
+    description: Optional[str] = Field(None, description="This NPC's role at this location")
+
+
+class LocationNPCResponse(BaseModel):
+    id: int
+    npc_id: int
+    name: str
+    race: str
+    occupation: Optional[str] = None
+    summary: Optional[str] = None
+    description: Optional[str] = None
+    is_visible_to_players: bool
 
     class Config:
         from_attributes = True

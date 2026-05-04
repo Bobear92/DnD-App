@@ -92,6 +92,26 @@ const locationService = {
     await api.delete(`/${campaignId}/locations/${locationId}/maps/${mapId}/pins/${pinId}`);
   },
 
+  // Location NPCs
+  getLocationNpcs: async (campaignId, locationId) => {
+    const res = await api.get(`/${campaignId}/locations/${locationId}/npcs`);
+    return res.data;
+  },
+
+  addLocationNpc: async (campaignId, locationId, data) => {
+    const res = await api.post(`/${campaignId}/locations/${locationId}/npcs`, data);
+    return res.data;
+  },
+
+  removeLocationNpc: async (campaignId, locationId, lnId) => {
+    await api.delete(`/${campaignId}/locations/${locationId}/npcs/${lnId}`);
+  },
+
+  getCampaignNpcs: async (campaignId) => {
+    const res = await api.get(`/npcs/campaign/${campaignId}`);
+    return res.data;
+  },
+
   // Relationships
   getRelationships: async (campaignId, locationId) => {
     const res = await api.get(`/${campaignId}/locations/${locationId}/relationships`);

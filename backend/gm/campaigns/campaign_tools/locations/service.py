@@ -3,15 +3,17 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, UploadFile, status
 from typing import List
 
-from .models import Location, LocationRelationship, LocationMap, MapPin, LocationLink
+from .models import Location, LocationNPC, LocationRelationship, LocationMap, MapPin, LocationLink
 from .schemas import (
     LocationCreate, LocationUpdate,
+    LocationNPCAdd, LocationNPCResponse,
     LocationRelationshipCreate,
     MapPinCreate, MapPinUpdate,
     LocationLinkCreate,
 )
 from .storage import save_map_image, delete_map_image
 from gm.campaigns.models import CampaignMember
+from gm.campaigns.campaign_tools.npcs.models import NPC
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,6 +58,19 @@ def _get_map_or_404(db: Session, map_id: int) -> LocationMap:
     return m
 
 
+def _build_npc_response(ln: LocationNPC, npc: NPC) -> LocationNPCResponse:
+    return LocationNPCResponse(
+        id=ln.id,
+        npc_id=npc.id,
+        name=npc.name,
+        race=npc.race,
+        occupation=npc.occupation,
+        summary=npc.summary,
+        description=ln.description,
+        is_visible_to_players=npc.is_visible_to_players,
+    )
+
+
 # ── Locations ─────────────────────────────────────────────────────────────────
 
 def create_location(db: Session, campaign_id: int, data: LocationCreate, user_id: int) -> Location:
@@ -82,6 +97,8 @@ def get_location_by_id(db: Session, campaign_id: int, location_id: int, user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
     if member.role == "player" and not loc.is_visible_to_players:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This location is not visible to players")
+    if member.role == "player":
+        loc.gm_notes = None
     return loc
 
 
@@ -102,7 +119,6 @@ def delete_location(db: Session, campaign_id: int, location_id: int, user_id: in
     loc = _get_location_or_404(db, location_id)
     if loc.campaign_id != campaign_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
-    # Clean up map image files before deleting
     for m in db.query(LocationMap).filter(LocationMap.location_id == location_id).all():
         delete_map_image(m.image_path)
     db.delete(loc)
@@ -119,6 +135,55 @@ def toggle_location_visibility(db: Session, campaign_id: int, location_id: int, 
     db.commit()
     db.refresh(loc)
     return loc
+
+
+# ── Location NPCs ─────────────────────────────────────────────────────────────
+
+def get_location_npcs(db: Session, campaign_id: int, location_id: int, user_id: int) -> List[LocationNPCResponse]:
+    member = _require_member(db, campaign_id, user_id)
+    loc = _get_location_or_404(db, location_id)
+    if loc.campaign_id != campaign_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
+    query = (
+        db.query(LocationNPC, NPC)
+        .join(NPC, LocationNPC.npc_id == NPC.id)
+        .filter(LocationNPC.location_id == location_id)
+    )
+    if member.role == "player":
+        query = query.filter(NPC.is_visible_to_players == True)
+    return [_build_npc_response(ln, npc) for ln, npc in query.all()]
+
+
+def add_location_npc(db: Session, campaign_id: int, location_id: int, data: LocationNPCAdd, user_id: int) -> LocationNPCResponse:
+    _require_gm(db, campaign_id, user_id)
+    loc = _get_location_or_404(db, location_id)
+    if loc.campaign_id != campaign_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
+    npc = db.query(NPC).filter(NPC.id == data.npc_id, NPC.campaign_id == campaign_id).first()
+    if not npc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"NPC {data.npc_id} not found in this campaign")
+    ln = LocationNPC(location_id=location_id, npc_id=data.npc_id, description=data.description)
+    db.add(ln)
+    try:
+        db.commit()
+        db.refresh(ln)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This NPC is already linked to this location")
+    return _build_npc_response(ln, npc)
+
+
+def remove_location_npc(db: Session, campaign_id: int, location_id: int, ln_id: int, user_id: int) -> dict:
+    _require_gm(db, campaign_id, user_id)
+    ln = db.query(LocationNPC).filter(
+        LocationNPC.id == ln_id,
+        LocationNPC.location_id == location_id,
+    ).first()
+    if not ln:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location NPC link {ln_id} not found")
+    db.delete(ln)
+    db.commit()
+    return {"message": "NPC removed from location"}
 
 
 # ── Relationships ─────────────────────────────────────────────────────────────

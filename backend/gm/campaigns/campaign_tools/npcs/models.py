@@ -21,6 +21,7 @@ class NPC(Base):
     occupation = Column(String(200), nullable=True)
     alignment = Column(String(50), nullable=True)
     
+    summary = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     backstory = Column(Text, nullable=True)
     location = Column(String(200), nullable=True)
