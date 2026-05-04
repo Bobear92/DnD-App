@@ -79,7 +79,8 @@ backend/
 ├── gm/
 │   ├── campaigns/               # Campaign + member management
 │   │   └── campaign_tools/
-│   │       └── npcs/            # NPC management (campaign-specific)
+│   │       ├── npcs/            # NPC management (campaign-specific)
+│   │       └── locations/       # Locations, maps, pins, NPC links — routes/service/models/schemas/storage
 │   └── tools/
 │       └── loot_tables/         # Loot table generation (system + campaign)
 ├── shared/
@@ -147,7 +148,7 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 
 ---
 
-## Current Database Schema (17 Tables)
+## Current Database Schema (19 Tables)
 
 ```sql
 -- Core
@@ -187,8 +188,47 @@ feats
 -- GM Campaign Tools
 npcs
   id, campaign_id (FK→campaigns), name, race, occupation, alignment,
+  summary,                          ← short blurb for cards/lists outside the NPC page
   description, backstory, location, stats (JSONB), notes,
   is_visible_to_players (boolean), created_at, updated_at
+
+location_npcs                        ← junction: NPCs linked to a location
+  id, location_id (FK→locations), npc_id (FK→npcs),
+  description,                      ← NPC's role at this specific location (optional)
+  created_at
+  UNIQUE(location_id, npc_id)
+
+locations
+  id, campaign_id (FK→campaigns), name,
+  description,                      ← player-visible
+  gm_notes,                         ← GM only, never returned to players
+  location_type, status,
+  -- Environment
+  weather, plant_life, animal_life, terrain, climate,
+  -- Lore & Culture
+  history, rumors, government, religion, economy,
+  -- Adventure
+  threats, available_services, points_of_interest,
+  is_visible_to_players (boolean), created_at, updated_at
+
+location_relationships
+  id, campaign_id (FK→campaigns),
+  location_a_id (FK→locations), location_b_id (FK→locations),
+  label, direction (ENUM: a_above_b/b_above_a/same_level),
+  created_at, updated_at
+  UNIQUE(location_a_id, location_b_id)
+
+location_maps
+  id, location_id (FK→locations), name, image_path,
+  is_visible_to_players (boolean), created_at, updated_at
+
+map_pins
+  id, map_id (FK→location_maps), x_percent, y_percent,
+  label, description, linked_location_id (FK→locations, nullable),
+  is_visible_to_players (boolean), created_at, updated_at
+
+location_links                       ← polymorphic: links a location to any other content type
+  id, location_id (FK→locations), content_type (string), content_id, notes, created_at
 
 loot_tables
   id, name, description, owner_type (string: 'system'/'campaign'),
@@ -314,6 +354,30 @@ Campaign creation uses `get_current_user` (any authenticated user). Member manag
 | DELETE | /api/gm/campaigns/npcs/{id} | Yes (GM of campaign) |
 | PATCH | /api/gm/campaigns/npcs/{id}/visibility | Yes (GM of campaign) |
 
+### Locations
+| Method | Endpoint | Auth Required |
+|--------|----------|---------------|
+| POST | /api/gm/campaigns/{id}/locations | Yes (GM) |
+| GET | /api/gm/campaigns/{id}/locations | Yes (member) |
+| GET | /api/gm/campaigns/{id}/locations/{lid} | Yes (member; player blocked if hidden) |
+| PUT | /api/gm/campaigns/{id}/locations/{lid} | Yes (GM) |
+| DELETE | /api/gm/campaigns/{id}/locations/{lid} | Yes (GM) |
+| PATCH | /api/gm/campaigns/{id}/locations/{lid}/visibility | Yes (GM) |
+| GET | /api/gm/campaigns/{id}/locations/{lid}/npcs | Yes (member; filters hidden NPCs for players) |
+| POST | /api/gm/campaigns/{id}/locations/{lid}/npcs | Yes (GM) |
+| DELETE | /api/gm/campaigns/{id}/locations/{lid}/npcs/{ln_id} | Yes (GM) |
+| GET/POST | /api/gm/campaigns/{id}/locations/{lid}/relationships | Yes (member / GM) |
+| DELETE | /api/gm/campaigns/{id}/locations/{lid}/relationships/{rel_id} | Yes (GM) |
+| GET | /api/gm/campaigns/{id}/locations/{lid}/maps | Yes (member; filters hidden for players) |
+| POST | /api/gm/campaigns/{id}/locations/{lid}/maps | Yes (GM, multipart) |
+| DELETE | /api/gm/campaigns/{id}/locations/{lid}/maps/{map_id} | Yes (GM) |
+| PATCH | /api/gm/campaigns/{id}/locations/{lid}/maps/{map_id}/visibility | Yes (GM) |
+| GET/POST | /api/gm/campaigns/{id}/locations/{lid}/maps/{map_id}/pins | Yes (member / GM) |
+| PUT/DELETE | /api/gm/campaigns/{id}/locations/{lid}/maps/{map_id}/pins/{pin_id} | Yes (GM) |
+| GET/POST/DELETE | /api/gm/campaigns/{id}/locations/{lid}/links | Yes (member / GM) |
+
+`gm_notes` is always stripped from location responses for players.
+
 ### Loot Tables
 | Method | Endpoint | Auth Required |
 |--------|----------|---------------|
@@ -396,10 +460,10 @@ frontend/src/
 │   ├── pages/CharacterList.jsx  # List characters, visibility toggle (GM) ✅
 │   └── characterService.js
 ├── locations/
-│   ├── locationService.js       # Full API client: locations, maps, pins, relationships
+│   ├── locationService.js       # Full API client: locations, maps, pins, relationships, location NPCs
 │   └── pages/
 │       ├── LocationList.jsx     # Campaign locations grid + create dialog + player view toggle ✅
-│       └── LocationDetail.jsx   # Maps tab (upload, zoom, pins, player view) + Info tab (always editable) ✅
+│       └── LocationDetail.jsx   # Maps tab (upload, zoom, pins, player view) + Info tab ✅
 ├── dashboard/
 │   └── Dashboard.jsx            # Overview cards — static placeholder data ⚠️
 └── shared/
@@ -425,10 +489,12 @@ frontend/src/
 - **Maps tab:** thumbnail strip (left) + scrollable map viewer (right) with zoom (+/−/scroll wheel) and dark background
 - **Pins:** click to open tooltip (toggle), X to close; linked pins are blue and navigate to linked location
 - **Pin dialog:** link to existing location OR create a new one inline
-- **Player view toggle:** filters to `is_visible_to_players=true` locations/maps/pins; auto-selects first visible map
-- **Info tab:** always editable (no pencil-mode toggle); Save/Reset buttons in each card
+- **Player view toggle:** filters to `is_visible_to_players=true` locations/maps/pins/NPCs; auto-selects first visible map
 - **Map upload:** 100 MB limit; client-side size validation with inline error before upload attempt
 - Maps default to `is_visible_to_players=false` — GM must explicitly show each map to players
+- **Info tab — GM view:** always editable; section cards for Details, GM Notes (private), Lore & Culture, Environment, Adventure, Important NPCs; Save/Reset buttons per card
+- **Info tab — Player view:** read-only; empty sections hidden entirely; GM Notes never shown; NPC cards only show NPCs where `is_visible_to_players=true` on the NPC
+- **Important NPCs:** linked via `location_npcs` junction; each link has an optional role description ("Runs the forge"); NPC cards show name, race, occupation, role description, and NPC `summary`
 
 ### Frontend Not Yet Built
 - Character creation and detail pages
@@ -483,7 +549,7 @@ backend/tests/
 ├── test_loot_tables.py             # loot tables (system/campaign ownership)
 ├── test_races_backgrounds_feats.py # admin-only compendium (parametrized)
 ├── test_encyclopedia.py            # bestiary + spells + 6 item types (parametrized)
-└── test_locations.py               # locations, maps, pins (not yet written)
+└── test_locations.py               # locations, maps, pins, location NPCs (42 tests)
 ```
 
 ### Required coverage for each new module
@@ -561,7 +627,6 @@ SECRET_KEY=your-secret-key-change-this-in-production
 ### Backend — Features Not Yet Started
 - `gm/campaigns/campaign_tools/session_notes/` — Session notes
 - Classes system (like races/backgrounds but for character classes)
-- `tests/test_locations.py` — Location/map/pin tests not yet written
 
 ### Frontend
 - Everything listed in "Frontend Not Yet Built" above
