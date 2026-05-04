@@ -13,7 +13,7 @@ You are an expert on this D&D app's backend architecture. You build new backend 
 
 ### models.py
 ```python
-from sqlalchemy import Column, Integer, String, Text, JSON, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from shared.database import Base
 
@@ -25,12 +25,12 @@ class MyModel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     def __repr__(self): return f"<MyModel(id={self.id}, name='{self.name}')>"
 ```
-- Use `SQLEnum(OwnerType)` and import `OwnerType` from `shared.enums` for content with ownership model
-- Use `ForeignKey("campaigns.id")` for campaign-specific content
+- Use `SQLEnum(OwnerType)` and import `OwnerType` from `shared.enums` for content with system/campaign ownership
+- Use `ForeignKey("campaigns.id", ondelete="CASCADE")` for campaign-specific content
 
 ### schemas.py
 ```python
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
@@ -41,9 +41,9 @@ class MyModelResponse(BaseModel):
     id: int
     # ... all fields ...
     created_at: datetime
-    updated_at: Optional[datetime]
+    updated_at: Optional[datetime] = None
     class Config: from_attributes = True
-class MyModelListItem(BaseModel):  # leaner subset
+class MyModelListItem(BaseModel):  # leaner subset for list endpoints
     id: int
     name: str
     class Config: from_attributes = True
@@ -52,60 +52,69 @@ class MyModelListItem(BaseModel):  # leaner subset
 ### service.py
 ```python
 from sqlalchemy.orm import Session
-from . import models, schemas
-from shared.exceptions import NotFoundException, ForbiddenException
+from fastapi import HTTPException, status
+from .models import MyModel
+from .schemas import MyModelCreate, MyModelUpdate
 
-def get_all_x(db: Session, ...): ...
-def get_x_by_id(db: Session, x_id: int):
-    x = db.query(models.X).filter(models.X.id == x_id).first()
-    if not x: raise NotFoundException(f"X with id {x_id} not found")
-    return x
-def create_x(db: Session, data: schemas.XCreate, user_id: int, is_admin: bool):
-    if not is_admin: raise ForbiddenException("Only administrators can create X")
-    ...
-    db.add(x); db.commit(); db.refresh(x); return x
-def update_x(db: Session, x_id: int, data: schemas.XUpdate, user_id: int, is_admin: bool):
-    x = get_x_by_id(db, x_id)
-    update_data = data.model_dump(exclude_unset=True)
-    for field, value in update_data.items(): setattr(x, field, value)
-    db.commit(); db.refresh(x); return x
-def delete_x(db: Session, x_id: int, user_id: int, is_admin: bool):
-    x = get_x_by_id(db, x_id)
-    db.delete(x); db.commit()
-    return {"message": f"X '{x.name}' deleted successfully"}
+def get_all(db: Session, ...) -> list[MyModel]: ...
+
+def get_by_id(db: Session, item_id: int) -> MyModel:
+    item = db.query(MyModel).filter(MyModel.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Item {item_id} not found")
+    return item
+
+def create(db: Session, data: MyModelCreate, user_id: int) -> MyModel:
+    # check permissions first, then:
+    item = MyModel(**data.model_dump())
+    db.add(item); db.commit(); db.refresh(item); return item
+
+def update(db: Session, item_id: int, data: MyModelUpdate, user_id: int) -> MyModel:
+    item = get_by_id(db, item_id)
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(item, field, value)
+    db.commit(); db.refresh(item); return item
+
+def delete(db: Session, item_id: int, user_id: int) -> dict:
+    item = get_by_id(db, item_id)
+    db.delete(item); db.commit()
+    return {"message": f"'{item.name}' deleted successfully"}
 ```
+- Raise `HTTPException` directly — do not use `shared.exceptions` wrappers (they exist but aren't used in practice)
+- Permission failures: `raise HTTPException(status_code=403, detail="...")`
 
 ### routes.py
 ```python
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from typing import List
-from . import service, schemas
 from shared.database import get_db
 from shared.dependencies import get_current_user
 from auth.models import User
+from . import service
+from .schemas import MyModelCreate, MyModelUpdate, MyModelResponse, MyModelListItem
 
-router = APIRouter(prefix="/my-models", tags=["My Models"])
+router = APIRouter(prefix="/api/my-models", tags=["My Models"])
 
-@router.get("", response_model=List[schemas.MyModelListItem])
-def get_my_models(db=Depends(get_db), current_user: User = Depends(get_current_user)):
-    return service.get_all_x(db, current_user.id)
+@router.get("", response_model=List[MyModelListItem])
+def list_items(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return service.get_all(db, current_user.id)
 
-@router.get("/{item_id}", response_model=schemas.MyModelResponse)
-def get_my_model(item_id: int, db=Depends(get_db), current_user: User = Depends(get_current_user)):
-    return service.get_x_by_id(db, item_id)
+@router.get("/{item_id}", response_model=MyModelResponse)
+def get_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return service.get_by_id(db, item_id)
 
-@router.post("", response_model=schemas.MyModelResponse, status_code=status.HTTP_201_CREATED)
-def create_my_model(data: schemas.MyModelCreate, db=Depends(get_db), current_user: User = Depends(get_current_user)):
-    return service.create_x(db, data, current_user.id, current_user.is_admin)
+@router.post("", response_model=MyModelResponse, status_code=status.HTTP_201_CREATED)
+def create_item(data: MyModelCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return service.create(db, data, current_user.id)
 
-@router.put("/{item_id}", response_model=schemas.MyModelResponse)
-def update_my_model(item_id: int, data: schemas.MyModelUpdate, db=Depends(get_db), current_user: User = Depends(get_current_user)):
-    return service.update_x(db, item_id, data, current_user.id, current_user.is_admin)
+@router.put("/{item_id}", response_model=MyModelResponse)
+def update_item(item_id: int, data: MyModelUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return service.update(db, item_id, data, current_user.id)
 
-@router.delete("/{item_id}")
-def delete_my_model(item_id: int, db=Depends(get_db), current_user: User = Depends(get_current_user)):
-    return service.delete_x(db, item_id, current_user.id, current_user.is_admin)
+@router.delete("/{item_id}", status_code=status.HTTP_200_OK)
+def delete_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return service.delete(db, item_id, current_user.id)
 ```
 
 ### __init__.py
@@ -114,12 +123,26 @@ from .routes import router
 ```
 
 ## Access Control Rules
-- `is_admin=True` required for system-wide content (races, backgrounds, feats, encyclopedia)
-- GM check (campaign member with role='gm') required for campaign tools (NPCs, locations, session notes)
-- Owner check required for player content (characters)
-- Use `ForbiddenException` from `shared.exceptions` — never raise raw `HTTPException` for auth failures
+- **Admin-only content** (races, backgrounds, feats, encyclopedia): check `current_user.is_admin`
+- **Campaign GM** (NPCs, locations, session notes): query `CampaignMember` for `role='gm'`
+- **Campaign member** (read access): query `CampaignMember` for any role
+- **Player-owned content** (characters): check `item.user_id == current_user.id`
+- `gm_notes` or any GM-private field: set to `None` before returning to players — do not commit
+
+## Visibility pattern (campaign-scoped content)
+```python
+member = db.query(CampaignMember).filter(...).first()
+if not member:
+    raise HTTPException(status_code=403, detail="You must be a member of this campaign")
+query = db.query(MyModel).filter(MyModel.campaign_id == campaign_id)
+if member.role == "player":
+    query = query.filter(MyModel.is_visible_to_players == True)
+return query.all()
+```
 
 ## After Creating Files
-Always remind the user to:
+Always:
 1. Register the router in `backend/main.py`
-2. Run `alembic revision --autogenerate -m "add <table> table"` then `alembic upgrade head`
+2. Run `alembic revision --autogenerate -m "add <table>"` then `alembic upgrade head`
+3. Write tests in `backend/tests/test_<module>.py` — tests ship with the feature, never deferred
+4. Update `CLAUDE.md`: schema table count, backend structure tree, API endpoints table, test file listing
