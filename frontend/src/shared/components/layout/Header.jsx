@@ -1,82 +1,51 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import './Header.css';
+import { useState } from 'react';
+import { useAuth } from '../../../auth/AuthContext';
+import { useCampaign } from '../../../campaigns/CampaignContext';
+import { LogOut, ChevronDown } from 'lucide-react';
 
-const Header = ({ user, campaign, onLogout }) => {
-  const navigate = useNavigate();
-  const [showUserMenu, setShowUserMenu] = useState(false);
-
-  // Get campaign name from props
-  const currentCampaign = campaign?.name || 'No Campaign';
-
-  const handleCampaignSwitch = () => {
-    navigate('/campaigns');
-  };
+const Header = ({ onLogout }) => {
+  const { user } = useAuth();
+  const { campaign } = useCampaign();
+  const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <header className="app-header">
-      <div className="header-left">
-        <h1 className="header-campaign-name">{currentCampaign}</h1>
-        <button 
-          onClick={handleCampaignSwitch}
-          className="campaign-switch-button"
-          title="Switch Campaign"
+    <header className="flex items-center justify-between h-14 px-6 border-b border-border bg-card shrink-0">
+      <h1 className="text-base font-semibold text-foreground">{campaign?.name || ''}</h1>
+
+      <div className="relative">
+        <button
+          onClick={() => setShowMenu(v => !v)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-muted transition-colors text-sm"
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 2L10 6H14L11 9L12 13L8 10L4 13L5 9L2 6H6L8 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-          </svg>
-          Switch Campaign
+          <span className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold shrink-0">
+            {user?.username?.charAt(0).toUpperCase()}
+          </span>
+          <span className="text-foreground">{user?.username}</span>
+          <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform ${showMenu ? 'rotate-180' : ''}`} />
         </button>
-      </div>
 
-      <div className="header-right">
-        <div className="user-menu">
-          <button 
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            className="user-menu-button"
-          >
-            <span className="user-avatar">{user?.username?.charAt(0).toUpperCase()}</span>
-            <span className="user-name">{user?.username}</span>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className={`chevron ${showUserMenu ? 'open' : ''}`}>
-              <path d="M3 5L6 8L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-
-          {showUserMenu && (
-            <div className="user-menu-dropdown">
-              <div className="menu-item user-info-item">
-                <div className="user-info-details">
-                  <span className="username-detail">{user?.username}</span>
-                  <span className="email-detail">{user?.email}</span>
-                  {user?.is_admin && <span className="admin-badge-detail">Game Master</span>}
-                </div>
+        {showMenu && (
+          <>
+            <div className="absolute right-0 top-full mt-1 w-52 rounded-md border border-border bg-card shadow-md z-50 py-1">
+              <div className="px-3 py-2 border-b border-border">
+                <p className="text-sm font-medium">{user?.username}</p>
+                <p className="text-xs text-muted-foreground">{user?.email}</p>
+                {user?.is_admin && (
+                  <span className="text-xs text-primary font-medium">Admin</span>
+                )}
               </div>
-              <div className="menu-divider"></div>
-              <button onClick={() => navigate('/settings')} className="menu-item">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M8 1V3M8 13V15M15 8H13M3 8H1M13.5 13.5L12 12M4 4L2.5 2.5M13.5 2.5L12 4M4 12L2.5 13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-                Settings
-              </button>
-              <button onClick={onLogout} className="menu-item logout-item">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M6 14H3C2.44772 14 2 13.5523 2 13V3C2 2.44772 2.44772 2 3 2H6M11 11L14 8M14 8L11 5M14 8H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+              <button
+                onClick={() => { setShowMenu(false); onLogout(); }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-destructive hover:bg-muted transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
                 Logout
               </button>
             </div>
-          )}
-        </div>
+            <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+          </>
+        )}
       </div>
-
-      {/* Click outside to close menu */}
-      {showUserMenu && (
-        <div 
-          className="menu-overlay" 
-          onClick={() => setShowUserMenu(false)}
-        />
-      )}
     </header>
   );
 };

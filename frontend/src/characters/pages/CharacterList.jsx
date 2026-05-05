@@ -1,40 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import characterService from '../characterService';
+import { useCampaign } from '../../campaigns/CampaignContext';
 import './CharacterList.css';
 
 const CharacterList = () => {
   const navigate = useNavigate();
+  const { campaignId } = useParams();
+  const { campaign } = useCampaign();
   const [characters, setCharacters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [user, setUser] = useState(null);
+
+  const isGm = campaign?.userRole === 'gm';
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     loadCharacters();
-  }, []);
+  }, [campaignId]);
 
   const loadCharacters = async () => {
+    if (!campaignId) { navigate('/campaigns'); return; }
     setLoading(true);
-    
-    // Get user and campaign
-    const storedUser = localStorage.getItem('user');
-    const storedCampaign = localStorage.getItem('selectedCampaign');
-    
-    if (!storedUser || !storedCampaign) {
-      navigate('/campaigns');
-      return;
-    }
 
-    const userData = JSON.parse(storedUser);
-    const campaignData = JSON.parse(storedCampaign);
-    
-    setUser(userData);
-
-    // Fetch characters
-    const result = await characterService.getCharactersByCampaign(campaignData.id);
+    const result = await characterService.getCharactersByCampaign(campaignId);
     if (result.success) {
       setCharacters(result.data);
     } else {
@@ -45,11 +35,11 @@ const CharacterList = () => {
   };
 
   const handleCreateCharacter = () => {
-    navigate('/characters/create');
+    navigate(`/campaigns/${campaignId}/characters/create`);
   };
 
   const handleViewCharacter = (characterId) => {
-    navigate(`/characters/${characterId}`);
+    navigate(`/campaigns/${campaignId}/characters/${characterId}`);
   };
 
   const handleToggleVisibility = async (characterId) => {
@@ -78,9 +68,9 @@ const CharacterList = () => {
       <div className="characters-page">
         <div className="page-header">
           <div className="header-content">
-            <h1>{user?.is_admin ? 'All Characters' : 'My Characters'}</h1>
+            <h1>{isGm ? 'All Characters' : 'My Characters'}</h1>
             <p className="page-subtitle">
-              {user?.is_admin 
+              {isGm 
                 ? 'Manage all player characters in your campaign'
                 : 'Create and manage your adventurers'}
             </p>
@@ -113,11 +103,11 @@ const CharacterList = () => {
               </svg>
               <h2>No Characters Yet</h2>
               <p>
-                {user?.is_admin 
+                {isGm 
                   ? "No players have created characters yet."
                   : "Create your first character to begin your adventure!"}
               </p>
-              {!user?.is_admin && (
+              {!isGm && (
                 <button onClick={handleCreateCharacter} className="empty-create-button">
                   Create Your First Character
                 </button>
@@ -128,10 +118,10 @@ const CharacterList = () => {
               <div key={character.id} className="character-card">
                 <div className="character-card-header">
                   <h3 className="character-name">{character.name}</h3>
-                  {user?.is_admin && character.user_id !== user.id && (
+                  {isGm && isGm && (
                     <span className="owner-badge">Player Character</span>
                   )}
-                  {user?.is_admin && (
+                  {isGm && (
                     <button
                       onClick={() => handleToggleVisibility(character.id)}
                       className={`visibility-toggle ${character.is_visible_to_players ? 'visible' : 'hidden'}`}

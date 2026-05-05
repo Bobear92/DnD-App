@@ -488,7 +488,7 @@ Campaign creation uses `get_current_user` (any authenticated user). Member manag
 
 ```
 frontend/src/
-├── App.jsx                      # Router: /login, /campaigns, /dashboard, /characters, /locations/*
+├── App.jsx                      # Router: providers (AuthProvider, CampaignProvider) + all routes
 ├── index.css                    # Tailwind import + shadcn CSS variables (light/dark)
 ├── lib/
 │   └── utils.js                 # cn() helper for class merging
@@ -497,9 +497,11 @@ frontend/src/
 │                                #   Badge, Textarea, Select, Tabs (do not edit)
 ├── auth/
 │   ├── pages/Login.jsx          # Login + Register (dual-mode toggle) ✅
+│   ├── AuthContext.jsx          # Calls /api/auth/me on load; exposes {user, loading, logout}
 │   └── authService.js
 ├── campaigns/
-│   ├── pages/CampaignSelection.jsx  # List campaigns, create modal (any user) ✅
+│   ├── pages/CampaignSelection.jsx  # List campaigns, create modal, enter → sets CampaignContext ✅
+│   ├── CampaignContext.jsx      # {campaign, enterCampaign, leaveCampaign}; persisted to localStorage
 │   └── campaignService.js
 ├── characters/
 │   ├── pages/CharacterList.jsx  # List characters, visibility toggle (GM) ✅
@@ -512,23 +514,36 @@ frontend/src/
 ├── dashboard/
 │   └── Dashboard.jsx            # Overview cards — static placeholder data ⚠️
 └── shared/
-    └── components/layout/
-        ├── MainLayout.jsx        # Wraps pages with Header + Sidebar
-        ├── Header.jsx
-        └── Sidebar.jsx          # "Locations" nav item → /locations
+    └── components/
+        ├── ProtectedRoute.jsx   # Redirects to /login if AuthContext user is null
+        └── layout/
+            ├── MainLayout.jsx   # Wraps pages with Sidebar + Header; reads from contexts
+            ├── Header.jsx       # Campaign name (from CampaignContext) + user menu (from AuthContext)
+            └── Sidebar.jsx      # Campaign-aware nav: uses useParams().campaignId for paths;
+                                 #   GM vs player items from campaign.userRole; "Switch Campaign" link
 ```
+
+### Auth + Campaign Context Pattern
+- `AuthContext` — wraps the entire app; calls `/api/auth/me` on mount; `user` is null until resolved
+- `CampaignContext` — `campaign` shape: `{id, name, description, created_by, userRole: 'gm'|'player', ...}`
+  - `userRole` is computed in CampaignSelection: `campaign.created_by === user.id ? 'gm' : 'player'`
+  - Persisted to localStorage so page refreshes restore context automatically
+- `isGm` in pages/components: always use `campaign?.userRole === 'gm'`, never `user.is_admin`
+- `ProtectedRoute` — redirects unauthenticated users to `/login` while `loading` is true shows nothing
 
 ### Implemented Routes
 | Path | Component | Status |
 |------|-----------|--------|
 | `/login` | Login | ✅ Functional |
 | `/campaigns` | CampaignSelection | ✅ Any authenticated user can create |
-| `/dashboard` | Dashboard | ⚠️ Static (not fetching data) |
-| `/characters` | CharacterList | ✅ Functional |
-| `/locations` | LocationList | ✅ Functional |
-| `/locations/:locationId` | LocationDetail | ✅ Functional |
-| `/characters/create` | — | ❌ Not built |
-| `/characters/:id` | — | ❌ Not built |
+| `/campaigns/:campaignId/dashboard` | Dashboard | ⚠️ Static placeholder |
+| `/campaigns/:campaignId/characters` | CharacterList | ✅ Functional |
+| `/campaigns/:campaignId/locations` | LocationList | ✅ Functional |
+| `/campaigns/:campaignId/locations/:locationId` | LocationDetail | ✅ Functional |
+| `/campaigns/:campaignId/characters/create` | — | ❌ Not built |
+| `/campaigns/:campaignId/characters/:id` | — | ❌ Not built |
+| `/campaigns/:campaignId/npcs` | — | ❌ Not built |
+| `/campaigns/:campaignId/npcs/:npcId` | — | ❌ Not built |
 
 ### Locations UI — Key Behaviours
 - **Maps tab:** thumbnail strip (left) + scrollable map viewer (right) with zoom (+/−/scroll wheel) and dark background
@@ -549,16 +564,15 @@ frontend/src/
 - **Top-level map on LocationList:** if a top-level location has maps, the first map is displayed above the hierarchy tree with clickable pin tooltips; multiple maps show a tab strip; pins linked to a location show a "Go to [name]" button; respects player view filter
 
 ### Frontend Not Yet Built
-- Character creation and detail pages
-- NPC management UI
+- Character creation and detail pages (`/campaigns/:campaignId/characters/create`, `/:id`)
+- NPC management UI (`/campaigns/:campaignId/npcs`, `/:npcId`)
 - Loot table UI
 - Encyclopedia browsing UI (players read campaign-merged view)
 - Admin panels (manage base compendium: races, backgrounds, feats, spells, items, creatures)
 - GM panels (campaign overrides + homebrew content management)
-- AuthContext and CampaignContext providers
 - Token refresh / expiration handling
-- `/gm/campaigns/:id/dashboard` and all GM campaign views
-- Active campaign context (switching between campaigns a user belongs to)
+- Dashboard with real data (`/campaigns/:campaignId/dashboard`)
+- NPC image serving (static file route not yet wired in `main.py`)
 
 ---
 

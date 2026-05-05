@@ -1,108 +1,84 @@
-import { NavLink } from 'react-router-dom';
-import './Sidebar.css';
+import { NavLink, useParams } from 'react-router-dom';
+import { useCampaign } from '../../../campaigns/CampaignContext';
+import { cn } from '@/lib/utils';
+import {
+  LayoutDashboard, Users, Drama, Map, Menu, ChevronLeft,
+} from 'lucide-react';
 
-const Sidebar = ({ collapsed, toggleSidebar, user, campaign }) => {
+const Sidebar = ({ collapsed, toggleSidebar }) => {
+  const { campaignId } = useParams();
+  const { campaign } = useCampaign();
 
-  // GM Navigation Items
+  const isGm = campaign?.userRole === 'gm';
+
   const gmNavItems = [
-    { path: '/dashboard', icon: '📊', label: 'Dashboard' },
-    { path: '/characters', icon: '👥', label: 'Characters' },
-    { path: '/npcs', icon: '🎭', label: 'NPCs' },
-    { path: '/locations', icon: '🗺️', label: 'Locations' },
-    { path: '/notes', icon: '📝', label: 'Session Notes' },
-    { path: '/encounters', icon: '⚔️', label: 'Encounters' },
-    { path: '/loot', icon: '💰', label: 'Loot Tables' },
+    { path: `/campaigns/${campaignId}/dashboard`, icon: LayoutDashboard, label: 'Dashboard' },
+    { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'Characters' },
+    { path: `/campaigns/${campaignId}/npcs`, icon: Drama, label: 'NPCs' },
+    { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
   ];
 
-  // Player Navigation Items
   const playerNavItems = [
-    { path: '/my-characters', icon: '👤', label: 'My Characters' },
-    { path: '/party', icon: '👥', label: 'Party' },
-    { path: '/npcs', icon: '🎭', label: 'NPCs' },
-    { path: '/locations', icon: '🗺️', label: 'Locations' },
-    { path: '/notes', icon: '📝', label: 'Notes' },
+    { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'My Characters' },
+    { path: `/campaigns/${campaignId}/npcs`, icon: Drama, label: 'NPCs' },
+    { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
   ];
 
-  // Encyclopedia Items (same for both)
-  const encyclopediaItems = [
-    { path: '/encyclopedia/bestiary', icon: '🐉', label: 'Bestiary' },
-    { path: '/encyclopedia/spells', icon: '✨', label: 'Spells' },
-    { path: '/encyclopedia/items', icon: '⚔️', label: 'Items' },
-  ];
-
-  const navItems = user?.is_admin ? gmNavItems : playerNavItems;
-
-  // Get campaign name from props
-  const campaignName = campaign?.name || 'No Campaign';
+  const navItems = isGm ? gmNavItems : playerNavItems;
 
   return (
-    <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      {/* Sidebar Header */}
-      <div className="sidebar-header">
-        <button 
+    <div className={cn(
+      'flex flex-col h-full bg-card border-r border-border transition-all duration-200 shrink-0',
+      collapsed ? 'w-14' : 'w-56'
+    )}>
+      {/* Header */}
+      <div className="flex items-center gap-2 h-14 px-3 border-b border-border shrink-0">
+        <button
           onClick={toggleSidebar}
-          className="sidebar-toggle"
+          className="p-1.5 rounded-md hover:bg-muted transition-colors shrink-0"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path d="M3 12H21M3 6H21M3 18H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
+          <Menu className="w-5 h-5 text-muted-foreground" />
         </button>
         {!collapsed && (
-          <div className="campaign-info">
-            <span className="campaign-name">{campaignName}</span>
-            <span className="role-badge">{user?.is_admin ? 'GM' : 'Player'}</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate leading-tight">{campaign?.name || 'Campaign'}</p>
+            <p className="text-xs text-muted-foreground">{isGm ? 'Game Master' : 'Player'}</p>
           </div>
         )}
       </div>
 
-      {/* Main Navigation */}
-      <nav className="sidebar-nav">
-        <div className="nav-section">
-          {!collapsed && <div className="nav-section-title">Main</div>}
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) => 
-                `nav-item ${isActive ? 'active' : ''}`
-              }
-              title={collapsed ? item.label : ''}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              {!collapsed && <span className="nav-label">{item.label}</span>}
-            </NavLink>
-          ))}
-        </div>
-
-        {/* Encyclopedia Section */}
-        <div className="nav-section">
-          {!collapsed && <div className="nav-section-title">Encyclopedia</div>}
-          {encyclopediaItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) => 
-                `nav-item ${isActive ? 'active' : ''}`
-              }
-              title={collapsed ? item.label : ''}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              {!collapsed && <span className="nav-label">{item.label}</span>}
-            </NavLink>
-          ))}
-        </div>
+      {/* Nav */}
+      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+        {navItems.map(({ path, icon: Icon, label }) => (
+          <NavLink
+            key={path}
+            to={path}
+            className={({ isActive }) => cn(
+              'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+              isActive
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
+            title={collapsed ? label : undefined}
+          >
+            <Icon className="w-4 h-4 shrink-0" />
+            {!collapsed && <span>{label}</span>}
+          </NavLink>
+        ))}
       </nav>
 
-      {/* Sidebar Footer */}
-      {!collapsed && (
-        <div className="sidebar-footer">
-          <div className="user-info">
-            <span className="user-name">{user?.username}</span>
-            <span className="user-email">{user?.email}</span>
-          </div>
-        </div>
-      )}
+      {/* Footer — switch campaign */}
+      <div className="p-2 border-t border-border">
+        <NavLink
+          to="/campaigns"
+          className="flex items-center gap-2 px-3 py-2 rounded-md text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title={collapsed ? 'Switch Campaign' : undefined}
+        >
+          <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
+          {!collapsed && <span>Switch Campaign</span>}
+        </NavLink>
+      </div>
     </div>
   );
 };

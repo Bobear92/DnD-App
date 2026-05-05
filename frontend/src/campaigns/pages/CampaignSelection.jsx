@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import campaignService from '../campaignService';
-import authService from '../../auth/authService';
+import { useAuth } from '../../auth/AuthContext';
+import { useCampaign } from '../CampaignContext';
 import './CampaignSelection.css';
 
 const CampaignSelection = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const { user, logout } = useAuth();
+  const { enterCampaign } = useCampaign();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -14,24 +16,8 @@ const CampaignSelection = () => {
   const [newCampaign, setNewCampaign] = useState({ name: '', description: '' });
 
 
-const loadUserAndCampaigns = async () => {
+const loadCampaigns = async () => {
   setLoading(true);
-    
-    // Get current user
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    } else {
-      // Fetch user if not in localStorage
-      const userResult = await authService.getCurrentUser();
-      if (userResult.success) {
-        setUser(userResult.data);
-        localStorage.setItem('user', JSON.stringify(userResult.data));
-      } else {
-        navigate('/login');
-        return;
-      }
-    }
 
     // Get campaigns
     const result = await campaignService.getAllCampaigns();
@@ -47,7 +33,7 @@ const loadUserAndCampaigns = async () => {
   // useEffect goes AFTER the function, not inside it
     useEffect(() => {
       // eslint-disable-next-line react-hooks/exhaustive-deps
-        loadUserAndCampaigns();
+        loadCampaigns();
     }, []);
 
   const handleCreateCampaign = async (e) => {
@@ -57,21 +43,20 @@ const loadUserAndCampaigns = async () => {
     if (result.success) {
       setShowCreateModal(false);
       setNewCampaign({ name: '', description: '' });
-      loadUserAndCampaigns(); // Reload campaigns
+      loadCampaigns(); // Reload campaigns
     } else {
       setError(result.error);
     }
   };
 
 const handleEnterCampaign = (campaign) => {
-  // Store selected campaign data
-  localStorage.setItem('selectedCampaign', JSON.stringify(campaign));
-  // Navigate to dashboard
-  navigate('/dashboard');
+  const userRole = campaign.created_by === user?.id ? 'gm' : 'player';
+  enterCampaign({ ...campaign, userRole });
+  navigate(`/campaigns/${campaign.id}/locations`);
 };
 
   const handleLogout = () => {
-    authService.logout();
+    logout();
     navigate('/login');
   };
 

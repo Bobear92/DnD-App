@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import MainLayout from '../../shared/components/layout/MainLayout';
+import { useCampaign } from '../../campaigns/CampaignContext';
 import locationService, { mapImageUrl } from '../locationService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,10 +53,8 @@ const EMPTY_EDIT_FORM = (loc) => ({
 
 export default function LocationDetail() {
   const navigate = useNavigate();
-  const { locationId } = useParams();
-
-  const [campaign, setCampaign] = useState(null);
-  const [user, setUser] = useState(null);
+  const { campaignId, locationId } = useParams();
+  const { campaign } = useCampaign();
   const [location, setLocation] = useState(null);
   const [allLocations, setAllLocations] = useState([]);
   const [locationListItem, setLocationListItem] = useState(null);
@@ -108,15 +107,9 @@ export default function LocationDetail() {
   const [loadingNpcs, setLoadingNpcs] = useState(false);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const storedCampaign = localStorage.getItem('selectedCampaign');
-    if (!storedUser || !storedCampaign) { navigate('/campaigns'); return; }
-    const u = JSON.parse(storedUser);
-    const c = JSON.parse(storedCampaign);
-    setUser(u);
-    setCampaign(c);
-    loadAll(c.id, locationId);
-  }, [locationId, navigate]);
+    if (!campaignId) { navigate('/campaigns'); return; }
+    loadAll(campaignId, locationId);
+  }, [campaignId, locationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadAll = async (campaignId, locId) => {
     setLoading(true);
@@ -159,14 +152,14 @@ export default function LocationDetail() {
 
   const refreshPins = async () => {
     if (!selectedMap || !campaign) return;
-    const pinList = await locationService.getPins(campaign.id, locationId, selectedMap.id);
+    const pinList = await locationService.getPins(campaignId, locationId, selectedMap.id);
     setPins(pinList);
   };
 
   const handleSaveEdit = async () => {
     setSaving(true);
     try {
-      const updated = await locationService.updateLocation(campaign.id, locationId, editForm);
+      const updated = await locationService.updateLocation(campaignId, locationId, editForm);
       setLocation(updated);
       // Refresh hierarchy fields — backend may have auto-cleared conflicting flags
       setEditForm(f => ({
@@ -184,7 +177,7 @@ export default function LocationDetail() {
 
   const handleToggleLocationVisibility = async () => {
     try {
-      const updated = await locationService.toggleLocationVisibility(campaign.id, locationId);
+      const updated = await locationService.toggleLocationVisibility(campaignId, locationId);
       setLocation(prev => ({ ...prev, is_visible_to_players: updated.is_visible_to_players }));
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to update visibility');
@@ -211,14 +204,14 @@ export default function LocationDetail() {
     if (!uploadFile || !uploadName.trim()) return;
     setUploading(true);
     try {
-      const newMap = await locationService.uploadMap(campaign.id, locationId, uploadName, uploadFile);
+      const newMap = await locationService.uploadMap(campaignId, locationId, uploadName, uploadFile);
       const updatedMaps = [...maps, newMap];
       setMaps(updatedMaps);
       setShowUpload(false);
       setUploadName('');
       setUploadFile(null);
       setUploadPreview(null);
-      await selectMap(campaign.id, locationId, newMap);
+      await selectMap(campaignId, locationId, newMap);
     } catch (err) {
       setError(err.response?.data?.detail || 'Upload failed');
     } finally {
@@ -230,11 +223,11 @@ export default function LocationDetail() {
     e.stopPropagation();
     if (!window.confirm('Delete this map? This will also remove all its pins.')) return;
     try {
-      await locationService.deleteMap(campaign.id, locationId, mapId);
+      await locationService.deleteMap(campaignId, locationId, mapId);
       const remaining = maps.filter(m => m.id !== mapId);
       setMaps(remaining);
       if (selectedMap?.id === mapId) {
-        if (remaining.length > 0) await selectMap(campaign.id, locationId, remaining[0]);
+        if (remaining.length > 0) await selectMap(campaignId, locationId, remaining[0]);
         else { setSelectedMap(null); setPins([]); }
       }
     } catch (err) {
@@ -245,7 +238,7 @@ export default function LocationDetail() {
   const handleToggleMapVisibility = async (mapId, e) => {
     e.stopPropagation();
     try {
-      const updated = await locationService.toggleMapVisibility(campaign.id, locationId, mapId);
+      const updated = await locationService.toggleMapVisibility(campaignId, locationId, mapId);
       setMaps(prev => prev.map(m => m.id === mapId ? { ...m, is_visible_to_players: updated.is_visible_to_players } : m));
       if (selectedMap?.id === mapId) setSelectedMap(prev => ({ ...prev, is_visible_to_players: updated.is_visible_to_players }));
     } catch (err) {
@@ -257,7 +250,7 @@ export default function LocationDetail() {
     if (!newLocForm.name.trim()) return;
     setCreatingLoc(true);
     try {
-      const created = await locationService.createLocation(campaign.id, {
+      const created = await locationService.createLocation(campaignId, {
         name: newLocForm.name,
         location_type: newLocForm.location_type,
         status: newLocForm.status,
@@ -282,7 +275,7 @@ export default function LocationDetail() {
     setNpcForm({ npc_id: '', description: '' });
     setLoadingNpcs(true);
     try {
-      const npcs = await locationService.getCampaignNpcs(campaign.id);
+      const npcs = await locationService.getCampaignNpcs(campaignId);
       const linked = new Set(locationNpcs.map(n => n.npc_id));
       setCampaignNpcs(npcs.filter(n => !linked.has(n.id)));
     } catch {
@@ -296,7 +289,7 @@ export default function LocationDetail() {
     if (!npcForm.npc_id) return;
     setAddingNpc(true);
     try {
-      const added = await locationService.addLocationNpc(campaign.id, locationId, {
+      const added = await locationService.addLocationNpc(campaignId, locationId, {
         npc_id: parseInt(npcForm.npc_id),
         description: npcForm.description || null,
       });
@@ -312,7 +305,7 @@ export default function LocationDetail() {
   const handleRemoveNpc = async (lnId) => {
     if (!window.confirm('Remove this NPC from this location?')) return;
     try {
-      await locationService.removeLocationNpc(campaign.id, locationId, lnId);
+      await locationService.removeLocationNpc(campaignId, locationId, lnId);
       setLocationNpcs(prev => prev.filter(n => n.id !== lnId));
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to remove NPC');
@@ -329,7 +322,7 @@ export default function LocationDetail() {
   const handleMovePin = async (pin, x, y) => {
     setMovingPin(null);
     try {
-      await locationService.updatePin(campaign.id, locationId, selectedMap.id, pin.id, { x_percent: x, y_percent: y });
+      await locationService.updatePin(campaignId, locationId, selectedMap.id, pin.id, { x_percent: x, y_percent: y });
       await refreshPins();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to move pin');
@@ -362,7 +355,7 @@ export default function LocationDetail() {
         is_visible_to_players: pinForm.is_visible_to_players,
         linked_location_id: pinForm.linked_location_id ? parseInt(pinForm.linked_location_id) : null,
       };
-      await locationService.createPin(campaign.id, locationId, selectedMap.id, payload);
+      await locationService.createPin(campaignId, locationId, selectedMap.id, payload);
       await refreshPins();
       setShowPinDialog(false);
       setAddingPin(false);
@@ -384,7 +377,7 @@ export default function LocationDetail() {
         is_visible_to_players: pinForm.is_visible_to_players,
         linked_location_id: pinForm.linked_location_id ? parseInt(pinForm.linked_location_id) : null,
       };
-      await locationService.updatePin(campaign.id, locationId, selectedMap.id, editingPin.id, payload);
+      await locationService.updatePin(campaignId, locationId, selectedMap.id, editingPin.id, payload);
       await refreshPins();
       setShowPinDialog(false);
       setEditingPin(null);
@@ -398,7 +391,7 @@ export default function LocationDetail() {
   const handleDeletePin = async (pinId) => {
     if (!window.confirm('Delete this pin?')) return;
     try {
-      await locationService.deletePin(campaign.id, locationId, selectedMap.id, pinId);
+      await locationService.deletePin(campaignId, locationId, selectedMap.id, pinId);
       await refreshPins();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to delete pin');
@@ -417,7 +410,7 @@ export default function LocationDetail() {
     setShowPinDialog(true);
   };
 
-  const isGm = !!user;
+  const isGm = campaign?.userRole === 'gm';
 
   const visibleMaps = playerView ? maps.filter(m => m.is_visible_to_players) : maps;
   const visiblePins = playerView ? pins.filter(p => p.is_visible_to_players) : pins;
@@ -427,7 +420,7 @@ export default function LocationDetail() {
     if (!campaign || !visibleMaps.length) return;
     const currentVisible = visibleMaps.some(m => m.id === selectedMap?.id);
     if (!currentVisible) {
-      selectMap(campaign.id, locationId, visibleMaps[0]);
+      selectMap(campaignId, locationId, visibleMaps[0]);
     }
   }, [playerView]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -471,7 +464,7 @@ export default function LocationDetail() {
     return (
       <MainLayout>
         <div className="p-6">
-          <Button variant="ghost" onClick={() => navigate('/locations')}>
+          <Button variant="ghost" onClick={() => navigate(`/campaigns/${campaignId}/locations`)}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Locations
           </Button>
           <p className="text-destructive mt-4">{error || 'Location not found.'}</p>
@@ -485,7 +478,7 @@ export default function LocationDetail() {
       <div className="p-6 max-w-6xl mx-auto">
         {/* Back + header */}
         <div className="flex items-start gap-4 mb-6">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/locations')} className="mt-1 shrink-0">
+          <Button variant="ghost" size="sm" onClick={() => navigate(`/campaigns/${campaignId}/locations`)} className="mt-1 shrink-0">
             <ArrowLeft className="w-4 h-4 mr-1" /> Locations
           </Button>
           <div className="flex-1 min-w-0">
@@ -558,7 +551,7 @@ export default function LocationDetail() {
                 {visibleMaps.map((m) => (
                   <div
                     key={m.id}
-                    onClick={() => selectMap(campaign.id, locationId, m)}
+                    onClick={() => selectMap(campaignId, locationId, m)}
                     className={`relative group rounded-lg overflow-hidden border-2 cursor-pointer transition-colors ${
                       selectedMap?.id === m.id ? 'border-primary' : 'border-transparent hover:border-muted-foreground/30'
                     }`}
@@ -665,7 +658,7 @@ export default function LocationDetail() {
                                       </div>
                                       {pin.description && <p className="text-xs text-muted-foreground mb-2">{pin.description}</p>}
                                       {linkedLoc && (
-                                        <button onClick={() => navigate(`/locations/${linkedLoc.id}`)} className="w-full flex items-center gap-1 text-xs py-1 px-2 rounded bg-blue-600/10 text-blue-600 hover:bg-blue-600/20 mb-1">
+                                        <button onClick={() => navigate(`/campaigns/${campaignId}/locations/${linkedLoc.id}`)} className="w-full flex items-center gap-1 text-xs py-1 px-2 rounded bg-blue-600/10 text-blue-600 hover:bg-blue-600/20 mb-1">
                                           <ExternalLink className="w-3 h-3" /> Go to {linkedLoc.name}
                                         </button>
                                       )}
@@ -1025,14 +1018,14 @@ export default function LocationDetail() {
                             <p className="text-xs font-medium text-muted-foreground mb-2">Child Locations</p>
                             <div className="space-y-1">
                               {childrenByParent.map(child => (
-                                <div key={child.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-muted cursor-pointer" onClick={() => navigate(`/locations/${child.id}`)}>
+                                <div key={child.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-muted cursor-pointer" onClick={() => navigate(`/campaigns/${campaignId}/locations/${child.id}`)}>
                                   <Link className="w-3 h-3 text-muted-foreground shrink-0" />
                                   <span className="flex-1 truncate">{child.name}</span>
                                   <span className="text-xs text-muted-foreground">manually set</span>
                                 </div>
                               ))}
                               {childrenByPin.map(child => (
-                                <div key={child.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-muted cursor-pointer" onClick={() => navigate(`/locations/${child.id}`)}>
+                                <div key={child.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-muted cursor-pointer" onClick={() => navigate(`/campaigns/${campaignId}/locations/${child.id}`)}>
                                   <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
                                   <span className="flex-1 truncate">{child.name}</span>
                                   <span className="text-xs text-muted-foreground">via map pin</span>

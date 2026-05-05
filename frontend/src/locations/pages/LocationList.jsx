@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import MainLayout from '../../shared/components/layout/MainLayout';
+import { useCampaign } from '../../campaigns/CampaignContext';
 import locationService, { mapImageUrl } from '../locationService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,7 +56,7 @@ function LocationTreeNode({ node, depth, navigate, isGm, playerView, onToggleVis
     <div className={cn(depth > 0 && 'border-l border-border ml-4 pl-3')}>
       <div
         className="flex items-center gap-1.5 py-1.5 px-2 rounded-md hover:bg-muted cursor-pointer group"
-        onClick={() => navigate(`/locations/${loc.id}`)}
+        onClick={() => navigate(`/campaigns/${campaignId}/locations/${loc.id}`)}
       >
         {children.length > 0 ? (
           <button
@@ -115,7 +116,7 @@ function LocationCard({ loc, navigate, isGm, playerView, onToggleVisibility }) {
   return (
     <Card
       className="cursor-pointer hover:shadow-md transition-shadow"
-      onClick={() => navigate(`/locations/${loc.id}`)}
+      onClick={() => navigate(`/campaigns/${campaignId}/locations/${loc.id}`)}
     >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
@@ -174,11 +175,11 @@ function SectionHeader({ icon: Icon, title, count, open, onToggle }) {
 
 export default function LocationList() {
   const navigate = useNavigate();
+  const { campaignId } = useParams();
+  const { campaign } = useCampaign();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [campaign, setCampaign] = useState(null);
-  const [user, setUser] = useState(null);
   const [playerView, setPlayerView] = useState(false);
   const [viewMode, setViewMode] = useState('hierarchy'); // 'hierarchy' | 'alphabetical'
   const [searchQuery, setSearchQuery] = useState('');
@@ -201,14 +202,9 @@ export default function LocationList() {
   });
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const storedCampaign = localStorage.getItem('selectedCampaign');
-    if (!storedUser || !storedCampaign) { navigate('/campaigns'); return; }
-    setUser(JSON.parse(storedUser));
-    const camp = JSON.parse(storedCampaign);
-    setCampaign(camp);
-    loadLocations(camp.id);
-  }, [navigate]);
+    if (!campaignId) { navigate('/campaigns'); return; }
+    loadLocations(campaignId);
+  }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadLocations = async (campaignId) => {
     setLoading(true);
@@ -226,10 +222,10 @@ export default function LocationList() {
     if (!form.name.trim()) return;
     setCreating(true);
     try {
-      await locationService.createLocation(campaign.id, form);
+      await locationService.createLocation(campaignId, form);
       setShowCreate(false);
       setForm({ name: '', description: '', gm_notes: '', location_type: '', status: '', is_visible_to_players: false });
-      await loadLocations(campaign.id);
+      await loadLocations(campaignId);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to create location');
     } finally {
@@ -240,7 +236,7 @@ export default function LocationList() {
   const handleToggleVisibility = async (locationId, e) => {
     e.stopPropagation();
     try {
-      const updated = await locationService.toggleLocationVisibility(campaign.id, locationId);
+      const updated = await locationService.toggleLocationVisibility(campaignId, locationId);
       setLocations(prev => prev.map(l =>
         l.id === locationId ? { ...l, is_visible_to_players: updated.is_visible_to_players } : l
       ));
@@ -249,7 +245,7 @@ export default function LocationList() {
     }
   };
 
-  const isGm = !!user;
+  const isGm = campaign?.userRole === 'gm';
 
   // ── Derived data ────────────────────────────────────────────────────────────
 
@@ -301,16 +297,16 @@ export default function LocationList() {
   const handleSelectTopMap = async (mapId) => {
     setTopOpenPinId(null);
     setSelectedTopMapId(mapId);
-    if (!topLevelPins[mapId] && campaign && topLevel) {
+    if (!topLevelPins[mapId] && campaignId && topLevel) {
       try {
-        const pins = await locationService.getPins(campaign.id, topLevel.id, mapId);
+        const pins = await locationService.getPins(campaignId, topLevel.id, mapId);
         setTopLevelPins(prev => ({ ...prev, [mapId]: pins }));
       } catch {}
     }
   };
 
   useEffect(() => {
-    if (!topLevel || !campaign) {
+    if (!topLevel || !campaignId) {
       setTopLevelMaps([]);
       setSelectedTopMapId(null);
       setTopLevelPins({});
@@ -318,19 +314,19 @@ export default function LocationList() {
     }
     setLoadingTopMap(true);
     setTopOpenPinId(null);
-    locationService.getMaps(campaign.id, topLevel.id)
+    locationService.getMaps(campaignId, topLevel.id)
       .then(async (maps) => {
         setTopLevelMaps(maps);
         if (maps.length > 0) {
           const first = maps[0];
           setSelectedTopMapId(first.id);
-          const pins = await locationService.getPins(campaign.id, topLevel.id, first.id);
+          const pins = await locationService.getPins(campaignId, topLevel.id, first.id);
           setTopLevelPins({ [first.id]: pins });
         }
       })
       .catch(() => {})
       .finally(() => setLoadingTopMap(false));
-  }, [topLevel?.id, campaign?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [topLevel?.id, campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Top-level map derived data ───────────────────────────────────────────────
 
@@ -562,7 +558,7 @@ export default function LocationList() {
                                     {pin.description && <p className="text-xs text-muted-foreground mb-2">{pin.description}</p>}
                                     {linkedLoc && (
                                       <button
-                                        onClick={() => navigate(`/locations/${linkedLoc.id}`)}
+                                        onClick={() => navigate(`/campaigns/${campaignId}/locations/${linkedLoc.id}`)}
                                         className="w-full flex items-center gap-1 text-xs py-1 px-2 rounded bg-blue-600/10 text-blue-600 hover:bg-blue-600/20"
                                       >
                                         <ExternalLink className="w-3 h-3" /> Go to {linkedLoc.name}
@@ -583,7 +579,7 @@ export default function LocationList() {
                         </div>
                         <button
                           className="pointer-events-auto text-xs text-white/80 hover:text-white flex items-center gap-1"
-                          onClick={(e) => { e.stopPropagation(); navigate(`/locations/${topLevel.id}`); }}
+                          onClick={(e) => { e.stopPropagation(); navigate(`/campaigns/${campaignId}/locations/${topLevel.id}`); }}
                         >
                           View Details <ChevronRight className="w-3 h-3" />
                         </button>
@@ -632,7 +628,7 @@ export default function LocationList() {
                       <div
                         key={loc.id}
                         className="flex items-center gap-1.5 py-1.5 px-2 rounded-md hover:bg-muted cursor-pointer"
-                        onClick={() => navigate(`/locations/${loc.id}`)}
+                        onClick={() => navigate(`/campaigns/${campaignId}/locations/${loc.id}`)}
                       >
                         <span className="w-4 shrink-0" />
                         <span className="text-sm flex-1 min-w-0 truncate">{loc.name}</span>
@@ -677,7 +673,7 @@ export default function LocationList() {
                       <div
                         key={loc.id}
                         className="flex items-center gap-1.5 py-1.5 px-2 rounded-md hover:bg-muted cursor-pointer"
-                        onClick={() => navigate(`/locations/${loc.id}`)}
+                        onClick={() => navigate(`/campaigns/${campaignId}/locations/${loc.id}`)}
                       >
                         <span className="w-4 shrink-0" />
                         <span className="text-sm flex-1 min-w-0 truncate">{loc.name}</span>
