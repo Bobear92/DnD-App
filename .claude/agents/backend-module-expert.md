@@ -27,6 +27,7 @@ class MyModel(Base):
 ```
 - Use `SQLEnum(OwnerType)` and import `OwnerType` from `shared.enums` for content with system/campaign ownership
 - Use `ForeignKey("campaigns.id", ondelete="CASCADE")` for campaign-specific content
+- **SQLAlchemy Enums in Postgres:** autogenerate will NOT create the PG type automatically. Manually add `op.execute("CREATE TYPE myenum AS ENUM (...)")` BEFORE the `op.add_column(...)` call in the migration, and `op.execute("DROP TYPE myenum")` in downgrade after dropping the column.
 
 ### schemas.py
 ```python
@@ -140,9 +141,61 @@ if member.role == "player":
 return query.all()
 ```
 
+## File Upload Pattern
+When a module needs image/file uploads (e.g. NPC portraits, map images), create a `storage.py` alongside the other module files:
+```python
+# backend/gm/.../mymodule/storage.py
+import os, uuid
+from fastapi import UploadFile, HTTPException, status
+
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_BASE_DIR = os.path.normpath(os.path.join(_MODULE_DIR, "../../../../uploads/mymodule"))
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_FILE_SIZE = 10 * 1024 * 1024
+
+async def save_image(file: UploadFile, campaign_id: int, item_id: int) -> str:
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed")
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File size exceeds the 10 MB limit")
+    dir_path = os.path.join(UPLOAD_BASE_DIR, str(campaign_id), str(item_id))
+    os.makedirs(dir_path, exist_ok=True)
+    ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+    filename = f"{uuid.uuid4()}{ext}"
+    with open(os.path.join(dir_path, filename), "wb") as f:
+        f.write(contents)
+    return f"uploads/mymodule/{campaign_id}/{item_id}/{filename}"
+
+def delete_image(image_path: str) -> None:
+    backend_dir = os.path.normpath(os.path.join(_MODULE_DIR, "../../../.."))
+    full_path = os.path.join(backend_dir, image_path)
+    if os.path.exists(full_path): os.remove(full_path)
+```
+- Store path under `backend/uploads/<module>/` (e.g. `uploads/maps/`, `uploads/npcs/`)
+- Reference implementations: `locations/storage.py` (maps, 100 MB limit) and `npcs/storage.py` (portraits, 10 MB limit)
+- Image upload route: `POST /{item_id}/image` with `file: UploadFile = File(...)`, async handler
+
+## Junction Table / Relationship Pattern
+For many-to-many or named relationships (see `npc_relationships`, `npc_player_relationships`, `location_npcs`):
+```python
+class MyRelationship(Base):
+    __tablename__ = "my_relationships"
+    id = Column(Integer, primary_key=True, index=True)
+    a_id = Column(Integer, ForeignKey("a.id", ondelete="CASCADE"), nullable=False, index=True)
+    b_id = Column(Integer, ForeignKey("b.id", ondelete="CASCADE"), nullable=False)
+    relationship_type = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (UniqueConstraint("a_id", "b_id", name="uq_my_relationship"),)
+```
+- Routes: `GET /{id}/relationships`, `POST /{id}/relationships`, `DELETE /{id}/relationships/{rel_id}`
+- Service builds a response DTO by joining the related record for its name/username
+
 ## After Creating Files
 Always:
 1. Register the router in `backend/main.py`
 2. Run `alembic revision --autogenerate -m "add <table>"` then `alembic upgrade head`
+   - If the model uses a SQLAlchemy Enum, manually add `op.execute("CREATE TYPE ...")` before the column in the migration
 3. Write tests in `backend/tests/test_<module>.py` — tests ship with the feature, never deferred
 4. Update `CLAUDE.md`: schema table count, backend structure tree, API endpoints table, test file listing

@@ -80,9 +80,13 @@ backend/
 │   ├── campaigns/               # Campaign + member management
 │   │   └── campaign_tools/
 │   │       ├── npcs/            # NPC management (campaign-specific)
-│   │       └── locations/       # Locations, maps, pins, NPC links — routes/service/models/schemas/storage
+│   │       ├── npcs/            # NPC management — routes/service/models/schemas/storage
+│       └── locations/       # Locations, maps, pins, NPC links — routes/service/models/schemas/storage
 │   └── tools/
 │       └── loot_tables/         # Loot table generation (system + campaign)
+├── uploads/
+│   ├── maps/                    # Map images: uploads/maps/{campaign_id}/{location_id}/uuid.ext
+│   └── npcs/                    # NPC portraits: uploads/npcs/{campaign_id}/{npc_id}/uuid.ext
 ├── shared/
 │   ├── encyclopedia/
 │   │   ├── bestiary/            # Creatures/monsters
@@ -148,7 +152,7 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 
 ---
 
-## Current Database Schema (19 Tables)
+## Current Database Schema (21 Tables)
 
 ```sql
 -- Core
@@ -187,12 +191,40 @@ feats
 
 -- GM Campaign Tools
 npcs
-  id, campaign_id (FK→campaigns), name, race, occupation, alignment,
+  id, campaign_id (FK→campaigns),
+  -- Core
+  name, race, occupation, alignment,
+  status (ENUM: alive/dead/missing/unknown),
+  -- Physical
+  age, gender, height, weight (all String), appearance (Text), image_path,
+  -- Personality & voice
+  voice, personality_traits, ideals, bonds, flaws (all Text),
+  languages (JSONB),                ← ["Common", "Elvish"]
+  -- Narrative (player-visible)
   summary,                          ← short blurb for cards/lists outside the NPC page
-  description, backstory, location, stats (JSONB), notes,
+  description, backstory,
+  -- Location tracking
+  last_known_location_id (FK→locations, SET NULL), last_seen_notes,
+  -- Media
+  theme_music_url,
+  -- Combat
+  stats (JSONB),
+  -- GM only (never returned to players)
+  gm_notes,
   is_visible_to_players (boolean), created_at, updated_at
 
-location_npcs                        ← junction: NPCs linked to a location
+npc_relationships                    ← NPC-to-NPC named relationships
+  id, npc_a_id (FK→npcs CASCADE), npc_b_id (FK→npcs CASCADE),
+  relationship_type, description, created_at
+  UNIQUE(npc_a_id, npc_b_id)
+
+npc_player_relationships             ← NPC-to-player named relationships (campaign-scoped)
+  id, npc_id (FK→npcs CASCADE), user_id (FK→users CASCADE),
+  campaign_id (FK→campaigns CASCADE),
+  relationship_type, description, created_at
+  UNIQUE(npc_id, user_id, campaign_id)
+
+location_npcs                        ← junction: NPCs manually linked to a location
   id, location_id (FK→locations), npc_id (FK→npcs),
   description,                      ← NPC's role at this specific location (optional)
   created_at
@@ -357,6 +389,15 @@ Campaign creation uses `get_current_user` (any authenticated user). Member manag
 | PUT | /api/gm/campaigns/npcs/{id} | Yes (GM of campaign) |
 | DELETE | /api/gm/campaigns/npcs/{id} | Yes (GM of campaign) |
 | PATCH | /api/gm/campaigns/npcs/{id}/visibility | Yes (GM of campaign) |
+| POST | /api/gm/campaigns/npcs/{id}/image | Yes (GM, multipart) |
+| DELETE | /api/gm/campaigns/npcs/{id}/image | Yes (GM of campaign) |
+| GET/POST | /api/gm/campaigns/npcs/{id}/relationships | Yes (member / GM) |
+| DELETE | /api/gm/campaigns/npcs/{id}/relationships/{rel_id} | Yes (GM of campaign) |
+| GET/POST | /api/gm/campaigns/npcs/{id}/player-relationships | Yes (member / GM) |
+| DELETE | /api/gm/campaigns/npcs/{id}/player-relationships/{rel_id} | Yes (GM of campaign) |
+
+`gm_notes` is always stripped from NPC responses for players.
+`last_known_location_id` NPCs surface in location NPC lists as `source="last_seen"` (deduped against manually linked `source="linked"` NPCs).
 
 ### Locations
 | Method | Endpoint | Auth Required |
@@ -498,7 +539,7 @@ frontend/src/
 - Maps default to `is_visible_to_players=false` — GM must explicitly show each map to players
 - **Info tab — GM view:** always editable; section cards for Details, GM Notes (private), Lore & Culture, Environment, Adventure, Hierarchy, Important NPCs; Save/Reset buttons per card
 - **Info tab — Player view:** read-only; empty sections hidden entirely; GM Notes never shown; NPC cards only show NPCs where `is_visible_to_players=true` on the NPC
-- **Important NPCs:** linked via `location_npcs` junction; each link has an optional role description ("Runs the forge"); NPC cards show name, race, occupation, role description, and NPC `summary`
+- **Important NPCs:** two sources merged in the NPC list response — `source="linked"` (manual `location_npcs` junction, has role description) and `source="last_seen"` (NPC's `last_known_location_id` points here, shows `last_seen_notes`). Deduped: if an NPC is both, `linked` wins. NPC cards show name, race, occupation, role/last_seen description, and NPC `summary`
 - **Hierarchy card (GM only):** set top-level, set parent, mark as unknown; child list shows manually-set children (link icon) and pin-derived children (pin icon + "via map pin" label)
 - **LocationList — GM view:** three sections — World Hierarchy tree (from top-level), Unsorted (staging area, locations not placed anywhere), Unknown Locations
 - **LocationList — Player view:** toggle Hierarchy / A–Z; search bar; Unknown Locations section at bottom of hierarchy view
@@ -555,7 +596,7 @@ backend/tests/
 ├── conftest.py                     # shared fixtures + helpers
 ├── test_auth.py                    # auth module
 ├── test_campaigns.py               # campaign CRUD + member management
-├── test_npcs.py                    # NPC CRUD + visibility
+├── test_npcs.py                    # NPC CRUD, visibility, gm_notes stripping, image, relationships, player-relationships, last_known_location (36 tests)
 ├── test_characters.py              # character CRUD + visibility
 ├── test_loot_tables.py             # loot tables (system/campaign ownership)
 ├── test_races_backgrounds_feats.py # admin-only compendium (parametrized)
@@ -636,8 +677,9 @@ SECRET_KEY=your-secret-key-change-this-in-production
 - Content copy/export between a GM's campaigns not yet implemented
 
 ### Backend — Features Not Yet Started
-- `gm/campaigns/campaign_tools/session_notes/` — Session notes
+- `gm/campaigns/campaign_tools/session_notes/` — Session notes (NPC session attendance will be a junction table here)
 - Classes system (like races/backgrounds but for character classes)
+- NPC image upload endpoint exists but image serving (static file route) not yet wired in `main.py` — needed before frontend can display portraits
 
 ### Frontend
 - Everything listed in "Frontend Not Yet Built" above

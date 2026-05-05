@@ -68,6 +68,21 @@ def _build_npc_response(ln: LocationNPC, npc: NPC) -> LocationNPCResponse:
         summary=npc.summary,
         description=ln.description,
         is_visible_to_players=npc.is_visible_to_players,
+        source="linked",
+    )
+
+
+def _build_last_seen_npc_response(npc: NPC) -> LocationNPCResponse:
+    return LocationNPCResponse(
+        id=None,
+        npc_id=npc.id,
+        name=npc.name,
+        race=npc.race,
+        occupation=npc.occupation,
+        summary=npc.summary,
+        description=npc.last_seen_notes,
+        is_visible_to_players=npc.is_visible_to_players,
+        source="last_seen",
     )
 
 
@@ -217,14 +232,29 @@ def get_location_npcs(db: Session, campaign_id: int, location_id: int, user_id: 
     loc = _get_location_or_404(db, location_id)
     if loc.campaign_id != campaign_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
-    query = (
+
+    # Manually linked NPCs (location_npcs junction)
+    linked_query = (
         db.query(LocationNPC, NPC)
         .join(NPC, LocationNPC.npc_id == NPC.id)
         .filter(LocationNPC.location_id == location_id)
     )
     if member.role == "player":
-        query = query.filter(NPC.is_visible_to_players == True)
-    return [_build_npc_response(ln, npc) for ln, npc in query.all()]
+        linked_query = linked_query.filter(NPC.is_visible_to_players == True)
+    linked = [_build_npc_response(ln, npc) for ln, npc in linked_query.all()]
+    linked_npc_ids = {r.npc_id for r in linked}
+
+    # NPCs whose last known location is here (deduped against linked)
+    last_seen_query = db.query(NPC).filter(
+        NPC.last_known_location_id == location_id,
+        NPC.campaign_id == campaign_id,
+        NPC.id.notin_(linked_npc_ids),
+    )
+    if member.role == "player":
+        last_seen_query = last_seen_query.filter(NPC.is_visible_to_players == True)
+    last_seen = [_build_last_seen_npc_response(npc) for npc in last_seen_query.all()]
+
+    return linked + last_seen
 
 
 def add_location_npc(db: Session, campaign_id: int, location_id: int, data: LocationNPCAdd, user_id: int) -> LocationNPCResponse:

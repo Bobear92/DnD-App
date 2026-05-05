@@ -133,14 +133,15 @@ class LocationNPCAdd(BaseModel):
 
 
 class LocationNPCResponse(BaseModel):
-    id: int
+    id: Optional[int] = None  # None for last_seen NPCs (no junction row)
     npc_id: int
     name: str
     race: str
     occupation: Optional[str] = None
     summary: Optional[str] = None
-    description: Optional[str] = None
+    description: Optional[str] = None  # junction role description or last_seen_notes
     is_visible_to_players: bool
+    source: str = "linked"  # "linked" (manual junction) or "last_seen" (last_known_location_id)
 
     class Config:
         from_attributes = True
