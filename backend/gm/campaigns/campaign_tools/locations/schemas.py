@@ -19,6 +19,10 @@ class LocationCreate(BaseModel):
     location_type: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = Field(None, max_length=100)
     is_visible_to_players: bool = Field(default=False)
+    # Hierarchy
+    parent_location_id: Optional[int] = None
+    is_top_level: bool = Field(default=False)
+    is_unknown: bool = Field(default=False)
     # Environment
     weather: Optional[str] = None
     plant_life: Optional[str] = None
@@ -44,6 +48,10 @@ class LocationUpdate(BaseModel):
     location_type: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = Field(None, max_length=100)
     is_visible_to_players: Optional[bool] = None
+    # Hierarchy
+    parent_location_id: Optional[int] = None
+    is_top_level: Optional[bool] = None
+    is_unknown: Optional[bool] = None
     # Environment
     weather: Optional[str] = None
     plant_life: Optional[str] = None
@@ -71,6 +79,10 @@ class LocationResponse(BaseModel):
     location_type: Optional[str] = None
     status: Optional[str] = None
     is_visible_to_players: bool
+    # Hierarchy
+    parent_location_id: Optional[int] = None
+    is_top_level: bool = False
+    is_unknown: bool = False
     # Environment
     weather: Optional[str] = None
     plant_life: Optional[str] = None
@@ -98,9 +110,15 @@ class LocationListItem(BaseModel):
     id: int
     campaign_id: int
     name: str
+    description: Optional[str] = None
     location_type: Optional[str] = None
     status: Optional[str] = None
     is_visible_to_players: bool
+    # Hierarchy
+    parent_location_id: Optional[int] = None
+    is_top_level: bool = False
+    is_unknown: bool = False
+    pin_child_ids: List[int] = []
     created_at: datetime
 
     class Config:

@@ -5,7 +5,7 @@ from typing import List
 
 from .models import Location, LocationNPC, LocationRelationship, LocationMap, MapPin, LocationLink
 from .schemas import (
-    LocationCreate, LocationUpdate,
+    LocationCreate, LocationUpdate, LocationListItem,
     LocationNPCAdd, LocationNPCResponse,
     LocationRelationshipCreate,
     MapPinCreate, MapPinUpdate,
@@ -82,12 +82,47 @@ def create_location(db: Session, campaign_id: int, data: LocationCreate, user_id
     return loc
 
 
-def get_locations(db: Session, campaign_id: int, user_id: int) -> List[Location]:
+def get_locations(db: Session, campaign_id: int, user_id: int) -> List[LocationListItem]:
     member = _require_member(db, campaign_id, user_id)
     query = db.query(Location).filter(Location.campaign_id == campaign_id)
     if member.role == "player":
         query = query.filter(Location.is_visible_to_players == True)
-    return query.order_by(Location.name).all()
+    locations = query.order_by(Location.name).all()
+
+    location_ids = [l.id for l in locations]
+    pin_children: dict[int, list[int]] = {}
+    if location_ids:
+        rows = (
+            db.query(LocationMap.location_id, MapPin.linked_location_id)
+            .join(MapPin, MapPin.map_id == LocationMap.id)
+            .filter(
+                LocationMap.location_id.in_(location_ids),
+                MapPin.linked_location_id.isnot(None),
+            )
+            .all()
+        )
+        for parent_id, child_id in rows:
+            pin_children.setdefault(parent_id, [])
+            if child_id not in pin_children[parent_id]:
+                pin_children[parent_id].append(child_id)
+
+    return [
+        LocationListItem(
+            id=loc.id,
+            campaign_id=loc.campaign_id,
+            name=loc.name,
+            description=loc.description,
+            location_type=loc.location_type,
+            status=loc.status,
+            is_visible_to_players=loc.is_visible_to_players,
+            parent_location_id=loc.parent_location_id,
+            is_top_level=loc.is_top_level,
+            is_unknown=loc.is_unknown,
+            pin_child_ids=pin_children.get(loc.id, []),
+            created_at=loc.created_at,
+        )
+        for loc in locations
+    ]
 
 
 def get_location_by_id(db: Session, campaign_id: int, location_id: int, user_id: int) -> Location:
@@ -107,7 +142,45 @@ def update_location(db: Session, campaign_id: int, location_id: int, data: Locat
     loc = _get_location_or_404(db, location_id)
     if loc.campaign_id != campaign_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
-    for field, value in data.model_dump(exclude_unset=True).items():
+
+    fields = data.model_dump(exclude_unset=True)
+
+    if fields.get("is_top_level"):
+        # Enforce single top-level per campaign
+        db.query(Location).filter(
+            Location.campaign_id == campaign_id,
+            Location.id != location_id,
+            Location.is_top_level == True,
+        ).update({"is_top_level": False}, synchronize_session=False)
+        # Top-level has no parent and is not unknown
+        fields["parent_location_id"] = None
+        fields["is_unknown"] = False
+
+    if fields.get("is_unknown"):
+        # Unknown locations have no parent and are not top-level
+        fields["parent_location_id"] = None
+        fields["is_top_level"] = False
+
+    if "parent_location_id" in fields and fields["parent_location_id"] is not None:
+        # Giving a location a parent clears top-level status
+        fields["is_top_level"] = False
+        # Validate parent belongs to same campaign
+        parent = db.query(Location).filter(
+            Location.id == fields["parent_location_id"],
+            Location.campaign_id == campaign_id,
+        ).first()
+        if not parent:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Parent location not found in this campaign",
+            )
+        if fields["parent_location_id"] == location_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A location cannot be its own parent",
+            )
+
+    for field, value in fields.items():
         setattr(loc, field, value)
     db.commit()
     db.refresh(loc)

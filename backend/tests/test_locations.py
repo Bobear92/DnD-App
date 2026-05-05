@@ -564,3 +564,166 @@ class TestLocationNpcs:
         client.delete(f"{NPC_BASE}/{npc_id}", headers=h)
         resp = client.get(f"{BASE(cid)}/{lid}/npcs", headers=h)
         assert resp.json() == []
+
+
+# ── Location Hierarchy ────────────────────────────────────────────────────────
+
+class TestLocationHierarchyFields:
+    """List response includes hierarchy fields; defaults are correct."""
+
+    def test_list_returns_hierarchy_defaults(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        make_location(client, h, cid, name="The Keep", description="A dark fortress")
+        resp = client.get(BASE(cid), headers=h)
+        assert resp.status_code == 200
+        loc = resp.json()[0]
+        assert loc["is_top_level"] is False
+        assert loc["is_unknown"] is False
+        assert loc["parent_location_id"] is None
+        assert loc["pin_child_ids"] == []
+
+    def test_list_returns_description(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        make_location(client, h, cid, name="The Moor", description="A bleak wasteland")
+        resp = client.get(BASE(cid), headers=h)
+        assert resp.json()[0]["description"] == "A bleak wasteland"
+
+
+class TestSetTopLevel:
+    def test_gm_can_set_top_level(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        lid = make_location(client, h, cid, name="World Map")
+        resp = client.put(BASE(cid) + f"/{lid}", json={"is_top_level": True}, headers=h)
+        assert resp.status_code == 200
+        assert resp.json()["is_top_level"] is True
+        assert resp.json()["parent_location_id"] is None
+        assert resp.json()["is_unknown"] is False
+
+    def test_setting_new_top_level_clears_old(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        lid1 = make_location(client, h, cid, name="Old Top")
+        lid2 = make_location(client, h, cid, name="New Top")
+        client.put(BASE(cid) + f"/{lid1}", json={"is_top_level": True}, headers=h)
+        client.put(BASE(cid) + f"/{lid2}", json={"is_top_level": True}, headers=h)
+        resp1 = client.get(BASE(cid) + f"/{lid1}", headers=h)
+        resp2 = client.get(BASE(cid) + f"/{lid2}", headers=h)
+        assert resp1.json()["is_top_level"] is False
+        assert resp2.json()["is_top_level"] is True
+
+    def test_top_level_clears_unknown_flag(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        lid = make_location(client, h, cid)
+        client.put(BASE(cid) + f"/{lid}", json={"is_unknown": True}, headers=h)
+        resp = client.put(BASE(cid) + f"/{lid}", json={"is_top_level": True}, headers=h)
+        assert resp.json()["is_unknown"] is False
+        assert resp.json()["is_top_level"] is True
+
+
+class TestSetParent:
+    def test_gm_can_set_parent(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        parent_id = make_location(client, h, cid, name="Continent")
+        child_id = make_location(client, h, cid, name="City")
+        resp = client.put(BASE(cid) + f"/{child_id}", json={"parent_location_id": parent_id}, headers=h)
+        assert resp.status_code == 200
+        assert resp.json()["parent_location_id"] == parent_id
+
+    def test_setting_parent_clears_top_level(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        parent_id = make_location(client, h, cid, name="World")
+        child_id = make_location(client, h, cid, name="Country")
+        client.put(BASE(cid) + f"/{child_id}", json={"is_top_level": True}, headers=h)
+        resp = client.put(BASE(cid) + f"/{child_id}", json={"parent_location_id": parent_id}, headers=h)
+        assert resp.json()["is_top_level"] is False
+        assert resp.json()["parent_location_id"] == parent_id
+
+    def test_cannot_set_self_as_parent(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        lid = make_location(client, h, cid)
+        resp = client.put(BASE(cid) + f"/{lid}", json={"parent_location_id": lid}, headers=h)
+        assert resp.status_code == 400
+
+    def test_cannot_set_parent_from_different_campaign(self, client):
+        h1, _ = make_user(client, 1)
+        h2, _ = make_user(client, 2)
+        cid1 = make_campaign(client, h1)
+        cid2 = make_campaign(client, h2)
+        foreign_lid = make_location(client, h2, cid2, name="Foreign Location")
+        child_lid = make_location(client, h1, cid1, name="My Location")
+        resp = client.put(BASE(cid1) + f"/{child_lid}", json={"parent_location_id": foreign_lid}, headers=h1)
+        assert resp.status_code == 400
+
+
+class TestSetUnknown:
+    def test_gm_can_mark_unknown(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        lid = make_location(client, h, cid)
+        resp = client.put(BASE(cid) + f"/{lid}", json={"is_unknown": True}, headers=h)
+        assert resp.status_code == 200
+        assert resp.json()["is_unknown"] is True
+        assert resp.json()["parent_location_id"] is None
+        assert resp.json()["is_top_level"] is False
+
+    def test_unknown_clears_parent(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        parent_id = make_location(client, h, cid, name="Parent")
+        child_id = make_location(client, h, cid, name="Child")
+        client.put(BASE(cid) + f"/{child_id}", json={"parent_location_id": parent_id}, headers=h)
+        resp = client.put(BASE(cid) + f"/{child_id}", json={"is_unknown": True}, headers=h)
+        assert resp.json()["parent_location_id"] is None
+        assert resp.json()["is_unknown"] is True
+
+
+class TestPinChildIds:
+    def test_pin_child_ids_populated_from_pins(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        parent_lid = make_location(client, h, cid, name="Dungeon")
+        child_lid = make_location(client, h, cid, name="Vault")
+        upload_resp = _upload_map(client, h, cid, parent_lid)
+        mid = upload_resp.json()["id"]
+        client.post(
+            f"{BASE(cid)}/{parent_lid}/maps/{mid}/pins",
+            json={"x_percent": 50.0, "y_percent": 50.0, "linked_location_id": child_lid, "is_visible_to_players": False},
+            headers=h,
+        )
+        resp = client.get(BASE(cid), headers=h)
+        locs = {l["id"]: l for l in resp.json()}
+        assert child_lid in locs[parent_lid]["pin_child_ids"]
+        assert locs[child_lid]["pin_child_ids"] == []
+
+    def test_pin_child_ids_empty_when_no_pins(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        lid = make_location(client, h, cid)
+        resp = client.get(BASE(cid), headers=h)
+        assert resp.json()[0]["pin_child_ids"] == []
+
+    def test_player_list_includes_pin_child_ids(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_player, uid = make_user(client, 2)
+        cid = make_campaign(client, h_gm)
+        invite_player(client, h_gm, cid, uid)
+        parent_lid = make_location(client, h_gm, cid, name="Tower", visible=True)
+        child_lid = make_location(client, h_gm, cid, name="Roof", visible=True)
+        upload_resp = _upload_map(client, h_gm, cid, parent_lid)
+        mid = upload_resp.json()["id"]
+        client.patch(f"{BASE(cid)}/{parent_lid}/maps/{mid}/visibility", headers=h_gm)
+        client.post(
+            f"{BASE(cid)}/{parent_lid}/maps/{mid}/pins",
+            json={"x_percent": 50.0, "y_percent": 50.0, "linked_location_id": child_lid, "is_visible_to_players": True},
+            headers=h_gm,
+        )
+        resp = client.get(BASE(cid), headers=h_player)
+        locs = {l["id"]: l for l in resp.json()}
+        assert child_lid in locs[parent_lid]["pin_child_ids"]

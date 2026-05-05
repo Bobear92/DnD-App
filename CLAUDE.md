@@ -203,6 +203,10 @@ locations
   description,                      ← player-visible
   gm_notes,                         ← GM only, never returned to players
   location_type, status,
+  -- Hierarchy
+  parent_location_id (FK→locations, nullable, ondelete SET NULL),
+  is_top_level (boolean, default false),   ← exactly one per campaign; service auto-clears old
+  is_unknown (boolean, default false),     ← GM marks deliberately; mutually exclusive with top-level/parent
   -- Environment
   weather, plant_life, animal_life, terrain, climate,
   -- Lore & Culture
@@ -492,9 +496,16 @@ frontend/src/
 - **Player view toggle:** filters to `is_visible_to_players=true` locations/maps/pins/NPCs; auto-selects first visible map
 - **Map upload:** 100 MB limit; client-side size validation with inline error before upload attempt
 - Maps default to `is_visible_to_players=false` — GM must explicitly show each map to players
-- **Info tab — GM view:** always editable; section cards for Details, GM Notes (private), Lore & Culture, Environment, Adventure, Important NPCs; Save/Reset buttons per card
+- **Info tab — GM view:** always editable; section cards for Details, GM Notes (private), Lore & Culture, Environment, Adventure, Hierarchy, Important NPCs; Save/Reset buttons per card
 - **Info tab — Player view:** read-only; empty sections hidden entirely; GM Notes never shown; NPC cards only show NPCs where `is_visible_to_players=true` on the NPC
 - **Important NPCs:** linked via `location_npcs` junction; each link has an optional role description ("Runs the forge"); NPC cards show name, race, occupation, role description, and NPC `summary`
+- **Hierarchy card (GM only):** set top-level, set parent, mark as unknown; child list shows manually-set children (link icon) and pin-derived children (pin icon + "via map pin" label)
+- **LocationList — GM view:** three sections — World Hierarchy tree (from top-level), Unsorted (staging area, locations not placed anywhere), Unknown Locations
+- **LocationList — Player view:** toggle Hierarchy / A–Z; search bar; Unknown Locations section at bottom of hierarchy view
+- **Hierarchy tree:** indented expandable tree; click node to navigate; pin-derived children included automatically from `map_pins.linked_location_id`
+- **Unsorted locations:** visible to GM only; any location with no parent, not top-level, not unknown, not pin-linked from any other location's map
+- **`pin_child_ids`:** computed at query time in `get_locations` — for each location, the IDs of locations linked via pins on that location's maps
+- **Top-level map on LocationList:** if a top-level location has maps, the first map is displayed above the hierarchy tree with clickable pin tooltips; multiple maps show a tab strip; pins linked to a location show a "Go to [name]" button; respects player view filter
 
 ### Frontend Not Yet Built
 - Character creation and detail pages
@@ -549,7 +560,7 @@ backend/tests/
 ├── test_loot_tables.py             # loot tables (system/campaign ownership)
 ├── test_races_backgrounds_feats.py # admin-only compendium (parametrized)
 ├── test_encyclopedia.py            # bestiary + spells + 6 item types (parametrized)
-└── test_locations.py               # locations, maps, pins, location NPCs (42 tests)
+└── test_locations.py               # locations, maps, pins, location NPCs, hierarchy (56 tests)
 ```
 
 ### Required coverage for each new module

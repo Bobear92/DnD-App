@@ -23,6 +23,11 @@ class Location(Base):
     status = Column(String(100), nullable=True)
     is_visible_to_players = Column(Boolean, default=False, nullable=False)
 
+    # Hierarchy
+    parent_location_id = Column(Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True)
+    is_top_level = Column(Boolean, default=False, nullable=False)
+    is_unknown = Column(Boolean, default=False, nullable=False)
+
     # Environment
     weather = Column(Text, nullable=True)
     plant_life = Column(Text, nullable=True)

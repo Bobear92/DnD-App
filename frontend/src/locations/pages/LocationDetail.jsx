@@ -14,7 +14,7 @@ import {
   ArrowLeft, Eye, EyeOff, Pencil, Trash2, Upload, Plus,
   MapPin, X, Check, Map, Loader2, ZoomIn, ZoomOut,
   Link, Users, ExternalLink, Move, UserCircle, Shield,
-  Leaf, Wind, Sword, BookOpen, LandPlot,
+  Leaf, Wind, Sword, BookOpen, LandPlot, GitBranch,
 } from 'lucide-react';
 
 const ZOOM_MIN = 0.25;
@@ -28,6 +28,10 @@ const EMPTY_EDIT_FORM = (loc) => ({
   location_type: loc.location_type || '',
   status: loc.status || '',
   is_visible_to_players: loc.is_visible_to_players,
+  // Hierarchy
+  parent_location_id: loc.parent_location_id ?? null,
+  is_top_level: loc.is_top_level ?? false,
+  is_unknown: loc.is_unknown ?? false,
   // Environment
   weather: loc.weather || '',
   plant_life: loc.plant_life || '',
@@ -54,6 +58,7 @@ export default function LocationDetail() {
   const [user, setUser] = useState(null);
   const [location, setLocation] = useState(null);
   const [allLocations, setAllLocations] = useState([]);
+  const [locationListItem, setLocationListItem] = useState(null);
   const [maps, setMaps] = useState([]);
   const [selectedMap, setSelectedMap] = useState(null);
   const [pins, setPins] = useState([]);
@@ -126,7 +131,9 @@ export default function LocationDetail() {
       setLocation(loc);
       setEditForm(EMPTY_EDIT_FORM(loc));
       setMaps(mapList);
-      setAllLocations(allLocs.filter(l => l.id !== parseInt(locId)));
+      const lid = parseInt(locId);
+      setLocationListItem(allLocs.find(l => l.id === lid) || null);
+      setAllLocations(allLocs.filter(l => l.id !== lid));
       setLocationNpcs(npcs);
       if (mapList.length > 0) await selectMap(campaignId, locId, mapList[0]);
     } catch (err) {
@@ -161,6 +168,13 @@ export default function LocationDetail() {
     try {
       const updated = await locationService.updateLocation(campaign.id, locationId, editForm);
       setLocation(updated);
+      // Refresh hierarchy fields — backend may have auto-cleared conflicting flags
+      setEditForm(f => ({
+        ...f,
+        parent_location_id: updated.parent_location_id ?? null,
+        is_top_level: updated.is_top_level ?? false,
+        is_unknown: updated.is_unknown ?? false,
+      }));
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to save');
     } finally {
@@ -923,7 +937,116 @@ export default function LocationDetail() {
                   </Card>
                 </div>
 
-                {/* Row 4: Important NPCs */}
+                {/* Row 4: Hierarchy */}
+                {(() => {
+                  const locMap = Object.fromEntries(allLocations.map(l => [l.id, l]));
+                  const childrenByParent = allLocations.filter(l => l.parent_location_id === parseInt(locationId));
+                  const pinChildIds = locationListItem?.pin_child_ids ?? [];
+                  const childrenByPin = pinChildIds
+                    .map(id => locMap[id])
+                    .filter(l => l && !childrenByParent.find(c => c.id === l.id));
+
+                  const setHierarchyField = (key, value, clearKeys = []) => {
+                    setEditForm(f => {
+                      const next = { ...f, [key]: value };
+                      for (const k of clearKeys) next[k] = k === 'parent_location_id' ? null : false;
+                      return next;
+                    });
+                  };
+
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <GitBranch className="w-4 h-4" /> Hierarchy
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-5">
+                        {/* Top Level */}
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            id="hier-toplevel"
+                            className="w-4 h-4 mt-0.5"
+                            checked={editForm.is_top_level || false}
+                            onChange={(e) => setHierarchyField('is_top_level', e.target.checked, e.target.checked ? ['parent_location_id', 'is_unknown'] : [])}
+                          />
+                          <div>
+                            <Label htmlFor="hier-toplevel" className="cursor-pointer font-medium">Set as Top-Level Location</Label>
+                            <p className="text-xs text-muted-foreground mt-0.5">Makes this the root of the world hierarchy. Only one location can be top-level per campaign.</p>
+                          </div>
+                        </div>
+
+                        {/* Parent Location */}
+                        <div className={`space-y-1.5 ${editForm.is_top_level ? 'opacity-40 pointer-events-none' : ''}`}>
+                          <Label>Parent Location</Label>
+                          <select
+                            className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                            value={editForm.parent_location_id ?? ''}
+                            disabled={editForm.is_top_level || false}
+                            onChange={(e) => setHierarchyField('parent_location_id', e.target.value ? parseInt(e.target.value) : null, e.target.value ? ['is_top_level'] : [])}
+                          >
+                            <option value="">— No parent —</option>
+                            {allLocations
+                              .filter(l => !l.is_unknown)
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map(l => (
+                                <option key={l.id} value={l.id}>{l.name}</option>
+                              ))}
+                          </select>
+                        </div>
+
+                        {/* Unknown */}
+                        <div className={`flex items-start gap-3 ${editForm.is_top_level ? 'opacity-40 pointer-events-none' : ''}`}>
+                          <input
+                            type="checkbox"
+                            id="hier-unknown"
+                            className="w-4 h-4 mt-0.5"
+                            checked={editForm.is_unknown || false}
+                            disabled={editForm.is_top_level || false}
+                            onChange={(e) => setHierarchyField('is_unknown', e.target.checked, e.target.checked ? ['parent_location_id', 'is_top_level'] : [])}
+                          />
+                          <div>
+                            <Label htmlFor="hier-unknown" className="cursor-pointer font-medium">Mark as Unknown Location</Label>
+                            <p className="text-xs text-muted-foreground mt-0.5">Players see this location but don't know where it fits geographically.</p>
+                          </div>
+                        </div>
+
+                        <SaveResetButtons onReset={() => setEditForm(f => ({
+                          ...f,
+                          parent_location_id: location.parent_location_id ?? null,
+                          is_top_level: location.is_top_level ?? false,
+                          is_unknown: location.is_unknown ?? false,
+                        }))} />
+
+                        {/* Child locations (read-only) */}
+                        {(childrenByParent.length > 0 || childrenByPin.length > 0) && (
+                          <div className="pt-2 border-t">
+                            <p className="text-xs font-medium text-muted-foreground mb-2">Child Locations</p>
+                            <div className="space-y-1">
+                              {childrenByParent.map(child => (
+                                <div key={child.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-muted cursor-pointer" onClick={() => navigate(`/locations/${child.id}`)}>
+                                  <Link className="w-3 h-3 text-muted-foreground shrink-0" />
+                                  <span className="flex-1 truncate">{child.name}</span>
+                                  <span className="text-xs text-muted-foreground">manually set</span>
+                                </div>
+                              ))}
+                              {childrenByPin.map(child => (
+                                <div key={child.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-muted cursor-pointer" onClick={() => navigate(`/locations/${child.id}`)}>
+                                  <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+                                  <span className="flex-1 truncate">{child.name}</span>
+                                  <span className="text-xs text-muted-foreground">via map pin</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+
+                {/* Row 5: Important NPCs */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
