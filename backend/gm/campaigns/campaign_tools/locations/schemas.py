@@ -140,6 +140,7 @@ class LocationNPCResponse(BaseModel):
     occupation: Optional[str] = None
     summary: Optional[str] = None
     description: Optional[str] = None  # junction role description or last_seen_notes
+    image_path: Optional[str] = None
     is_visible_to_players: bool
     source: str = "linked"  # "linked" (manual junction) or "last_seen" (last_known_location_id)
 

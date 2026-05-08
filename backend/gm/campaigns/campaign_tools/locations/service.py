@@ -67,6 +67,7 @@ def _build_npc_response(ln: LocationNPC, npc: NPC) -> LocationNPCResponse:
         occupation=npc.occupation,
         summary=npc.summary,
         description=ln.description,
+        image_path=npc.image_path,
         is_visible_to_players=npc.is_visible_to_players,
         source="linked",
     )
@@ -81,6 +82,7 @@ def _build_last_seen_npc_response(npc: NPC) -> LocationNPCResponse:
         occupation=npc.occupation,
         summary=npc.summary,
         description=npc.last_seen_notes,
+        image_path=npc.image_path,
         is_visible_to_players=npc.is_visible_to_players,
         source="last_seen",
     )

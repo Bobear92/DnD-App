@@ -1,5 +1,19 @@
 {
   "permissions": {
     "allow": ["Bash(git push origin main)"]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "Write-Output '{\"systemMessage\": \"Post-turn checklist: (1) Run npm test in frontend/  (2) Audit CLAUDE.md for schema/endpoint/UI/test changes  (3) Check .claude/agents/ and .claude/commands/ for stale references\"}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

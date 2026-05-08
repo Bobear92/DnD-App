@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   MapPin, Plus, Eye, EyeOff, ChevronRight, ChevronDown,
   Map, Users, Search, GitBranch, List, Layers, HelpCircle,
-  Link, Loader2, X, ExternalLink,
+  Loader2, Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -48,7 +48,7 @@ function buildHierarchyTree(topLevel, locMap, locs) {
 
 // ── LocationTreeNode ─────────────────────────────────────────────────────────
 
-function LocationTreeNode({ node, depth, navigate, isGm, playerView, onToggleVisibility }) {
+function LocationTreeNode({ node, depth, navigate, campaignId, isGm, playerView, onToggleVisibility }) {
   const [expanded, setExpanded] = useState(true);
   const { loc, children } = node;
 
@@ -99,6 +99,7 @@ function LocationTreeNode({ node, depth, navigate, isGm, playerView, onToggleVis
               node={child}
               depth={depth + 1}
               navigate={navigate}
+              campaignId={campaignId}
               isGm={isGm}
               playerView={playerView}
               onToggleVisibility={onToggleVisibility}
@@ -112,7 +113,7 @@ function LocationTreeNode({ node, depth, navigate, isGm, playerView, onToggleVis
 
 // ── LocationCard (flat/grid view) ────────────────────────────────────────────
 
-function LocationCard({ loc, navigate, isGm, playerView, onToggleVisibility }) {
+function LocationCard({ loc, navigate, campaignId, isGm, playerView, onToggleVisibility }) {
   return (
     <Card
       className="cursor-pointer hover:shadow-md transition-shadow"
@@ -189,9 +190,7 @@ export default function LocationList() {
   const [unknownOpen, setUnknownOpen] = useState(true);
   const [topLevelMaps, setTopLevelMaps] = useState([]);
   const [selectedTopMapId, setSelectedTopMapId] = useState(null);
-  const [topLevelPins, setTopLevelPins] = useState({});
   const [loadingTopMap, setLoadingTopMap] = useState(false);
-  const [topOpenPinId, setTopOpenPinId] = useState(null);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -294,35 +293,21 @@ export default function LocationList() {
 
   // ── Top-level map loading (must come after topLevel is declared) ─────────────
 
-  const handleSelectTopMap = async (mapId) => {
-    setTopOpenPinId(null);
+  const handleSelectTopMap = (mapId) => {
     setSelectedTopMapId(mapId);
-    if (!topLevelPins[mapId] && campaignId && topLevel) {
-      try {
-        const pins = await locationService.getPins(campaignId, topLevel.id, mapId);
-        setTopLevelPins(prev => ({ ...prev, [mapId]: pins }));
-      } catch {}
-    }
   };
 
   useEffect(() => {
     if (!topLevel || !campaignId) {
       setTopLevelMaps([]);
       setSelectedTopMapId(null);
-      setTopLevelPins({});
       return;
     }
     setLoadingTopMap(true);
-    setTopOpenPinId(null);
     locationService.getMaps(campaignId, topLevel.id)
-      .then(async (maps) => {
+      .then((maps) => {
         setTopLevelMaps(maps);
-        if (maps.length > 0) {
-          const first = maps[0];
-          setSelectedTopMapId(first.id);
-          const pins = await locationService.getPins(campaignId, topLevel.id, first.id);
-          setTopLevelPins({ [first.id]: pins });
-        }
+        if (maps.length > 0) setSelectedTopMapId(maps[0].id);
       })
       .catch(() => {})
       .finally(() => setLoadingTopMap(false));
@@ -332,12 +317,10 @@ export default function LocationList() {
 
   const visibleTopMaps = playerView ? topLevelMaps.filter(m => m.is_visible_to_players) : topLevelMaps;
   const selectedTopMap = visibleTopMaps.find(m => m.id === selectedTopMapId) || visibleTopMaps[0] || null;
-  const currentTopPins = selectedTopMap ? (topLevelPins[selectedTopMap.id] || []) : [];
-  const visibleTopPins = playerView ? currentTopPins.filter(p => p.is_visible_to_players) : currentTopPins;
 
   // ── Handlers for toggle visibility in tree ──────────────────────────────────
 
-  const toggleProps = { isGm, playerView, onToggleVisibility: handleToggleVisibility };
+  const toggleProps = { campaignId, isGm, playerView, onToggleVisibility: handleToggleVisibility };
 
   // ── Loading ─────────────────────────────────────────────────────────────────
 
@@ -494,6 +477,23 @@ export default function LocationList() {
                   </div>
                 ) : visibleTopMaps.length > 0 && selectedTopMap ? (
                   <div className="mb-4">
+                    {/* GM toolbar above the map */}
+                    {isGm && !playerView && (
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-muted-foreground">
+                          Map preview — click pins to navigate. Edit info, maps, and pins in the location detail.
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7"
+                          onClick={() => navigate(`/campaigns/${campaignId}/locations/${topLevel.id}`)}
+                        >
+                          <Pencil className="w-3 h-3 mr-1.5" />
+                          Edit {topLevel.name}
+                        </Button>
+                      </div>
+                    )}
                     {/* Map tab strip (shown only if multiple maps) */}
                     {visibleTopMaps.length > 1 && (
                       <div className="flex gap-1 mb-2 flex-wrap">
@@ -513,63 +513,15 @@ export default function LocationList() {
                         ))}
                       </div>
                     )}
-                    {/* Map image with pins */}
-                    <div
-                      className="relative rounded-lg overflow-hidden border bg-zinc-900 cursor-default"
-                      onClick={() => setTopOpenPinId(null)}
-                    >
-                      <div className="relative overflow-y-auto max-h-[500px]">
+                    {/* Map image — read-only preview, no pins */}
+                    <div className="relative rounded-lg overflow-hidden border bg-zinc-900">
+                      <div className="overflow-y-auto max-h-[500px]">
                         <img
                           src={mapImageUrl(selectedTopMap.image_path)}
                           alt={selectedTopMap.name}
                           className="w-full h-auto block select-none"
                           draggable={false}
                         />
-                        {visibleTopPins.map(pin => {
-                          const linkedLoc = pin.linked_location_id ? locMap[pin.linked_location_id] : null;
-                          const isOpen = topOpenPinId === pin.id;
-                          return (
-                            <div
-                              key={pin.id}
-                              className="absolute"
-                              style={{ left: `${pin.x_percent}%`, top: `${pin.y_percent}%`, transform: 'translate(-50%, -100%)', zIndex: isOpen ? 20 : 10 }}
-                              onClick={(e) => { e.stopPropagation(); setTopOpenPinId(isOpen ? null : pin.id); }}
-                            >
-                              <div className="relative flex flex-col items-center cursor-pointer">
-                                <div className={cn(
-                                  'text-xs px-1.5 py-0.5 rounded whitespace-nowrap max-w-[140px] truncate mb-0.5 shadow-md flex items-center gap-1 transition-opacity',
-                                  linkedLoc ? 'bg-blue-600 text-white' : 'bg-primary text-primary-foreground',
-                                  isOpen ? 'opacity-100' : 'opacity-80 hover:opacity-100',
-                                )}>
-                                  {linkedLoc && <Link className="w-2.5 h-2.5 shrink-0" />}
-                                  {pin.label}
-                                </div>
-                                <MapPin className={cn('w-5 h-5 drop-shadow-md', linkedLoc ? 'text-blue-500' : 'text-primary')} />
-                              </div>
-                              {isOpen && (
-                                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-20" onClick={(e) => e.stopPropagation()}>
-                                  <div className="bg-popover border rounded-md shadow-lg p-2.5 min-w-[160px]">
-                                    <div className="flex items-start justify-between gap-2 mb-1">
-                                      <p className="font-medium text-xs">{pin.label}</p>
-                                      <button onClick={() => setTopOpenPinId(null)} className="text-muted-foreground hover:text-foreground shrink-0">
-                                        <X className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                    {pin.description && <p className="text-xs text-muted-foreground mb-2">{pin.description}</p>}
-                                    {linkedLoc && (
-                                      <button
-                                        onClick={() => navigate(`/campaigns/${campaignId}/locations/${linkedLoc.id}`)}
-                                        className="w-full flex items-center gap-1 text-xs py-1 px-2 rounded bg-blue-600/10 text-blue-600 hover:bg-blue-600/20"
-                                      >
-                                        <ExternalLink className="w-3 h-3" /> Go to {linkedLoc.name}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
                       </div>
                       {/* Bottom bar */}
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-3 flex items-end justify-between pointer-events-none">
@@ -581,7 +533,7 @@ export default function LocationList() {
                           className="pointer-events-auto text-xs text-white/80 hover:text-white flex items-center gap-1"
                           onClick={(e) => { e.stopPropagation(); navigate(`/campaigns/${campaignId}/locations/${topLevel.id}`); }}
                         >
-                          View Details <ChevronRight className="w-3 h-3" />
+                          Open Location <ChevronRight className="w-3 h-3" />
                         </button>
                       </div>
                     </div>

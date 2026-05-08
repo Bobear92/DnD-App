@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import locationService, { mapImageUrl } from '../locationService';
+import { mapNpcImageUrl } from '../../npcs/npcService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -784,18 +785,30 @@ export default function LocationDetail() {
                     <CardHeader><CardTitle className="text-base flex items-center gap-2"><UserCircle className="w-4 h-4" /> Important NPCs</CardTitle></CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {visibleNpcs.map(npc => (
-                          <div key={npc.id} className="border rounded-md p-3 space-y-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="font-medium text-sm">{npc.name}</p>
-                                <p className="text-xs text-muted-foreground">{npc.race}{npc.occupation ? ` · ${npc.occupation}` : ''}</p>
+                        {visibleNpcs.map(npc => {
+                          const imgUrl = mapNpcImageUrl(npc.image_path);
+                          return (
+                            <div
+                              key={npc.id}
+                              className="border rounded-md overflow-hidden cursor-pointer hover:bg-muted/50 transition-colors"
+                              onClick={() => navigate(`/campaigns/${campaignId}/npcs/${npc.npc_id}`)}
+                            >
+                              <div className="flex items-stretch gap-0">
+                                {imgUrl && (
+                                  <div className="w-16 shrink-0 bg-muted">
+                                    <img src={imgUrl} alt={npc.name} className="w-full h-full object-cover" />
+                                  </div>
+                                )}
+                                <div className="p-3 space-y-1 min-w-0">
+                                  <p className="font-medium text-sm">{npc.name}</p>
+                                  <p className="text-xs text-muted-foreground">{npc.race}{npc.occupation ? ` · ${npc.occupation}` : ''}</p>
+                                  {npc.description && <p className="text-xs text-primary/80 italic">{npc.description}</p>}
+                                  {npc.summary && <p className="text-xs text-muted-foreground">{npc.summary}</p>}
+                                </div>
                               </div>
                             </div>
-                            {npc.description && <p className="text-xs text-primary/80 italic">{npc.description}</p>}
-                            {npc.summary && <p className="text-xs text-muted-foreground">{npc.summary}</p>}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>
@@ -1054,26 +1067,46 @@ export default function LocationDetail() {
                       <p className="text-sm text-muted-foreground">No NPCs linked to this location yet.</p>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {locationNpcs.map(npc => (
-                          <div key={npc.id} className="border rounded-md p-3 space-y-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="font-medium text-sm">{npc.name}</p>
-                                <p className="text-xs text-muted-foreground">{npc.race}{npc.occupation ? ` · ${npc.occupation}` : ''}</p>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                {!npc.is_visible_to_players && (
-                                  <Badge variant="outline" className="text-xs gap-1"><EyeOff className="w-3 h-3" /> Hidden</Badge>
+                        {locationNpcs.map(npc => {
+                          const imgUrl = mapNpcImageUrl(npc.image_path);
+                          return (
+                            <div
+                              key={npc.id}
+                              className="border rounded-md overflow-hidden cursor-pointer hover:bg-muted/50 transition-colors"
+                              onClick={() => navigate(`/campaigns/${campaignId}/npcs/${npc.npc_id}`)}
+                            >
+                              <div className="flex items-stretch gap-0">
+                                {imgUrl && (
+                                  <div className="w-16 shrink-0 bg-muted">
+                                    <img src={imgUrl} alt={npc.name} className="w-full h-full object-cover" />
+                                  </div>
                                 )}
-                                <button onClick={() => handleRemoveNpc(npc.id)} className="text-muted-foreground hover:text-destructive" title="Remove NPC">
-                                  <X className="w-4 h-4" />
-                                </button>
+                                <div className="p-3 space-y-1 min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <p className="font-medium text-sm">{npc.name}</p>
+                                      <p className="text-xs text-muted-foreground">{npc.race}{npc.occupation ? ` · ${npc.occupation}` : ''}</p>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {!npc.is_visible_to_players && (
+                                        <Badge variant="outline" className="text-xs gap-1"><EyeOff className="w-3 h-3" /> Hidden</Badge>
+                                      )}
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleRemoveNpc(npc.id); }}
+                                        className="text-muted-foreground hover:text-destructive"
+                                        title="Remove NPC"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {npc.description && <p className="text-xs text-primary/80 italic">{npc.description}</p>}
+                                  {npc.summary && <p className="text-xs text-muted-foreground">{npc.summary}</p>}
+                                </div>
                               </div>
                             </div>
-                            {npc.description && <p className="text-xs text-primary/80 italic">{npc.description}</p>}
-                            {npc.summary && <p className="text-xs text-muted-foreground">{npc.summary}</p>}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>

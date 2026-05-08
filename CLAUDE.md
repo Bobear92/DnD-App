@@ -564,14 +564,14 @@ frontend/src/
 - Maps default to `is_visible_to_players=false` — GM must explicitly show each map to players
 - **Info tab — GM view:** always editable; section cards for Details, GM Notes (private), Lore & Culture, Environment, Adventure, Hierarchy, Important NPCs; Save/Reset buttons per card
 - **Info tab — Player view:** read-only; empty sections hidden entirely; GM Notes never shown; NPC cards only show NPCs where `is_visible_to_players=true` on the NPC
-- **Important NPCs:** two sources merged in the NPC list response — `source="linked"` (manual `location_npcs` junction, has role description) and `source="last_seen"` (NPC's `last_known_location_id` points here, shows `last_seen_notes`). Deduped: if an NPC is both, `linked` wins. NPC cards show name, race, occupation, role/last_seen description, and NPC `summary`
+- **Important NPCs:** two sources merged in the NPC list response — `source="linked"` (manual `location_npcs` junction, has role description) and `source="last_seen"` (NPC's `last_known_location_id` points here, shows `last_seen_notes`). Deduped: if an NPC is both, `linked` wins. NPC cards show portrait thumbnail (left strip, 64px wide, if `image_path` exists), name, race, occupation, role/last_seen description, and NPC `summary`. Cards are clickable and navigate to `/campaigns/:campaignId/npcs/:npcId`. GM remove button uses `stopPropagation` so it doesn't trigger navigation.
 - **Hierarchy card (GM only):** set top-level, set parent, mark as unknown; child list shows manually-set children (link icon) and pin-derived children (pin icon + "via map pin" label)
-- **LocationList — GM view:** three sections — World Hierarchy tree (from top-level), Unsorted (staging area, locations not placed anywhere), Unknown Locations
+- **LocationList — GM view:** three sections — World Hierarchy tree (from top-level), Unsorted (staging area, locations not placed anywhere), Unknown Locations. When the top-level location has maps, a GM toolbar row appears above the map with an "Edit [name]" button that navigates to that location's `LocationDetail` page for full editing (info, maps, pins).
 - **LocationList — Player view:** toggle Hierarchy / A–Z; search bar; Unknown Locations section at bottom of hierarchy view
 - **Hierarchy tree:** indented expandable tree; click node to navigate; pin-derived children included automatically from `map_pins.linked_location_id`
 - **Unsorted locations:** visible to GM only; any location with no parent, not top-level, not unknown, not pin-linked from any other location's map
 - **`pin_child_ids`:** computed at query time in `get_locations` — for each location, the IDs of locations linked via pins on that location's maps
-- **Top-level map on LocationList:** if a top-level location has maps, the first map is displayed above the hierarchy tree with clickable pin tooltips; multiple maps show a tab strip; pins linked to a location show a "Go to [name]" button; respects player view filter
+- **Top-level map on LocationList:** if a top-level location has maps, the first map is displayed above the hierarchy tree as a read-only image preview (no pins); multiple maps show a tab strip; a GM toolbar above the map shows an "Edit [name]" button to navigate to LocationDetail for full editing; respects player view filter (only visible maps shown to players)
 
 ### NPCs UI — Key Behaviours
 - **NPCList grid:** portrait thumbnail (placeholder icon when none), color-coded status badge (alive/dead/missing/unknown), race · occupation subtitle, summary text
@@ -586,7 +586,7 @@ frontend/src/
 - **Player Relationships tab (GM only):** NPC-to-player list; populated from campaign members (players only); GM can add and delete
 - **Language tags:** add via input + Enter or button, remove with × on each tag; stored as JSONB array
 - **Last Known Location:** select from all campaign locations; in player view shows as a clickable link to that location's detail page
-- **Portrait display note:** image serving requires the static file route to be wired in `main.py` (tracked in What's NOT Built Yet) — upload/delete flow is functional
+- **Portrait display note:** images are served via `app.mount("/uploads", StaticFiles(...))` in `main.py` — upload/delete/display are all functional
 
 ### Frontend Not Yet Built
 - Character creation and detail pages (`/campaigns/:campaignId/characters/create`, `/:id`)
@@ -704,6 +704,10 @@ frontend/src/
 │   └── pages/
 │       ├── NPCDetail.jsx
 │       └── NPCDetail.test.jsx        # render smoke test, SelectItem regression, error state, GM vs player visibility (5 tests)
+├── locations/
+│   └── pages/
+│       ├── LocationList.jsx
+│       └── LocationList.test.jsx     # campaignId prop regression (tree/card navigate), GM toolbar show/hide/navigate (5 tests)
 └── shared/
     └── components/
         ├── ProtectedRoute.jsx
@@ -751,6 +755,8 @@ vi.mock('../../campaigns/CampaignContext', () => ({
 
 `NPCDetail.test.jsx` — "does not crash with null last_known_location_id" — guards against the Radix UI `<SelectItem value="">` crash that blanks the entire React tree in React 19. Also guards GM vs player visibility of the GM Notes card.
 
+`LocationList.test.jsx` — "clicking the top-level node navigates with the correct campaignId — not undefined" — guards against `LocationTreeNode` and `LocationCard` being module-level components that can't close over `useParams()`'s `campaignId`. Without the prop fix, all tree/card clicks navigate to `/campaigns/undefined/locations/X`.
+
 ---
 
 ## Development Commands
@@ -793,7 +799,7 @@ SECRET_KEY=your-secret-key-change-this-in-production
 ### Backend — Features Not Yet Started
 - `gm/campaigns/campaign_tools/session_notes/` — Session notes (NPC session attendance will be a junction table here)
 - Classes system (like races/backgrounds but for character classes)
-- NPC image upload endpoint exists but image serving (static file route) not yet wired in `main.py` — needed before frontend can display portraits
+- NPC image upload, serving, and display are fully functional (`/uploads` static mount is wired in `main.py`)
 
 ### Frontend
 - Everything listed in "Frontend Not Yet Built" above
