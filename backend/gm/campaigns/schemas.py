@@ -56,8 +56,9 @@ class CampaignListItem(BaseModel):
     id: int
     name: str
     description: Optional[str]
+    created_by: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 

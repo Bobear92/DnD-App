@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../authService';
+import { useAuth } from '../AuthContext';
 import './Login.css';
 
 const Login = () => {
   const navigate = useNavigate();
+  const { setUser } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -37,10 +39,9 @@ const Login = () => {
       });
 
       if (result.success) {
-        // Get user info
         const userResult = await authService.getCurrentUser();
         if (userResult.success) {
-          localStorage.setItem('user', JSON.stringify(userResult.data));
+          setUser(userResult.data);
           navigate('/campaigns');
         } else {
           setError('Failed to load user data');
@@ -66,7 +67,7 @@ const Login = () => {
         if (loginResult.success) {
           const userResult = await authService.getCurrentUser();
           if (userResult.success) {
-            localStorage.setItem('user', JSON.stringify(userResult.data));
+            setUser(userResult.data);
             navigate('/campaigns');
           }
         }

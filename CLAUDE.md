@@ -473,6 +473,7 @@ Campaign creation uses `get_current_user` (any authenticated user). Member manag
 - Import path: `@/components/ui/<component>`
 - Config file: `components.json` (do not edit manually)
 - Icon library: `lucide-react` — import icons as `import { IconName } from "lucide-react"`
+- **`<SelectItem value="">` is forbidden** — Radix UI reserves empty string to signal "clear the selection". Use a sentinel like `"__none__"` and convert back to `null`/`''` in `onValueChange`. Passing `value=""` crashes the entire React tree in React 19.
 
 ### Path Aliases
 - `@/` resolves to `frontend/src/` — always use this for internal imports
@@ -506,6 +507,11 @@ frontend/src/
 ├── characters/
 │   ├── pages/CharacterList.jsx  # List characters, visibility toggle (GM) ✅
 │   └── characterService.js
+├── npcs/
+│   ├── npcService.js            # Full API client: NPCs, relationships, player relationships, image upload
+│   └── pages/
+│       ├── NPCList.jsx          # Campaign NPC grid + create dialog + visibility toggle + player view ✅
+│       └── NPCDetail.jsx        # Portrait upload, section cards with Save/Reset, relationships tabs ✅
 ├── locations/
 │   ├── locationService.js       # Full API client: locations, maps, pins, relationships, location NPCs
 │   └── pages/
@@ -516,6 +522,7 @@ frontend/src/
 └── shared/
     └── components/
         ├── ProtectedRoute.jsx   # Redirects to /login if AuthContext user is null
+        ├── ErrorBoundary.jsx    # Class component; wraps all routes in App.jsx; shows render error instead of blank page
         └── layout/
             ├── MainLayout.jsx   # Wraps pages with Sidebar + Header; reads from contexts
             ├── Header.jsx       # Campaign name (from CampaignContext) + user menu (from AuthContext)
@@ -524,10 +531,13 @@ frontend/src/
 ```
 
 ### Auth + Campaign Context Pattern
-- `AuthContext` — wraps the entire app; calls `/api/auth/me` on mount; `user` is null until resolved
+- `AuthContext` — wraps the entire app; calls `/api/auth/me` on mount; `user` is null until resolved; exposes `setUser` so `Login` can update context without a page reload
 - `CampaignContext` — `campaign` shape: `{id, name, description, created_by, userRole: 'gm'|'player', ...}`
   - `userRole` is computed in CampaignSelection: `campaign.created_by === user.id ? 'gm' : 'player'`
+  - `created_by` comes from `CampaignListItem` (the list endpoint includes it — required for role computation)
   - Persisted to localStorage so page refreshes restore context automatically
+  - `authService.logout()` clears `selectedCampaign` from localStorage to prevent stale role surviving across sessions
+- `MainLayout` — heals stale `userRole` on every mount: re-derives role from `campaign.created_by === user.id` and calls `enterCampaign` if the stored value is wrong. Guards against sessions where role was incorrectly persisted.
 - `isGm` in pages/components: always use `campaign?.userRole === 'gm'`, never `user.is_admin`
 - `ProtectedRoute` — redirects unauthenticated users to `/login` while `loading` is true shows nothing
 
@@ -540,10 +550,10 @@ frontend/src/
 | `/campaigns/:campaignId/characters` | CharacterList | ✅ Functional |
 | `/campaigns/:campaignId/locations` | LocationList | ✅ Functional |
 | `/campaigns/:campaignId/locations/:locationId` | LocationDetail | ✅ Functional |
+| `/campaigns/:campaignId/npcs` | NPCList | ✅ Functional |
+| `/campaigns/:campaignId/npcs/:npcId` | NPCDetail | ✅ Functional |
 | `/campaigns/:campaignId/characters/create` | — | ❌ Not built |
 | `/campaigns/:campaignId/characters/:id` | — | ❌ Not built |
-| `/campaigns/:campaignId/npcs` | — | ❌ Not built |
-| `/campaigns/:campaignId/npcs/:npcId` | — | ❌ Not built |
 
 ### Locations UI — Key Behaviours
 - **Maps tab:** thumbnail strip (left) + scrollable map viewer (right) with zoom (+/−/scroll wheel) and dark background
@@ -563,22 +573,37 @@ frontend/src/
 - **`pin_child_ids`:** computed at query time in `get_locations` — for each location, the IDs of locations linked via pins on that location's maps
 - **Top-level map on LocationList:** if a top-level location has maps, the first map is displayed above the hierarchy tree with clickable pin tooltips; multiple maps show a tab strip; pins linked to a location show a "Go to [name]" button; respects player view filter
 
+### NPCs UI — Key Behaviours
+- **NPCList grid:** portrait thumbnail (placeholder icon when none), color-coded status badge (alive/dead/missing/unknown), race · occupation subtitle, summary text
+- **GM controls on card:** eye toggle (visibility) + delete button overlaid on portrait; Player View preview toggle
+- **Filters:** search by name/race/occupation + status dropdown
+- **Create dialog:** name (required), race, occupation, alignment, status select, summary, visible-to-players checkbox; navigates directly to NPCDetail on create
+- **NPCDetail portrait:** click or drag-drop to upload (10 MB limit, client-side check); remove button; upload overlay while in progress
+- **NPCDetail core fields:** name, status, race, occupation, alignment, visibility checkbox — inline editing in portrait row; per-section Save/Reset appear only when dirty
+- **Info tab sections:** Physical (age, gender, height, weight, appearance) | Personality (voice, traits, ideals, bonds, flaws, languages as removable tags) | Narrative (summary, description, backstory — labeled "Player visible") | GM Notes (amber-tinted "Private" card, GM only) | Location & Media (last known location select, last-seen notes, theme music URL with clickable link) | Combat Stats (freeform JSON textarea, GM only)
+- **Player view:** all GM-only cards (GM Notes, Combat Stats, Player Relationships tab) hidden; all fields read-only; empty sections suppressed entirely
+- **Relationships tab:** NPC-to-NPC list; related NPC name is a clickable link to their detail page; GM can add (select NPC + type + description) and delete
+- **Player Relationships tab (GM only):** NPC-to-player list; populated from campaign members (players only); GM can add and delete
+- **Language tags:** add via input + Enter or button, remove with × on each tag; stored as JSONB array
+- **Last Known Location:** select from all campaign locations; in player view shows as a clickable link to that location's detail page
+- **Portrait display note:** image serving requires the static file route to be wired in `main.py` (tracked in What's NOT Built Yet) — upload/delete flow is functional
+
 ### Frontend Not Yet Built
 - Character creation and detail pages (`/campaigns/:campaignId/characters/create`, `/:id`)
-- NPC management UI (`/campaigns/:campaignId/npcs`, `/:npcId`)
 - Loot table UI
 - Encyclopedia browsing UI (players read campaign-merged view)
 - Admin panels (manage base compendium: races, backgrounds, feats, spells, items, creatures)
 - GM panels (campaign overrides + homebrew content management)
 - Token refresh / expiration handling
 - Dashboard with real data (`/campaigns/:campaignId/dashboard`)
-- NPC image serving (static file route not yet wired in `main.py`)
 
 ---
 
-## Testing (Backend)
+## Testing
 
-**Every new backend module MUST have a corresponding test file.** Tests are written before or alongside the feature, not after.
+**Every new module — backend or frontend — MUST have a corresponding test file. Tests are written before or alongside the feature, not after.**
+
+## Testing (Backend)
 
 ### Running tests
 ```bash
@@ -654,6 +679,80 @@ backend/tests/
 
 ---
 
+## Testing (Frontend)
+
+Stack: **Vitest** + **React Testing Library** + **jsdom**. Run from `frontend/`.
+
+### Running tests
+```bash
+cd frontend
+npm test              # run all tests once
+npm run test:watch    # watch mode during development
+```
+
+### Test file naming and location
+Co-locate test files next to the source file they test:
+```
+frontend/src/
+├── auth/
+│   ├── AuthContext.jsx
+│   ├── AuthContext.test.jsx          # context state, setUser exposure, logout + selectedCampaign clearing (6 tests)
+│   └── pages/
+│       ├── Login.jsx
+│       └── Login.test.jsx            # login flow, setUser call, navigation, error states (8 tests)
+├── npcs/
+│   └── pages/
+│       ├── NPCDetail.jsx
+│       └── NPCDetail.test.jsx        # render smoke test, SelectItem regression, error state, GM vs player visibility (5 tests)
+└── shared/
+    └── components/
+        ├── ProtectedRoute.jsx
+        ├── ProtectedRoute.test.jsx   # loading/null/authenticated cases (3 tests)
+        └── layout/
+            ├── MainLayout.jsx
+            └── MainLayout.test.jsx   # userRole healing: stale player→gm, correct unchanged, player for non-creator, null guards (5 tests)
+```
+
+### Setup
+- Config in `vite.config.js` under the `test` key (`environment: 'jsdom'`, `globals: true`)
+- Global setup: `src/test/setup.js` (imports `@testing-library/jest-dom` matchers)
+
+### What to test for each new frontend page/component
+- **Service calls:** the right API method is invoked with the right arguments
+- **Context interaction:** components read from and write to context correctly (not raw localStorage)
+- **Navigation:** `navigate()` is called with the correct path on success
+- **Error states:** API failures surface an error message; navigation and context updates do NOT happen
+- **Auth/GM gating:** GM-only elements are hidden in player view; restricted actions are blocked
+
+### Mocking patterns
+```js
+// Mock a service module
+vi.mock('../npcService', () => ({ default: { getNpcs: vi.fn() } }));
+
+// Mock useNavigate
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => ({
+  ...await vi.importActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
+
+// Mock a context hook
+vi.mock('../../campaigns/CampaignContext', () => ({
+  useCampaign: () => ({ campaign: { id: 1, name: 'Test', userRole: 'gm' } }),
+}));
+```
+
+### Key regression tests
+`Login.test.jsx` — "calls setUser from AuthContext — not just localStorage" — guards against the bug where Login wrote to localStorage but never called `setUser`, leaving `AuthContext.user` null and causing `ProtectedRoute` to bounce the user back to `/login` immediately after a successful login.
+
+`test_campaigns.py::TestListCampaigns::test_list_includes_created_by` — asserts `created_by` is present in the list response. Without it, the frontend cannot compute `userRole` and every user defaults to `'player'`, hiding all GM controls.
+
+`MainLayout.test.jsx` — "calls enterCampaign with gm when created_by matches user.id but role is stored as player" — guards against stale `userRole` in localStorage surviving across sessions.
+
+`NPCDetail.test.jsx` — "does not crash with null last_known_location_id" — guards against the Radix UI `<SelectItem value="">` crash that blanks the entire React tree in React 19. Also guards GM vs player visibility of the GM Notes card.
+
+---
+
 ## Development Commands
 
 ```bash
@@ -665,6 +764,7 @@ uvicorn main:app --reload         # Dev server at http://localhost:8000
 # Frontend
 cd frontend
 npm run dev                       # Dev server at http://localhost:5173
+npm test                          # run frontend tests
 
 # Database
 psql -U postgres -d dnd_app_dev
@@ -697,6 +797,4 @@ SECRET_KEY=your-secret-key-change-this-in-production
 
 ### Frontend
 - Everything listed in "Frontend Not Yet Built" above
-- No context providers (AuthContext, CampaignContext)
-- No protected route wrapper (currently no auth guard on routes)
 - No token expiry handling

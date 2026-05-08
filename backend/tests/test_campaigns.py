@@ -47,6 +47,14 @@ class TestCreateCampaign:
 # ---------------------------------------------------------------------------
 
 class TestListCampaigns:
+    def test_list_includes_created_by(self, client):
+        """created_by must be in the list response so the frontend can compute userRole."""
+        headers, user_id = make_user(client, 1)
+        create_campaign(client, headers)
+        resp = client.get("/api/gm/campaigns", headers=headers).json()
+        assert "created_by" in resp[0]
+        assert resp[0]["created_by"] == user_id
+
     def test_user_sees_only_their_campaigns(self, client):
         h1, _ = make_user(client, 1)
         h2, _ = make_user(client, 2)

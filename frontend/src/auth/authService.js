@@ -73,6 +73,7 @@ const authService = {
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('selectedCampaign');
   },
 
   // Check if user is authenticated
