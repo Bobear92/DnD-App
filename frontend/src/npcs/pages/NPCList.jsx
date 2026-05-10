@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import npcService, { mapNpcImageUrl } from '../npcService';
+import locationService from '../../locations/locationService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -20,6 +21,8 @@ const STATUS_STYLES = {
   unknown: 'bg-secondary text-secondary-foreground',
 };
 
+const STATUS_SORT_ORDER = { alive: 0, missing: 1, unknown: 2, dead: 3 };
+
 function StatusBadge({ status }) {
   if (!status) return null;
   return (
@@ -27,6 +30,32 @@ function StatusBadge({ status }) {
       {status}
     </span>
   );
+}
+
+/** Return all descendant location IDs (including rootId) using parent_location_id and pin_child_ids. */
+function getSubtreeIds(rootId, locations) {
+  const childrenMap = {};
+  for (const loc of locations) {
+    if (loc.parent_location_id) {
+      childrenMap[loc.parent_location_id] = childrenMap[loc.parent_location_id] || [];
+      childrenMap[loc.parent_location_id].push(loc.id);
+    }
+    for (const childId of (loc.pin_child_ids || [])) {
+      childrenMap[loc.id] = childrenMap[loc.id] || [];
+      if (!childrenMap[loc.id].includes(childId)) {
+        childrenMap[loc.id].push(childId);
+      }
+    }
+  }
+  const ids = new Set();
+  const queue = [rootId];
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (ids.has(id)) continue;
+    ids.add(id);
+    for (const childId of (childrenMap[id] || [])) queue.push(childId);
+  }
+  return ids;
 }
 
 const EMPTY_FORM = {
@@ -46,11 +75,14 @@ export default function NPCList() {
   const isGm = campaign?.userRole === 'gm';
 
   const [npcs, setNpcs] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [playerView, setPlayerView] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('__all__');
+  const [locationFilter, setLocationFilter] = useState('__all__');
+  const [sortBy, setSortBy] = useState('name_asc');
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -58,14 +90,19 @@ export default function NPCList() {
 
   useEffect(() => {
     if (!campaignId) { navigate('/campaigns'); return; }
-    loadNpcs();
+    loadData();
   }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const loadNpcs = async () => {
+  const loadData = async () => {
     setLoading(true);
     setError('');
     try {
-      setNpcs(await npcService.getNpcs(campaignId));
+      const [npcData, locData] = await Promise.all([
+        npcService.getNpcs(campaignId),
+        locationService.getLocations(campaignId),
+      ]);
+      setNpcs(npcData);
+      setLocations(locData);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load NPCs');
     } finally {
@@ -113,17 +150,36 @@ export default function NPCList() {
 
   const displayed = useMemo(() => {
     let base = playerView ? npcs.filter(n => n.is_visible_to_players) : npcs;
-    if (statusFilter !== 'all') base = base.filter(n => n.status === statusFilter);
+
+    if (statusFilter !== '__all__') {
+      base = base.filter(n => n.status === statusFilter);
+    }
+
+    if (locationFilter === '__unplaced__') {
+      base = base.filter(n => !n.last_known_location_id);
+    } else if (locationFilter !== '__all__') {
+      const subtree = getSubtreeIds(Number(locationFilter), locations);
+      base = base.filter(n => n.last_known_location_id && subtree.has(n.last_known_location_id));
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       base = base.filter(n =>
         n.name.toLowerCase().includes(q) ||
         (n.race || '').toLowerCase().includes(q) ||
-        (n.occupation || '').toLowerCase().includes(q)
+        (n.occupation || '').toLowerCase().includes(q) ||
+        (n.summary || '').toLowerCase().includes(q)
       );
     }
-    return base;
-  }, [npcs, playerView, statusFilter, searchQuery]);
+
+    const sorted = [...base];
+    if (sortBy === 'name_asc') sorted.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sortBy === 'name_desc') sorted.sort((a, b) => b.name.localeCompare(a.name));
+    else if (sortBy === 'recently_added') sorted.sort((a, b) => b.id - a.id);
+    else if (sortBy === 'status') sorted.sort((a, b) => (STATUS_SORT_ORDER[a.status] ?? 99) - (STATUS_SORT_ORDER[b.status] ?? 99));
+
+    return sorted;
+  }, [npcs, locations, playerView, statusFilter, locationFilter, sortBy, searchQuery]);
 
   if (loading) {
     return (
@@ -135,7 +191,7 @@ export default function NPCList() {
     );
   }
 
-  const isFiltered = searchQuery.trim().length > 0 || statusFilter !== 'all';
+  const isFiltered = searchQuery.trim().length > 0 || statusFilter !== '__all__' || locationFilter !== '__all__';
 
   return (
     <MainLayout>
@@ -184,26 +240,49 @@ export default function NPCList() {
         )}
 
         {/* Filters */}
-        <div className="flex items-center gap-2 mb-5">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap items-center gap-2 mb-5">
+          <div className="relative flex-1 min-w-48">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
               className="pl-8"
-              placeholder="Search by name, race, or occupation…"
+              placeholder="Search name, race, occupation, or description…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+          <Select value={locationFilter} onValueChange={setLocationFilter}>
+            <SelectTrigger className="w-44 shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All locations</SelectItem>
+              <SelectItem value="__unplaced__">Unplaced</SelectItem>
+              {locations.map(loc => (
+                <SelectItem key={loc.id} value={String(loc.id)}>{loc.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-36 shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="__all__">All statuses</SelectItem>
               <SelectItem value="alive">Alive</SelectItem>
               <SelectItem value="dead">Dead</SelectItem>
               <SelectItem value="missing">Missing</SelectItem>
               <SelectItem value="unknown">Unknown</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-40 shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name_asc">Name (A–Z)</SelectItem>
+              <SelectItem value="name_desc">Name (Z–A)</SelectItem>
+              <SelectItem value="recently_added">Recently added</SelectItem>
+              <SelectItem value="status">Status</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -217,7 +296,7 @@ export default function NPCList() {
             </h2>
             <p className="text-muted-foreground text-sm mb-4">
               {isFiltered
-                ? 'Try adjusting your search or status filter.'
+                ? 'Try adjusting your search or filters.'
                 : playerView
                 ? 'No NPCs have been made visible to players yet.'
                 : 'Create your first NPC to populate the campaign world.'}

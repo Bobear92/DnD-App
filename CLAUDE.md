@@ -571,12 +571,16 @@ frontend/src/
 - **Hierarchy tree:** indented expandable tree; click node to navigate; pin-derived children included automatically from `map_pins.linked_location_id`
 - **Unsorted locations:** visible to GM only; any location with no parent, not top-level, not unknown, not pin-linked from any other location's map
 - **`pin_child_ids`:** computed at query time in `get_locations` — for each location, the IDs of locations linked via pins on that location's maps
+- **Pin → parent persistence:** when a GM creates or updates a pin with a `linked_location_id`, the service automatically sets the linked location's `parent_location_id` to the map's parent location — but only if the linked location has no parent yet, is not top-level, and is not unknown ("first pin wins"). This makes the hierarchy fully explicit in the DB.
 - **Top-level map on LocationList:** if a top-level location has maps, the first map is displayed above the hierarchy tree as a read-only image preview (no pins); multiple maps show a tab strip; a GM toolbar above the map shows an "Edit [name]" button to navigate to LocationDetail for full editing; respects player view filter (only visible maps shown to players)
 
 ### NPCs UI — Key Behaviours
 - **NPCList grid:** portrait thumbnail (placeholder icon when none), color-coded status badge (alive/dead/missing/unknown), race · occupation subtitle, summary text
 - **GM controls on card:** eye toggle (visibility) + delete button overlaid on portrait; Player View preview toggle
-- **Filters:** search by name/race/occupation + status dropdown
+- **Filters:** search bar (matches name, race, occupation, and summary text) + location dropdown + status dropdown + sort select
+- **NPCList purpose:** acts as a searchable NPC database — designed for cross-cutting queries ("what blacksmiths have we found?", "who was that bandit we killed?") rather than geographic browsing (use Locations for that)
+- **Location filter:** flat dropdown of all campaign locations; selecting a location shows NPCs whose `last_known_location_id` is anywhere in that location's subtree (walks `parent_location_id` + `pin_child_ids` recursively on the client); "Unplaced" option shows NPCs with no `last_known_location_id`
+- **Sort options:** Name A–Z (default) | Name Z–A | Recently added (by id desc) | Status (alive → missing → unknown → dead)
 - **Create dialog:** name (required), race, occupation, alignment, status select, summary, visible-to-players checkbox; navigates directly to NPCDetail on create
 - **NPCDetail portrait:** click or drag-drop to upload (10 MB limit, client-side check); remove button; upload overlay while in progress
 - **NPCDetail core fields:** name, status, race, occupation, alignment, visibility checkbox — inline editing in portrait row; per-section Save/Reset appear only when dirty
@@ -640,7 +644,7 @@ backend/tests/
 ├── test_loot_tables.py             # loot tables (system/campaign ownership)
 ├── test_races_backgrounds_feats.py # admin-only compendium (parametrized)
 ├── test_encyclopedia.py            # bestiary + spells + 6 item types (parametrized)
-└── test_locations.py               # locations, maps, pins, location NPCs, hierarchy (56 tests)
+└── test_locations.py               # locations, maps, pins, location NPCs, hierarchy, pin→parent persistence (61 tests)
 ```
 
 ### Required coverage for each new module
@@ -703,7 +707,9 @@ frontend/src/
 ├── npcs/
 │   └── pages/
 │       ├── NPCDetail.jsx
-│       └── NPCDetail.test.jsx        # render smoke test, SelectItem regression, error state, GM vs player visibility (5 tests)
+│       ├── NPCDetail.test.jsx        # render smoke test, SelectItem regression, error state, GM vs player visibility (5 tests)
+│       ├── NPCList.jsx
+│       └── NPCList.test.jsx          # render, search (includes summary), location filter (unplaced + hierarchy subtree), sort, GM vs player view (10 tests)
 ├── locations/
 │   └── pages/
 │       ├── LocationList.jsx
@@ -719,7 +725,7 @@ frontend/src/
 
 ### Setup
 - Config in `vite.config.js` under the `test` key (`environment: 'jsdom'`, `globals: true`)
-- Global setup: `src/test/setup.js` (imports `@testing-library/jest-dom` matchers)
+- Global setup: `src/test/setup.js` (imports `@testing-library/jest-dom` matchers; adds `window.HTMLElement.prototype.scrollIntoView = () => {}` — required because Radix UI Select calls scrollIntoView which jsdom doesn't implement)
 
 ### What to test for each new frontend page/component
 - **Service calls:** the right API method is invoked with the right arguments
@@ -756,6 +762,8 @@ vi.mock('../../campaigns/CampaignContext', () => ({
 `NPCDetail.test.jsx` — "does not crash with null last_known_location_id" — guards against the Radix UI `<SelectItem value="">` crash that blanks the entire React tree in React 19. Also guards GM vs player visibility of the GM Notes card.
 
 `LocationList.test.jsx` — "clicking the top-level node navigates with the correct campaignId — not undefined" — guards against `LocationTreeNode` and `LocationCard` being module-level components that can't close over `useParams()`'s `campaignId`. Without the prop fix, all tree/card clicks navigate to `/campaigns/undefined/locations/X`.
+
+`NPCList.test.jsx` — "filters by summary text" — guards against search only checking name/race/occupation and missing the summary field. "location filter includes NPCs at child locations" — guards the hierarchy-aware subtree walk that must follow both `parent_location_id` and `pin_child_ids`.
 
 ---
 

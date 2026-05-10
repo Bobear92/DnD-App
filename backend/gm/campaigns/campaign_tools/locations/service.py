@@ -396,6 +396,17 @@ def toggle_map_visibility(db: Session, campaign_id: int, location_id: int, map_i
 
 # ── Pins ──────────────────────────────────────────────────────────────────────
 
+def _maybe_set_pin_parent(db: Session, linked_location_id: int | None, parent_location_id: int) -> None:
+    """If the linked location has no parent yet, set it to the map's parent location."""
+    if not linked_location_id:
+        return
+    linked = db.query(Location).filter(Location.id == linked_location_id).first()
+    if linked and linked.parent_location_id is None and not linked.is_top_level and not linked.is_unknown:
+        linked.parent_location_id = parent_location_id
+        db.commit()
+
+
+
 def create_pin(db: Session, campaign_id: int, location_id: int, map_id: int, data: MapPinCreate, user_id: int) -> MapPin:
     _require_gm(db, campaign_id, user_id)
     m = _get_map_or_404(db, map_id)
@@ -405,6 +416,7 @@ def create_pin(db: Session, campaign_id: int, location_id: int, map_id: int, dat
     db.add(pin)
     db.commit()
     db.refresh(pin)
+    _maybe_set_pin_parent(db, pin.linked_location_id, location_id)
     return pin
 
 
@@ -429,10 +441,14 @@ def update_pin(
     pin = db.query(MapPin).filter(MapPin.id == pin_id, MapPin.map_id == map_id).first()
     if not pin:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Pin {pin_id} not found")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    fields = data.model_dump(exclude_unset=True)
+    new_linked_id = fields.get('linked_location_id')
+    for field, value in fields.items():
         setattr(pin, field, value)
     db.commit()
     db.refresh(pin)
+    if new_linked_id:
+        _maybe_set_pin_parent(db, new_linked_id, location_id)
     return pin
 
 

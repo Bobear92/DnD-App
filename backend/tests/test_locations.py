@@ -727,3 +727,94 @@ class TestPinChildIds:
         resp = client.get(BASE(cid), headers=h_player)
         locs = {l["id"]: l for l in resp.json()}
         assert child_lid in locs[parent_lid]["pin_child_ids"]
+
+
+class TestPinParentPersistence:
+    """Creating/updating a pin with linked_location_id sets that location's parent."""
+
+    def test_create_pin_sets_parent_on_linked_location(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        parent_lid = make_location(client, h, cid, name="City")
+        child_lid = make_location(client, h, cid, name="Tavern")
+        upload_resp = _upload_map(client, h, cid, parent_lid)
+        mid = upload_resp.json()["id"]
+        client.post(
+            f"{BASE(cid)}/{parent_lid}/maps/{mid}/pins",
+            json={"x_percent": 10.0, "y_percent": 20.0, "linked_location_id": child_lid, "is_visible_to_players": False},
+            headers=h,
+        )
+        resp = client.get(f"{BASE(cid)}/{child_lid}", headers=h)
+        assert resp.json()["parent_location_id"] == parent_lid
+
+    def test_create_pin_does_not_overwrite_existing_parent(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        original_parent_lid = make_location(client, h, cid, name="Province")
+        other_parent_lid = make_location(client, h, cid, name="City")
+        child_lid = make_location(client, h, cid, name="Tavern")
+        # manually set parent to original_parent
+        client.put(BASE(cid) + f"/{child_lid}", json={"parent_location_id": original_parent_lid}, headers=h)
+        # pin from other_parent should not override
+        upload_resp = _upload_map(client, h, cid, other_parent_lid)
+        mid = upload_resp.json()["id"]
+        client.post(
+            f"{BASE(cid)}/{other_parent_lid}/maps/{mid}/pins",
+            json={"x_percent": 10.0, "y_percent": 20.0, "linked_location_id": child_lid, "is_visible_to_players": False},
+            headers=h,
+        )
+        resp = client.get(f"{BASE(cid)}/{child_lid}", headers=h)
+        assert resp.json()["parent_location_id"] == original_parent_lid
+
+    def test_create_pin_without_linked_location_leaves_no_parent(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        lid = make_location(client, h, cid, name="Room")
+        upload_resp = _upload_map(client, h, cid, lid)
+        mid = upload_resp.json()["id"]
+        client.post(
+            f"{BASE(cid)}/{lid}/maps/{mid}/pins",
+            json={"x_percent": 10.0, "y_percent": 20.0, "is_visible_to_players": False},
+            headers=h,
+        )
+        resp = client.get(f"{BASE(cid)}/{lid}", headers=h)
+        assert resp.json()["parent_location_id"] is None
+
+    def test_update_pin_sets_parent_when_link_added(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        parent_lid = make_location(client, h, cid, name="City")
+        child_lid = make_location(client, h, cid, name="Market")
+        upload_resp = _upload_map(client, h, cid, parent_lid)
+        mid = upload_resp.json()["id"]
+        # create pin without link
+        pin_resp = client.post(
+            f"{BASE(cid)}/{parent_lid}/maps/{mid}/pins",
+            json={"x_percent": 10.0, "y_percent": 20.0, "is_visible_to_players": False},
+            headers=h,
+        )
+        pin_id = pin_resp.json()["id"]
+        # update to add link
+        client.put(
+            f"{BASE(cid)}/{parent_lid}/maps/{mid}/pins/{pin_id}",
+            json={"linked_location_id": child_lid},
+            headers=h,
+        )
+        resp = client.get(f"{BASE(cid)}/{child_lid}", headers=h)
+        assert resp.json()["parent_location_id"] == parent_lid
+
+    def test_top_level_location_parent_not_set_via_pin(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        top_lid = make_location(client, h, cid, name="World")
+        client.put(BASE(cid) + f"/{top_lid}", json={"is_top_level": True}, headers=h)
+        other_lid = make_location(client, h, cid, name="Country")
+        upload_resp = _upload_map(client, h, cid, other_lid)
+        mid = upload_resp.json()["id"]
+        client.post(
+            f"{BASE(cid)}/{other_lid}/maps/{mid}/pins",
+            json={"x_percent": 10.0, "y_percent": 20.0, "linked_location_id": top_lid, "is_visible_to_players": False},
+            headers=h,
+        )
+        resp = client.get(f"{BASE(cid)}/{top_lid}", headers=h)
+        assert resp.json()["parent_location_id"] is None
