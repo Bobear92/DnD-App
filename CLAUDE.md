@@ -79,9 +79,10 @@ backend/
 ├── gm/
 │   ├── campaigns/               # Campaign + member management
 │   │   └── campaign_tools/
-│   │       ├── npcs/            # NPC management (campaign-specific)
 │   │       ├── npcs/            # NPC management — routes/service/models/schemas/storage
-│       └── locations/       # Locations, maps, pins, NPC links — routes/service/models/schemas/storage
+│   │       ├── locations/       # Locations, maps, pins, NPC links — routes/service/models/schemas/storage
+│   │       ├── calendar/        # Per-campaign calendar: seasons, months, eras — routes/service/models/schemas
+│   │       └── timeline/        # Timeline events with NPC/location links — routes/service/models/schemas
 │   └── tools/
 │       └── loot_tables/         # Loot table generation (system + campaign)
 ├── uploads/
@@ -152,7 +153,7 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 
 ---
 
-## Current Database Schema (21 Tables)
+## Current Database Schema (28 Tables)
 
 ```sql
 -- Core
@@ -266,6 +267,54 @@ map_pins
 location_links                       ← polymorphic: links a location to any other content type
   id, location_id (FK→locations), content_type (string), content_id, notes, created_at
 
+-- GM Campaign Calendar System
+campaign_calendars
+  id, campaign_id (FK→campaigns CASCADE, UNIQUE),
+  name (default "Campaign Calendar"), days_per_month (default 30),
+  current_era_id (FK→calendar_eras SET NULL, use_alter=True ← breaks circular FK),
+  current_year, current_month_order, current_day,
+  created_at, updated_at
+
+calendar_seasons
+  id, calendar_id (FK→campaign_calendars CASCADE),
+  name, order_index, created_at, updated_at
+
+calendar_months
+  id, calendar_id (FK→campaign_calendars CASCADE),
+  season_id (FK→calendar_seasons SET NULL, nullable),
+  name, description, order_index, created_at, updated_at
+
+calendar_eras
+  id, calendar_id (FK→campaign_calendars CASCADE),
+  name, abbreviation, description,
+  direction (ENUM: ascending/descending),
+  is_primary (boolean),             ← auto-set on first era; must be ascending
+  epoch_offset (int),               ← absolute = era_year + offset (asc) or offset - era_year (desc)
+  anchor_era_id (FK→calendar_eras SET NULL, nullable),
+  anchor_era_year, anchor_this_year (nullable = transition anchor for descending),
+  era_start_absolute, era_end_absolute (nullable = open-ended),
+  is_current (boolean),
+  is_visible_to_players (boolean), created_at, updated_at
+
+-- GM Campaign Timeline
+timeline_events
+  id, campaign_id (FK→campaigns CASCADE),
+  title, description,
+  era_id (FK→calendar_eras SET NULL, nullable),
+  year, month_order, day (all nullable),
+  absolute_year (computed from era + year; used for ORDER BY),
+  is_visible_to_players (boolean), created_at, updated_at
+
+timeline_event_npcs                  ← junction: NPC linked to a timeline event
+  id, event_id (FK→timeline_events CASCADE), npc_id (FK→npcs CASCADE),
+  description, created_at
+  UNIQUE(event_id, npc_id)
+
+timeline_event_locations             ← junction: location linked to a timeline event
+  id, event_id (FK→timeline_events CASCADE), location_id (FK→locations CASCADE),
+  description, created_at
+  UNIQUE(event_id, location_id)
+
 loot_tables
   id, name, description, owner_type (string: 'system'/'campaign'),
   owner_id, loot_items (JSONB), created_at, updated_at
@@ -333,6 +382,20 @@ in "What's NOT Built Yet."
 ### GM Authorization
 - A user is "GM of campaign X" if they have a `campaign_members` row with `role='gm'` for that campaign
 - `require_gm(campaign_id)` dependency checks this — do not use `require_admin` for GM actions
+
+### Calendar Circular FK
+- `campaign_calendars.current_era_id → calendar_eras` and `calendar_eras.calendar_id → campaign_calendars` is a circular FK cycle
+- Resolved with `use_alter=True, name="fk_calendar_current_era"` on the `current_era_id` FK — SQLAlchemy emits it as `ALTER TABLE` after creation and excludes it from topological sort
+- Test teardown uses raw `DROP TABLE IF EXISTS ... CASCADE` instead of `Base.metadata.drop_all()` (which can't sort circular FKs)
+- `conftest.py` nullifies `campaign_calendars.current_era_id` before each-test delete: `_CIRCULAR_FK_NULLIFIERS = ["UPDATE campaign_calendars SET current_era_id = NULL"]`
+
+### Calendar Era Math
+- **Absolute year**: hidden internal integer used for sorting/conversion; never shown to GM or players
+- `era_to_absolute(era, era_year)`: `era_year + epoch_offset` (ascending) or `epoch_offset - era_year` (descending)
+- `absolute_to_era(era, absolute_year)`: reverse of above
+- **No year 0**: adjacent opposite-direction eras (e.g. BBF/ABF) offset by 1; BBF 1 = absolute X, ABF 1 = absolute X+1 (achieved via transition anchor)
+- **Transition anchor** (descending era, `anchor_this_year=None`): year 1 of the descending era is the year immediately BEFORE the anchor reference year
+- **`_load_calendar(db, cal)`**: manually attaches `.seasons`, `.months`, `.eras` as Python attributes on the ORM object so Pydantic `from_attributes=True` can serialize them (these are not SQLAlchemy relationships)
 
 ---
 
@@ -449,6 +512,44 @@ Campaign creation uses `get_current_user` (any authenticated user). Member manag
 - `/api/encyclopedia/items/potions`
 - `/api/encyclopedia/items/magic-items`
 - `/api/encyclopedia/items/food-drink`
+
+### Calendar (per-campaign)
+| Method | Endpoint | Auth Required |
+|--------|----------|---------------|
+| POST | /api/gm/campaigns/{id}/calendar | Yes (GM) |
+| GET | /api/gm/campaigns/{id}/calendar | Yes (member) |
+| PUT | /api/gm/campaigns/{id}/calendar | Yes (GM) |
+| POST | /api/gm/campaigns/{id}/calendar/seasons | Yes (GM) |
+| PUT | /api/gm/campaigns/{id}/calendar/seasons/{season_id} | Yes (GM) |
+| DELETE | /api/gm/campaigns/{id}/calendar/seasons/{season_id} | Yes (GM) |
+| POST | /api/gm/campaigns/{id}/calendar/months | Yes (GM) |
+| PUT | /api/gm/campaigns/{id}/calendar/months/{month_id} | Yes (GM) |
+| DELETE | /api/gm/campaigns/{id}/calendar/months/{month_id} | Yes (GM) |
+| POST | /api/gm/campaigns/{id}/calendar/eras | Yes (GM) |
+| PUT | /api/gm/campaigns/{id}/calendar/eras/{era_id} | Yes (GM) |
+| DELETE | /api/gm/campaigns/{id}/calendar/eras/{era_id} | Yes (GM) |
+| PATCH | /api/gm/campaigns/{id}/calendar/eras/{era_id}/visibility | Yes (GM) |
+
+GET calendar response includes nested `seasons`, `months`, `eras` lists.
+First era created is automatically `is_primary=True` and must be ascending.
+Non-primary eras require `anchor_era_id` + `anchor_era_year` for epoch offset math.
+
+### Timeline (per-campaign)
+| Method | Endpoint | Auth Required |
+|--------|----------|---------------|
+| POST | /api/gm/campaigns/{id}/timeline | Yes (GM) |
+| GET | /api/gm/campaigns/{id}/timeline | Yes (member; players see only visible events) |
+| GET | /api/gm/campaigns/{id}/timeline/{event_id} | Yes (member; players blocked if hidden) |
+| PUT | /api/gm/campaigns/{id}/timeline/{event_id} | Yes (GM) |
+| DELETE | /api/gm/campaigns/{id}/timeline/{event_id} | Yes (GM) |
+| PATCH | /api/gm/campaigns/{id}/timeline/{event_id}/visibility | Yes (GM) |
+| GET/POST | /api/gm/campaigns/{id}/timeline/{event_id}/npcs | Yes (member / GM) |
+| DELETE | /api/gm/campaigns/{id}/timeline/{event_id}/npcs/{link_id} | Yes (GM) |
+| GET/POST | /api/gm/campaigns/{id}/timeline/{event_id}/locations | Yes (member / GM) |
+| DELETE | /api/gm/campaigns/{id}/timeline/{event_id}/locations/{link_id} | Yes (GM) |
+
+Events sorted by `absolute_year ASC NULLS FIRST, month_order ASC, day ASC`.
+Each event response includes `era_dates: List[EraDate]` — the event's date expressed in every era whose range covers the event's `absolute_year`. Hidden eras are excluded for players.
 
 ---
 
@@ -593,6 +694,7 @@ frontend/src/
 - **Portrait display note:** images are served via `app.mount("/uploads", StaticFiles(...))` in `main.py` — upload/delete/display are all functional
 
 ### Frontend Not Yet Built
+- Calendar/timeline UI (Campaign Settings → Calendar tab; Timeline page for events with NPC/location links)
 - Character creation and detail pages (`/campaigns/:campaignId/characters/create`, `/:id`)
 - Loot table UI
 - Encyclopedia browsing UI (players read campaign-merged view)
@@ -639,12 +741,13 @@ backend/tests/
 ├── conftest.py                     # shared fixtures + helpers
 ├── test_auth.py                    # auth module
 ├── test_campaigns.py               # campaign CRUD + member management
-├── test_npcs.py                    # NPC CRUD, visibility, gm_notes stripping, image, relationships, player-relationships, last_known_location (36 tests)
+├── test_calendar_timeline.py       # calendar (6+2+3+8), timeline events (10), event links (6) = 34 tests
 ├── test_characters.py              # character CRUD + visibility
-├── test_loot_tables.py             # loot tables (system/campaign ownership)
-├── test_races_backgrounds_feats.py # admin-only compendium (parametrized)
 ├── test_encyclopedia.py            # bestiary + spells + 6 item types (parametrized)
-└── test_locations.py               # locations, maps, pins, location NPCs, hierarchy, pin→parent persistence (61 tests)
+├── test_locations.py               # locations, maps, pins, location NPCs, hierarchy, pin→parent persistence (61 tests)
+├── test_loot_tables.py             # loot tables (system/campaign ownership)
+├── test_npcs.py                    # NPC CRUD, visibility, gm_notes stripping, image, relationships, player-relationships, last_known_location (36 tests)
+└── test_races_backgrounds_feats.py # admin-only compendium (parametrized)
 ```
 
 ### Required coverage for each new module
@@ -807,7 +910,6 @@ SECRET_KEY=your-secret-key-change-this-in-production
 ### Backend — Features Not Yet Started
 - `gm/campaigns/campaign_tools/session_notes/` — Session notes (NPC session attendance will be a junction table here)
 - Classes system (like races/backgrounds but for character classes)
-- NPC image upload, serving, and display are fully functional (`/uploads` static mount is wired in `main.py`)
 
 ### Frontend
 - Everything listed in "Frontend Not Yet Built" above

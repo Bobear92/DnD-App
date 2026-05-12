@@ -10,7 +10,7 @@ os.environ["DATABASE_URL"] = _dev_url.replace("dnd_app_dev", "dnd_app_test")
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from shared.database import Base, get_db
@@ -19,18 +19,28 @@ from main import app
 _engine = create_engine(os.environ["DATABASE_URL"])
 _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
+# Tables with circular FKs that must be nullified before deletion/drop.
+_CIRCULAR_FK_NULLIFIERS = [
+    "UPDATE campaign_calendars SET current_era_id = NULL",
+]
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _create_tables():
     Base.metadata.create_all(bind=_engine)
     yield
-    Base.metadata.drop_all(bind=_engine)
+    # DROP all tables at once with CASCADE to bypass circular FK sort issues.
+    table_names = ", ".join(f'"{t}"' for t in Base.metadata.tables.keys())
+    with _engine.begin() as conn:
+        conn.execute(text(f"DROP TABLE IF EXISTS {table_names} CASCADE"))
 
 
 @pytest.fixture(autouse=True)
 def _clean_tables(_create_tables):
     yield
     with _engine.begin() as conn:
+        for stmt in _CIRCULAR_FK_NULLIFIERS:
+            conn.execute(text(stmt))
         for table in reversed(Base.metadata.sorted_tables):
             conn.execute(table.delete())
 
