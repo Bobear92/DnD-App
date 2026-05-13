@@ -818,3 +818,78 @@ class TestPinParentPersistence:
         )
         resp = client.get(f"{BASE(cid)}/{top_lid}", headers=h)
         assert resp.json()["parent_location_id"] is None
+
+
+# ── List schema round-trip ────────────────────────────────────────────────────
+
+class TestLocationListFieldRoundTrip:
+    """Every field in LocationListItem must survive a POST→list and PUT→list round-trip.
+
+    Root bug pattern: a field present in LocationResponse but absent from
+    LocationListItem would be silently stripped by the list endpoint even though
+    the DB stores it correctly.  These tests catch that class of regression.
+    """
+
+    def _setup(self, client):
+        h, _ = make_user(client, 1)
+        cid = make_campaign(client, h)
+        return h, cid
+
+    def _list(self, client, cid, headers):
+        return client.get(BASE(cid), headers=headers).json()
+
+    def test_name_in_list(self, client):
+        h, cid = self._setup(client)
+        make_location(client, h, cid, name="Silverpeak")
+        assert self._list(client, cid, h)[0]["name"] == "Silverpeak"
+
+    def test_description_in_list_after_create(self, client):
+        h, cid = self._setup(client)
+        lid = make_location(client, h, cid, description="A misty mountain pass")
+        item = next(loc for loc in self._list(client, cid, h) if loc["id"] == lid)
+        assert item["description"] == "A misty mountain pass"
+
+    def test_description_in_list_after_update(self, client):
+        h, cid = self._setup(client)
+        lid = make_location(client, h, cid)
+        client.put(BASE(cid) + f"/{lid}", json={"description": "Updated pass"}, headers=h)
+        item = next(loc for loc in self._list(client, cid, h) if loc["id"] == lid)
+        assert item["description"] == "Updated pass"
+
+    def test_location_type_in_list(self, client):
+        h, cid = self._setup(client)
+        lid = make_location(client, h, cid, location_type="City")
+        item = next(loc for loc in self._list(client, cid, h) if loc["id"] == lid)
+        assert item["location_type"] == "City"
+
+    def test_status_in_list(self, client):
+        h, cid = self._setup(client)
+        lid = make_location(client, h, cid, status="Ruined")
+        item = next(loc for loc in self._list(client, cid, h) if loc["id"] == lid)
+        assert item["status"] == "Ruined"
+
+    def test_visibility_in_list(self, client):
+        h, cid = self._setup(client)
+        lid = make_location(client, h, cid, visible=True)
+        item = next(loc for loc in self._list(client, cid, h) if loc["id"] == lid)
+        assert item["is_visible_to_players"] is True
+
+    def test_is_top_level_in_list(self, client):
+        h, cid = self._setup(client)
+        lid = make_location(client, h, cid)
+        client.put(BASE(cid) + f"/{lid}", json={"is_top_level": True}, headers=h)
+        item = next(loc for loc in self._list(client, cid, h) if loc["id"] == lid)
+        assert item["is_top_level"] is True
+
+    def test_is_unknown_in_list(self, client):
+        h, cid = self._setup(client)
+        lid = make_location(client, h, cid, is_unknown=True)
+        item = next(loc for loc in self._list(client, cid, h) if loc["id"] == lid)
+        assert item["is_unknown"] is True
+
+    def test_parent_location_id_in_list(self, client):
+        h, cid = self._setup(client)
+        parent_lid = make_location(client, h, cid, name="Parent")
+        child_lid = make_location(client, h, cid, name="Child", parent_location_id=parent_lid)
+        item = next(loc for loc in self._list(client, cid, h) if loc["id"] == child_lid)
+        assert item["parent_location_id"] == parent_lid

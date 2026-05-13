@@ -125,6 +125,8 @@ def _event_to_response(db: Session, event: TimelineEvent, is_player: bool):
                 created_at=link.created_at,
             ))
 
+    if is_player:
+        event.gm_notes = None
     event.era_dates = era_dates
     event.npc_links = npc_links
     event.location_links = location_links
@@ -151,6 +153,8 @@ def list_events(db: Session, campaign_id: int, user_id: int) -> List[TimelineEve
             db, campaign_id, event.absolute_year, event.month_order, event.day, is_player
         )
         event.era_dates = era_dates
+        if is_player:
+            event.gm_notes = None
 
     return events
 
@@ -173,6 +177,7 @@ def create_event(db: Session, campaign_id: int, data: EventCreate, user_id: int)
         campaign_id=campaign_id,
         title=data.title,
         description=data.description,
+        gm_notes=data.gm_notes,
         era_id=data.era_id,
         year=data.year,
         month_order=data.month_order,

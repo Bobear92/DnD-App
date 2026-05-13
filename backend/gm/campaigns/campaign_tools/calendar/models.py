@@ -17,6 +17,8 @@ class CampaignCalendar(Base):
     campaign_id = Column(Integer, ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     name = Column(String(200), nullable=False, default="Campaign Calendar")
     days_per_month = Column(Integer, nullable=False, default=30)
+    use_weeks = Column(Boolean, nullable=False, default=False)
+    days_per_week = Column(Integer, nullable=True)
     # Current date in the campaign world
     current_era_id = Column(Integer, ForeignKey("calendar_eras.id", ondelete="SET NULL", use_alter=True, name="fk_calendar_current_era"), nullable=True)
     current_year = Column(Integer, nullable=True)
@@ -49,7 +51,7 @@ class CalendarMonth(Base):
     id = Column(Integer, primary_key=True, index=True)
     calendar_id = Column(Integer, ForeignKey("campaign_calendars.id", ondelete="CASCADE"), nullable=False, index=True)
     season_id = Column(Integer, ForeignKey("calendar_seasons.id", ondelete="SET NULL"), nullable=True)
-    name = Column(String(200), nullable=False)
+    name = Column(String(200), nullable=True)
     description = Column(Text, nullable=True)
     order_index = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -87,3 +89,17 @@ class CalendarEra(Base):
 
     def __repr__(self):
         return f"<CalendarEra(id={self.id}, name='{self.name}', abbr='{self.abbreviation}')>"
+
+
+class CalendarWeekday(Base):
+    __tablename__ = "calendar_weekdays"
+
+    id = Column(Integer, primary_key=True, index=True)
+    calendar_id = Column(Integer, ForeignKey("campaign_calendars.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    order_index = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<CalendarWeekday(id={self.id}, name='{self.name}', order_index={self.order_index})>"

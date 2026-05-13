@@ -16,6 +16,7 @@ class TimelineEvent(Base):
     month_order = Column(Integer, nullable=True)  # 1-based order_index of the calendar month
     day = Column(Integer, nullable=True)
     absolute_year = Column(Integer, nullable=True)  # computed from era + year for ORDER BY
+    gm_notes = Column(Text, nullable=True)
     is_visible_to_players = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

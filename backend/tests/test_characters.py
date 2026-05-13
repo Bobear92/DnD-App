@@ -229,3 +229,86 @@ class TestCharacterVisibility:
             headers=h_player,
         )
         assert resp.status_code == 403
+
+
+# ── List schema round-trip ────────────────────────────────────────────────────
+
+class TestCharacterListFieldRoundTrip:
+    """Every field in CharacterListItem must survive a POST→list and PUT→list round-trip.
+
+    Root bug pattern: a field present in CharacterResponse but absent from
+    CharacterListItem would be silently stripped by the list endpoint even though
+    the DB stores it correctly.  These tests catch that class of regression.
+    """
+
+    LIST_URL = "/api/characters/campaign/{campaign_id}"
+    CHAR_URL = "/api/characters"
+
+    def _setup(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_player, uid_player = make_user(client, 2)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid_player)
+        return h_gm, h_player, campaign_id
+
+    def _list(self, client, campaign_id, headers):
+        return client.get(self.LIST_URL.format(campaign_id=campaign_id), headers=headers).json()
+
+    def _create(self, client, headers, campaign_id, **overrides):
+        payload = {**CHAR_PAYLOAD, "campaign_id": campaign_id, **overrides}
+        resp = client.post(self.CHAR_URL, json=payload, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def test_name_in_list(self, client):
+        h_gm, h_player, cid = self._setup(client)
+        self._create(client, h_player, cid, name="Balin")
+        items = self._list(client, cid, h_gm)
+        assert any(c["name"] == "Balin" for c in items)
+
+    def test_race_in_list(self, client):
+        h_gm, h_player, cid = self._setup(client)
+        char_id = self._create(client, h_player, cid, race="Dwarf")
+        item = next(c for c in self._list(client, cid, h_gm) if c["id"] == char_id)
+        assert item["race"] == "Dwarf"
+
+    def test_char_class_in_list(self, client):
+        h_gm, h_player, cid = self._setup(client)
+        char_id = self._create(client, h_player, cid, char_class="Ranger")
+        item = next(c for c in self._list(client, cid, h_gm) if c["id"] == char_id)
+        assert item["char_class"] == "Ranger"
+
+    def test_level_in_list(self, client):
+        h_gm, h_player, cid = self._setup(client)
+        char_id = self._create(client, h_player, cid, level=5)
+        item = next(c for c in self._list(client, cid, h_gm) if c["id"] == char_id)
+        assert item["level"] == 5
+
+    def test_level_in_list_after_update(self, client):
+        h_gm, h_player, cid = self._setup(client)
+        char_id = self._create(client, h_player, cid, level=1)
+        client.put(f"{self.CHAR_URL}/{char_id}", json={"level": 7}, headers=h_player)
+        item = next(c for c in self._list(client, cid, h_gm) if c["id"] == char_id)
+        assert item["level"] == 7
+
+    def test_ability_scores_in_list(self, client):
+        h_gm, h_player, cid = self._setup(client)
+        char_id = self._create(
+            client, h_player, cid,
+            strength=16, dexterity=14, constitution=15,
+            intelligence=10, wisdom=12, charisma=8,
+        )
+        item = next(c for c in self._list(client, cid, h_gm) if c["id"] == char_id)
+        assert item["strength"] == 16
+        assert item["dexterity"] == 14
+        assert item["constitution"] == 15
+        assert item["intelligence"] == 10
+        assert item["wisdom"] == 12
+        assert item["charisma"] == 8
+
+    def test_visibility_in_list(self, client):
+        h_gm, h_player, cid = self._setup(client)
+        char_id = self._create(client, h_player, cid)
+        client.patch(f"{self.CHAR_URL}/{char_id}/visibility", json={"is_visible": True}, headers=h_gm)
+        item = next(c for c in self._list(client, cid, h_gm) if c["id"] == char_id)
+        assert item["is_visible_to_players"] is True

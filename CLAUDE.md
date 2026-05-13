@@ -271,6 +271,8 @@ location_links                       ← polymorphic: links a location to any ot
 campaign_calendars
   id, campaign_id (FK→campaigns CASCADE, UNIQUE),
   name (default "Campaign Calendar"), days_per_month (default 30),
+  use_weeks (boolean, default false),   ← GM must opt in; false = no weekday tracking
+  days_per_week (integer, nullable),    ← only meaningful when use_weeks=true
   current_era_id (FK→calendar_eras SET NULL, use_alter=True ← breaks circular FK),
   current_year, current_month_order, current_day,
   created_at, updated_at
@@ -282,7 +284,12 @@ calendar_seasons
 calendar_months
   id, calendar_id (FK→campaign_calendars CASCADE),
   season_id (FK→calendar_seasons SET NULL, nullable),
-  name, description, order_index, created_at, updated_at
+  name (nullable),                      ← optional; display as "Month N" when null
+  description, order_index, created_at, updated_at
+
+calendar_weekdays
+  id, calendar_id (FK→campaign_calendars CASCADE),
+  name, order_index, created_at, updated_at
 
 calendar_eras
   id, calendar_id (FK→campaign_calendars CASCADE),
@@ -300,6 +307,7 @@ calendar_eras
 timeline_events
   id, campaign_id (FK→campaigns CASCADE),
   title, description,
+  gm_notes (Text, nullable),                ← GM only; never returned to players
   era_id (FK→calendar_eras SET NULL, nullable),
   year, month_order, day (all nullable),
   absolute_year (computed from era + year; used for ORDER BY),
@@ -529,8 +537,11 @@ Campaign creation uses `get_current_user` (any authenticated user). Member manag
 | PUT | /api/gm/campaigns/{id}/calendar/eras/{era_id} | Yes (GM) |
 | DELETE | /api/gm/campaigns/{id}/calendar/eras/{era_id} | Yes (GM) |
 | PATCH | /api/gm/campaigns/{id}/calendar/eras/{era_id}/visibility | Yes (GM) |
+| POST | /api/gm/campaigns/{id}/calendar/weekdays | Yes (GM) |
+| PUT | /api/gm/campaigns/{id}/calendar/weekdays/{weekday_id} | Yes (GM) |
+| DELETE | /api/gm/campaigns/{id}/calendar/weekdays/{weekday_id} | Yes (GM) |
 
-GET calendar response includes nested `seasons`, `months`, `eras` lists.
+GET calendar response includes nested `seasons`, `months`, `eras`, `weekdays` lists.
 First era created is automatically `is_primary=True` and must be ascending.
 Non-primary eras require `anchor_era_id` + `anchor_era_year` for epoch offset math.
 
@@ -653,6 +664,7 @@ frontend/src/
 | `/campaigns/:campaignId/locations/:locationId` | LocationDetail | ✅ Functional |
 | `/campaigns/:campaignId/npcs` | NPCList | ✅ Functional |
 | `/campaigns/:campaignId/npcs/:npcId` | NPCDetail | ✅ Functional |
+| `/campaigns/:campaignId/settings` | CampaignSettings | ✅ Functional (GM only: Calendar + Timeline tabs) |
 | `/campaigns/:campaignId/characters/create` | — | ❌ Not built |
 | `/campaigns/:campaignId/characters/:id` | — | ❌ Not built |
 
@@ -693,8 +705,26 @@ frontend/src/
 - **Last Known Location:** select from all campaign locations; in player view shows as a clickable link to that location's detail page
 - **Portrait display note:** images are served via `app.mount("/uploads", StaticFiles(...))` in `main.py` — upload/delete/display are all functional
 
+### Settings UI — Key Behaviours
+- **Route:** `/campaigns/:campaignId/settings` — wrapped in `<MainLayout>` in App.jsx (not internally); GM-only controls; Settings link added to GM section of Sidebar
+- **Calendar tab:** landing page (explainer + defaults bullet list + "Set Up Calendar" button) when 404; management UI when calendar exists
+  - **General card:** calendar name, days_per_month, `use_weeks` toggle (ToggleLeft/ToggleRight icon), `days_per_week` input (shown only when `use_weeks=true`); Save button appears when dirty
+  - **Seasons card:** inline editable list (click name to rename), add via input+Enter/button, delete with confirmation; deletion nullifies month assignments in local state
+  - **Months card:** one row per month — ordinal (read-only), optional name input (placeholder "Month N" when blank), season select; Save button appears per row when dirty; `monthLabel()` helper returns name or "Month N"
+  - **Weekdays card:** only shown when `use_weeks=true`; same add/edit/delete pattern as seasons; shows order_index as prefix
+  - **Current Date card:** GM only; era select (sentinel `__none__`), year, month-ordinal select (showing `monthLabel()`), day inputs; saves via `PUT /calendar`
+- **Timeline tab:** landing page (CSS era diagram + prose explanation + "Set Up Timeline" button) when no eras; full management UI when eras exist
+  - **Era diagram:** renders styled divs showing `← [Before Era] 3·2·1 | 1·2·3·4 [Era] →` with "Year 1 meets Year 1 — no year zero" caption
+  - **Eras card:** list with Primary/Current/direction/visibility badges; edit dialog (name, abbreviation, is_current, is_visible_to_players); visibility eye toggle; delete (blocked with error message if primary and others exist)
+  - **Add Era dialog:** direction select (disabled/locked to ascending for first era), anchor era + anchor year fields (required when non-primary)
+  - **Timeline Events card:** sorted list (backend order); each row is collapsible — shows title, `EraDateList` (year + abbreviation for each era_date), visibility badge; expand reveals description + linked NPCs/locations with add/remove + GM Notes amber card
+  - **`EraDateList`:** renders `{year} {abbreviation}` for each era_date, separated by `·`
+  - **GM Notes (timeline events):** amber-tinted "Private" card in the expanded EventDetail section; GM-only textarea with inline Save/Reset that appear when dirty; saves via `PUT /timeline/{event_id}` with `{ gm_notes }`. Stripped from all player-facing responses (list + detail). Never shown in player view.
+  - **Event NPC/location links:** loaded on expand; GM sees add row (select + description + plus button); remove button per link
+  - **Player view:** Add Era / Add Event buttons hidden; visibility toggles hidden; GM-only eras hidden from era list
+  - **`settingsService.js`:** all calendar + timeline API methods; uses same axios pattern + token interceptor as npcService
+
 ### Frontend Not Yet Built
-- Calendar/timeline UI (Campaign Settings → Calendar tab; Timeline page for events with NPC/location links)
 - Character creation and detail pages (`/campaigns/:campaignId/characters/create`, `/:id`)
 - Loot table UI
 - Encyclopedia browsing UI (players read campaign-merged view)
@@ -724,6 +754,8 @@ pytest -v                     # verbose (show each test name)
 ### Test database
 Tests run against `dnd_app_test` (never `dnd_app_dev`). The database is derived automatically from `DATABASE_URL` in `backend/.env`. Tables are created once per session and wiped between each test — no manual setup needed.
 
+The session fixture does `DROP SCHEMA public CASCADE` + `CREATE SCHEMA public` at **session start** (not just end) so that stale schemas from model changes or interrupted runs never cause `UndefinedColumn` failures. Never change this to `create_all`-only — it won't pick up new columns on existing tables.
+
 ### Fixtures and helpers (backend/tests/conftest.py)
 | Helper | Returns | Use for |
 |--------|---------|---------|
@@ -741,7 +773,9 @@ backend/tests/
 ├── conftest.py                     # shared fixtures + helpers
 ├── test_auth.py                    # auth module
 ├── test_campaigns.py               # campaign CRUD + member management
-├── test_calendar_timeline.py       # calendar (6+2+3+8), timeline events (10), event links (6) = 34 tests
+├── test_calendar_timeline.py       # calendar (6+2+3+4+8+7), timeline events (13), event links (6) = 49 tests
+                                    #   TestCalendarCRUD(6), TestSeasons(2), TestMonths(3), TestMonthOptionalName(4),
+                                    #   TestWeekdays(7), TestEras(8), TestTimelineEvents(13, incl. gm_notes), TestEventListFieldRoundTrip(8), TestEventLinks(6)
 ├── test_characters.py              # character CRUD + visibility
 ├── test_encyclopedia.py            # bestiary + spells + 6 item types (parametrized)
 ├── test_locations.py               # locations, maps, pins, location NPCs, hierarchy, pin→parent persistence (61 tests)
@@ -784,6 +818,27 @@ backend/tests/
 - Do not mock the database — all tests hit `dnd_app_test` via the real ORM
 - Each test is fully self-contained: create all data it needs, assert, done
 
+### List/detail schema round-trip (REQUIRED for every module with a `*ListItem` schema)
+Any module that has a separate `*ListItem` schema (distinct from `*Response`) **must** include a `TestXxxListFieldRoundTrip` class. Each test writes a value via the API (POST or PUT) and reads it back from the **list** endpoint — not the detail endpoint — to verify the field survives the `response_model=List[*ListItem]` serialization.
+
+**Why this matters:** FastAPI's `response_model` silently strips any field that exists in `*Response` but is missing from `*ListItem`. The field is saved to the DB correctly; only the list endpoint drops it. The detail endpoint passes because it uses `*Response`. Without a round-trip test, this regression is invisible.
+
+```python
+class TestWidgetListFieldRoundTrip:
+    def _list(self, client, campaign_id, headers):
+        return client.get(f"/api/.../widgets", headers=headers).json()
+
+    def test_description_in_list_after_create(self, client):
+        # POST with description → GET list → assert description present
+        ...
+
+    def test_description_in_list_after_update(self, client):
+        # PUT with description → GET list → assert description updated
+        ...
+```
+
+Modules currently covered: `timeline_events` (`TestEventListFieldRoundTrip`), `locations` (`TestLocationListFieldRoundTrip`), `characters` (`TestCharacterListFieldRoundTrip`). NPCs are exempt — they use `NPCResponse` for both list and detail.
+
 ---
 
 ## Testing (Frontend)
@@ -817,6 +872,12 @@ frontend/src/
 │   └── pages/
 │       ├── LocationList.jsx
 │       └── LocationList.test.jsx     # campaignId prop regression (tree/card navigate), GM toolbar show/hide/navigate (5 tests)
+├── settings/
+│   └── pages/
+│       ├── CalendarTab.jsx
+│       ├── CalendarTab.test.jsx      # 404→landing, GM vs player landing, setup form, management UI, use_weeks toggle, Month N placeholder, seasons (14 tests)
+│       ├── TimelineTab.jsx
+│       └── TimelineTab.test.jsx      # no-eras landing (era diagram, prose, setup form), eras-exist (list, badges, GM controls), events (title, era_dates, visibility) (14 tests)
 └── shared/
     └── components/
         ├── ProtectedRoute.jsx
@@ -888,6 +949,24 @@ psql -U postgres -d dnd_app_dev
 alembic revision --autogenerate -m "description"
 alembic upgrade head
 ```
+
+### Backend Server Restart — REQUIRED After Every Backend Change
+
+**The user cannot see or access the terminal Claude uses to run the server. Claude must restart the server itself** after every backend change — do not ask the user to do it.
+
+After any change to backend code — models, schemas, routes, service logic, or migrations — kill the running process and start a fresh one:
+
+```powershell
+# 1. Kill existing server (PowerShell)
+Get-Process -Name python* -ErrorAction SilentlyContinue | Stop-Process -Force
+```
+```bash
+# 2. Start fresh (Bash, run_in_background=false to confirm startup)
+cd "c:/Users/rober/Documents/Projects/dnd-app/backend" && source venv/Scripts/activate && uvicorn main:app --reload &
+sleep 4 && curl -s http://localhost:8000/docs > /dev/null && echo "Server up"
+```
+
+The running process caches old modules and silently serves stale responses (missing fields, wrong behavior) until restarted. This has caused multi-session debugging rabbit holes where the DB and schema files were correct but the API returned wrong data.
 
 ---
 

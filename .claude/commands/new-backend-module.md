@@ -56,6 +56,8 @@ Create these 5 files following the project's exact patterns:
    - Admin-only compendium (Races, Backgrounds, Feats): use `test_races_backgrounds_feats.py` as the template
    - User-owned (Characters): use `test_characters.py` as the template
 5. Run `pytest` from `backend/` and confirm all tests pass before marking the module complete
+6. **Remind the user to restart the backend server** so the running process picks up the new routes and schema:
+   > "Module complete. **Restart the backend server** (`uvicorn main:app --reload` from `backend/`) so the running process loads the new routes and model changes."
 
 ## Arguments
 $ARGUMENTS

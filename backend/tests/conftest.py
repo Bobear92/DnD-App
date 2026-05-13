@@ -27,12 +27,16 @@ _CIRCULAR_FK_NULLIFIERS = [
 
 @pytest.fixture(scope="session", autouse=True)
 def _create_tables():
+    # Drop and recreate at session start so stale schemas from model changes or
+    # interrupted runs never cause "UndefinedColumn" failures.
+    with _engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
     Base.metadata.create_all(bind=_engine)
     yield
-    # DROP all tables at once with CASCADE to bypass circular FK sort issues.
-    table_names = ", ".join(f'"{t}"' for t in Base.metadata.tables.keys())
     with _engine.begin() as conn:
-        conn.execute(text(f"DROP TABLE IF EXISTS {table_names} CASCADE"))
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
 
 
 @pytest.fixture(autouse=True)

@@ -11,6 +11,8 @@ import LocationList from './locations/pages/LocationList';
 import LocationDetail from './locations/pages/LocationDetail';
 import NPCList from './npcs/pages/NPCList';
 import NPCDetail from './npcs/pages/NPCDetail';
+import CampaignSettings from './settings/pages/CampaignSettings';
+import MainLayout from './shared/components/layout/MainLayout';
 
 function App() {
   return (
@@ -27,6 +29,7 @@ function App() {
             <Route path="/campaigns/:campaignId/locations/:locationId" element={<ProtectedRoute><LocationDetail /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/npcs" element={<ProtectedRoute><NPCList /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/npcs/:npcId" element={<ProtectedRoute><NPCDetail /></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/settings" element={<ProtectedRoute><MainLayout><CampaignSettings /></MainLayout></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/campaigns" replace />} />
           </Routes>
           </ErrorBoundary>

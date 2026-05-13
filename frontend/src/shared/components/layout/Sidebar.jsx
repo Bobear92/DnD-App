@@ -2,7 +2,7 @@ import { NavLink, useParams } from 'react-router-dom';
 import { useCampaign } from '../../../campaigns/CampaignContext';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard, Users, Drama, Map, Menu, ChevronLeft,
+  LayoutDashboard, Users, Drama, Map, Clock, Menu, ChevronLeft,
 } from 'lucide-react';
 
 const Sidebar = ({ collapsed, toggleSidebar }) => {
@@ -16,6 +16,7 @@ const Sidebar = ({ collapsed, toggleSidebar }) => {
     { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'Characters' },
     { path: `/campaigns/${campaignId}/npcs`, icon: Drama, label: 'NPCs' },
     { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
+    { path: `/campaigns/${campaignId}/settings`, icon: Clock, label: 'Campaign Time' },
   ];
 
   const playerNavItems = [

@@ -21,6 +21,7 @@ class EraDate(BaseModel):
 class EventCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     description: Optional[str] = None
+    gm_notes: Optional[str] = None
     era_id: Optional[int] = None
     year: Optional[int] = None
     month_order: Optional[int] = Field(None, ge=1)
@@ -31,6 +32,7 @@ class EventCreate(BaseModel):
 class EventUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=500)
     description: Optional[str] = None
+    gm_notes: Optional[str] = None
     era_id: Optional[int] = None
     year: Optional[int] = None
     month_order: Optional[int] = Field(None, ge=1)
@@ -47,6 +49,7 @@ class EventResponse(BaseModel):
     campaign_id: int
     title: str
     description: Optional[str] = None
+    gm_notes: Optional[str] = None
     era_id: Optional[int] = None
     year: Optional[int] = None
     month_order: Optional[int] = None
@@ -68,6 +71,8 @@ class EventListItem(BaseModel):
     id: int
     campaign_id: int
     title: str
+    description: Optional[str] = None
+    gm_notes: Optional[str] = None
     era_id: Optional[int] = None
     year: Optional[int] = None
     month_order: Optional[int] = None

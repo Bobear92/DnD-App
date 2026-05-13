@@ -10,6 +10,7 @@ from .schemas import (
     SeasonCreate, SeasonUpdate, SeasonResponse,
     MonthCreate, MonthUpdate, MonthResponse,
     EraCreate, EraUpdate, EraVisibilityUpdate, EraResponse,
+    WeekdayCreate, WeekdayUpdate, WeekdayResponse,
 )
 from . import service
 
@@ -158,3 +159,36 @@ def update_era_visibility(
     current_user: User = Depends(get_current_user),
 ):
     return service.update_era_visibility(db, campaign_id, era_id, data, current_user.id)
+
+
+# ── Weekdays ──────────────────────────────────────────────────────────────────
+
+@router.post("/weekdays", response_model=WeekdayResponse, status_code=status.HTTP_201_CREATED)
+def create_weekday(
+    campaign_id: int,
+    data: WeekdayCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.create_weekday(db, campaign_id, data, current_user.id)
+
+
+@router.put("/weekdays/{weekday_id}", response_model=WeekdayResponse)
+def update_weekday(
+    campaign_id: int,
+    weekday_id: int,
+    data: WeekdayUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.update_weekday(db, campaign_id, weekday_id, data, current_user.id)
+
+
+@router.delete("/weekdays/{weekday_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_weekday(
+    campaign_id: int,
+    weekday_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service.delete_weekday(db, campaign_id, weekday_id, current_user.id)

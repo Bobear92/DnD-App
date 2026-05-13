@@ -25,6 +25,16 @@ def make_season(client, gm_headers, campaign_id, *, name="Spring", order_index=1
     return resp.json()
 
 
+def make_weekday(client, gm_headers, campaign_id, *, name="Monday", order_index=1):
+    resp = client.post(
+        f"/api/gm/campaigns/{campaign_id}/calendar/weekdays",
+        json={"name": name, "order_index": order_index},
+        headers=gm_headers,
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
 def make_month(client, gm_headers, campaign_id, *, name="Yondalla's Fete", order_index=1, season_id=None, description=None):
     body = {"name": name, "order_index": order_index}
     if season_id:
@@ -139,19 +149,24 @@ class TestCalendarCRUD:
         assert resp.status_code == 200
         assert resp.json()["days_per_month"] == 28
 
-    def test_get_calendar_includes_seasons_months_eras(self, client):
+    def test_get_calendar_includes_seasons_months_eras_weekdays(self, client):
         gm_h, _ = make_user(client, 1)
         cid = make_campaign(client, gm_h)
         make_calendar(client, gm_h, cid)
-        make_season(client, gm_h, cid, name="Spring", order_index=1)
-        make_month(client, gm_h, cid, name="Yondalla's Fete", order_index=1)
+        # create_calendar seeds 4 seasons + 12 months automatically; add extras
+        make_season(client, gm_h, cid, name="Monsoon", order_index=5)
+        make_month(client, gm_h, cid, name="Yondalla's Fete", order_index=13)
         make_primary_era(client, gm_h, cid)
+        make_weekday(client, gm_h, cid, name="Sunday", order_index=1)
         resp = client.get(f"/api/gm/campaigns/{cid}/calendar", headers=gm_h)
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data["seasons"]) == 1
-        assert len(data["months"]) == 1
+        # seeded 4 + manually added 1
+        assert any(s["name"] == "Monsoon" for s in data["seasons"])
+        # seeded 12 + manually added 1
+        assert any(m["name"] == "Yondalla's Fete" for m in data["months"])
         assert len(data["eras"]) == 1
+        assert len(data["weekdays"]) == 1
 
 
 # ── Seasons ───────────────────────────────────────────────────────────────────
@@ -218,6 +233,145 @@ class TestMonths:
             headers=gm_h,
         )
         assert resp.status_code == 204
+
+
+# ── Month optional name ───────────────────────────────────────────────────────
+
+class TestMonthOptionalName:
+    def test_create_month_without_name(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/calendar/months",
+            json={"order_index": 1},
+            headers=gm_h,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["name"] is None
+
+    def test_create_month_with_name(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        month = make_month(client, gm_h, cid, name="Harvestide", order_index=1)
+        assert month["name"] == "Harvestide"
+
+    def test_update_month_name_to_null(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        month = make_month(client, gm_h, cid, name="Harvestide", order_index=1)
+        resp = client.put(
+            f"/api/gm/campaigns/{cid}/calendar/months/{month['id']}",
+            json={"name": None},
+            headers=gm_h,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["name"] is None
+
+    def test_get_calendar_includes_unnamed_months(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        # create_calendar seeds 12 named-null months; add one more explicitly unnamed
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/calendar/months",
+            json={"order_index": 13},
+            headers=gm_h,
+        )
+        assert resp.json()["name"] is None
+        cal = client.get(f"/api/gm/campaigns/{cid}/calendar", headers=gm_h).json()
+        # at least the seeded months plus the one we added are all unnamed (name=None)
+        assert any(m["name"] is None for m in cal["months"])
+
+
+# ── Weekdays ──────────────────────────────────────────────────────────────────
+
+class TestWeekdays:
+    def test_gm_can_create_weekday(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        day = make_weekday(client, gm_h, cid, name="Sunday", order_index=1)
+        assert day["name"] == "Sunday"
+        assert day["order_index"] == 1
+
+    def test_player_cannot_create_weekday(self, client):
+        gm_h, _ = make_user(client, 1)
+        player_h, player_id = make_user(client, 2)
+        cid = make_campaign(client, gm_h)
+        invite_player(client, gm_h, cid, player_id)
+        make_calendar(client, gm_h, cid)
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/calendar/weekdays",
+            json={"name": "Nope", "order_index": 1},
+            headers=player_h,
+        )
+        assert resp.status_code == 403
+
+    def test_non_member_cannot_create_weekday(self, client):
+        gm_h, _ = make_user(client, 1)
+        other_h, _ = make_user(client, 2)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/calendar/weekdays",
+            json={"name": "Nope", "order_index": 1},
+            headers=other_h,
+        )
+        assert resp.status_code == 403
+
+    def test_update_weekday(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        day = make_weekday(client, gm_h, cid, name="Moonday", order_index=1)
+        resp = client.put(
+            f"/api/gm/campaigns/{cid}/calendar/weekdays/{day['id']}",
+            json={"name": "Lunday"},
+            headers=gm_h,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "Lunday"
+
+    def test_delete_weekday(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        day = make_weekday(client, gm_h, cid)
+        resp = client.delete(
+            f"/api/gm/campaigns/{cid}/calendar/weekdays/{day['id']}",
+            headers=gm_h,
+        )
+        assert resp.status_code == 204
+
+    def test_weekdays_appear_in_calendar_response(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        make_weekday(client, gm_h, cid, name="Sunday", order_index=1)
+        make_weekday(client, gm_h, cid, name="Moonday", order_index=2)
+        cal = client.get(f"/api/gm/campaigns/{cid}/calendar", headers=gm_h).json()
+        assert len(cal["weekdays"]) == 2
+        assert cal["weekdays"][0]["name"] == "Sunday"
+        assert cal["weekdays"][1]["name"] == "Moonday"
+
+    def test_use_weeks_and_days_per_week_on_calendar(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        cal = make_calendar(client, gm_h, cid)
+        assert cal["use_weeks"] is False
+        assert cal["days_per_week"] is None
+        resp = client.put(
+            f"/api/gm/campaigns/{cid}/calendar",
+            json={"use_weeks": True, "days_per_week": 7},
+            headers=gm_h,
+        )
+        assert resp.status_code == 200
+        updated = resp.json()
+        assert updated["use_weeks"] is True
+        assert updated["days_per_week"] == 7
 
 
 # ── Eras & epoch math ─────────────────────────────────────────────────────────
@@ -496,12 +650,151 @@ class TestTimelineEvents:
         assert updated["year"] == 500
         assert updated["absolute_year"] == 500  # OFC epoch=0
 
+    def test_description_persists_through_list_endpoint(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        # Create event with description
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/timeline",
+            json={"title": "Battle of Ironhold", "description": "A great battle was fought here."},
+            headers=gm_h,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["description"] == "A great battle was fought here."
+        # List endpoint must also return description (regression: EventListItem was missing it)
+        events = client.get(f"/api/gm/campaigns/{cid}/timeline", headers=gm_h).json()
+        assert events[0]["description"] == "A great battle was fought here."
+        # Update description via PUT and verify list returns the new value
+        client.put(
+            f"/api/gm/campaigns/{cid}/timeline/{events[0]['id']}",
+            json={"title": "Battle of Ironhold", "description": "Updated description."},
+            headers=gm_h,
+        )
+        events = client.get(f"/api/gm/campaigns/{cid}/timeline", headers=gm_h).json()
+        assert events[0]["description"] == "Updated description."
+
     def test_delete_event(self, client):
         gm_h, _ = make_user(client, 1)
         cid = make_campaign(client, gm_h)
         event = make_event(client, gm_h, cid)
         resp = client.delete(f"/api/gm/campaigns/{cid}/timeline/{event['id']}", headers=gm_h)
         assert resp.status_code == 204
+
+    def test_gm_can_set_and_read_gm_notes(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/timeline",
+            json={"title": "Secret", "gm_notes": "The villain escaped north."},
+            headers=gm_h,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["gm_notes"] == "The villain escaped north."
+
+    def test_gm_notes_stripped_for_player(self, client):
+        gm_h, _ = make_user(client, 1)
+        player_h, player_id = make_user(client, 2)
+        cid = make_campaign(client, gm_h)
+        invite_player(client, gm_h, cid, player_id)
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/timeline",
+            json={"title": "Public Event", "gm_notes": "Secret info.", "is_visible_to_players": True},
+            headers=gm_h,
+        )
+        event_id = resp.json()["id"]
+        # GM list sees gm_notes
+        gm_events = client.get(f"/api/gm/campaigns/{cid}/timeline", headers=gm_h).json()
+        assert gm_events[0]["gm_notes"] == "Secret info."
+        # Player list gets gm_notes stripped
+        player_events = client.get(f"/api/gm/campaigns/{cid}/timeline", headers=player_h).json()
+        assert player_events[0]["gm_notes"] is None
+        # Player detail also stripped
+        player_detail = client.get(f"/api/gm/campaigns/{cid}/timeline/{event_id}", headers=player_h).json()
+        assert player_detail["gm_notes"] is None
+
+
+# ── List/detail schema round-trip ─────────────────────────────────────────────
+# Guard against fields being present in EventResponse (detail) but silently
+# dropped from EventListItem (list). Pattern: write a value via POST or PUT,
+# read it back through the list endpoint, assert it matches.
+
+class TestEventListFieldRoundTrip:
+    """Every writable field must survive a POST→list and PUT→list round-trip.
+
+    Root bug: EventListItem was missing 'description', so the list endpoint
+    silently stripped it even though the DB stored it correctly.  Adding a
+    field to EventResponse but forgetting EventListItem would repeat the bug.
+    """
+
+    def _setup(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        era = make_primary_era(client, gm_h, cid, abbr="AK")
+        return gm_h, cid, era
+
+    def _list(self, client, cid, headers):
+        return client.get(f"/api/gm/campaigns/{cid}/timeline", headers=headers).json()
+
+    def test_title_in_list(self, client):
+        gm_h, cid, era = self._setup(client)
+        client.post(f"/api/gm/campaigns/{cid}/timeline",
+                    json={"title": "Round Trip Title"}, headers=gm_h)
+        assert self._list(client, cid, gm_h)[0]["title"] == "Round Trip Title"
+
+    def test_description_in_list_after_create(self, client):
+        gm_h, cid, era = self._setup(client)
+        client.post(f"/api/gm/campaigns/{cid}/timeline",
+                    json={"title": "T", "description": "Created desc"}, headers=gm_h)
+        assert self._list(client, cid, gm_h)[0]["description"] == "Created desc"
+
+    def test_description_in_list_after_update(self, client):
+        gm_h, cid, era = self._setup(client)
+        resp = client.post(f"/api/gm/campaigns/{cid}/timeline",
+                           json={"title": "T"}, headers=gm_h)
+        eid = resp.json()["id"]
+        client.put(f"/api/gm/campaigns/{cid}/timeline/{eid}",
+                   json={"title": "T", "description": "Updated desc"}, headers=gm_h)
+        assert self._list(client, cid, gm_h)[0]["description"] == "Updated desc"
+
+    def test_era_and_year_in_list(self, client):
+        gm_h, cid, era = self._setup(client)
+        client.post(f"/api/gm/campaigns/{cid}/timeline",
+                    json={"title": "T", "era_id": era["id"], "year": 42}, headers=gm_h)
+        item = self._list(client, cid, gm_h)[0]
+        assert item["era_id"] == era["id"]
+        assert item["year"] == 42
+        assert item["absolute_year"] == 42
+
+    def test_visibility_in_list(self, client):
+        gm_h, cid, era = self._setup(client)
+        client.post(f"/api/gm/campaigns/{cid}/timeline",
+                    json={"title": "T", "is_visible_to_players": True}, headers=gm_h)
+        assert self._list(client, cid, gm_h)[0]["is_visible_to_players"] is True
+
+    def test_era_dates_in_list(self, client):
+        gm_h, cid, era = self._setup(client)
+        client.post(f"/api/gm/campaigns/{cid}/timeline",
+                    json={"title": "T", "era_id": era["id"], "year": 100}, headers=gm_h)
+        item = self._list(client, cid, gm_h)[0]
+        assert len(item["era_dates"]) == 1
+        assert item["era_dates"][0]["year"] == 100
+        assert item["era_dates"][0]["abbreviation"] == "AK"
+
+    def test_gm_notes_in_list_after_create(self, client):
+        gm_h, cid, era = self._setup(client)
+        client.post(f"/api/gm/campaigns/{cid}/timeline",
+                    json={"title": "T", "gm_notes": "Note on create"}, headers=gm_h)
+        assert self._list(client, cid, gm_h)[0]["gm_notes"] == "Note on create"
+
+    def test_gm_notes_in_list_after_update(self, client):
+        gm_h, cid, era = self._setup(client)
+        resp = client.post(f"/api/gm/campaigns/{cid}/timeline",
+                           json={"title": "T"}, headers=gm_h)
+        eid = resp.json()["id"]
+        client.put(f"/api/gm/campaigns/{cid}/timeline/{eid}",
+                   json={"title": "T", "gm_notes": "Note on update"}, headers=gm_h)
+        assert self._list(client, cid, gm_h)[0]["gm_notes"] == "Note on update"
 
 
 # ── NPC and Location links ────────────────────────────────────────────────────

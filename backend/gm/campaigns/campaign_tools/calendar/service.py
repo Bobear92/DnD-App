@@ -2,12 +2,13 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from typing import List, Optional
 
-from .models import CampaignCalendar, CalendarSeason, CalendarMonth, CalendarEra, EraDirection
+from .models import CampaignCalendar, CalendarSeason, CalendarMonth, CalendarEra, CalendarWeekday, EraDirection
 from .schemas import (
     CalendarCreate, CalendarUpdate,
     SeasonCreate, SeasonUpdate,
     MonthCreate, MonthUpdate,
     EraCreate, EraUpdate, EraVisibilityUpdate,
+    WeekdayCreate, WeekdayUpdate,
 )
 from gm.campaigns.models import CampaignMember
 
@@ -132,8 +133,35 @@ def create_calendar(db: Session, campaign_id: int, data: CalendarCreate, user_id
     existing = db.query(CampaignCalendar).filter(CampaignCalendar.campaign_id == campaign_id).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A calendar already exists for this campaign")
-    cal = CampaignCalendar(campaign_id=campaign_id, name=data.name, days_per_month=data.days_per_month)
+    cal = CampaignCalendar(
+        campaign_id=campaign_id,
+        name=data.name,
+        days_per_month=data.days_per_month,
+        use_weeks=data.use_weeks,
+        days_per_week=data.days_per_week,
+    )
     db.add(cal)
+    db.flush()  # get cal.id before creating children
+
+    # Seed 4 default seasons
+    season_names = ["Spring", "Summer", "Fall", "Winter"]
+    seasons = []
+    for i, name in enumerate(season_names, 1):
+        s = CalendarSeason(calendar_id=cal.id, name=name, order_index=i)
+        db.add(s)
+        seasons.append(s)
+    db.flush()  # get season IDs
+
+    # Seed 12 default months (3 per season, no names)
+    for i in range(1, 13):
+        season_idx = (i - 1) // 3
+        db.add(CalendarMonth(
+            calendar_id=cal.id,
+            name=None,
+            order_index=i,
+            season_id=seasons[season_idx].id,
+        ))
+
     db.commit()
     db.refresh(cal)
     return _load_calendar(db, cal)
@@ -169,6 +197,12 @@ def _load_calendar(db: Session, cal: CampaignCalendar):
         db.query(CalendarEra)
         .filter(CalendarEra.calendar_id == cal.id)
         .order_by(CalendarEra.id)
+        .all()
+    )
+    cal.weekdays = (
+        db.query(CalendarWeekday)
+        .filter(CalendarWeekday.calendar_id == cal.id)
+        .order_by(CalendarWeekday.order_index)
         .all()
     )
     return cal
@@ -406,3 +440,43 @@ def _get_era_or_404(db: Session, campaign_id: int, era_id: int) -> CalendarEra:
     if not era:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Era {era_id} not found")
     return era
+
+
+def _get_weekday_or_404(db: Session, campaign_id: int, weekday_id: int) -> CalendarWeekday:
+    cal = _get_calendar_or_404(db, campaign_id)
+    weekday = db.query(CalendarWeekday).filter(
+        CalendarWeekday.id == weekday_id,
+        CalendarWeekday.calendar_id == cal.id,
+    ).first()
+    if not weekday:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Weekday {weekday_id} not found")
+    return weekday
+
+
+# ── Weekday CRUD ──────────────────────────────────────────────────────────────
+
+def create_weekday(db: Session, campaign_id: int, data: WeekdayCreate, user_id: int) -> CalendarWeekday:
+    _require_gm(db, campaign_id, user_id)
+    cal = _get_calendar_or_404(db, campaign_id)
+    weekday = CalendarWeekday(calendar_id=cal.id, name=data.name, order_index=data.order_index)
+    db.add(weekday)
+    db.commit()
+    db.refresh(weekday)
+    return weekday
+
+
+def update_weekday(db: Session, campaign_id: int, weekday_id: int, data: WeekdayUpdate, user_id: int) -> CalendarWeekday:
+    _require_gm(db, campaign_id, user_id)
+    weekday = _get_weekday_or_404(db, campaign_id, weekday_id)
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(weekday, field, value)
+    db.commit()
+    db.refresh(weekday)
+    return weekday
+
+
+def delete_weekday(db: Session, campaign_id: int, weekday_id: int, user_id: int) -> None:
+    _require_gm(db, campaign_id, user_id)
+    weekday = _get_weekday_or_404(db, campaign_id, weekday_id)
+    db.delete(weekday)
+    db.commit()

@@ -14,11 +14,15 @@ class EraDirection(str, Enum):
 class CalendarCreate(BaseModel):
     name: str = Field(default="Campaign Calendar", max_length=200)
     days_per_month: int = Field(default=30, ge=1, le=365)
+    use_weeks: bool = False
+    days_per_week: Optional[int] = Field(None, ge=2, le=366)
 
 
 class CalendarUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     days_per_month: Optional[int] = Field(None, ge=1, le=365)
+    use_weeks: Optional[bool] = None
+    days_per_week: Optional[int] = Field(None, ge=2, le=366)
     current_era_id: Optional[int] = None
     current_year: Optional[int] = None
     current_month_order: Optional[int] = Field(None, ge=1)
@@ -30,6 +34,8 @@ class CalendarResponse(BaseModel):
     campaign_id: int
     name: str
     days_per_month: int
+    use_weeks: bool
+    days_per_week: Optional[int] = None
     current_era_id: Optional[int] = None
     current_year: Optional[int] = None
     current_month_order: Optional[int] = None
@@ -37,6 +43,7 @@ class CalendarResponse(BaseModel):
     seasons: List["SeasonResponse"] = []
     months: List["MonthResponse"] = []
     eras: List["EraResponse"] = []
+    weekdays: List["WeekdayResponse"] = []
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -71,14 +78,14 @@ class SeasonResponse(BaseModel):
 # ── CalendarMonth ─────────────────────────────────────────────────────────────
 
 class MonthCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
+    name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     order_index: int = Field(..., ge=1)
     season_id: Optional[int] = None
 
 
 class MonthUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     order_index: Optional[int] = Field(None, ge=1)
     season_id: Optional[int] = None
@@ -88,8 +95,32 @@ class MonthResponse(BaseModel):
     id: int
     calendar_id: int
     season_id: Optional[int] = None
-    name: str
+    name: Optional[str] = None
     description: Optional[str] = None
+    order_index: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ── CalendarWeekday ───────────────────────────────────────────────────────────
+
+class WeekdayCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    order_index: int = Field(..., ge=1)
+
+
+class WeekdayUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    order_index: Optional[int] = Field(None, ge=1)
+
+
+class WeekdayResponse(BaseModel):
+    id: int
+    calendar_id: int
+    name: str
     order_index: int
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -157,3 +188,4 @@ class EraResponse(BaseModel):
 
 
 CalendarResponse.model_rebuild()
+
