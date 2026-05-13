@@ -4,6 +4,19 @@ import authService from '../authService';
 import { useAuth } from '../AuthContext';
 import './Login.css';
 
+function getPostLoginPath() {
+  try {
+    const stored = localStorage.getItem('selectedCampaign');
+    if (stored) {
+      const campaign = JSON.parse(stored);
+      if (campaign?.id) return `/campaigns/${campaign.id}/dashboard`;
+    }
+  } catch {
+    // fall through
+  }
+  return '/campaigns';
+}
+
 const Login = () => {
   const navigate = useNavigate();
   const { setUser } = useAuth();
@@ -42,7 +55,7 @@ const Login = () => {
         const userResult = await authService.getCurrentUser();
         if (userResult.success) {
           setUser(userResult.data);
-          navigate('/campaigns');
+          navigate(getPostLoginPath());
         } else {
           setError('Failed to load user data');
         }
@@ -68,7 +81,7 @@ const Login = () => {
           const userResult = await authService.getCurrentUser();
           if (userResult.success) {
             setUser(userResult.data);
-            navigate('/campaigns');
+            navigate(getPostLoginPath());
           }
         }
       } else {

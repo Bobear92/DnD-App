@@ -52,7 +52,7 @@ const loadCampaigns = async () => {
 const handleEnterCampaign = (campaign) => {
   const userRole = campaign.created_by === user?.id ? 'gm' : 'player';
   enterCampaign({ ...campaign, userRole });
-  navigate(`/campaigns/${campaign.id}/locations`);
+  navigate(`/campaigns/${campaign.id}/dashboard`);
 };
 
   const handleLogout = () => {

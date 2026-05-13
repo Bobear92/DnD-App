@@ -82,13 +82,23 @@ describe('Login — successful login', () => {
     await waitFor(() => expect(mockSetUser).toHaveBeenCalledWith(FAKE_USER));
   });
 
-  it('navigates to /campaigns after successful login', async () => {
+  it('navigates to /campaigns when no campaign is stored', async () => {
     renderLogin();
     await userEvent.type(screen.getByLabelText(/email/i), 'gm@dnd.com');
     await userEvent.type(screen.getByLabelText(/password/i), 'password123');
     await userEvent.click(screen.getByRole('button', { name: /enter the realm/i }));
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/campaigns'));
+  });
+
+  it('navigates to the campaign dashboard when a campaign is stored', async () => {
+    localStorage.setItem('selectedCampaign', JSON.stringify({ id: 7, name: 'Test Campaign' }));
+    renderLogin();
+    await userEvent.type(screen.getByLabelText(/email/i), 'gm@dnd.com');
+    await userEvent.type(screen.getByLabelText(/password/i), 'password123');
+    await userEvent.click(screen.getByRole('button', { name: /enter the realm/i }));
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/campaigns/7/dashboard'));
   });
 });
 
