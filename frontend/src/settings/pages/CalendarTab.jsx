@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, Trash2, CalendarDays, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Loader2, Plus, Trash2, CalendarDays, ToggleLeft, ToggleRight, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -99,6 +99,70 @@ function CalendarLanding({ onSetUp, isGm }) {
         </Card>
       )}
     </div>
+  );
+}
+
+// ── Calendar guide ────────────────────────────────────────────────────────────
+
+function CalendarGuide() {
+  return (
+    <div className="text-sm text-muted-foreground space-y-4">
+      <p>
+        A campaign calendar gives your world its own sense of time. Define the structure once —
+        months, seasons, optional weekday names — then track the current in-world date as your
+        campaign progresses.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground mb-2">What you configure</p>
+          <ul className="space-y-1">
+            <li>• <strong>Months</strong> — name each one, or leave as "Month 1", "Month 2", etc.</li>
+            <li>• <strong>Seasons</strong> — optional named groups; assign months to a season</li>
+            <li>• <strong>Days per month</strong> — one number, applies to all months</li>
+            <li>• <strong>Weekdays</strong> — optional; toggled on per campaign</li>
+          </ul>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground mb-2">Starting defaults</p>
+          <ul className="space-y-1">
+            <li>• 12 months per year</li>
+            <li>• 30 days per month</li>
+            <li>• 4 seasons: Spring, Summer, Fall, Winter</li>
+            <li>• No named weekdays (opt-in)</li>
+          </ul>
+        </div>
+      </div>
+      <p>
+        The <strong>Current Date</strong> card (GM only) lets you track exactly where in the
+        calendar your campaign is.
+      </p>
+    </div>
+  );
+}
+
+function CalendarInfoPanel() {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card>
+      <CardHeader
+        className="py-3 cursor-pointer select-none"
+        onClick={() => setOpen(o => !o)}
+      >
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            How does the calendar work?
+          </CardTitle>
+          {open
+            ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+        </div>
+      </CardHeader>
+      {open && (
+        <CardContent className="pt-0 pb-4">
+          <CalendarGuide />
+        </CardContent>
+      )}
+    </Card>
   );
 }
 
@@ -476,6 +540,8 @@ export default function CalendarTab({ campaignId, isGm }) {
     <div className="space-y-6">
       {error && <p className="text-sm text-destructive bg-destructive/10 rounded p-3">{error}</p>}
 
+      <CalendarInfoPanel />
+
       {/* ── General ───────────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
@@ -699,10 +765,11 @@ export default function CalendarTab({ campaignId, isGm }) {
               <div className="space-y-1">
                 <Label>Year</Label>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   className="h-9"
                   value={dateDraft.year}
-                  onChange={e => setDateDraft(d => ({ ...d, year: e.target.value }))}
+                  onChange={e => setDateDraft(d => ({ ...d, year: e.target.value.replace(/,/g, '') }))}
                 />
               </div>
               <div className="space-y-1">

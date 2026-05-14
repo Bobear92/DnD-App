@@ -25,10 +25,14 @@ vi.mock('../npcService', () => ({
 vi.mock('../../locations/locationService', () => ({
   default: { getLocations: vi.fn() },
 }));
+vi.mock('../../settings/settingsService', () => ({
+  default: { getEventsForNpc: vi.fn() },
+}));
 
 import { useCampaign } from '../../campaigns/CampaignContext';
 import npcService from '../npcService';
 import locationService from '../../locations/locationService';
+import settingsService from '../../settings/settingsService';
 import NPCDetail from './NPCDetail';
 
 const GM_CAMPAIGN = { id: 1, name: 'Test Campaign', userRole: 'gm', created_by: 1 };
@@ -56,6 +60,7 @@ beforeEach(() => {
   npcService.getPlayerRelationships.mockResolvedValue([]);
   npcService.getCampaignDetails.mockResolvedValue({ id: 1, members: [] });
   locationService.getLocations.mockResolvedValue([]);
+  settingsService.getEventsForNpc.mockResolvedValue([]);
 });
 
 describe('NPCDetail — render', () => {
@@ -100,6 +105,63 @@ describe('NPCDetail — render', () => {
     renderDetail();
     await waitFor(() => {
       expect(screen.getByText('GM Notes')).toBeTruthy();
+    });
+  });
+});
+
+describe('NPCDetail — Timeline Events card', () => {
+  it('GM view always shows Timeline Events card — empty state when no events', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    settingsService.getEventsForNpc.mockResolvedValue([]);
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByText('Timeline Events')).toBeTruthy();
+    });
+    expect(screen.getByText('No timeline events linked to this NPC.')).toBeTruthy();
+  });
+
+  it('GM view shows event titles and era dates', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    settingsService.getEventsForNpc.mockResolvedValue([
+      { id: 1, title: 'The Heist', is_visible_to_players: true, era_dates: [{ era_id: 1, year: 412, abbreviation: 'AE' }] },
+    ]);
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByText('The Heist')).toBeTruthy();
+    });
+    expect(screen.getByText(/412.*AE/)).toBeTruthy();
+  });
+
+  it('GM view shows Hidden badge for non-visible events', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    settingsService.getEventsForNpc.mockResolvedValue([
+      { id: 2, title: 'Secret Meeting', is_visible_to_players: false, era_dates: [] },
+    ]);
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByText('Secret Meeting')).toBeTruthy();
+    });
+    expect(screen.getByText('Hidden')).toBeTruthy();
+  });
+
+  it('player view hides Timeline Events card when no events', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    settingsService.getEventsForNpc.mockResolvedValue([]);
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByText('Prince Thep')).toBeTruthy();
+    });
+    expect(screen.queryByText('Timeline Events')).toBeNull();
+  });
+
+  it('player view shows Timeline Events card when events exist', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    settingsService.getEventsForNpc.mockResolvedValue([
+      { id: 1, title: 'The Coronation', is_visible_to_players: true, era_dates: [{ era_id: 1, year: 100, abbreviation: 'CR' }] },
+    ]);
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByText('The Coronation')).toBeTruthy();
     });
   });
 });

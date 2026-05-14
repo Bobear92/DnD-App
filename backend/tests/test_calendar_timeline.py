@@ -524,6 +524,33 @@ class TestEras:
         assert resp.status_code == 200
         assert resp.json()["is_visible_to_players"] is True
 
+    def test_delete_era_nulls_absolute_year_on_linked_events(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        primary = make_primary_era(client, gm_h, cid, is_current=True)
+        secondary = make_secondary_era(
+            client, gm_h, cid, primary["id"],
+            name="Before Federation", abbr="BF", direction="ascending",
+            anchor_era_year=1, anchor_this_year=500,
+        )
+        # Create an event anchored to the secondary era
+        event = make_event(client, gm_h, cid, title="Ancient Battle", era_id=secondary["id"], year=100)
+        assert event["absolute_year"] is not None
+
+        # Delete the secondary era
+        resp = client.delete(
+            f"/api/gm/campaigns/{cid}/calendar/eras/{secondary['id']}", headers=gm_h
+        )
+        assert resp.status_code == 204
+
+        # Event should still exist but with absolute_year nulled and era_id cleared
+        resp = client.get(f"/api/gm/campaigns/{cid}/timeline/{event['id']}", headers=gm_h)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["absolute_year"] is None
+        assert data["era_id"] is None
+
 
 # ── Timeline events ───────────────────────────────────────────────────────────
 
@@ -884,3 +911,101 @@ class TestEventLinks:
             headers=gm_h,
         )
         assert resp.status_code == 204
+
+
+# ── Filter events by location ─────────────────────────────────────────────────
+
+class TestLocationFilter:
+    """Tests for GET /timeline?location_id=N — returns only events linked to that location."""
+
+    def _setup(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        loc_resp = client.post(
+            f"/api/gm/campaigns/{cid}/locations",
+            json={"name": "Olissipo"},
+            headers=gm_h,
+        )
+        loc_id = loc_resp.json()["id"]
+        return gm_h, cid, loc_id
+
+    def _link(self, client, gm_h, cid, event_id, loc_id):
+        return client.post(
+            f"/api/gm/campaigns/{cid}/timeline/{event_id}/locations",
+            json={"location_id": loc_id},
+            headers=gm_h,
+        )
+
+    def test_filter_returns_linked_events(self, client):
+        gm_h, cid, loc_id = self._setup(client)
+        event = make_event(client, gm_h, cid, title="Battle at Olissipo")
+        self._link(client, gm_h, cid, event["id"], loc_id)
+
+        resp = client.get(
+            f"/api/gm/campaigns/{cid}/timeline?location_id={loc_id}",
+            headers=gm_h,
+        )
+        assert resp.status_code == 200
+        events = resp.json()
+        assert len(events) == 1
+        assert events[0]["title"] == "Battle at Olissipo"
+
+    def test_filter_excludes_unlinked_events(self, client):
+        gm_h, cid, loc_id = self._setup(client)
+        linked_event = make_event(client, gm_h, cid, title="Linked Event")
+        make_event(client, gm_h, cid, title="Unlinked Event")
+        self._link(client, gm_h, cid, linked_event["id"], loc_id)
+
+        resp = client.get(
+            f"/api/gm/campaigns/{cid}/timeline?location_id={loc_id}",
+            headers=gm_h,
+        )
+        events = resp.json()
+        assert len(events) == 1
+        assert events[0]["title"] == "Linked Event"
+
+    def test_filter_returns_empty_when_no_links(self, client):
+        gm_h, cid, loc_id = self._setup(client)
+        make_event(client, gm_h, cid, title="Unlinked Event")
+
+        resp = client.get(
+            f"/api/gm/campaigns/{cid}/timeline?location_id={loc_id}",
+            headers=gm_h,
+        )
+        assert resp.json() == []
+
+    def test_filter_player_sees_only_visible_events(self, client):
+        gm_h, _ = make_user(client, 1)
+        player_h, player_id = make_user(client, 2)
+        cid = make_campaign(client, gm_h)
+        invite_player(client, gm_h, cid, player_id)
+        loc_resp = client.post(
+            f"/api/gm/campaigns/{cid}/locations",
+            json={"name": "Olissipo"},
+            headers=gm_h,
+        )
+        loc_id = loc_resp.json()["id"]
+
+        hidden = make_event(client, gm_h, cid, title="Hidden", visible=False)
+        visible = make_event(client, gm_h, cid, title="Visible", visible=True)
+        self._link(client, gm_h, cid, hidden["id"], loc_id)
+        self._link(client, gm_h, cid, visible["id"], loc_id)
+
+        gm_resp = client.get(
+            f"/api/gm/campaigns/{cid}/timeline?location_id={loc_id}", headers=gm_h
+        ).json()
+        player_resp = client.get(
+            f"/api/gm/campaigns/{cid}/timeline?location_id={loc_id}", headers=player_h
+        ).json()
+        assert len(gm_resp) == 2
+        assert len(player_resp) == 1
+        assert player_resp[0]["title"] == "Visible"
+
+    def test_filter_non_member_gets_403(self, client):
+        gm_h, cid, loc_id = self._setup(client)
+        other_h, _ = make_user(client, 2)
+        resp = client.get(
+            f"/api/gm/campaigns/{cid}/timeline?location_id={loc_id}",
+            headers=other_h,
+        )
+        assert resp.status_code == 403

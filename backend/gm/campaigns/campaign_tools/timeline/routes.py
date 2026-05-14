@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from shared.database import get_db
 from shared.dependencies import get_current_user
@@ -33,10 +33,12 @@ def create_event(
 @router.get("", response_model=List[EventListItem])
 def list_events(
     campaign_id: int,
+    location_id: Optional[int] = Query(None),
+    npc_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return service.list_events(db, campaign_id, current_user.id)
+    return service.list_events(db, campaign_id, current_user.id, location_id=location_id, npc_id=npc_id)
 
 
 @router.get("/{event_id}", response_model=EventResponse)

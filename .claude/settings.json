@@ -8,9 +8,10 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "Write-Output '{\"systemMessage\": \"Post-turn checklist: (1) Run npm test in frontend/  (2) Audit CLAUDE.md for schema/endpoint/UI/test changes  (3) Check .claude/agents/ and .claude/commands/ for stale references\"}'",
-            "timeout": 5
+            "shell": "bash",
+            "command": "cd c:/Users/rober/Documents/Projects/dnd-app/frontend && export R=$(npm test -- --run 2>&1 | tail -10) && node -e \"process.stdout.write(JSON.stringify({systemMessage:'Post-turn checklist: (1) confirm .test.jsx for every new/changed .jsx; (2) audit CLAUDE.md schema/endpoint/UI/test-file-listing; (3) check .claude/agents and .claude/commands for stale refs\\n\\n--- npm test (last 10 lines) ---\\n'+(process.env.R||'')}));\"",
+            "timeout": 60,
+            "statusMessage": "Running npm test..."
           }
         ]
       }

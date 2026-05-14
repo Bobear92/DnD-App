@@ -146,7 +146,7 @@ export default function Dashboard() {
             ) : noCalendar ? (
               <p className="text-sm text-muted-foreground">
                 No calendar has been set up for this campaign.
-                {isGm && ' Go to Settings → Calendar to get started.'}
+                {isGm && ' Go to Campaign Time → Calendar to get started.'}
               </p>
             ) : (
               <div className="space-y-4">

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import settingsService from '../settingsService';
 import npcService from '../../npcs/npcService';
 import locationService from '../../locations/locationService';
@@ -10,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2, Clock, ChevronDown, ChevronRight, Eye, EyeOff, Users } from 'lucide-react';
+import { Loader2, Plus, Trash2, Clock, ChevronDown, ChevronRight, Eye, EyeOff, Users, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ── Era diagram ───────────────────────────────────────────────────────────────
@@ -37,6 +38,192 @@ function EraDiagram() {
   );
 }
 
+// ── Timeline guide (era type examples) ───────────────────────────────────────
+
+function EraTypeExample({ number, title, subtitle, visual, eventsLabel, events, setupLabel, inputs }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-mono shrink-0">
+            {number}
+          </span>
+          {title}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="bg-muted/50 rounded-md p-3">{visual}</div>
+        <div className="text-xs space-y-1">
+          <p className="text-muted-foreground font-medium">{eventsLabel}</p>
+          {events.map((e, i) => <p key={i} className="font-mono pl-2">{e}</p>)}
+        </div>
+        <div className="bg-muted/30 rounded-md p-3 text-xs space-y-1.5">
+          <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px]">{setupLabel}</p>
+          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5">
+            {inputs.map(([label, value], i) => (
+              <>
+                <span key={`l${i}`} className="text-muted-foreground whitespace-nowrap">{label}</span>
+                <span key={`v${i}`} className="font-medium">{value}</span>
+              </>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TimelineGuide() {
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-muted-foreground space-y-2">
+        <p>
+          A timeline is built from one or more <strong>eras</strong> — named dating systems.
+          Every event can display its date in multiple eras at once.
+        </p>
+        <p>
+          Your first era is the <strong>primary era</strong> — ascending, the baseline of your
+          world's time. You can then add:
+        </p>
+        <ul className="space-y-0.5 pl-4">
+          <li>• A <strong>descending era</strong> that counts backwards toward a pivot event (BC/AD style)</li>
+          <li>• A <strong>parallel era</strong> — a second dating system anchored to an event in an existing era</li>
+        </ul>
+      </div>
+
+      <EraTypeExample
+        number="1"
+        title="Single Ascending Era"
+        subtitle="Simplest setup — one continuous forward count from year 1."
+        visual={
+          <div className="space-y-1 font-mono text-xs">
+            <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap">
+              <span className="text-muted-foreground">1 AR</span>
+              <span className="border-t border-muted-foreground/40 flex-1 min-w-4" />
+              <span className="text-muted-foreground">300 AR</span>
+              <span className="border-t border-muted-foreground/40 flex-1 min-w-4" />
+              <span className="text-muted-foreground">612 AR</span>
+              <span className="border-t border-muted-foreground/40 flex-1 min-w-4" />
+              <span className="text-primary font-bold">1,250 AR ●</span>
+            </div>
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span>The Founding</span>
+              <span>Dragon War</span>
+              <span>Empire Falls</span>
+              <span>Campaign now</span>
+            </div>
+          </div>
+        }
+        eventsLabel="Events appear as:"
+        events={[
+          '"The Dragon War — 300 AR"',
+          '"Battle of Thornwall — 842 AR"',
+        ]}
+        setupLabel="To create this (your very first era)"
+        inputs={[
+          ['Era Name:', 'Age of Renewal'],
+          ['Abbreviation:', 'AR'],
+          ['Direction:', 'Ascending (automatic — first era is always primary)'],
+        ]}
+      />
+
+      <EraTypeExample
+        number="2"
+        title="Before / After Split"
+        subtitle='BC/AD-style pivot — years count backward before the event, forward after.'
+        visual={
+          <div className="space-y-2">
+            <div className="flex items-center justify-center gap-0 font-mono text-xs flex-wrap">
+              <span className="text-muted-foreground">←</span>
+              <span className="mx-1.5 px-2 py-0.5 rounded bg-muted text-muted-foreground text-[11px]">Before the Sundering</span>
+              <span className="text-muted-foreground">500 · 2 · 1</span>
+              <span className="mx-1 text-primary font-bold text-base">|</span>
+              <span className="text-muted-foreground">1 · 2 · 850</span>
+              <span className="mx-1.5 px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold text-[11px]">After the Sundering</span>
+              <span className="text-muted-foreground">→</span>
+            </div>
+            <p className="text-center text-[10px] text-muted-foreground">
+              BSun · ASun — year 1 meets year 1, no year zero
+            </p>
+          </div>
+        }
+        eventsLabel="Events appear as:"
+        events={[
+          '"The Great Betrayal — 500 BSun"',
+          '"The Sundering — 1 BSun / 1 ASun" (pivot event shows both)',
+          '"New Kingdoms Rise — 300 ASun"',
+        ]}
+        setupLabel='To create this (click "Add Era" → "Before / After Split")'
+        inputs={[
+          ['Before era name:', 'Before the Sundering'],
+          ['Before abbreviation:', 'BSun'],
+          ['After era name:', 'After the Sundering'],
+          ['After abbreviation:', 'ASun'],
+        ]}
+      />
+
+      <EraTypeExample
+        number="3"
+        title="Parallel Era"
+        subtitle="A second dating system layered over the same timeline — religious calendars, imperial reckonings, etc."
+        visual={
+          <div className="font-mono text-xs space-y-1.5">
+            <div className="flex gap-2 items-baseline">
+              <span className="text-muted-foreground w-36 shrink-0 text-[10px]">Age of Kings (AK)</span>
+              <span className="whitespace-nowrap">1 AK ── 312 AK ── 412 AK ── 842 AK</span>
+            </div>
+            <div className="flex gap-2 items-baseline">
+              <span className="text-muted-foreground w-36 shrink-0 text-[10px]">Imperial Cal. (IC)</span>
+              <span className="text-muted-foreground whitespace-nowrap pl-14">= 1 IC ── 100 IC ── 530 IC</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">IC started when the Empire was founded (312 AK = 1 IC)</p>
+          </div>
+        }
+        eventsLabel="Events appear as:"
+        events={[
+          '"The Founding — 1 AK" (before IC started, only AK shown)',
+          '"Battle of Thornwall — 842 AK · 530 IC"',
+        ]}
+        setupLabel='To add the secondary era (click "Add Era" → "Parallel Era")'
+        inputs={[
+          ['Era Name:', 'Imperial Calendar'],
+          ['Abbreviation:', 'IC'],
+          ['Anchor Era:', 'Age of Kings'],
+          ['In AK, this year is:', '312'],
+          ['That year in IC:', '1'],
+        ]}
+      />
+    </div>
+  );
+}
+
+function TimelineInfoPanel() {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card>
+      <CardHeader
+        className="py-3 cursor-pointer select-none"
+        onClick={() => setOpen(o => !o)}
+      >
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            How do eras and timelines work?
+          </CardTitle>
+          {open
+            ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+        </div>
+      </CardHeader>
+      {open && (
+        <CardContent className="pt-0 pb-4">
+          <TimelineGuide />
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 // ── Timeline landing (no eras yet) ────────────────────────────────────────────
 
 function TimelineLanding({ onSetUp, isGm }) {
@@ -57,94 +244,81 @@ function TimelineLanding({ onSetUp, isGm }) {
     }
   };
 
-  if (!isGm) {
-    return (
-      <div className="text-center py-16 text-muted-foreground">
-        <Clock className="w-12 h-12 mx-auto mb-3 opacity-30" />
-        <p>No timeline has been set up for this campaign yet.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-xl mx-auto py-8">
-      <div className="text-center mb-4">
+    <div className="max-w-2xl mx-auto py-8 space-y-6">
+      <div className="text-center">
         <Clock className="w-12 h-12 mx-auto mb-3 text-primary" />
         <h2 className="text-xl font-bold mb-2">Campaign Timeline</h2>
+        <p className="text-sm text-muted-foreground max-w-lg mx-auto">
+          Record your world's history using <strong>eras</strong> — named dating systems that let you
+          place events across time. Every event can display its date in multiple eras simultaneously.
+        </p>
       </div>
 
-      <EraDiagram />
-
-      <div className="text-sm text-muted-foreground space-y-3 mb-8">
-        <p>
-          Your <strong>first era</strong> is the <span className="text-foreground font-medium">primary era</span> —
-          ascending, this is "current time" in your world. Give it a name and abbreviation
-          (e.g. "Age of Kings" / "AK").
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+          Era types &amp; examples
         </p>
-        <p>
-          Additional eras branch off the primary. A <strong>descending era</strong> counts backwards
-          (e.g. "Before the Age of Kings" / "BAK") — year 1 of the descending era is the year
-          immediately before year 1 of the ascending era.
-        </p>
-        <p>
-          An <strong>ascending secondary era</strong> is a parallel dating system anchored to an
-          event in another era (e.g. a religious calendar that started 6,000 years before the
-          current era began).
-        </p>
-        <p>Every timeline event can display its date in multiple eras simultaneously.</p>
+        <TimelineGuide />
       </div>
 
-      {!showForm ? (
-        <div className="text-center">
-          <Button onClick={() => setShowForm(true)}>Set Up Timeline</Button>
-        </div>
+      {isGm ? (
+        !showForm ? (
+          <div className="text-center pt-2">
+            <Button onClick={() => setShowForm(true)}>Set Up Timeline</Button>
+          </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Create Primary Era</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Era name <span className="text-destructive">*</span></Label>
+                  <Input
+                    value={form.name}
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Age of Kings"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Abbreviation <span className="text-destructive">*</span></Label>
+                  <Input
+                    value={form.abbreviation}
+                    onChange={e => setForm(f => ({ ...f, abbreviation: e.target.value }))}
+                    placeholder="AK"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="era-current"
+                  checked={form.is_current}
+                  onChange={e => setForm(f => ({ ...f, is_current: e.target.checked }))}
+                  className="rounded"
+                />
+                <label htmlFor="era-current" className="text-sm">This is the current era</label>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancel</Button>
+                <Button
+                  onClick={handleCreate}
+                  disabled={saving || !form.name.trim() || !form.abbreviation.trim()}
+                >
+                  {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Create
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create Primary Era</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Era name <span className="text-destructive">*</span></Label>
-                <Input
-                  value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Age of Kings"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Abbreviation <span className="text-destructive">*</span></Label>
-                <Input
-                  value={form.abbreviation}
-                  onChange={e => setForm(f => ({ ...f, abbreviation: e.target.value }))}
-                  placeholder="AK"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="era-current"
-                checked={form.is_current}
-                onChange={e => setForm(f => ({ ...f, is_current: e.target.checked }))}
-                className="rounded"
-              />
-              <label htmlFor="era-current" className="text-sm">This is the current era</label>
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancel</Button>
-              <Button
-                onClick={handleCreate}
-                disabled={saving || !form.name.trim() || !form.abbreviation.trim()}
-              >
-                {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Create
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="text-center text-sm text-muted-foreground pt-2">
+          No timeline has been set up for this campaign yet.
+        </div>
       )}
     </div>
   );
@@ -158,22 +332,64 @@ function EraBadge({ label, variant = 'secondary' }) {
 
 // ── Era row ───────────────────────────────────────────────────────────────────
 
-function EraRow({ era, eras, isGm, onUpdate, onDelete, onToggleVisibility }) {
+function deriveOldestYear(era) {
+  if (era.direction === 'ascending') {
+    return era.era_end_absolute != null ? String(era.era_end_absolute - era.epoch_offset) : '';
+  }
+  return era.era_start_absolute != null ? String(era.epoch_offset - era.era_start_absolute) : '';
+}
+
+function eraYearSpan(era) {
+  const fmt = n => n.toLocaleString();
+  if (era.direction === 'ascending') {
+    const start = `1 ${era.abbreviation}`;
+    const end = era.era_end_absolute != null
+      ? `${fmt(era.era_end_absolute - era.epoch_offset)} ${era.abbreviation}`
+      : 'ongoing';
+    return `${start} – ${end}`;
+  }
+  // descending: highest year number is oldest, year 1 is most recent
+  const newest = `1 ${era.abbreviation}`;
+  const oldest = era.era_start_absolute != null
+    ? `${fmt(era.epoch_offset - era.era_start_absolute)} ${era.abbreviation}`
+    : null;
+  return oldest ? `${oldest} – ${newest}` : `ancient – ${newest}`;
+}
+
+function EraRow({ era, eras, isGm, onUpdate, onDelete, onToggleVisibility, isCustomSort, onMoveUp, onMoveDown, isFirst, isLast }) {
   const [showEdit, setShowEdit] = useState(false);
   const [form, setForm] = useState({
     name: era.name,
     abbreviation: era.abbreviation,
     is_current: era.is_current,
     is_visible_to_players: era.is_visible_to_players,
+    era_oldest_year: deriveOldestYear(era),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (showEdit) {
+      setForm({
+        name: era.name,
+        abbreviation: era.abbreviation,
+        is_current: era.is_current,
+        is_visible_to_players: era.is_visible_to_players,
+        era_oldest_year: deriveOldestYear(era),
+      });
+      setError('');
+    }
+  }, [showEdit]);
 
   const handleSave = async () => {
     setSaving(true);
     setError('');
     try {
-      await onUpdate(era.id, form);
+      const payload = {
+        ...form,
+        era_oldest_year: form.era_oldest_year !== '' ? Number(form.era_oldest_year) : null,
+      };
+      await onUpdate(era.id, payload);
       setShowEdit(false);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to update era');
@@ -183,7 +399,7 @@ function EraRow({ era, eras, isGm, onUpdate, onDelete, onToggleVisibility }) {
   };
 
   return (
-    <div className="border border-border rounded-md p-3 space-y-2">
+    <div className="border border-border rounded-md p-3 space-y-1.5">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-medium text-sm">{era.name}</span>
         <span className="text-xs text-muted-foreground">({era.abbreviation})</span>
@@ -196,6 +412,16 @@ function EraRow({ era, eras, isGm, onUpdate, onDelete, onToggleVisibility }) {
 
         {isGm && (
           <div className="ml-auto flex items-center gap-1">
+            {isCustomSort && (
+              <>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={onMoveUp} disabled={isFirst} title="Move up">
+                  <ArrowUp className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={onMoveDown} disabled={isLast} title="Move down">
+                  <ArrowDown className="w-3.5 h-3.5" />
+                </Button>
+              </>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -219,6 +445,7 @@ function EraRow({ era, eras, isGm, onUpdate, onDelete, onToggleVisibility }) {
           </div>
         )}
       </div>
+      <p className="text-xs text-muted-foreground pl-0.5">{eraYearSpan(era)}</p>
 
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent>
@@ -255,6 +482,21 @@ function EraRow({ era, eras, isGm, onUpdate, onDelete, onToggleVisibility }) {
               />
               <label htmlFor={`era-visible-${era.id}`} className="text-sm">Visible to players</label>
             </div>
+            <div className="space-y-1">
+              <Label>Timeline stops at year</Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder="open-ended"
+                value={form.era_oldest_year}
+                onChange={e => setForm(f => ({ ...f, era_oldest_year: e.target.value.replace(/,/g, '') }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                {era.direction === 'ascending'
+                  ? 'Highest year this era tracks. Leave blank for an ongoing era.'
+                  : 'Oldest year in this era\'s numbering. Leave blank for no defined start.'}
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEdit(false)} disabled={saving}>Cancel</Button>
@@ -272,7 +514,11 @@ function EraRow({ era, eras, isGm, onUpdate, onDelete, onToggleVisibility }) {
 // ── Format era date list ───────────────────────────────────────────────────────
 
 function EraDateList({ eraDates }) {
-  if (!eraDates || eraDates.length === 0) return <span className="text-muted-foreground text-xs">No date</span>;
+  if (!eraDates || eraDates.length === 0) return (
+    <span className="text-xs text-muted-foreground italic flex items-center gap-1">
+      <Clock className="w-3 h-3" />Unknown date
+    </span>
+  );
   return (
     <span className="text-xs text-muted-foreground">
       {eraDates.map((d, i) => (
@@ -288,6 +534,7 @@ function EraDateList({ eraDates }) {
 // ── Event detail (expanded) ───────────────────────────────────────────────────
 
 function EventDetail({ event, campaignId, isGm, npcs, locations, onUpdate }) {
+  const navigate = useNavigate();
   const [linkedNpcs, setLinkedNpcs] = useState([]);
   const [linkedLocations, setLinkedLocations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -411,7 +658,10 @@ function EventDetail({ event, campaignId, isGm, npcs, locations, onUpdate }) {
           <div className="space-y-1">
             {linkedNpcs.map(link => (
               <div key={link.id} className="flex items-center gap-2 text-sm">
-                <span className="flex-1">{link.npc?.name ?? `NPC #${link.npc_id}`}</span>
+                <button
+                  className="flex-1 text-left hover:underline text-primary/90"
+                  onClick={() => navigate(`/campaigns/${campaignId}/npcs/${link.npc_id}`)}
+                >{link.npc_name}</button>
                 {link.description && <span className="text-xs text-muted-foreground">{link.description}</span>}
                 {isGm && (
                   <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
@@ -457,7 +707,10 @@ function EventDetail({ event, campaignId, isGm, npcs, locations, onUpdate }) {
           <div className="space-y-1">
             {linkedLocations.map(link => (
               <div key={link.id} className="flex items-center gap-2 text-sm">
-                <span className="flex-1">{link.location?.name ?? `Location #${link.location_id}`}</span>
+                <button
+                  className="flex-1 text-left hover:underline text-primary/90"
+                  onClick={() => navigate(`/campaigns/${campaignId}/locations/${link.location_id}`)}
+                >{link.location_name}</button>
                 {link.description && <span className="text-xs text-muted-foreground">{link.description}</span>}
                 {isGm && (
                   <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
@@ -618,19 +871,21 @@ function EditEventDialog({ open, onClose, event, eras, onSave }) {
             <div className="space-y-1">
               <Label>Year</Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="h-9"
                 value={form.year}
-                onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, year: e.target.value.replace(/,/g, '') }))}
               />
             </div>
             <div className="space-y-1">
               <Label>Day</Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="h-9"
                 value={form.day}
-                onChange={e => setForm(f => ({ ...f, day: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, day: e.target.value.replace(/,/g, '') }))}
               />
             </div>
           </div>
@@ -735,32 +990,105 @@ function EventRow({ event, eras, campaignId, isGm, npcs, locations, onUpdate, on
 
 // ── Add era dialog ────────────────────────────────────────────────────────────
 
+function ModeCard({ selected, onClick, title, subtitle, description }) {
+  return (
+    <div
+      className={`flex-1 rounded-md border-2 p-3 cursor-pointer transition-colors ${selected ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground'}`}
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${selected ? 'border-primary' : 'border-muted-foreground'}`}>
+          {selected && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
+        </div>
+        <p className="text-sm font-medium">{title}</p>
+        {subtitle && <span className="text-xs text-muted-foreground font-normal">{subtitle}</span>}
+      </div>
+      <p className="text-xs text-muted-foreground pl-5">{description}</p>
+    </div>
+  );
+}
+
 function AddEraDialog({ open, onClose, eras, onSave }) {
   const hasPrimary = eras.some(e => e.is_primary);
+  // 'split' = Before/After (descending, transition anchor)
+  // 'parallel' = standard aligned era (ascending or descending)
+  const [mode, setMode] = useState('parallel');
   const [form, setForm] = useState({
     name: '',
     abbreviation: '',
-    direction: hasPrimary ? 'descending' : 'ascending',
+    // parallel fields
+    direction: 'ascending',
     anchor_era_id: '__none__',
     anchor_era_year: '',
     anchor_this_year: '',
+    // split fields
+    split_anchor_id: eras.length > 0 ? String(eras[0].id) : '__none__',
+    split_anchor_year: '1',
+    // shared
     is_current: false,
     is_visible_to_players: false,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const switchMode = (m) => { setMode(m); setError(''); };
+
+  // ── derived ──
   const isAscending = form.direction === 'ascending';
-  // ascending secondary eras require anchor_this_year; descending can leave it null
-  const anchorThisYearRequired = hasPrimary && isAscending;
+  const parallelAnchorName = form.anchor_era_id !== '__none__'
+    ? (eras.find(e => String(e.id) === form.anchor_era_id)?.name ?? '')
+    : '';
+  const splitAnchorEra = form.split_anchor_id !== '__none__'
+    ? eras.find(e => String(e.id) === form.split_anchor_id)
+    : null;
+  const splitAnchorYear = form.split_anchor_year || '1';
+  const thisAbbr = form.abbreviation || 'NEW';
+  const splitAfterAbbr = splitAnchorEra?.abbreviation || '???';
+
+  // parallel preview
+  const showParallelPreview = hasPrimary && parallelAnchorName && form.anchor_era_year &&
+    (isAscending ? form.anchor_this_year : true);
+  const parallelPreviewText = isAscending
+    ? `${form.name || 'This era'} year ${form.anchor_this_year} = ${parallelAnchorName} year ${form.anchor_era_year}`
+    : form.anchor_this_year
+      ? `${form.name || 'This era'} year ${form.anchor_this_year} = ${parallelAnchorName} year ${form.anchor_era_year}`
+      : `${form.name || 'This era'} year 1 is immediately before ${parallelAnchorName} year ${form.anchor_era_year}`;
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.abbreviation.trim()) return;
-    if (hasPrimary && form.anchor_era_id === '__none__') {
-      setError('Please select an anchor era.');
+
+    if (mode === 'split') {
+      if (form.split_anchor_id === '__none__') {
+        setError('Please select the era this one sits before.');
+        return;
+      }
+      setSaving(true);
+      setError('');
+      try {
+        await onSave({
+          name: form.name.trim(),
+          abbreviation: form.abbreviation.trim(),
+          direction: 'descending',
+          is_current: form.is_current,
+          is_visible_to_players: form.is_visible_to_players,
+          anchor_era_id: Number(form.split_anchor_id),
+          anchor_era_year: Number(splitAnchorYear),
+        });
+        onClose();
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Failed to create era');
+      } finally {
+        setSaving(false);
+      }
       return;
     }
-    if (anchorThisYearRequired && form.anchor_this_year === '') {
+
+    // parallel mode
+    if (hasPrimary && form.anchor_era_id === '__none__') {
+      setError('Please select an era to align with.');
+      return;
+    }
+    if (hasPrimary && isAscending && form.anchor_this_year === '') {
       setError('Year in this era is required for ascending eras.');
       return;
     }
@@ -788,25 +1116,40 @@ function AddEraDialog({ open, onClose, eras, onSave }) {
     }
   };
 
-  const anchorEraName = form.anchor_era_id !== '__none__'
-    ? (eras.find(e => String(e.id) === form.anchor_era_id)?.name ?? '')
-    : '';
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{hasPrimary ? 'Add Era' : 'Create Primary Era'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           {error && <p className="text-sm text-destructive">{error}</p>}
+
+          {hasPrimary && (
+            <div className="flex gap-2">
+              <ModeCard
+                selected={mode === 'parallel'}
+                onClick={() => switchMode('parallel')}
+                title="Parallel Era"
+                description="An ascending or descending era that aligns with an existing one at a specific crossing point."
+              />
+              <ModeCard
+                selected={mode === 'split'}
+                onClick={() => switchMode('split')}
+                title="Before/After Split"
+                subtitle="(like BC / AD)"
+                description="Counts backwards from a fixed moment. Year 1 sits immediately before year 1 of the other era — no year zero."
+              />
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Name <span className="text-destructive">*</span></Label>
               <Input
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="Age of Kings"
+                placeholder={mode === 'split' ? 'Before the Sundering' : 'The Age of Embers'}
               />
             </div>
             <div className="space-y-1">
@@ -814,107 +1157,129 @@ function AddEraDialog({ open, onClose, eras, onSave }) {
               <Input
                 value={form.abbreviation}
                 onChange={e => setForm(f => ({ ...f, abbreviation: e.target.value }))}
-                placeholder="AK"
+                placeholder={mode === 'split' ? 'BtS' : 'AE'}
               />
             </div>
           </div>
 
-          <div className="space-y-1">
-            <Label>Direction</Label>
-            <Select
-              value={form.direction}
-              onValueChange={v => setForm(f => ({ ...f, direction: v }))}
-              disabled={!hasPrimary}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ascending">Ascending (counts up from year 1)</SelectItem>
-                <SelectItem value="descending">Descending (counts down to year 1)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {hasPrimary && (
+          {mode === 'split' ? (
             <>
               <div className="space-y-1">
-                <Label>Anchor era <span className="text-destructive">*</span></Label>
-                <p className="text-xs text-muted-foreground">Which existing era does this one align with?</p>
-                <Select value={form.anchor_era_id} onValueChange={v => setForm(f => ({ ...f, anchor_era_id: v }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select anchor era…" />
-                  </SelectTrigger>
+                <Label>Sits immediately before <span className="text-destructive">*</span></Label>
+                <p className="text-xs text-muted-foreground">Which existing era does this one count backwards from?</p>
+                <Select value={form.split_anchor_id} onValueChange={v => setForm(f => ({ ...f, split_anchor_id: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select era…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">Select anchor era…</SelectItem>
-                    {eras.map(e => (
-                      <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
-                    ))}
+                    <SelectItem value="__none__">Select era…</SelectItem>
+                    {eras.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>
-                    Year in {anchorEraName || 'anchor era'}
-                    <span className="text-destructive"> *</span>
-                  </Label>
-                  <p className="text-xs text-muted-foreground">at the crossing point</p>
-                  <Input
-                    type="number"
-                    value={form.anchor_era_year}
-                    onChange={e => setForm(f => ({ ...f, anchor_era_year: e.target.value }))}
-                    placeholder="e.g. 6261"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>
-                    Year in this era
-                    {anchorThisYearRequired && <span className="text-destructive"> *</span>}
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    {isAscending
-                      ? 'at the same crossing point'
-                      : 'optional — leave blank for transition anchor (year 1 → year before anchor)'}
-                  </p>
-                  <Input
-                    type="number"
-                    value={form.anchor_this_year}
-                    onChange={e => setForm(f => ({ ...f, anchor_this_year: e.target.value }))}
-                    placeholder={isAscending ? 'e.g. 1' : 'optional'}
-                  />
-                </div>
-              </div>
-              {anchorEraName && form.anchor_era_year && (isAscending ? form.anchor_this_year : true) && (
-                <p className="text-xs text-muted-foreground bg-muted rounded p-2">
-                  {isAscending
-                    ? `${form.name || 'This era'} year ${form.anchor_this_year} = ${anchorEraName} year ${form.anchor_era_year}`
-                    : form.anchor_this_year
-                      ? `${form.name || 'This era'} year ${form.anchor_this_year} = ${anchorEraName} year ${form.anchor_era_year}`
-                      : `${form.name || 'This era'} year 1 is immediately before ${anchorEraName} year ${form.anchor_era_year}`}
+              <div className="space-y-1">
+                <Label>Split at year <span className="text-destructive">*</span></Label>
+                <p className="text-xs text-muted-foreground">
+                  Which year in <strong>{splitAnchorEra?.name || 'the other era'}</strong> is the crossing point? Usually year 1.
                 </p>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  className="w-32"
+                  value={form.split_anchor_year}
+                  onChange={e => setForm(f => ({ ...f, split_anchor_year: e.target.value.replace(/,/g, '') }))}
+                  placeholder="1"
+                />
+              </div>
+
+              <div className="rounded-md bg-muted px-4 py-3 font-mono text-sm text-center tracking-wide">
+                <span className="text-muted-foreground">… 3 · 2 · 1 </span>
+                <span className="font-bold">[{thisAbbr}]</span>
+                <span className="text-muted-foreground"> | </span>
+                <span className="font-bold">[{splitAfterAbbr}]</span>
+                <span className="text-muted-foreground"> {splitAnchorYear} · {Number(splitAnchorYear) + 1} · {Number(splitAnchorYear) + 2} …</span>
+                <p className="text-xs text-muted-foreground font-sans mt-1 normal-case tracking-normal">
+                  {thisAbbr} year 1 is the year immediately before {splitAfterAbbr} year {splitAnchorYear} — no year zero.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <Label>Direction <span className="text-destructive">*</span></Label>
+                <Select
+                  value={form.direction}
+                  onValueChange={v => setForm(f => ({ ...f, direction: v }))}
+                  disabled={!hasPrimary}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ascending">Ascending — counts up from year 1</SelectItem>
+                    <SelectItem value="descending">Descending — counts down to year 1</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {hasPrimary && (
+                <>
+                  <div className="space-y-1">
+                    <Label>Aligns with <span className="text-destructive">*</span></Label>
+                    <p className="text-xs text-muted-foreground">Which existing era does this one share a crossing point with?</p>
+                    <Select value={form.anchor_era_id} onValueChange={v => setForm(f => ({ ...f, anchor_era_id: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Select era…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Select era…</SelectItem>
+                        {eras.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Year in {parallelAnchorName || 'that era'} <span className="text-destructive">*</span></Label>
+                      <p className="text-xs text-muted-foreground">at the crossing point</p>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={form.anchor_era_year}
+                        onChange={e => setForm(f => ({ ...f, anchor_era_year: e.target.value.replace(/,/g, '') }))}
+                        placeholder="e.g. 100"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>
+                        Year in this era
+                        {hasPrimary && isAscending && <span className="text-destructive"> *</span>}
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        {isAscending ? 'at the same crossing point' : 'leave blank if year 1 sits just before the crossing'}
+                      </p>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={form.anchor_this_year}
+                        onChange={e => setForm(f => ({ ...f, anchor_this_year: e.target.value.replace(/,/g, '') }))}
+                        placeholder={isAscending ? 'e.g. 1' : 'optional'}
+                      />
+                    </div>
+                  </div>
+
+                  {showParallelPreview && (
+                    <p className="text-xs text-muted-foreground bg-muted rounded p-2">{parallelPreviewText}</p>
+                  )}
+                </>
               )}
             </>
           )}
 
           <div className="flex gap-6">
             <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="add-era-current"
-                checked={form.is_current}
-                onChange={e => setForm(f => ({ ...f, is_current: e.target.checked }))}
-              />
+              <input type="checkbox" id="add-era-current" checked={form.is_current}
+                onChange={e => setForm(f => ({ ...f, is_current: e.target.checked }))} />
               <label htmlFor="add-era-current" className="text-sm">Current era</label>
             </div>
             <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="add-era-visible"
-                checked={form.is_visible_to_players}
-                onChange={e => setForm(f => ({ ...f, is_visible_to_players: e.target.checked }))}
-              />
+              <input type="checkbox" id="add-era-visible" checked={form.is_visible_to_players}
+                onChange={e => setForm(f => ({ ...f, is_visible_to_players: e.target.checked }))} />
               <label htmlFor="add-era-visible" className="text-sm">Visible to players</label>
             </div>
           </div>
@@ -1012,19 +1377,21 @@ function AddEventDialog({ open, onClose, eras, onSave }) {
             <div className="space-y-1">
               <Label>Year</Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="h-9"
                 value={form.year}
-                onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, year: e.target.value.replace(/,/g, '') }))}
               />
             </div>
             <div className="space-y-1">
               <Label>Day</Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="h-9"
                 value={form.day}
-                onChange={e => setForm(f => ({ ...f, day: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, day: e.target.value.replace(/,/g, '') }))}
               />
             </div>
           </div>
@@ -1156,11 +1523,46 @@ export default function TimelineTab({ campaignId, isGm }) {
   const handleAddEra = async (data) => {
     const era = await settingsService.createEra(campaignId, data);
     setEras(prev => [...prev, era]);
+    if (customEraOrder) {
+      const next = [...customEraOrder, era.id];
+      setCustomEraOrder(next);
+      localStorage.setItem(eraSortKey + '_order', JSON.stringify(next));
+    }
   };
 
   const handleUpdateEra = async (eraId, data) => {
     const updated = await settingsService.updateEra(campaignId, eraId, data);
     setEras(prev => prev.map(e => e.id === eraId ? updated : e));
+  };
+
+  const eraSortKey = `era_sort_${campaignId}`;
+  const [eraSort, setEraSort] = useState(() => localStorage.getItem(eraSortKey + '_mode') || 'chronological');
+  const [customEraOrder, setCustomEraOrder] = useState(() => {
+    const saved = localStorage.getItem(eraSortKey + '_order');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const switchEraSort = (mode) => {
+    setEraSort(mode);
+    localStorage.setItem(eraSortKey + '_mode', mode);
+    if (mode === 'custom' && !customEraOrder) {
+      const initOrder = chronologicalEras.map(e => e.id);
+      setCustomEraOrder(initOrder);
+      localStorage.setItem(eraSortKey + '_order', JSON.stringify(initOrder));
+    }
+  };
+
+  const moveEra = (eraId, dir) => {
+    const order = customEraOrder || chronologicalEras.map(e => e.id);
+    const idx = order.indexOf(eraId);
+    if (idx === -1) return;
+    if (dir === 'up' && idx === 0) return;
+    if (dir === 'down' && idx === order.length - 1) return;
+    const next = [...order];
+    const swap = dir === 'up' ? idx - 1 : idx + 1;
+    [next[idx], next[swap]] = [next[swap], next[idx]];
+    setCustomEraOrder(next);
+    localStorage.setItem(eraSortKey + '_order', JSON.stringify(next));
   };
 
   const handleDeleteEra = async (eraId) => {
@@ -1169,10 +1571,25 @@ export default function TimelineTab({ campaignId, isGm }) {
       setError('Cannot delete the primary era while other eras exist. Delete them first.');
       return;
     }
-    if (!window.confirm('Delete this era? This cannot be undone.')) return;
+    const orphanCount = events.filter(e => e.era_id === eraId).length;
+    const orphanWarning = orphanCount > 0
+      ? `\n\n${orphanCount} event${orphanCount === 1 ? '' : 's'} dated in this era will move to "Unknown Date" and can be reassigned later.`
+      : '';
+    if (!window.confirm(`Delete this era? This cannot be undone.${orphanWarning}`)) return;
     try {
       await settingsService.deleteEra(campaignId, eraId);
       setEras(prev => prev.filter(e => e.id !== eraId));
+      if (customEraOrder) {
+        const next = customEraOrder.filter(id => id !== eraId);
+        setCustomEraOrder(next);
+        localStorage.setItem(eraSortKey + '_order', JSON.stringify(next));
+      }
+      if (orphanCount > 0) {
+        setEvents(prev => prev.map(e => e.era_id === eraId
+          ? { ...e, era_id: null, absolute_year: null, era_dates: [] }
+          : e
+        ));
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to delete era');
     }
@@ -1241,8 +1658,27 @@ export default function TimelineTab({ campaignId, isGm }) {
   }
 
   const effectiveIsGm = isGm && !playerView;
-  const displayedEras = playerView ? eras.filter(e => e.is_visible_to_players) : eras;
-  const displayedEvents = playerView ? events.filter(e => e.is_visible_to_players) : events;
+  const filteredEras = playerView ? eras.filter(e => e.is_visible_to_players) : eras;
+  const chronologicalEras = filteredEras.slice().sort((a, b) => {
+    const aStart = a.era_start_absolute ?? -Infinity;
+    const bStart = b.era_start_absolute ?? -Infinity;
+    return aStart - bStart;
+  });
+  const displayedEras = (eraSort === 'custom' && customEraOrder)
+    ? filteredEras.slice().sort((a, b) => {
+        const ai = customEraOrder.indexOf(a.id);
+        const bi = customEraOrder.indexOf(b.id);
+        return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi);
+      })
+    : chronologicalEras;
+  const visibleEraIds = new Set(filteredEras.map(e => e.id));
+  const allDisplayedEvents = playerView
+    ? events
+        .filter(e => e.is_visible_to_players)
+        .map(e => ({ ...e, era_dates: (e.era_dates || []).filter(d => visibleEraIds.has(d.era_id)) }))
+    : events;
+  const datedEvents = allDisplayedEvents.filter(e => e.era_dates && e.era_dates.length > 0);
+  const undatedEvents = allDisplayedEvents.filter(e => !e.era_dates || e.era_dates.length === 0);
 
   return (
     <div className="space-y-6">
@@ -1268,24 +1704,40 @@ export default function TimelineTab({ campaignId, isGm }) {
         </div>
       )}
 
+      <TimelineInfoPanel />
+
       <CurrentDateBanner calData={calData} eras={eras} />
 
       {/* ── Eras ─────────────────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-base">Eras</CardTitle>
-          {effectiveIsGm && (
-            <Button size="sm" onClick={() => setShowAddEra(true)}>
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              Add Era
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {effectiveIsGm && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() => switchEraSort(eraSort === 'custom' ? 'chronological' : 'custom')}
+                title={eraSort === 'custom' ? 'Switch to chronological order' : 'Switch to manual order'}
+              >
+                <ArrowUpDown className="w-3 h-3" />
+                {eraSort === 'custom' ? 'Manual' : 'Chronological'}
+              </Button>
+            )}
+            {effectiveIsGm && (
+              <Button size="sm" onClick={() => setShowAddEra(true)}>
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Add Era
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {displayedEras.length === 0 && (
             <p className="text-sm text-muted-foreground">No visible eras.</p>
           )}
-          {displayedEras.map(era => (
+          {displayedEras.map((era, idx) => (
             <EraRow
               key={era.id}
               era={era}
@@ -1294,6 +1746,11 @@ export default function TimelineTab({ campaignId, isGm }) {
               onUpdate={handleUpdateEra}
               onDelete={handleDeleteEra}
               onToggleVisibility={handleToggleEraVisibility}
+              isCustomSort={eraSort === 'custom'}
+              onMoveUp={() => moveEra(era.id, 'up')}
+              onMoveDown={() => moveEra(era.id, 'down')}
+              isFirst={idx === 0}
+              isLast={idx === displayedEras.length - 1}
             />
           ))}
         </CardContent>
@@ -1311,12 +1768,12 @@ export default function TimelineTab({ campaignId, isGm }) {
           )}
         </CardHeader>
         <CardContent className="space-y-2">
-          {displayedEvents.length === 0 && (
+          {allDisplayedEvents.length === 0 && (
             <p className="text-sm text-muted-foreground">
               {playerView ? 'No visible events.' : 'No events yet.'}
             </p>
           )}
-          {displayedEvents.map(event => (
+          {datedEvents.map(event => (
             <EventRow
               key={event.id}
               event={event}
@@ -1330,6 +1787,39 @@ export default function TimelineTab({ campaignId, isGm }) {
               onToggleVisibility={handleToggleEventVisibility}
             />
           ))}
+
+          {undatedEvents.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 pt-2">
+                <div className="h-px flex-1 bg-border" />
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium px-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  Unknown Date
+                  <span className="text-muted-foreground/60">({undatedEvents.length})</span>
+                </span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              {!playerView && (
+                <p className="text-xs text-muted-foreground pb-1">
+                  These events have no era or date assigned. Click <strong>Edit</strong> on any event to select an era and year, which will move it onto the timeline.
+                </p>
+              )}
+              {undatedEvents.map(event => (
+                <EventRow
+                  key={event.id}
+                  event={event}
+                  eras={eras}
+                  campaignId={campaignId}
+                  isGm={effectiveIsGm}
+                  npcs={npcs}
+                  locations={locations}
+                  onUpdate={handleUpdateEvent}
+                  onDelete={handleDeleteEvent}
+                  onToggleVisibility={handleToggleEventVisibility}
+                />
+              ))}
+            </>
+          )}
         </CardContent>
       </Card>
 

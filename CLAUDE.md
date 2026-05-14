@@ -549,7 +549,7 @@ Non-primary eras require `anchor_era_id` + `anchor_era_year` for epoch offset ma
 | Method | Endpoint | Auth Required |
 |--------|----------|---------------|
 | POST | /api/gm/campaigns/{id}/timeline | Yes (GM) |
-| GET | /api/gm/campaigns/{id}/timeline | Yes (member; players see only visible events) |
+| GET | /api/gm/campaigns/{id}/timeline | Yes (member; players see only visible events); accepts `?location_id=N` or `?npc_id=N` to filter to events linked to that location/NPC |
 | GET | /api/gm/campaigns/{id}/timeline/{event_id} | Yes (member; players blocked if hidden) |
 | PUT | /api/gm/campaigns/{id}/timeline/{event_id} | Yes (GM) |
 | DELETE | /api/gm/campaigns/{id}/timeline/{event_id} | Yes (GM) |
@@ -630,7 +630,8 @@ frontend/src/
 │       ├── LocationList.jsx     # Campaign locations grid + create dialog + player view toggle ✅
 │       └── LocationDetail.jsx   # Maps tab (upload, zoom, pins, player view) + Info tab ✅
 ├── dashboard/
-│   └── Dashboard.jsx            # Overview cards — static placeholder data ⚠️
+│   ├── Dashboard.jsx            # Current date display (loads calendar API) + GM date-set form ✅
+│   └── Dashboard.test.jsx       # loading, 404 no-calendar, date formatting, GM/player gating, save date (9 tests) ✅
 └── shared/
     └── components/
         ├── ProtectedRoute.jsx   # Redirects to /login if AuthContext user is null
@@ -664,7 +665,7 @@ frontend/src/
 | `/campaigns/:campaignId/locations/:locationId` | LocationDetail | ✅ Functional |
 | `/campaigns/:campaignId/npcs` | NPCList | ✅ Functional |
 | `/campaigns/:campaignId/npcs/:npcId` | NPCDetail | ✅ Functional |
-| `/campaigns/:campaignId/settings` | CampaignSettings | ✅ Functional (GM only: Calendar + Timeline tabs) |
+| `/campaigns/:campaignId/campaign-time` | CampaignSettings | ✅ Functional (GM only: Calendar + Timeline tabs) |
 | `/campaigns/:campaignId/characters/create` | — | ❌ Not built |
 | `/campaigns/:campaignId/characters/:id` | — | ❌ Not built |
 
@@ -678,6 +679,7 @@ frontend/src/
 - **Info tab — GM view:** always editable; section cards for Details, GM Notes (private), Lore & Culture, Environment, Adventure, Hierarchy, Important NPCs; Save/Reset buttons per card
 - **Info tab — Player view:** read-only; empty sections hidden entirely; GM Notes never shown; NPC cards only show NPCs where `is_visible_to_players=true` on the NPC
 - **Important NPCs:** two sources merged in the NPC list response — `source="linked"` (manual `location_npcs` junction, has role description) and `source="last_seen"` (NPC's `last_known_location_id` points here, shows `last_seen_notes`). Deduped: if an NPC is both, `linked` wins. NPC cards show portrait thumbnail (left strip, 64px wide, if `image_path` exists), name, race, occupation, role/last_seen description, and NPC `summary`. Cards are clickable and navigate to `/campaigns/:campaignId/npcs/:npcId`. GM remove button uses `stopPropagation` so it doesn't trigger navigation.
+- **Timeline Events card (Info tab):** loaded on page mount via `GET /timeline?location_id=N`; shown in both GM and player views; GM view always shows the card (empty state: "No timeline events linked") with visibility badges for hidden events; player view shows only when events exist (visible-only events); each row shows title + era dates (`year abbreviation` separated by `·`) or "Unknown date" italic; events are managed from the Campaign Time page
 - **Hierarchy card (GM only):** set top-level, set parent, mark as unknown; child list shows manually-set children (link icon) and pin-derived children (pin icon + "via map pin" label)
 - **LocationList — GM view:** three sections — World Hierarchy tree (from top-level), Unsorted (staging area, locations not placed anywhere), Unknown Locations. When the top-level location has maps, a GM toolbar row appears above the map with an "Edit [name]" button that navigates to that location's `LocationDetail` page for full editing (info, maps, pins).
 - **LocationList — Player view:** toggle Hierarchy / A–Z; search bar; Unknown Locations section at bottom of hierarchy view
@@ -697,8 +699,9 @@ frontend/src/
 - **Create dialog:** name (required), race, occupation, alignment, status select, summary, visible-to-players checkbox; navigates directly to NPCDetail on create
 - **NPCDetail portrait:** click or drag-drop to upload (10 MB limit, client-side check); remove button; upload overlay while in progress
 - **NPCDetail core fields:** name, status, race, occupation, alignment, visibility checkbox — inline editing in portrait row; per-section Save/Reset appear only when dirty
-- **Info tab sections:** Physical (age, gender, height, weight, appearance) | Personality (voice, traits, ideals, bonds, flaws, languages as removable tags) | Narrative (summary, description, backstory — labeled "Player visible") | GM Notes (amber-tinted "Private" card, GM only) | Location & Media (last known location select, last-seen notes, theme music URL with clickable link) | Combat Stats (freeform JSON textarea, GM only)
-- **Player view:** all GM-only cards (GM Notes, Combat Stats, Player Relationships tab) hidden; all fields read-only; empty sections suppressed entirely
+- **Info tab sections:** Physical (age, gender, height, weight, appearance) | Personality (voice, traits, ideals, bonds, flaws, languages as removable tags) | Narrative (summary, description, backstory — labeled "Player visible") | GM Notes (amber-tinted "Private" card, GM only) | Location & Media (last known location select, last-seen notes, theme music URL with clickable link) | Combat Stats (freeform JSON textarea, GM only) | Timeline Events (loaded on mount via `GET /timeline?npc_id=N`)
+- **Timeline Events card (Info tab — NPCDetail):** GM view always shows the card (empty state: "No timeline events linked to this NPC.") with Hidden badges for non-visible events; player view shows only when events exist; each row shows title + era dates (`year abbreviation` separated by `·`) or "Unknown date" italic; events are managed from the Campaign Time page
+- **Player view:** all GM-only cards (GM Notes, Combat Stats, Player Relationships tab) hidden; all fields read-only; empty sections suppressed entirely; Timeline Events card hidden when no events
 - **Relationships tab:** NPC-to-NPC list; related NPC name is a clickable link to their detail page; GM can add (select NPC + type + description) and delete
 - **Player Relationships tab (GM only):** NPC-to-player list; populated from campaign members (players only); GM can add and delete
 - **Language tags:** add via input + Enter or button, remove with × on each tag; stored as JSONB array
@@ -706,22 +709,29 @@ frontend/src/
 - **Portrait display note:** images are served via `app.mount("/uploads", StaticFiles(...))` in `main.py` — upload/delete/display are all functional
 
 ### Settings UI — Key Behaviours
-- **Route:** `/campaigns/:campaignId/settings` — wrapped in `<MainLayout>` in App.jsx (not internally); GM-only controls; Settings link added to GM section of Sidebar
+- **Route:** `/campaigns/:campaignId/campaign-time` — wrapped in `<MainLayout>` in App.jsx (not internally); GM-only controls; "Campaign Time" link in GM section of Sidebar
 - **Calendar tab:** landing page (explainer + defaults bullet list + "Set Up Calendar" button) when 404; management UI when calendar exists
   - **General card:** calendar name, days_per_month, `use_weeks` toggle (ToggleLeft/ToggleRight icon), `days_per_week` input (shown only when `use_weeks=true`); Save button appears when dirty
   - **Seasons card:** inline editable list (click name to rename), add via input+Enter/button, delete with confirmation; deletion nullifies month assignments in local state
   - **Months card:** one row per month — ordinal (read-only), optional name input (placeholder "Month N" when blank), season select; Save button appears per row when dirty; `monthLabel()` helper returns name or "Month N"
   - **Weekdays card:** only shown when `use_weeks=true`; same add/edit/delete pattern as seasons; shows order_index as prefix
-  - **Current Date card:** GM only; era select (sentinel `__none__`), year, month-ordinal select (showing `monthLabel()`), day inputs; saves via `PUT /calendar`
+  - **Current Date card:** GM only; era select (sentinel `__none__`), year (`type="text"` + `inputMode="numeric"`, commas allowed and stripped on save), month-ordinal select (showing `monthLabel()`), day inputs; saves via `PUT /calendar`
 - **Timeline tab:** landing page (CSS era diagram + prose explanation + "Set Up Timeline" button) when no eras; full management UI when eras exist
   - **Era diagram:** renders styled divs showing `← [Before Era] 3·2·1 | 1·2·3·4 [Era] →` with "Year 1 meets Year 1 — no year zero" caption
-  - **Eras card:** list with Primary/Current/direction/visibility badges; edit dialog (name, abbreviation, is_current, is_visible_to_players); visibility eye toggle; delete (blocked with error message if primary and others exist)
-  - **Add Era dialog:** direction select (disabled/locked to ascending for first era), anchor era + anchor year fields (required when non-primary)
+  - **Eras card:** sorted list; each row shows name, year span (e.g. "Yr 1 – Yr 10,000" for ascending, "5,000 BBF – 1 BBF" for descending, "ancient – 1 BBF" when no defined oldest year), Primary/Current/direction/visibility badges
+    - **Sort toggle** (GM only): ArrowUpDown button in card header switches between "Chronological" (by `era_start_absolute` ascending, null = −∞ / oldest possible) and "Manual" (custom order with up/down arrows per row); mode + order persisted to localStorage per campaign
+    - **Edit dialog:** name, abbreviation, `is_current`, `is_visible_to_players`; for non-current eras also shows "Timeline stops at year" field (`era_oldest_year`) with comma-allowed numeric input; saves via `PUT /calendar/eras/{era_id}`
+    - **Visibility eye toggle**; delete blocked with error message if primary era and others still exist
+    - **Deleting an era:** backend nulls `absolute_year` on all linked timeline events via raw SQL before deleting the era; frontend optimistically moves those events to the Unknown Date section
+  - **Add Era dialog:** two-mode selector at top — **Parallel Era** (single timeline, ascending or descending, anchor required for non-primary) and **Before/After Split** (guided setup for a BC/AD-style pair: user names both eras + picks the split point; dialog auto-creates both with correct anchor math); year inputs accept commas
+    - First era is always ascending (direction locked); subsequent eras show mode cards
+    - Anchor era + anchor year fields appear in Parallel mode for non-primary eras
   - **Timeline Events card:** sorted list (backend order); each row is collapsible — shows title, `EraDateList` (year + abbreviation for each era_date), visibility badge; expand reveals description + linked NPCs/locations with add/remove + GM Notes amber card
-  - **`EraDateList`:** renders `{year} {abbreviation}` for each era_date, separated by `·`
+  - **`EraDateList`:** renders `{year} {abbreviation}` for each era_date, separated by `·`; when `era_dates` is empty renders Clock icon + "Unknown date" italic text
+  - **Unknown Date section:** events with no `era_dates` (no era assigned, or era was deleted) appear below all dated events under a Clock-icon divider; GM can edit these events to assign them to an era
   - **GM Notes (timeline events):** amber-tinted "Private" card in the expanded EventDetail section; GM-only textarea with inline Save/Reset that appear when dirty; saves via `PUT /timeline/{event_id}` with `{ gm_notes }`. Stripped from all player-facing responses (list + detail). Never shown in player view.
-  - **Event NPC/location links:** loaded on expand; GM sees add row (select + description + plus button); remove button per link
-  - **Player view:** Add Era / Add Event buttons hidden; visibility toggles hidden; GM-only eras hidden from era list
+  - **Event NPC/location links:** loaded on expand; GM sees add row (select + description + plus button); remove button per link; NPC and location names are clickable links that navigate to their detail pages (`/npcs/:id` and `/locations/:id`); backend returns flat `npc_name`/`location_name` fields (not nested objects)
+  - **Player view:** Add Era / Add Event buttons hidden; visibility toggles hidden; sort toggle hidden; GM-only eras hidden from era list; Unknown Date section visible (shows events with empty era_dates that are `is_visible_to_players`)
   - **`settingsService.js`:** all calendar + timeline API methods; uses same axios pattern + token interceptor as npcService
 
 ### Frontend Not Yet Built
@@ -731,7 +741,7 @@ frontend/src/
 - Admin panels (manage base compendium: races, backgrounds, feats, spells, items, creatures)
 - GM panels (campaign overrides + homebrew content management)
 - Token refresh / expiration handling
-- Dashboard with real data (`/campaigns/:campaignId/dashboard`)
+
 
 ---
 
@@ -773,9 +783,9 @@ backend/tests/
 ├── conftest.py                     # shared fixtures + helpers
 ├── test_auth.py                    # auth module
 ├── test_campaigns.py               # campaign CRUD + member management
-├── test_calendar_timeline.py       # calendar (6+2+3+4+8+7), timeline events (13), event links (6) = 49 tests
+├── test_calendar_timeline.py       # calendar (6+2+3+4+8+8), timeline events (13), event links (6), location filter (5) = 57 tests
                                     #   TestCalendarCRUD(6), TestSeasons(2), TestMonths(3), TestMonthOptionalName(4),
-                                    #   TestWeekdays(7), TestEras(8), TestTimelineEvents(13, incl. gm_notes), TestEventListFieldRoundTrip(8), TestEventLinks(6)
+                                    #   TestWeekdays(7), TestEras(8), TestTimelineEvents(13, incl. gm_notes), TestEventListFieldRoundTrip(8), TestEventLinks(6), TestLocationFilter(5)
 ├── test_characters.py              # character CRUD + visibility
 ├── test_encyclopedia.py            # bestiary + spells + 6 item types (parametrized)
 ├── test_locations.py               # locations, maps, pins, location NPCs, hierarchy, pin→parent persistence (61 tests)
@@ -862,22 +872,34 @@ frontend/src/
 │   └── pages/
 │       ├── Login.jsx
 │       └── Login.test.jsx            # login flow, setUser call, navigation, error states (8 tests)
+├── campaigns/
+│   └── pages/
+│       ├── CampaignSelection.jsx
+│       └── CampaignSelection.test.jsx  # load list, empty state, enter (role=gm/player), navigate to dashboard, create modal (submit+close+reload), logout (11 tests)
+├── characters/
+│   └── pages/
+│       ├── CharacterList.jsx
+│       └── CharacterList.test.jsx    # loading, fetch with campaignId, error, empty state, card render, View Character navigate, GM title+visibility toggles, player title+no toggles (11 tests)
 ├── npcs/
 │   └── pages/
 │       ├── NPCDetail.jsx
-│       ├── NPCDetail.test.jsx        # render smoke test, SelectItem regression, error state, GM vs player visibility (5 tests)
+│       ├── NPCDetail.test.jsx        # render smoke test, SelectItem regression, error state, GM vs player visibility, Timeline Events card (GM empty/events/hidden badge, player hide/show) (10 tests)
 │       ├── NPCList.jsx
 │       └── NPCList.test.jsx          # render, search (includes summary), location filter (unplaced + hierarchy subtree), sort, GM vs player view (10 tests)
 ├── locations/
 │   └── pages/
 │       ├── LocationList.jsx
-│       └── LocationList.test.jsx     # campaignId prop regression (tree/card navigate), GM toolbar show/hide/navigate (5 tests)
+│       ├── LocationList.test.jsx     # campaignId prop regression (tree/card navigate), GM toolbar show/hide/navigate (5 tests)
+│       └── LocationDetail.test.jsx  # Timeline Events card: GM always-visible (empty/events/dates/hidden badge), player preview (no card when empty, shows card when events exist), fetch params (9 tests); uses Tabs mock (all panels visible) + player-view toggle via title button
+├── dashboard/
+│   ├── Dashboard.jsx
+│   └── Dashboard.test.jsx            # loading spinner, 404 no-calendar (player/GM messages), date formatting (named month, Month N fallback), GM vs player gating, Player View toggle hides form, save date calls updateCalendar (9 tests)
 ├── settings/
 │   └── pages/
 │       ├── CalendarTab.jsx
-│       ├── CalendarTab.test.jsx      # 404→landing, GM vs player landing, setup form, management UI, use_weeks toggle, Month N placeholder, seasons (14 tests)
+│       ├── CalendarTab.test.jsx      # 404→landing, GM vs player landing, setup form, management UI, use_weeks toggle, Month N placeholder, seasons, CalendarInfoPanel toggle (16 tests)
 │       ├── TimelineTab.jsx
-│       └── TimelineTab.test.jsx      # no-eras landing (era diagram, prose, setup form), eras-exist (list, badges, GM controls), events (title, era_dates, visibility) (14 tests)
+│       └── TimelineTab.test.jsx      # no-eras landing (era diagram, prose, setup form), eras-exist (list, badges, GM controls), events (title, era_dates, visibility), Unknown Date section (GM + player), linked NPC/location names (npc_name/location_name fields, clickable) (22 tests)
 └── shared/
     └── components/
         ├── ProtectedRoute.jsx

@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from fastapi import HTTPException, status
 from typing import List, Optional
 
@@ -359,11 +360,12 @@ def update_era(db: Session, campaign_id: int, era_id: int, data: EraUpdate, user
             CalendarEra.id != era_id,
         ).update({"is_current": False})
 
-    for field, value in data.model_dump(exclude_unset=True, exclude={"era_oldest_year"}).items():
+    raw = data.model_dump(exclude_unset=True)
+    for field, value in {k: v for k, v in raw.items() if k != "era_oldest_year"}.items():
         setattr(era, field, value)
 
-    if data.era_oldest_year is not None:
-        start, end = _compute_era_range(era.direction, era.epoch_offset, data.era_oldest_year)
+    if "era_oldest_year" in raw:
+        start, end = _compute_era_range(era.direction, era.epoch_offset, raw["era_oldest_year"])
         era.era_start_absolute = start
         era.era_end_absolute = end
 
@@ -385,6 +387,7 @@ def delete_era(db: Session, campaign_id: int, era_id: int, user_id: int) -> None
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Cannot delete the primary era while other eras exist. Delete other eras first.",
             )
+    db.execute(text("UPDATE timeline_events SET absolute_year = NULL WHERE era_id = :era_id"), {"era_id": era_id})
     db.delete(era)
     db.commit()
 

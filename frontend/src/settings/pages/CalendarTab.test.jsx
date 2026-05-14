@@ -160,4 +160,19 @@ describe('CalendarTab — calendar exists', () => {
     await waitFor(() => expect(screen.getByText('General')).toBeTruthy());
     expect(screen.queryByText('Current Date')).toBeNull();
   });
+
+  it('CalendarInfoPanel is collapsed by default — guide content not visible', async () => {
+    renderTab();
+    await waitFor(() => expect(screen.getByText('How does the calendar work?')).toBeTruthy());
+    expect(screen.queryByText(/gives your world its own sense of time/i)).toBeNull();
+  });
+
+  it('clicking CalendarInfoPanel header expands guide content', async () => {
+    renderTab();
+    await waitFor(() => screen.getByText('How does the calendar work?'));
+    fireEvent.click(screen.getByText('How does the calendar work?'));
+    await waitFor(() =>
+      expect(screen.getByText(/gives your world its own sense of time/i)).toBeTruthy()
+    );
+  });
 });

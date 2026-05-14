@@ -4,6 +4,7 @@ import MainLayout from '../../shared/components/layout/MainLayout';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import locationService, { mapImageUrl } from '../locationService';
 import { mapNpcImageUrl } from '../../npcs/npcService';
+import settingsService from '../../settings/settingsService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -16,7 +17,7 @@ import {
   ArrowLeft, Eye, EyeOff, Pencil, Trash2, Upload, Plus,
   MapPin, X, Check, Map, Loader2, ZoomIn, ZoomOut,
   Link, Users, ExternalLink, Move, UserCircle, Shield,
-  Leaf, Wind, Sword, BookOpen, LandPlot, GitBranch,
+  Leaf, Wind, Sword, BookOpen, LandPlot, GitBranch, Clock,
 } from 'lucide-react';
 
 const ZOOM_MIN = 0.25;
@@ -107,6 +108,9 @@ export default function LocationDetail() {
   const [addingNpc, setAddingNpc] = useState(false);
   const [loadingNpcs, setLoadingNpcs] = useState(false);
 
+  // Timeline events linked to this location
+  const [timelineEvents, setTimelineEvents] = useState([]);
+
   useEffect(() => {
     if (!campaignId) { navigate('/campaigns'); return; }
     loadAll(campaignId, locationId);
@@ -116,11 +120,12 @@ export default function LocationDetail() {
     setLoading(true);
     setError('');
     try {
-      const [loc, mapList, allLocs, npcs] = await Promise.all([
+      const [loc, mapList, allLocs, npcs, events] = await Promise.all([
         locationService.getLocation(campaignId, locId),
         locationService.getMaps(campaignId, locId),
         locationService.getLocations(campaignId),
         locationService.getLocationNpcs(campaignId, locId),
+        settingsService.getEventsForLocation(campaignId, locId).catch(() => []),
       ]);
       setLocation(loc);
       setEditForm(EMPTY_EDIT_FORM(loc));
@@ -129,6 +134,7 @@ export default function LocationDetail() {
       setLocationListItem(allLocs.find(l => l.id === lid) || null);
       setAllLocations(allLocs.filter(l => l.id !== lid));
       setLocationNpcs(npcs);
+      setTimelineEvents(events);
       if (mapList.length > 0) await selectMap(campaignId, locId, mapList[0]);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load location');
@@ -779,7 +785,7 @@ export default function LocationDetail() {
                   </Card>
                 )}
 
-                {/* Important NPCs */}
+                {/* Important NPCs — player view */}
                 {visibleNpcs.length > 0 && (
                   <Card>
                     <CardHeader><CardTitle className="text-base flex items-center gap-2"><UserCircle className="w-4 h-4" /> Important NPCs</CardTitle></CardHeader>
@@ -809,6 +815,31 @@ export default function LocationDetail() {
                             </div>
                           );
                         })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Timeline Events — player view */}
+                {timelineEvents.length > 0 && (
+                  <Card>
+                    <CardHeader><CardTitle className="text-base flex items-center gap-2"><Clock className="w-4 h-4" /> Timeline Events</CardTitle></CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {timelineEvents.map(ev => (
+                          <div key={ev.id} className="text-sm space-y-0.5">
+                            <p className="font-medium">{ev.title}</p>
+                            {ev.era_dates.length > 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                {ev.era_dates.map((d, i) => (
+                                  <span key={d.era_id}>{i > 0 && ' · '}{d.year} {d.abbreviation}</span>
+                                ))}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic">Unknown date</p>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
@@ -1052,7 +1083,7 @@ export default function LocationDetail() {
                   );
                 })()}
 
-                {/* Row 5: Important NPCs */}
+                {/* Row 5: Important NPCs — GM view */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -1107,6 +1138,38 @@ export default function LocationDetail() {
                             </div>
                           );
                         })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Row 6: Timeline Events — GM view */}
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><Clock className="w-4 h-4" /> Timeline Events</CardTitle></CardHeader>
+                  <CardContent>
+                    {timelineEvents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No timeline events linked to this location.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {timelineEvents.map(ev => (
+                          <div key={ev.id} className="text-sm space-y-0.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-medium">{ev.title}</p>
+                              {!ev.is_visible_to_players && (
+                                <Badge variant="outline" className="text-xs gap-1 shrink-0"><EyeOff className="w-3 h-3" /> Hidden</Badge>
+                              )}
+                            </div>
+                            {ev.era_dates.length > 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                {ev.era_dates.map((d, i) => (
+                                  <span key={d.era_id}>{i > 0 && ' · '}{d.year} {d.abbreviation}</span>
+                                ))}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic">Unknown date</p>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </CardContent>

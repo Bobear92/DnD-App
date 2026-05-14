@@ -158,6 +158,16 @@ const settingsService = {
   removeEventLocation: async (campaignId, eventId, linkId) => {
     await api.delete(`/${campaignId}/timeline/${eventId}/locations/${linkId}`);
   },
+
+  getEventsForLocation: async (campaignId, locationId) => {
+    const res = await api.get(`/${campaignId}/timeline?location_id=${locationId}`);
+    return res.data;
+  },
+
+  getEventsForNpc: async (campaignId, npcId) => {
+    const res = await api.get(`/${campaignId}/timeline?npc_id=${npcId}`);
+    return res.data;
+  },
 };
 
 export default settingsService;

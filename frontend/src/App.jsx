@@ -29,7 +29,7 @@ function App() {
             <Route path="/campaigns/:campaignId/locations/:locationId" element={<ProtectedRoute><LocationDetail /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/npcs" element={<ProtectedRoute><NPCList /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/npcs/:npcId" element={<ProtectedRoute><NPCDetail /></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/settings" element={<ProtectedRoute><MainLayout><CampaignSettings /></MainLayout></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/campaign-time" element={<ProtectedRoute><MainLayout><CampaignSettings /></MainLayout></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/campaigns" replace />} />
           </Routes>
           </ErrorBoundary>

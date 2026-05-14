@@ -135,13 +135,25 @@ def _event_to_response(db: Session, event: TimelineEvent, is_player: bool):
 
 # ── Timeline event CRUD ───────────────────────────────────────────────────────
 
-def list_events(db: Session, campaign_id: int, user_id: int) -> List[TimelineEvent]:
+def list_events(db: Session, campaign_id: int, user_id: int, location_id: Optional[int] = None, npc_id: Optional[int] = None) -> List[TimelineEvent]:
     member = _require_member(db, campaign_id, user_id)
     is_player = member.role != "gm"
 
     query = db.query(TimelineEvent).filter(TimelineEvent.campaign_id == campaign_id)
     if is_player:
         query = query.filter(TimelineEvent.is_visible_to_players == True)
+    if location_id is not None:
+        query = query.join(
+            TimelineEventLocation,
+            (TimelineEventLocation.event_id == TimelineEvent.id) &
+            (TimelineEventLocation.location_id == location_id),
+        )
+    if npc_id is not None:
+        query = query.join(
+            TimelineEventNPC,
+            (TimelineEventNPC.event_id == TimelineEvent.id) &
+            (TimelineEventNPC.npc_id == npc_id),
+        )
     events = query.order_by(
         TimelineEvent.absolute_year.asc().nullsfirst(),
         TimelineEvent.month_order.asc().nullsfirst(),

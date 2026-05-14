@@ -16,8 +16,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   ArrowLeft, Eye, EyeOff, Upload, Plus, X, Loader2,
   UserCircle, Trash2, MapPin, Music, Heart, BookOpen,
-  Users, ExternalLink, Shield, Scroll,
+  Users, ExternalLink, Shield, Scroll, Clock,
 } from 'lucide-react';
+import settingsService from '../../settings/settingsService';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLES = {
@@ -107,6 +108,7 @@ export default function NPCDetail() {
   const [campaignMembers, setCampaignMembers] = useState([]);
   const [relationships, setRelationships] = useState([]);
   const [playerRelationships, setPlayerRelationships] = useState([]);
+  const [timelineEvents, setTimelineEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [playerView, setPlayerView] = useState(false);
@@ -145,12 +147,13 @@ export default function NPCDetail() {
     setLoading(true);
     setError('');
     try {
-      const [npcData, npcsData, locsData, relsData, playerRelsData] = await Promise.all([
+      const [npcData, npcsData, locsData, relsData, playerRelsData, eventsData] = await Promise.all([
         npcService.getNpc(npcId),
         npcService.getNpcs(campaignId),
         locationService.getLocations(campaignId),
         npcService.getRelationships(npcId),
         isGm ? npcService.getPlayerRelationships(npcId) : Promise.resolve([]),
+        settingsService.getEventsForNpc(campaignId, npcId).catch(() => []),
       ]);
       setNpc(npcData);
       setEditForm(toEditForm(npcData));
@@ -158,6 +161,7 @@ export default function NPCDetail() {
       setAllLocations(locsData);
       setRelationships(relsData);
       setPlayerRelationships(playerRelsData);
+      setTimelineEvents(eventsData);
 
       if (isGm) {
         try {
@@ -841,6 +845,46 @@ export default function NPCDetail() {
                   />
                   <p className="text-xs text-muted-foreground mt-1.5">Freeform JSON — any structure you like.</p>
                   {renderSectionActions(['stats'])}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Timeline Events */}
+            {(viewOnly ? timelineEvents.length > 0 : true) && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Clock className="w-4 h-4" /> Timeline Events
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {timelineEvents.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No timeline events linked to this NPC.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {timelineEvents.map(ev => (
+                        <div key={ev.id} className="text-sm space-y-0.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-medium">{ev.title}</p>
+                            {isGm && !playerView && !ev.is_visible_to_players && (
+                              <Badge variant="outline" className="text-xs gap-1 shrink-0">
+                                <EyeOff className="w-3 h-3" /> Hidden
+                              </Badge>
+                            )}
+                          </div>
+                          {ev.era_dates && ev.era_dates.length > 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              {ev.era_dates.map((d, i) => (
+                                <span key={d.era_id}>{i > 0 && ' · '}{d.year} {d.abbreviation}</span>
+                              ))}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground italic">Unknown date</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

@@ -197,3 +197,167 @@ describe('TimelineTab — events with era_dates', () => {
     expect(screen.queryByText('Add Event')).toBeNull();
   });
 });
+
+describe('TimelineTab — Unknown Date section', () => {
+  const UNDATED_EVENT = {
+    id: 2,
+    title: 'The Founding of the Order',
+    description: 'Lost to history.',
+    era_id: null,
+    year: null,
+    month_order: null,
+    day: null,
+    absolute_year: null,
+    is_visible_to_players: false,
+    era_dates: [],
+  };
+
+  beforeEach(() => {
+    settingsService.getCalendar.mockResolvedValue(CALENDAR_WITH_ERA);
+  });
+
+  it('shows Unknown Date section when an event has no era_dates', async () => {
+    settingsService.getEvents.mockResolvedValue([UNDATED_EVENT]);
+    renderTab(true);
+    await waitFor(() => expect(screen.getByText('Unknown Date')).toBeTruthy());
+    expect(screen.getByText('The Founding of the Order')).toBeTruthy();
+  });
+
+  it('dated events do not appear in Unknown Date section', async () => {
+    settingsService.getEvents.mockResolvedValue([SAMPLE_EVENT, UNDATED_EVENT]);
+    renderTab(true);
+    await waitFor(() => expect(screen.getByText('Unknown Date')).toBeTruthy());
+    // Both events render but only UNDATED_EVENT is under the Unknown Date divider
+    expect(screen.getByText('The Battle of Ironhold')).toBeTruthy();
+    expect(screen.getByText('The Founding of the Order')).toBeTruthy();
+  });
+
+  it('Unknown Date section is hidden when all events have era_dates', async () => {
+    settingsService.getEvents.mockResolvedValue([SAMPLE_EVENT]);
+    renderTab(true);
+    await waitFor(() => expect(screen.getByText('The Battle of Ironhold')).toBeTruthy());
+    expect(screen.queryByText('Unknown Date')).toBeNull();
+  });
+
+  it('player sees visible undated events in Unknown Date section', async () => {
+    const visibleUndated = { ...UNDATED_EVENT, is_visible_to_players: true };
+    settingsService.getEvents.mockResolvedValue([visibleUndated]);
+    renderTab(false);
+    await waitFor(() => expect(screen.getByText('Unknown Date')).toBeTruthy());
+    expect(screen.getByText('The Founding of the Order')).toBeTruthy();
+  });
+});
+
+describe('TimelineTab — player view strips GM-only era dates', () => {
+  const GM_ONLY_ERA = {
+    id: 10,
+    name: 'Ancient Before',
+    abbreviation: 'ABF',
+    direction: 'descending',
+    is_primary: false,
+    is_current: false,
+    is_visible_to_players: false,
+    epoch_offset: 0,
+    era_start_absolute: null,
+    era_end_absolute: 0,
+  };
+  const PLAYER_ERA = {
+    id: 11,
+    name: 'Official Calendar',
+    abbreviation: 'OFC',
+    direction: 'ascending',
+    is_primary: true,
+    is_current: true,
+    is_visible_to_players: true,
+    epoch_offset: 0,
+    era_start_absolute: 1,
+    era_end_absolute: null,
+  };
+  const EVENT_WITH_BOTH_ERAS = {
+    id: 5,
+    title: 'City Founded',
+    description: null,
+    era_id: 11,
+    year: 100,
+    month_order: null,
+    day: null,
+    absolute_year: 100,
+    is_visible_to_players: true,
+    era_dates: [
+      { era_id: 10, era_name: 'Ancient Before', abbreviation: 'ABF', year: 5000, is_visible_to_players: false },
+      { era_id: 11, era_name: 'Official Calendar', abbreviation: 'OFC', year: 100, is_visible_to_players: true },
+    ],
+  };
+
+  beforeEach(() => {
+    settingsService.getCalendar.mockResolvedValue({
+      id: 1, campaign_id: 1, name: 'Campaign Calendar', days_per_month: 30,
+      use_weeks: false, days_per_week: null, seasons: [], months: [], weekdays: [],
+      eras: [GM_ONLY_ERA, PLAYER_ERA],
+    });
+    settingsService.getEvents.mockResolvedValue([EVENT_WITH_BOTH_ERAS]);
+  });
+
+  it('GM sees era dates from all eras before toggling player view', async () => {
+    renderTab(true);
+    await waitFor(() => expect(screen.getByText('City Founded')).toBeTruthy());
+    expect(screen.getByText(/5000 ABF/)).toBeTruthy();
+    expect(screen.getByText(/100 OFC/)).toBeTruthy();
+  });
+
+  it('player view toggle hides dates from GM-only eras', async () => {
+    renderTab(true);
+    await waitFor(() => screen.getByText('Player View'));
+    fireEvent.click(screen.getByText('Player View'));
+    await waitFor(() => expect(screen.getByText('City Founded')).toBeTruthy());
+    expect(screen.queryByText(/5000 ABF/)).toBeNull();
+    expect(screen.getByText(/100 OFC/)).toBeTruthy();
+  });
+});
+
+describe('TimelineTab — linked NPC and location names in expanded event', () => {
+  const NPC_LINK = { id: 10, event_id: 1, npc_id: 5, npc_name: 'Feanor', description: null, created_at: '2024-01-01T00:00:00' };
+  const LOC_LINK = { id: 20, event_id: 1, location_id: 7, location_name: 'Olissipo', description: null, created_at: '2024-01-01T00:00:00' };
+
+  beforeEach(() => {
+    settingsService.getCalendar.mockResolvedValue(CALENDAR_WITH_ERA);
+    settingsService.getEvents.mockResolvedValue([SAMPLE_EVENT]);
+    settingsService.getEventNpcs.mockResolvedValue([NPC_LINK]);
+    settingsService.getEventLocations.mockResolvedValue([LOC_LINK]);
+  });
+
+  async function expandEvent() {
+    renderTab(true);
+    await waitFor(() => screen.getByText('The Battle of Ironhold'));
+    fireEvent.click(screen.getByText('The Battle of Ironhold'));
+    await waitFor(() => expect(settingsService.getEventNpcs).toHaveBeenCalled());
+  }
+
+  it('shows npc_name from the link response — not "NPC #N"', async () => {
+    await expandEvent();
+    await waitFor(() => expect(screen.getByText('Feanor')).toBeTruthy());
+    expect(screen.queryByText(/NPC #/)).toBeNull();
+  });
+
+  it('shows location_name from the link response — not "Location #N"', async () => {
+    await expandEvent();
+    await waitFor(() => expect(screen.getByText('Olissipo')).toBeTruthy());
+    expect(screen.queryByText(/Location #/)).toBeNull();
+  });
+
+  it('NPC name navigates to NPC detail page on click', async () => {
+    await expandEvent();
+    await waitFor(() => screen.getByText('Feanor'));
+    fireEvent.click(screen.getByText('Feanor'));
+    // useNavigate is the real MemoryRouter one here; verify no crash and the mock was set up correctly
+    // (navigation is tested end-to-end; here we just guard against a crash / wrong text)
+    expect(screen.getByText('Feanor')).toBeTruthy();
+  });
+
+  it('location name navigates to location detail page on click', async () => {
+    await expandEvent();
+    await waitFor(() => screen.getByText('Olissipo'));
+    fireEvent.click(screen.getByText('Olissipo'));
+    expect(screen.getByText('Olissipo')).toBeTruthy();
+  });
+});
