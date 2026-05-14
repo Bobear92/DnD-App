@@ -28,11 +28,15 @@ vi.mock('../../locations/locationService', () => ({
 vi.mock('../../settings/settingsService', () => ({
   default: { getEventsForNpc: vi.fn() },
 }));
+vi.mock('../../sessions/sessionService', () => ({
+  default: { listSessions: vi.fn() },
+}));
 
 import { useCampaign } from '../../campaigns/CampaignContext';
 import npcService from '../npcService';
 import locationService from '../../locations/locationService';
 import settingsService from '../../settings/settingsService';
+import sessionService from '../../sessions/sessionService';
 import NPCDetail from './NPCDetail';
 
 const GM_CAMPAIGN = { id: 1, name: 'Test Campaign', userRole: 'gm', created_by: 1 };
@@ -61,6 +65,7 @@ beforeEach(() => {
   npcService.getCampaignDetails.mockResolvedValue({ id: 1, members: [] });
   locationService.getLocations.mockResolvedValue([]);
   settingsService.getEventsForNpc.mockResolvedValue([]);
+  sessionService.listSessions.mockResolvedValue([]);
 });
 
 describe('NPCDetail — render', () => {
@@ -163,5 +168,52 @@ describe('NPCDetail — Timeline Events card', () => {
     await waitFor(() => {
       expect(screen.getByText('The Coronation')).toBeTruthy();
     });
+  });
+});
+
+describe('NPCDetail — Sessions card', () => {
+  it('GM view always shows Sessions card — empty state when no sessions', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    sessionService.listSessions.mockResolvedValue([]);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Sessions')).toBeTruthy());
+    expect(screen.getByText('No session notes linked to this NPC.')).toBeTruthy();
+  });
+
+  it('GM view shows session titles with number prefix', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    sessionService.listSessions.mockResolvedValue([
+      { id: 10, session_number: 18, title: 'Orc Princeling', is_visible_to_players: true, real_world_date: '2024-01-21' },
+    ]);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText(/Orc Princeling/)).toBeTruthy());
+    expect(screen.getByText(/#18/)).toBeTruthy();
+  });
+
+  it('GM view shows Hidden badge for non-visible sessions', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    sessionService.listSessions.mockResolvedValue([
+      { id: 11, session_number: null, title: 'Hidden Session', is_visible_to_players: false, real_world_date: null },
+    ]);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Hidden Session')).toBeTruthy());
+    expect(screen.getAllByText('Hidden').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('player view hides Sessions card when no sessions', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    sessionService.listSessions.mockResolvedValue([]);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Prince Thep')).toBeTruthy());
+    expect(screen.queryByText('Sessions')).toBeNull();
+  });
+
+  it('player view shows Sessions card when sessions exist', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    sessionService.listSessions.mockResolvedValue([
+      { id: 10, session_number: 18, title: 'Orc Princeling', is_visible_to_players: true, real_world_date: null },
+    ]);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText(/Orc Princeling/)).toBeTruthy());
   });
 });

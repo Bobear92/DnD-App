@@ -5,6 +5,7 @@ import { useCampaign } from '../../campaigns/CampaignContext';
 import locationService, { mapImageUrl } from '../locationService';
 import { mapNpcImageUrl } from '../../npcs/npcService';
 import settingsService from '../../settings/settingsService';
+import sessionService from '../../sessions/sessionService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -17,7 +18,7 @@ import {
   ArrowLeft, Eye, EyeOff, Pencil, Trash2, Upload, Plus,
   MapPin, X, Check, Map, Loader2, ZoomIn, ZoomOut,
   Link, Users, ExternalLink, Move, UserCircle, Shield,
-  Leaf, Wind, Sword, BookOpen, LandPlot, GitBranch, Clock,
+  Leaf, Wind, Sword, BookOpen, LandPlot, GitBranch, Clock, Scroll,
 } from 'lucide-react';
 
 const ZOOM_MIN = 0.25;
@@ -111,6 +112,9 @@ export default function LocationDetail() {
   // Timeline events linked to this location
   const [timelineEvents, setTimelineEvents] = useState([]);
 
+  // Sessions linked to this location
+  const [sessions, setSessions] = useState([]);
+
   useEffect(() => {
     if (!campaignId) { navigate('/campaigns'); return; }
     loadAll(campaignId, locationId);
@@ -120,12 +124,13 @@ export default function LocationDetail() {
     setLoading(true);
     setError('');
     try {
-      const [loc, mapList, allLocs, npcs, events] = await Promise.all([
+      const [loc, mapList, allLocs, npcs, events, sessionsData] = await Promise.all([
         locationService.getLocation(campaignId, locId),
         locationService.getMaps(campaignId, locId),
         locationService.getLocations(campaignId),
         locationService.getLocationNpcs(campaignId, locId),
         settingsService.getEventsForLocation(campaignId, locId).catch(() => []),
+        sessionService.listSessions(campaignId, { location_id: locId }).catch(() => []),
       ]);
       setLocation(loc);
       setEditForm(EMPTY_EDIT_FORM(loc));
@@ -135,6 +140,7 @@ export default function LocationDetail() {
       setAllLocations(allLocs.filter(l => l.id !== lid));
       setLocationNpcs(npcs);
       setTimelineEvents(events);
+      setSessions(sessionsData);
       if (mapList.length > 0) await selectMap(campaignId, locId, mapList[0]);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load location');
@@ -844,6 +850,30 @@ export default function LocationDetail() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Sessions — player view */}
+                {sessions.length > 0 && (
+                  <Card>
+                    <CardHeader><CardTitle className="text-base flex items-center gap-2"><Scroll className="w-4 h-4" /> Sessions</CardTitle></CardHeader>
+                    <CardContent>
+                      <div className="space-y-1">
+                        {sessions.map(s => (
+                          <div key={s.id} className="flex items-center justify-between gap-2 text-sm">
+                            <button
+                              className="text-left hover:underline font-medium"
+                              onClick={() => navigate(`/campaigns/${campaignId}/sessions/${s.id}`)}
+                            >
+                              {s.session_number != null ? `#${s.session_number} — ` : ''}{s.title}
+                            </button>
+                            {s.real_world_date && (
+                              <span className="text-xs text-muted-foreground shrink-0">{s.real_world_date}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             ) : (
               /* ── GM view: always editable ── */
@@ -1168,6 +1198,37 @@ export default function LocationDetail() {
                             ) : (
                               <p className="text-xs text-muted-foreground italic">Unknown date</p>
                             )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Row 7: Sessions — GM view */}
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><Scroll className="w-4 h-4" /> Sessions</CardTitle></CardHeader>
+                  <CardContent>
+                    {sessions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No session notes linked to this location.</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {sessions.map(s => (
+                          <div key={s.id} className="flex items-center justify-between gap-2 text-sm">
+                            <button
+                              className="text-left hover:underline font-medium"
+                              onClick={() => navigate(`/campaigns/${campaignId}/sessions/${s.id}`)}
+                            >
+                              {s.session_number != null ? `#${s.session_number} — ` : ''}{s.title}
+                            </button>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {s.real_world_date && (
+                                <span className="text-xs text-muted-foreground">{s.real_world_date}</span>
+                              )}
+                              {!s.is_visible_to_players && (
+                                <Badge variant="outline" className="text-xs gap-1"><EyeOff className="w-3 h-3" /> Hidden</Badge>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>

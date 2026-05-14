@@ -4,6 +4,7 @@ import MainLayout from '../../shared/components/layout/MainLayout';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import npcService, { mapNpcImageUrl } from '../npcService';
 import locationService from '../../locations/locationService';
+import sessionService from '../../sessions/sessionService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -109,6 +110,7 @@ export default function NPCDetail() {
   const [relationships, setRelationships] = useState([]);
   const [playerRelationships, setPlayerRelationships] = useState([]);
   const [timelineEvents, setTimelineEvents] = useState([]);
+  const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [playerView, setPlayerView] = useState(false);
@@ -147,13 +149,14 @@ export default function NPCDetail() {
     setLoading(true);
     setError('');
     try {
-      const [npcData, npcsData, locsData, relsData, playerRelsData, eventsData] = await Promise.all([
+      const [npcData, npcsData, locsData, relsData, playerRelsData, eventsData, sessionsData] = await Promise.all([
         npcService.getNpc(npcId),
         npcService.getNpcs(campaignId),
         locationService.getLocations(campaignId),
         npcService.getRelationships(npcId),
         isGm ? npcService.getPlayerRelationships(npcId) : Promise.resolve([]),
         settingsService.getEventsForNpc(campaignId, npcId).catch(() => []),
+        sessionService.listSessions(campaignId, { npc_id: npcId }).catch(() => []),
       ]);
       setNpc(npcData);
       setEditForm(toEditForm(npcData));
@@ -162,6 +165,7 @@ export default function NPCDetail() {
       setRelationships(relsData);
       setPlayerRelationships(playerRelsData);
       setTimelineEvents(eventsData);
+      setSessions(sessionsData);
 
       if (isGm) {
         try {
@@ -880,6 +884,45 @@ export default function NPCDetail() {
                             </p>
                           ) : (
                             <p className="text-xs text-muted-foreground italic">Unknown date</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Sessions */}
+            {(viewOnly ? sessions.length > 0 : true) && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Scroll className="w-4 h-4" /> Sessions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {sessions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No session notes linked to this NPC.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {sessions.map(s => (
+                        <div key={s.id} className="text-sm space-y-0.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <button
+                              className="font-medium text-left hover:underline text-primary/90"
+                              onClick={() => navigate(`/campaigns/${campaignId}/sessions/${s.id}`)}
+                            >
+                              {s.session_number != null ? `#${s.session_number} — ` : ''}{s.title}
+                            </button>
+                            {isGm && !playerView && !s.is_visible_to_players && (
+                              <Badge variant="outline" className="text-xs gap-1 shrink-0">
+                                <EyeOff className="w-3 h-3" /> Hidden
+                              </Badge>
+                            )}
+                          </div>
+                          {s.real_world_date && (
+                            <p className="text-xs text-muted-foreground">{s.real_world_date}</p>
                           )}
                         </div>
                       ))}

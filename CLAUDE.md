@@ -82,12 +82,14 @@ backend/
 │   │       ├── npcs/            # NPC management — routes/service/models/schemas/storage
 │   │       ├── locations/       # Locations, maps, pins, NPC links — routes/service/models/schemas/storage
 │   │       ├── calendar/        # Per-campaign calendar: seasons, months, eras — routes/service/models/schemas
-│   │       └── timeline/        # Timeline events with NPC/location links — routes/service/models/schemas
+│   │       ├── timeline/        # Timeline events with NPC/location links — routes/service/models/schemas
+│   │       └── session_notes/   # Session notes + 4 junction tables + image upload — routes/service/models/schemas/storage
 │   └── tools/
 │       └── loot_tables/         # Loot table generation (system + campaign)
 ├── uploads/
 │   ├── maps/                    # Map images: uploads/maps/{campaign_id}/{location_id}/uuid.ext
-│   └── npcs/                    # NPC portraits: uploads/npcs/{campaign_id}/{npc_id}/uuid.ext
+│   ├── npcs/                    # NPC portraits: uploads/npcs/{campaign_id}/{npc_id}/uuid.ext
+│   └── sessions/                # Session images: uploads/sessions/{campaign_id}/{session_id}/uuid.ext
 ├── shared/
 │   ├── encyclopedia/
 │   │   ├── bestiary/            # Creatures/monsters
@@ -153,7 +155,7 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 
 ---
 
-## Current Database Schema (28 Tables)
+## Current Database Schema (33 Tables)
 
 ```sql
 -- Core
@@ -322,6 +324,43 @@ timeline_event_locations             ← junction: location linked to a timeline
   id, event_id (FK→timeline_events CASCADE), location_id (FK→locations CASCADE),
   description, created_at
   UNIQUE(event_id, location_id)
+
+-- GM Campaign Session Notes
+session_notes
+  id, campaign_id (FK→campaigns CASCADE),
+  session_number (nullable integer),
+  title,
+  real_world_date (Date, nullable),           ← real-world date the session was played
+  era_id (FK→calendar_eras SET NULL, nullable),
+  year, month_order, day (all nullable),
+  time_of_day (ENUM: morning/afternoon/evening/night/dawn, nullable),
+  absolute_year (computed from era + year; used for era_dates display),
+  summary,                                     ← short blurb for session list card
+  content (Text, nullable),                    ← full Markdown prose ("chapter of a book")
+  gm_notes (Text, nullable),                   ← GM only; never returned to players
+  music_url (nullable),
+  is_visible_to_players (boolean, default false),
+  created_at, updated_at
+
+session_note_npcs                    ← junction: NPC featured in a session
+  id, session_id (FK→session_notes CASCADE), npc_id (FK→npcs CASCADE),
+  description, created_at
+  UNIQUE(session_id, npc_id)
+
+session_note_locations               ← junction: location visited in a session
+  id, session_id (FK→session_notes CASCADE), location_id (FK→locations CASCADE),
+  description, created_at
+  UNIQUE(session_id, location_id)
+
+session_note_events                  ← junction: timeline event linked to a session
+  id, session_id (FK→session_notes CASCADE), event_id (FK→timeline_events CASCADE),
+  description, created_at
+  UNIQUE(session_id, event_id)
+
+session_note_characters              ← junction: character present in a session
+  id, session_id (FK→session_notes CASCADE), character_id (FK→characters CASCADE),
+  description, created_at
+  UNIQUE(session_id, character_id)
 
 loot_tables
   id, name, description, owner_type (string: 'system'/'campaign'),
@@ -562,6 +601,32 @@ Non-primary eras require `anchor_era_id` + `anchor_era_year` for epoch offset ma
 Events sorted by `absolute_year ASC NULLS FIRST, month_order ASC, day ASC`.
 Each event response includes `era_dates: List[EraDate]` — the event's date expressed in every era whose range covers the event's `absolute_year`. Hidden eras are excluded for players.
 
+### Session Notes (per-campaign)
+| Method | Endpoint | Auth Required |
+|--------|----------|---------------|
+| POST | /api/gm/campaigns/{id}/sessions | Yes (GM) |
+| GET | /api/gm/campaigns/{id}/sessions | Yes (member; players see only visible); accepts `?npc_id=N`, `?location_id=N`, `?event_id=N` |
+| GET | /api/gm/campaigns/{id}/sessions/{session_id} | Yes (member; players blocked if hidden) |
+| PUT | /api/gm/campaigns/{id}/sessions/{session_id} | Yes (GM) |
+| DELETE | /api/gm/campaigns/{id}/sessions/{session_id} | Yes (GM) |
+| PATCH | /api/gm/campaigns/{id}/sessions/{session_id}/visibility | Yes (GM) |
+| POST | /api/gm/campaigns/{id}/sessions/{session_id}/image | Yes (GM, multipart) |
+| DELETE | /api/gm/campaigns/{id}/sessions/{session_id}/image | Yes (GM) |
+| GET/POST | /api/gm/campaigns/{id}/sessions/{session_id}/npcs | Yes (member / GM) |
+| DELETE | /api/gm/campaigns/{id}/sessions/{session_id}/npcs/{link_id} | Yes (GM) |
+| GET/POST | /api/gm/campaigns/{id}/sessions/{session_id}/locations | Yes (member / GM) |
+| DELETE | /api/gm/campaigns/{id}/sessions/{session_id}/locations/{link_id} | Yes (GM) |
+| GET/POST | /api/gm/campaigns/{id}/sessions/{session_id}/events | Yes (member / GM) |
+| DELETE | /api/gm/campaigns/{id}/sessions/{session_id}/events/{link_id} | Yes (GM) |
+| GET/POST | /api/gm/campaigns/{id}/sessions/{session_id}/characters | Yes (member / GM) |
+| DELETE | /api/gm/campaigns/{id}/sessions/{session_id}/characters/{link_id} | Yes (GM) |
+
+Sessions ordered by `session_number ASC NULLS LAST, real_world_date ASC, id ASC`.
+Each session response includes `era_dates: List[EraDate]` (same pattern as timeline events).
+`gm_notes` and `content` are excluded from `SessionNoteListItem` (not just nulled) — list view is lightweight.
+`gm_notes` is always stripped from session responses for players.
+Image upload stores to `uploads/sessions/{campaign_id}/{session_id}/uuid.ext`, served via StaticFiles.
+
 ---
 
 ## Frontend UI Standards (ALWAYS FOLLOW)
@@ -629,6 +694,11 @@ frontend/src/
 │   └── pages/
 │       ├── LocationList.jsx     # Campaign locations grid + create dialog + player view toggle ✅
 │       └── LocationDetail.jsx   # Maps tab (upload, zoom, pins, player view) + Info tab ✅
+├── sessions/
+│   ├── sessionService.js        # Full API client: sessions CRUD, visibility, image upload, 4 link CRUD sets
+│   └── pages/
+│       ├── SessionList.jsx      # Session cards grid + create dialog + eye/delete controls + player view ✅
+│       └── SessionDetail.jsx    # Markdown editor + image upload at cursor + metadata card + GM Notes + 4 LinkCards ✅
 ├── dashboard/
 │   ├── Dashboard.jsx            # Current date display (loads calendar API) + GM date-set form ✅
 │   └── Dashboard.test.jsx       # loading, 404 no-calendar, date formatting, GM/player gating, save date (9 tests) ✅
@@ -666,6 +736,8 @@ frontend/src/
 | `/campaigns/:campaignId/npcs` | NPCList | ✅ Functional |
 | `/campaigns/:campaignId/npcs/:npcId` | NPCDetail | ✅ Functional |
 | `/campaigns/:campaignId/campaign-time` | CampaignSettings | ✅ Functional (GM only: Calendar + Timeline tabs) |
+| `/campaigns/:campaignId/sessions` | SessionList | ✅ Functional |
+| `/campaigns/:campaignId/sessions/:sessionId` | SessionDetail | ✅ Functional |
 | `/campaigns/:campaignId/characters/create` | — | ❌ Not built |
 | `/campaigns/:campaignId/characters/:id` | — | ❌ Not built |
 
@@ -680,6 +752,7 @@ frontend/src/
 - **Info tab — Player view:** read-only; empty sections hidden entirely; GM Notes never shown; NPC cards only show NPCs where `is_visible_to_players=true` on the NPC
 - **Important NPCs:** two sources merged in the NPC list response — `source="linked"` (manual `location_npcs` junction, has role description) and `source="last_seen"` (NPC's `last_known_location_id` points here, shows `last_seen_notes`). Deduped: if an NPC is both, `linked` wins. NPC cards show portrait thumbnail (left strip, 64px wide, if `image_path` exists), name, race, occupation, role/last_seen description, and NPC `summary`. Cards are clickable and navigate to `/campaigns/:campaignId/npcs/:npcId`. GM remove button uses `stopPropagation` so it doesn't trigger navigation.
 - **Timeline Events card (Info tab):** loaded on page mount via `GET /timeline?location_id=N`; shown in both GM and player views; GM view always shows the card (empty state: "No timeline events linked") with visibility badges for hidden events; player view shows only when events exist (visible-only events); each row shows title + era dates (`year abbreviation` separated by `·`) or "Unknown date" italic; events are managed from the Campaign Time page
+- **Sessions card (Info tab):** loaded on mount via `GET /sessions?location_id=N`; GM view always shows (empty state: "No session notes linked to this location.") with Hidden badges; player view shows only when sessions exist; each row shows session title + real_world_date + Hidden badge (GM); clickable → SessionDetail
 - **Hierarchy card (GM only):** set top-level, set parent, mark as unknown; child list shows manually-set children (link icon) and pin-derived children (pin icon + "via map pin" label)
 - **LocationList — GM view:** three sections — World Hierarchy tree (from top-level), Unsorted (staging area, locations not placed anywhere), Unknown Locations. When the top-level location has maps, a GM toolbar row appears above the map with an "Edit [name]" button that navigates to that location's `LocationDetail` page for full editing (info, maps, pins).
 - **LocationList — Player view:** toggle Hierarchy / A–Z; search bar; Unknown Locations section at bottom of hierarchy view
@@ -701,7 +774,8 @@ frontend/src/
 - **NPCDetail core fields:** name, status, race, occupation, alignment, visibility checkbox — inline editing in portrait row; per-section Save/Reset appear only when dirty
 - **Info tab sections:** Physical (age, gender, height, weight, appearance) | Personality (voice, traits, ideals, bonds, flaws, languages as removable tags) | Narrative (summary, description, backstory — labeled "Player visible") | GM Notes (amber-tinted "Private" card, GM only) | Location & Media (last known location select, last-seen notes, theme music URL with clickable link) | Combat Stats (freeform JSON textarea, GM only) | Timeline Events (loaded on mount via `GET /timeline?npc_id=N`)
 - **Timeline Events card (Info tab — NPCDetail):** GM view always shows the card (empty state: "No timeline events linked to this NPC.") with Hidden badges for non-visible events; player view shows only when events exist; each row shows title + era dates (`year abbreviation` separated by `·`) or "Unknown date" italic; events are managed from the Campaign Time page
-- **Player view:** all GM-only cards (GM Notes, Combat Stats, Player Relationships tab) hidden; all fields read-only; empty sections suppressed entirely; Timeline Events card hidden when no events
+- **Sessions card (Info tab — NPCDetail):** loaded on mount via `GET /sessions?npc_id=N`; GM view always shows (empty state: "No session notes linked to this NPC.") with Hidden badges; player view shows only when sessions exist; each row shows `#N — Title` (or just title if no number) + real_world_date; clickable → SessionDetail
+- **Player view:** all GM-only cards (GM Notes, Combat Stats, Player Relationships tab) hidden; all fields read-only; empty sections suppressed entirely; Timeline Events and Sessions cards hidden when no events/sessions
 - **Relationships tab:** NPC-to-NPC list; related NPC name is a clickable link to their detail page; GM can add (select NPC + type + description) and delete
 - **Player Relationships tab (GM only):** NPC-to-player list; populated from campaign members (players only); GM can add and delete
 - **Language tags:** add via input + Enter or button, remove with × on each tag; stored as JSONB array
@@ -731,8 +805,21 @@ frontend/src/
   - **Unknown Date section:** events with no `era_dates` (no era assigned, or era was deleted) appear below all dated events under a Clock-icon divider; GM can edit these events to assign them to an era
   - **GM Notes (timeline events):** amber-tinted "Private" card in the expanded EventDetail section; GM-only textarea with inline Save/Reset that appear when dirty; saves via `PUT /timeline/{event_id}` with `{ gm_notes }`. Stripped from all player-facing responses (list + detail). Never shown in player view.
   - **Event NPC/location links:** loaded on expand; GM sees add row (select + description + plus button); remove button per link; NPC and location names are clickable links that navigate to their detail pages (`/npcs/:id` and `/locations/:id`); backend returns flat `npc_name`/`location_name` fields (not nested objects)
+  - **Sessions section (EventDetail):** loaded on expand via `GET /sessions?event_id=N`; read-only list of sessions linked to this event; GM view always shows (empty state: "No sessions linked.") with Hidden badges; player view shows only when sessions exist; session titles are clickable → SessionDetail; sessions are linked from the SessionDetail page (not from here)
   - **Player view:** Add Era / Add Event buttons hidden; visibility toggles hidden; sort toggle hidden; GM-only eras hidden from era list; Unknown Date section visible (shows events with empty era_dates that are `is_visible_to_players`)
   - **`settingsService.js`:** all calendar + timeline API methods; uses same axios pattern + token interceptor as npcService
+
+### Sessions UI — Key Behaviours
+- **SessionList grid:** session number badge, title, real-world date, era dates (from `era_dates` list), time-of-day badge, summary, Hidden badge (GM view); GM eye/delete controls on hover
+- **Create dialog:** session_number (optional), real_world_date (date picker), title (required), summary, is_visible_to_players → navigates to SessionDetail on create
+- **SessionDetail header:** session number + title, real-world date, in-world era dates, time-of-day badge, music URL link, eye toggle (GM)
+- **Metadata card (GM only):** session_number, real_world_date, time_of_day (Select with `__none__` sentinel), music_url, summary, is_visible_to_players — Save/Reset on dirty
+- **Content card:** Write/Preview toggle; Markdown textarea (with `ref` for cursor tracking) for GM; read-only ReactMarkdown for players; Image Upload button (GM) inserts `\n![](http://localhost:8000/{image_url})\n` at cursor
+- **GM Notes card (GM only):** amber border/bg "Private" card with Save/Reset when dirty; always stripped from player responses
+- **Linked content (bottom grid):** Characters Present | NPCs Featured | Locations Visited | Timeline Events — each a `LinkCard` with + button (GM), Select + description input + Add/Cancel; read-only list for players; NPC/location names are `<Link>` components to their detail pages
+- **Sessions listed in Sidebar** for both GM and player (`BookOpen` icon, "Session Notes" label)
+- **`react-markdown`** is installed for Markdown rendering in content card
+- **`mapSessionImageUrl(path)`** helper in `sessionService.js` → `http://localhost:8000/${path}`
 
 ### Frontend Not Yet Built
 - Character creation and detail pages (`/campaigns/:campaignId/characters/create`, `/:id`)
@@ -791,8 +878,11 @@ backend/tests/
 ├── test_locations.py               # locations, maps, pins, location NPCs, hierarchy, pin→parent persistence (61 tests)
 ├── test_loot_tables.py             # loot tables (system/campaign ownership)
 ├── test_npcs.py                    # NPC CRUD, visibility, gm_notes stripping, image, relationships, player-relationships, last_known_location (36 tests)
+├── test_session_notes.py           # session CRUD (10), list (4), visibility (2), gm_notes (3), fields (2), list-field round-trip (3), filters (?npc_id/?location_id/?event_id) (3), NPC links (5), location links (3), event links (3), character links (4) = 42 tests
 └── test_races_backgrounds_feats.py # admin-only compendium (parametrized)
 ```
+
+Modules covered by `TestXxxListFieldRoundTrip`: `timeline_events`, `locations`, `characters`, `session_notes`. NPCs exempt (use same response schema for list + detail).
 
 ### Required coverage for each new module
 
@@ -883,14 +973,20 @@ frontend/src/
 ├── npcs/
 │   └── pages/
 │       ├── NPCDetail.jsx
-│       ├── NPCDetail.test.jsx        # render smoke test, SelectItem regression, error state, GM vs player visibility, Timeline Events card (GM empty/events/hidden badge, player hide/show) (10 tests)
+│       ├── NPCDetail.test.jsx        # render smoke test, SelectItem regression, error state, GM vs player visibility, Timeline Events card (GM empty/events/hidden badge, player hide/show), Sessions card (GM empty/sessions/hidden badge, player hide/show) (15 tests)
 │       ├── NPCList.jsx
 │       └── NPCList.test.jsx          # render, search (includes summary), location filter (unplaced + hierarchy subtree), sort, GM vs player view (10 tests)
 ├── locations/
 │   └── pages/
 │       ├── LocationList.jsx
 │       ├── LocationList.test.jsx     # campaignId prop regression (tree/card navigate), GM toolbar show/hide/navigate (5 tests)
-│       └── LocationDetail.test.jsx  # Timeline Events card: GM always-visible (empty/events/dates/hidden badge), player preview (no card when empty, shows card when events exist), fetch params (9 tests); uses Tabs mock (all panels visible) + player-view toggle via title button
+│       └── LocationDetail.test.jsx  # Timeline Events card (9 tests) + Sessions card (7 tests); GM always-visible/empty/events/dates/hidden, player preview (no card when empty, shows card when exists), fetch params; uses Tabs mock + player-view toggle via title button
+├── sessions/
+│   └── pages/
+│       ├── SessionList.jsx
+│       ├── SessionList.test.jsx      # loading, empty state, card render (number, date, era dates, time of day, Hidden badge), GM New Session button/create/navigate, eye toggle, delete dialog, player view (no controls) (14 tests)
+│       ├── SessionDetail.jsx
+│       └── SessionDetail.test.jsx   # loading/error, header (title/date/era/time/Hidden), GM vs player view (Details card, GM Notes, Upload Image, content), updateSession, link cards, SelectItem regression (null time_of_day) (17 tests)
 ├── dashboard/
 │   ├── Dashboard.jsx
 │   └── Dashboard.test.jsx            # loading spinner, 404 no-calendar (player/GM messages), date formatting (named month, Month N fallback), GM vs player gating, Player View toggle hides form, save date calls updateCalendar (9 tests)
@@ -899,7 +995,7 @@ frontend/src/
 │       ├── CalendarTab.jsx
 │       ├── CalendarTab.test.jsx      # 404→landing, GM vs player landing, setup form, management UI, use_weeks toggle, Month N placeholder, seasons, CalendarInfoPanel toggle (16 tests)
 │       ├── TimelineTab.jsx
-│       └── TimelineTab.test.jsx      # no-eras landing (era diagram, prose, setup form), eras-exist (list, badges, GM controls), events (title, era_dates, visibility), Unknown Date section (GM + player), linked NPC/location names (npc_name/location_name fields, clickable) (22 tests)
+│       └── TimelineTab.test.jsx      # no-eras landing (era diagram, prose, setup form), eras-exist (list, badges, GM controls), events (title, era_dates, visibility), Unknown Date section (GM + player), linked NPC/location names (npc_name/location_name fields, clickable), Sessions section in expanded event (GM empty/sessions/hidden badge, player hide/show) (27 tests)
 └── shared/
     └── components/
         ├── ProtectedRoute.jsx
@@ -1009,7 +1105,6 @@ SECRET_KEY=your-secret-key-change-this-in-production
 - Content copy/export between a GM's campaigns not yet implemented
 
 ### Backend — Features Not Yet Started
-- `gm/campaigns/campaign_tools/session_notes/` — Session notes (NPC session attendance will be a junction table here)
 - Classes system (like races/backgrounds but for character classes)
 
 ### Frontend

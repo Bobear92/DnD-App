@@ -35,10 +35,14 @@ vi.mock('../../npcs/npcService', () => ({
 vi.mock('../../settings/settingsService', () => ({
   default: { getEventsForLocation: vi.fn() },
 }));
+vi.mock('../../sessions/sessionService', () => ({
+  default: { listSessions: vi.fn() },
+}));
 
 import { useCampaign } from '../../campaigns/CampaignContext';
 import locationService from '../locationService';
 import settingsService from '../../settings/settingsService';
+import sessionService from '../../sessions/sessionService';
 import LocationDetail from './LocationDetail';
 
 const GM_CAMPAIGN = { id: 42, name: 'Test Campaign', userRole: 'gm', created_by: 1 };
@@ -90,6 +94,7 @@ beforeEach(() => {
   locationService.getLocations.mockResolvedValue([BASE_LOCATION]);
   locationService.getLocationNpcs.mockResolvedValue([]);
   settingsService.getEventsForLocation.mockResolvedValue([]);
+  sessionService.listSessions.mockResolvedValue([]);
 });
 
 describe('LocationDetail — Timeline Events (GM view)', () => {
@@ -165,5 +170,65 @@ describe('LocationDetail — Timeline Events (player preview mode)', () => {
     await enterPlayerView();
     await waitFor(() => expect(screen.getByText('Lost in Time')).toBeTruthy());
     expect(screen.getAllByText('Unknown date').length).toBeGreaterThan(0);
+  });
+});
+
+describe('LocationDetail — Sessions card (GM view)', () => {
+  beforeEach(() => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+  });
+
+  it('shows "No session notes linked" when no sessions', async () => {
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('No session notes linked to this location.')).toBeTruthy());
+  });
+
+  it('shows session title when a session is linked', async () => {
+    sessionService.listSessions.mockResolvedValue([
+      { id: 10, session_number: 18, title: 'Orc Princeling', is_visible_to_players: true, real_world_date: '2024-01-21' },
+    ]);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText(/Orc Princeling/)).toBeTruthy());
+  });
+
+  it('shows Hidden badge for sessions not visible to players', async () => {
+    sessionService.listSessions.mockResolvedValue([
+      { id: 11, session_number: null, title: 'Hidden Session', is_visible_to_players: false, real_world_date: null },
+    ]);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Hidden Session')).toBeTruthy());
+    expect(screen.getByText('Hidden')).toBeTruthy();
+  });
+
+  it('fetches sessions using correct campaignId and location_id param', async () => {
+    renderDetail();
+    await waitFor(() => expect(sessionService.listSessions).toHaveBeenCalledWith('42', { location_id: '7' }));
+  });
+});
+
+describe('LocationDetail — Sessions card (player preview)', () => {
+  beforeEach(() => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+  });
+
+  async function enterPlayerView() {
+    await waitFor(() => expect(screen.getByTitle('Preview what players see')).toBeTruthy());
+    fireEvent.click(screen.getByTitle('Preview what players see'));
+  }
+
+  it('hides Sessions card in player preview when no sessions', async () => {
+    renderDetail();
+    await enterPlayerView();
+    await waitFor(() => expect(screen.getByText(/Previewing as player/i)).toBeTruthy());
+    expect(screen.queryByText('Sessions')).toBeNull();
+  });
+
+  it('shows Sessions card in player preview when sessions exist', async () => {
+    sessionService.listSessions.mockResolvedValue([
+      { id: 10, session_number: null, title: 'The Arrival', is_visible_to_players: true, real_world_date: null },
+    ]);
+    renderDetail();
+    await enterPlayerView();
+    await waitFor(() => expect(screen.getByText('The Arrival')).toBeTruthy());
   });
 });

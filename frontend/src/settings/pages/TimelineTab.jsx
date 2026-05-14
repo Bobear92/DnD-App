@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import settingsService from '../settingsService';
 import npcService from '../../npcs/npcService';
 import locationService from '../../locations/locationService';
+import sessionService from '../../sessions/sessionService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -11,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Trash2, Clock, ChevronDown, ChevronRight, Eye, EyeOff, Users, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Loader2, Plus, Trash2, Clock, ChevronDown, ChevronRight, Eye, EyeOff, Users, ArrowUp, ArrowDown, ArrowUpDown, Scroll } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ── Era diagram ───────────────────────────────────────────────────────────────
@@ -537,6 +538,7 @@ function EventDetail({ event, campaignId, isGm, npcs, locations, onUpdate }) {
   const navigate = useNavigate();
   const [linkedNpcs, setLinkedNpcs] = useState([]);
   const [linkedLocations, setLinkedLocations] = useState([]);
+  const [linkedSessions, setLinkedSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [addNpcId, setAddNpcId] = useState('__none__');
   const [addNpcDesc, setAddNpcDesc] = useState('');
@@ -554,12 +556,14 @@ function EventDetail({ event, campaignId, isGm, npcs, locations, onUpdate }) {
     const load = async () => {
       setLoading(true);
       try {
-        const [n, l] = await Promise.all([
+        const [n, l, s] = await Promise.all([
           settingsService.getEventNpcs(campaignId, event.id),
           settingsService.getEventLocations(campaignId, event.id),
+          sessionService.listSessions(campaignId, { event_id: event.id }).catch(() => []),
         ]);
         setLinkedNpcs(n);
         setLinkedLocations(l);
+        setLinkedSessions(s);
       } catch {
         setError('Failed to load linked content');
       } finally {
@@ -743,6 +747,39 @@ function EventDetail({ event, campaignId, isGm, npcs, locations, onUpdate }) {
               <Button size="sm" className="h-7" onClick={handleAddLocation} disabled={savingLoc || addLocId === '__none__'}>
                 {savingLoc ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
               </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sessions */}
+      {(isGm || linkedSessions.length > 0) && (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1">
+            <Scroll className="w-3 h-3" /> Sessions
+          </p>
+          {linkedSessions.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No sessions linked.</p>
+          ) : (
+            <div className="space-y-1">
+              {linkedSessions.map(s => (
+                <div key={s.id} className="flex items-center justify-between gap-2 text-sm">
+                  <button
+                    className="flex-1 text-left hover:underline text-primary/90"
+                    onClick={() => navigate(`/campaigns/${campaignId}/sessions/${s.id}`)}
+                  >
+                    {s.session_number != null ? `#${s.session_number} — ` : ''}{s.title}
+                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {s.real_world_date && (
+                      <span className="text-xs text-muted-foreground">{s.real_world_date}</span>
+                    )}
+                    {isGm && !s.is_visible_to_players && (
+                      <Badge variant="outline" className="text-xs gap-1"><EyeOff className="w-3 h-3" /> Hidden</Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

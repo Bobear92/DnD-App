@@ -2,7 +2,7 @@ import { NavLink, useParams } from 'react-router-dom';
 import { useCampaign } from '../../../campaigns/CampaignContext';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard, Users, Drama, Map, Clock, Menu, ChevronLeft,
+  LayoutDashboard, Users, Drama, Map, Clock, BookOpen, Menu, ChevronLeft,
 } from 'lucide-react';
 
 const Sidebar = ({ collapsed, toggleSidebar }) => {
@@ -17,12 +17,14 @@ const Sidebar = ({ collapsed, toggleSidebar }) => {
     { path: `/campaigns/${campaignId}/npcs`, icon: Drama, label: 'NPCs' },
     { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
     { path: `/campaigns/${campaignId}/campaign-time`, icon: Clock, label: 'Campaign Time' },
+    { path: `/campaigns/${campaignId}/sessions`, icon: BookOpen, label: 'Session Notes' },
   ];
 
   const playerNavItems = [
     { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'My Characters' },
     { path: `/campaigns/${campaignId}/npcs`, icon: Drama, label: 'NPCs' },
     { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
+    { path: `/campaigns/${campaignId}/sessions`, icon: BookOpen, label: 'Session Notes' },
   ];
 
   const navItems = isGm ? gmNavItems : playerNavItems;

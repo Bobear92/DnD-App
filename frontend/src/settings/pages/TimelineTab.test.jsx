@@ -33,9 +33,14 @@ vi.mock('../../locations/locationService', () => ({
   default: { getLocations: vi.fn() },
 }));
 
+vi.mock('../../sessions/sessionService', () => ({
+  default: { listSessions: vi.fn() },
+}));
+
 import settingsService from '../settingsService';
 import npcService from '../../npcs/npcService';
 import locationService from '../../locations/locationService';
+import sessionService from '../../sessions/sessionService';
 import TimelineTab from './TimelineTab';
 
 const PRIMARY_ERA = {
@@ -89,6 +94,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   npcService.getNpcs.mockResolvedValue([]);
   locationService.getLocations.mockResolvedValue([]);
+  sessionService.listSessions.mockResolvedValue([]);
 });
 
 describe('TimelineTab — no eras (landing)', () => {
@@ -359,5 +365,64 @@ describe('TimelineTab — linked NPC and location names in expanded event', () =
     await waitFor(() => screen.getByText('Olissipo'));
     fireEvent.click(screen.getByText('Olissipo'));
     expect(screen.getByText('Olissipo')).toBeTruthy();
+  });
+});
+
+describe('TimelineTab — Sessions section in expanded event', () => {
+  beforeEach(() => {
+    settingsService.getCalendar.mockResolvedValue(CALENDAR_WITH_ERA);
+    settingsService.getEvents.mockResolvedValue([SAMPLE_EVENT]);
+    settingsService.getEventNpcs.mockResolvedValue([]);
+    settingsService.getEventLocations.mockResolvedValue([]);
+  });
+
+  async function expandEvent() {
+    renderTab(true);
+    await waitFor(() => screen.getByText('The Battle of Ironhold'));
+    fireEvent.click(screen.getByText('The Battle of Ironhold'));
+    await waitFor(() => expect(settingsService.getEventNpcs).toHaveBeenCalled());
+  }
+
+  it('GM view shows Sessions section — "None linked" when empty', async () => {
+    sessionService.listSessions.mockResolvedValue([]);
+    await expandEvent();
+    await waitFor(() => expect(screen.getByText('Sessions')).toBeTruthy());
+    expect(screen.getByText('No sessions linked.')).toBeTruthy();
+  });
+
+  it('GM view shows session title when sessions are linked', async () => {
+    sessionService.listSessions.mockResolvedValue([
+      { id: 10, session_number: 18, title: 'Orc Princeling', is_visible_to_players: true, real_world_date: '2024-01-21' },
+    ]);
+    await expandEvent();
+    await waitFor(() => expect(screen.getByText(/Orc Princeling/)).toBeTruthy());
+  });
+
+  it('GM view shows Hidden badge for non-visible sessions', async () => {
+    sessionService.listSessions.mockResolvedValue([
+      { id: 11, session_number: null, title: 'Hidden Session', is_visible_to_players: false, real_world_date: null },
+    ]);
+    await expandEvent();
+    await waitFor(() => expect(screen.getByText('Hidden Session')).toBeTruthy());
+    expect(screen.getByText('Hidden')).toBeTruthy();
+  });
+
+  it('player view hides Sessions section when no sessions', async () => {
+    sessionService.listSessions.mockResolvedValue([]);
+    renderTab(false);
+    await waitFor(() => screen.getByText('The Battle of Ironhold'));
+    fireEvent.click(screen.getByText('The Battle of Ironhold'));
+    await waitFor(() => expect(settingsService.getEventNpcs).toHaveBeenCalled());
+    expect(screen.queryByText('Sessions')).toBeNull();
+  });
+
+  it('player view shows Sessions section when sessions exist', async () => {
+    sessionService.listSessions.mockResolvedValue([
+      { id: 10, session_number: null, title: 'The Arrival', is_visible_to_players: true, real_world_date: null },
+    ]);
+    renderTab(false);
+    await waitFor(() => screen.getByText('The Battle of Ironhold'));
+    fireEvent.click(screen.getByText('The Battle of Ironhold'));
+    await waitFor(() => expect(screen.getByText('The Arrival')).toBeTruthy());
   });
 });
