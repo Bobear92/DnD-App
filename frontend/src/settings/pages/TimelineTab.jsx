@@ -514,12 +514,39 @@ function EraRow({ era, eras, isGm, onUpdate, onDelete, onToggleVisibility, isCus
 
 // ── Format era date list ───────────────────────────────────────────────────────
 
+function formatOrdinal(n) {
+  if (n === 1) return 'first';
+  if (n === 2) return 'second';
+  if (n === 3) return 'third';
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th'
+    : n % 10 === 1 ? 'st'
+    : n % 10 === 2 ? 'nd'
+    : n % 10 === 3 ? 'rd'
+    : 'th';
+  return `${n.toLocaleString()}${suffix}`;
+}
+
+function formatDayLabel(monthName, day) {
+  if (monthName && day != null) return `The ${formatOrdinal(day)} day of ${monthName}`;
+  if (monthName) return monthName;
+  if (day != null) return `The ${formatOrdinal(day)} day`;
+  return null;
+}
+
 function EraDateList({ eraDates }) {
   if (!eraDates || eraDates.length === 0) return (
     <span className="text-xs text-muted-foreground italic flex items-center gap-1">
       <Clock className="w-3 h-3" />Unknown date
     </span>
   );
+  const hasDetail = eraDates.some(d => d.month_name || d.day != null);
+  if (hasDetail) {
+    const first = eraDates.find(d => d.month_name || d.day != null) || eraDates[0];
+    const label = formatDayLabel(first.month_name, first.day);
+    return (
+      <span className="text-xs text-muted-foreground italic">{label}</span>
+    );
+  }
   return (
     <span className="text-xs text-muted-foreground">
       {eraDates.map((d, i) => (

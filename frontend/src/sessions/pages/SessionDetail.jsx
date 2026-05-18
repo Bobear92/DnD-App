@@ -75,6 +75,738 @@ function EraDateList({ eraDates }) {
   );
 }
 
+function EventLinkCard({ items, isGm, allOptions, onAdd, onRemove, onCreate, calendarEras, calendarMonths, sessionDate, campaignId }) {
+  const [adding, setAdding] = useState(false);
+  const [addMode, setAddMode] = useState('link');
+
+  // Link mode
+  const [selectedId, setSelectedId] = useState('');
+  const [linkDesc, setLinkDesc] = useState('');
+
+  // Create mode
+  const [newTitle, setNewTitle] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+  const [newEraId, setNewEraId] = useState('__none__');
+  const [newYear, setNewYear] = useState('');
+  const [newMonth, setNewMonth] = useState('__none__');
+  const [newDay, setNewDay] = useState('');
+  const [newEndEraId, setNewEndEraId] = useState('__none__');
+  const [newEndYear, setNewEndYear] = useState('');
+  const [newEndMonth, setNewEndMonth] = useState('__none__');
+  const [newEndDay, setNewEndDay] = useState('');
+  const [newVisible, setNewVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const usedIds = new Set(items.map(i => i.event_id));
+  const available = allOptions.filter(o => !usedIds.has(o.id));
+
+  function openAdd() {
+    setAddMode('link');
+    setSelectedId('');
+    setLinkDesc('');
+    setNewTitle(
+      sessionDate?.session_number != null
+        ? `Session ${sessionDate.session_number} - ${sessionDate.title || ''}`
+        : sessionDate?.title || ''
+    );
+    setNewDesc('');
+    setNewEraId(sessionDate?.era_id ? String(sessionDate.era_id) : '__none__');
+    setNewYear(sessionDate?.year ?? '');
+    setNewMonth(sessionDate?.month_order ? String(sessionDate.month_order) : '__none__');
+    setNewDay(sessionDate?.day ?? '');
+    setNewEndEraId(sessionDate?.era_id ? String(sessionDate.era_id) : '__none__');
+    // Fall back to start year/month when no explicit end year/month — keeps end_era_id valid
+    const endYear = sessionDate?.end_year ?? sessionDate?.year;
+    setNewEndYear(endYear != null ? endYear : '');
+    const endMonth = sessionDate?.end_month_order ?? sessionDate?.month_order;
+    setNewEndMonth(endMonth != null ? String(endMonth) : '__none__');
+    setNewEndDay(sessionDate?.end_day ?? '');
+    setNewVisible(false);
+    setAdding(true);
+  }
+
+  async function handleLink() {
+    if (!selectedId) return;
+    setSaving(true);
+    try {
+      await onAdd(Number(selectedId), linkDesc || undefined);
+      setAdding(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreate() {
+    if (!newTitle.trim()) return;
+    setSaving(true);
+    try {
+      await onCreate(
+        {
+          title: newTitle.trim(),
+          description: newDesc || null,
+          era_id: newEraId && newEraId !== '__none__' ? Number(newEraId) : null,
+          year: newYear !== '' ? Number(newYear) : null,
+          month_order: newMonth && newMonth !== '__none__' ? Number(newMonth) : null,
+          day: newDay !== '' ? Number(newDay) : null,
+          end_era_id: newEndEraId && newEndEraId !== '__none__' ? Number(newEndEraId) : null,
+          end_year: newEndYear !== '' ? Number(newEndYear) : null,
+          end_month_order: newEndMonth && newEndMonth !== '__none__' ? Number(newEndMonth) : null,
+          end_day: newEndDay !== '' ? Number(newEndDay) : null,
+          is_visible_to_players: newVisible,
+        },
+        newDesc || undefined
+      );
+      setAdding(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Clock className="w-4 h-4" />
+          Timeline Events
+          <span className="text-muted-foreground font-normal">({items.length})</span>
+        </CardTitle>
+        {isGm && (
+          <button data-testid="timeline-events-toggle" onClick={adding ? () => setAdding(false) : openAdd} className="p-1 rounded hover:bg-muted">
+            {adding ? <X className="w-4 h-4 text-muted-foreground" /> : <Plus className="w-4 h-4 text-muted-foreground" />}
+          </button>
+        )}
+      </CardHeader>
+      <CardContent className="pt-0 space-y-2">
+        {items.length === 0 && !adding && (
+          <p className="text-xs text-muted-foreground italic">None linked</p>
+        )}
+        {items.map(item => (
+          <div key={item.id} className="flex items-center justify-between gap-2 py-1 border-b border-border/50 last:border-0">
+            <span className="text-sm min-w-0">
+              <Link
+                to={`/campaigns/${campaignId}/timeline`}
+                className="hover:underline"
+                onClick={e => e.stopPropagation()}
+              >
+                {item.event_title}
+              </Link>
+              {item.description && <span className="text-xs text-muted-foreground ml-1">— {item.description}</span>}
+            </span>
+            {isGm && (
+              <button onClick={() => onRemove(item.id)} className="shrink-0 p-0.5 rounded hover:bg-destructive/10">
+                <X className="w-3.5 h-3.5 text-destructive" />
+              </button>
+            )}
+          </div>
+        ))}
+
+        {isGm && adding && (
+          <div className="pt-2 border-t border-border space-y-3">
+            {/* Mode toggle */}
+            <div className="flex gap-0.5 p-0.5 bg-muted rounded-md">
+              <button
+                className={cn('flex-1 py-1 rounded text-xs font-medium transition-colors', addMode === 'link' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                onClick={() => setAddMode('link')}
+              >
+                Link existing
+              </button>
+              <button
+                className={cn('flex-1 py-1 rounded text-xs font-medium transition-colors', addMode === 'create' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                onClick={() => setAddMode('create')}
+              >
+                Create new
+              </button>
+            </div>
+
+            {addMode === 'link' ? (
+              <div className="space-y-2">
+                <Select value={selectedId} onValueChange={setSelectedId}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select event…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {available.map(o => (
+                      <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Description (optional)"
+                  className="h-8 text-sm"
+                  value={linkDesc}
+                  onChange={e => setLinkDesc(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={handleLink} disabled={!selectedId || saving}>
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAdding(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Event Title</Label>
+                  <Input
+                    className="h-8 text-sm"
+                    placeholder="What happened?"
+                    value={newTitle}
+                    onChange={e => setNewTitle(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Link Description <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    className="h-8 text-sm"
+                    placeholder="e.g. Pivotal moment"
+                    value={newDesc}
+                    onChange={e => setNewDesc(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Date <span className="font-normal">(pre-filled from session)</span></Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Era</Label>
+                      <Select value={newEraId} onValueChange={setNewEraId}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">None</SelectItem>
+                          {calendarEras.map(e => (
+                            <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.abbreviation})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Year</Label>
+                      <Input
+                        className="h-8 text-sm"
+                        placeholder="e.g. 3739"
+                        value={newYear}
+                        onChange={e => setNewYear(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Month</Label>
+                      <Select value={newMonth} onValueChange={setNewMonth}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue placeholder="—" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">—</SelectItem>
+                          {calendarMonths.map(m => (
+                            <SelectItem key={m.order_index} value={String(m.order_index)}>
+                              {m.name || `Month ${m.order_index}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Day</Label>
+                      <Input
+                        type="number"
+                        className="h-8 text-sm"
+                        placeholder="1"
+                        value={newDay}
+                        onChange={e => setNewDay(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">End Date <span className="font-normal">(optional — for multi-day events)</span></Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Era</Label>
+                      <Select value={newEndEraId} onValueChange={setNewEndEraId}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">None</SelectItem>
+                          {calendarEras.map(e => (
+                            <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.abbreviation})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Year <span className="font-normal text-muted-foreground">(if different)</span></Label>
+                      <Input
+                        className="h-8 text-sm"
+                        placeholder="same"
+                        value={newEndYear}
+                        onChange={e => setNewEndYear(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Month</Label>
+                      <Select value={newEndMonth} onValueChange={setNewEndMonth}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue placeholder="—" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">—</SelectItem>
+                          {calendarMonths.map(m => (
+                            <SelectItem key={m.order_index} value={String(m.order_index)}>
+                              {m.name || `Month ${m.order_index}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Day</Label>
+                      <Input
+                        type="number"
+                        className="h-8 text-sm"
+                        placeholder="—"
+                        value={newEndDay}
+                        onChange={e => setNewEndDay(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newVisible}
+                    onChange={e => setNewVisible(e.target.checked)}
+                  />
+                  Visible to players
+                </label>
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={handleCreate} disabled={!newTitle.trim() || saving}>
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Create & Link'}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAdding(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function NpcLinkCard({ items, isGm, allOptions, onAdd, onRemove, onCreate, campaignId }) {
+  const [adding, setAdding] = useState(false);
+  const [addMode, setAddMode] = useState('link');
+
+  const [selectedId, setSelectedId] = useState('');
+  const [linkDesc, setLinkDesc] = useState('');
+
+  const [newName, setNewName] = useState('');
+  const [newRace, setNewRace] = useState('');
+  const [newOccupation, setNewOccupation] = useState('');
+  const [newStatus, setNewStatus] = useState('alive');
+  const [newSummary, setNewSummary] = useState('');
+  const [newVisible, setNewVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const usedIds = new Set(items.map(i => i.npc_id));
+  const available = allOptions.filter(o => !usedIds.has(o.id));
+
+  function openAdd() {
+    setAddMode('link');
+    setSelectedId('');
+    setLinkDesc('');
+    setNewName('');
+    setNewRace('');
+    setNewOccupation('');
+    setNewStatus('alive');
+    setNewSummary('');
+    setNewVisible(false);
+    setAdding(true);
+  }
+
+  async function handleLink() {
+    if (!selectedId) return;
+    setSaving(true);
+    try {
+      await onAdd(Number(selectedId), linkDesc || undefined);
+      setAdding(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreate() {
+    if (!newName.trim()) return;
+    setSaving(true);
+    try {
+      await onCreate(
+        {
+          name: newName.trim(),
+          race: newRace || null,
+          occupation: newOccupation || null,
+          status: newStatus,
+          summary: newSummary || null,
+          is_visible_to_players: newVisible,
+        },
+        linkDesc || undefined
+      );
+      setAdding(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Drama className="w-4 h-4" />
+          NPCs Featured
+          <span className="text-muted-foreground font-normal">({items.length})</span>
+        </CardTitle>
+        {isGm && (
+          <button data-testid="npcs-toggle" onClick={adding ? () => setAdding(false) : openAdd} className="p-1 rounded hover:bg-muted">
+            {adding ? <X className="w-4 h-4 text-muted-foreground" /> : <Plus className="w-4 h-4 text-muted-foreground" />}
+          </button>
+        )}
+      </CardHeader>
+      <CardContent className="pt-0 space-y-2">
+        {items.length === 0 && !adding && (
+          <p className="text-xs text-muted-foreground italic">None linked</p>
+        )}
+        {items.map(item => (
+          <div key={item.id} className="flex items-center justify-between gap-2 py-1 border-b border-border/50 last:border-0">
+            <Link
+              to={`/campaigns/${campaignId}/npcs/${item.npc_id}`}
+              className="text-sm hover:underline min-w-0"
+              onClick={e => e.stopPropagation()}
+            >
+              {item.npc_name}
+              {item.description && <span className="text-xs text-muted-foreground ml-1">— {item.description}</span>}
+            </Link>
+            {isGm && (
+              <button onClick={() => onRemove(item.id)} className="shrink-0 p-0.5 rounded hover:bg-destructive/10">
+                <X className="w-3.5 h-3.5 text-destructive" />
+              </button>
+            )}
+          </div>
+        ))}
+
+        {isGm && adding && (
+          <div className="pt-2 border-t border-border space-y-3">
+            <div className="flex gap-0.5 p-0.5 bg-muted rounded-md">
+              <button
+                className={cn('flex-1 py-1 rounded text-xs font-medium transition-colors', addMode === 'link' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                onClick={() => setAddMode('link')}
+              >
+                Link existing
+              </button>
+              <button
+                className={cn('flex-1 py-1 rounded text-xs font-medium transition-colors', addMode === 'create' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                onClick={() => setAddMode('create')}
+              >
+                Create new
+              </button>
+            </div>
+
+            {addMode === 'link' ? (
+              <div className="space-y-2">
+                <Select value={selectedId} onValueChange={setSelectedId}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select NPC…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {available.map(o => (
+                      <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Description (optional)"
+                  className="h-8 text-sm"
+                  value={linkDesc}
+                  onChange={e => setLinkDesc(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={handleLink} disabled={!selectedId || saving}>
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAdding(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Name <span className="text-destructive">*</span></Label>
+                  <Input
+                    className="h-8 text-sm"
+                    placeholder="NPC name"
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Race</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      placeholder="e.g. Human"
+                      value={newRace}
+                      onChange={e => setNewRace(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Occupation</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      placeholder="e.g. Blacksmith"
+                      value={newOccupation}
+                      onChange={e => setNewOccupation(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Status</Label>
+                  <Select value={newStatus} onValueChange={setNewStatus}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="alive">Alive</SelectItem>
+                      <SelectItem value="dead">Dead</SelectItem>
+                      <SelectItem value="missing">Missing</SelectItem>
+                      <SelectItem value="unknown">Unknown</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Summary <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    className="h-8 text-sm"
+                    placeholder="Short description…"
+                    value={newSummary}
+                    onChange={e => setNewSummary(e.target.value)}
+                  />
+                </div>
+                <Input
+                  placeholder="Link description (optional)"
+                  className="h-8 text-sm"
+                  value={linkDesc}
+                  onChange={e => setLinkDesc(e.target.value)}
+                />
+                <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                  <input type="checkbox" checked={newVisible} onChange={e => setNewVisible(e.target.checked)} />
+                  Visible to players
+                </label>
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={handleCreate} disabled={!newName.trim() || saving}>
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Create & Link'}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAdding(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LocationLinkCard({ items, isGm, allOptions, onAdd, onRemove, onCreate, campaignId }) {
+  const [adding, setAdding] = useState(false);
+  const [addMode, setAddMode] = useState('link');
+
+  const [selectedId, setSelectedId] = useState('');
+  const [linkDesc, setLinkDesc] = useState('');
+
+  const [newName, setNewName] = useState('');
+  const [newLocationType, setNewLocationType] = useState('');
+  const [newVisible, setNewVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const usedIds = new Set(items.map(i => i.location_id));
+  const available = allOptions.filter(o => !usedIds.has(o.id));
+
+  function openAdd() {
+    setAddMode('link');
+    setSelectedId('');
+    setLinkDesc('');
+    setNewName('');
+    setNewLocationType('');
+    setNewVisible(false);
+    setAdding(true);
+  }
+
+  async function handleLink() {
+    if (!selectedId) return;
+    setSaving(true);
+    try {
+      await onAdd(Number(selectedId), linkDesc || undefined);
+      setAdding(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreate() {
+    if (!newName.trim()) return;
+    setSaving(true);
+    try {
+      await onCreate(
+        {
+          name: newName.trim(),
+          location_type: newLocationType || null,
+          is_visible_to_players: newVisible,
+        },
+        linkDesc || undefined
+      );
+      setAdding(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <MapPin className="w-4 h-4" />
+          Locations Visited
+          <span className="text-muted-foreground font-normal">({items.length})</span>
+        </CardTitle>
+        {isGm && (
+          <button data-testid="locations-toggle" onClick={adding ? () => setAdding(false) : openAdd} className="p-1 rounded hover:bg-muted">
+            {adding ? <X className="w-4 h-4 text-muted-foreground" /> : <Plus className="w-4 h-4 text-muted-foreground" />}
+          </button>
+        )}
+      </CardHeader>
+      <CardContent className="pt-0 space-y-2">
+        {items.length === 0 && !adding && (
+          <p className="text-xs text-muted-foreground italic">None linked</p>
+        )}
+        {items.map(item => (
+          <div key={item.id} className="flex items-center justify-between gap-2 py-1 border-b border-border/50 last:border-0">
+            <Link
+              to={`/campaigns/${campaignId}/locations/${item.location_id}`}
+              className="text-sm hover:underline min-w-0"
+              onClick={e => e.stopPropagation()}
+            >
+              {item.location_name}
+              {item.description && <span className="text-xs text-muted-foreground ml-1">— {item.description}</span>}
+            </Link>
+            {isGm && (
+              <button onClick={() => onRemove(item.id)} className="shrink-0 p-0.5 rounded hover:bg-destructive/10">
+                <X className="w-3.5 h-3.5 text-destructive" />
+              </button>
+            )}
+          </div>
+        ))}
+
+        {isGm && adding && (
+          <div className="pt-2 border-t border-border space-y-3">
+            <div className="flex gap-0.5 p-0.5 bg-muted rounded-md">
+              <button
+                className={cn('flex-1 py-1 rounded text-xs font-medium transition-colors', addMode === 'link' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                onClick={() => setAddMode('link')}
+              >
+                Link existing
+              </button>
+              <button
+                className={cn('flex-1 py-1 rounded text-xs font-medium transition-colors', addMode === 'create' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                onClick={() => setAddMode('create')}
+              >
+                Create new
+              </button>
+            </div>
+
+            {addMode === 'link' ? (
+              <div className="space-y-2">
+                <Select value={selectedId} onValueChange={setSelectedId}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select location…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {available.map(o => (
+                      <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Description (optional)"
+                  className="h-8 text-sm"
+                  value={linkDesc}
+                  onChange={e => setLinkDesc(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={handleLink} disabled={!selectedId || saving}>
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAdding(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Name <span className="text-destructive">*</span></Label>
+                  <Input
+                    className="h-8 text-sm"
+                    placeholder="Location name"
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Type <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    className="h-8 text-sm"
+                    placeholder="e.g. City, Dungeon, Forest"
+                    value={newLocationType}
+                    onChange={e => setNewLocationType(e.target.value)}
+                  />
+                </div>
+                <Input
+                  placeholder="Link description (optional)"
+                  className="h-8 text-sm"
+                  value={linkDesc}
+                  onChange={e => setLinkDesc(e.target.value)}
+                />
+                <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                  <input type="checkbox" checked={newVisible} onChange={e => setNewVisible(e.target.checked)} />
+                  Visible to players
+                </label>
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={handleCreate} disabled={!newName.trim() || saving}>
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Create & Link'}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAdding(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function LinkCard({ title, icon: Icon, items, isGm, allOptions, optionLabel, onAdd, onRemove, renderItem }) {
   const [adding, setAdding] = useState(false);
   const [selectedId, setSelectedId] = useState('');
@@ -348,6 +1080,24 @@ export default function SessionDetail() {
   async function removeEvent(linkId) {
     await sessionService.removeEventLink(campaignId, sessionId, linkId);
     setEventLinks(prev => prev.filter(l => l.id !== linkId));
+  }
+  async function createAndLinkEvent(eventData, linkDescription) {
+    const newEvent = await settingsService.createEvent(campaignId, eventData);
+    const link = await sessionService.addEventLink(campaignId, sessionId, { event_id: newEvent.id, description: linkDescription });
+    setEventLinks(prev => [...prev, link]);
+    setAllEvents(prev => [...prev, { id: newEvent.id, name: newEvent.title }]);
+  }
+  async function createAndLinkNpc(npcData, linkDescription) {
+    const newNpc = await npcService.createNpc({ ...npcData, campaign_id: Number(campaignId) });
+    const link = await sessionService.addNpcLink(campaignId, sessionId, { npc_id: newNpc.id, description: linkDescription });
+    setNpcLinks(prev => [...prev, link]);
+    setAllNpcs(prev => [...prev, newNpc]);
+  }
+  async function createAndLinkLocation(locationData, linkDescription) {
+    const newLocation = await locationService.createLocation(campaignId, locationData);
+    const link = await sessionService.addLocationLink(campaignId, sessionId, { location_id: newLocation.id, description: linkDescription });
+    setLocationLinks(prev => [...prev, link]);
+    setAllLocations(prev => [...prev, newLocation]);
   }
   async function addCharacter(characterId, description) {
     const link = await sessionService.addCharacterLink(campaignId, sessionId, { character_id: characterId, description });
@@ -763,60 +1513,45 @@ export default function SessionDetail() {
               </span>
             )}
           />
-          <LinkCard
-            title="NPCs Featured"
-            icon={Drama}
+          <NpcLinkCard
             items={npcLinks}
             isGm={isGm && !playerView}
             allOptions={allNpcs}
-            optionLabel="NPC"
             onAdd={addNpc}
             onRemove={removeNpc}
-            renderItem={item => (
-              <Link
-                to={`/campaigns/${campaignId}/npcs/${item.npc_id}`}
-                className="text-sm hover:underline"
-                onClick={e => e.stopPropagation()}
-              >
-                {item.npc_name}
-                {item.description && <span className="text-xs text-muted-foreground ml-1">— {item.description}</span>}
-              </Link>
-            )}
+            onCreate={createAndLinkNpc}
+            campaignId={campaignId}
           />
-          <LinkCard
-            title="Locations Visited"
-            icon={MapPin}
+          <LocationLinkCard
             items={locationLinks}
             isGm={isGm && !playerView}
             allOptions={allLocations}
-            optionLabel="location"
             onAdd={addLocation}
             onRemove={removeLocation}
-            renderItem={item => (
-              <Link
-                to={`/campaigns/${campaignId}/locations/${item.location_id}`}
-                className="text-sm hover:underline"
-                onClick={e => e.stopPropagation()}
-              >
-                {item.location_name}
-                {item.description && <span className="text-xs text-muted-foreground ml-1">— {item.description}</span>}
-              </Link>
-            )}
+            onCreate={createAndLinkLocation}
+            campaignId={campaignId}
           />
-          <LinkCard
-            title="Timeline Events"
-            icon={Clock}
+          <EventLinkCard
             items={eventLinks}
             isGm={isGm && !playerView}
             allOptions={allEvents}
-            optionLabel="event"
             onAdd={addEvent}
             onRemove={removeEvent}
-            renderItem={item => (
-              <span className="text-sm">{item.event_title}
-                {item.description && <span className="text-xs text-muted-foreground ml-1">— {item.description}</span>}
-              </span>
-            )}
+            onCreate={createAndLinkEvent}
+            calendarEras={calendarEras}
+            calendarMonths={calendarMonths}
+            campaignId={campaignId}
+            sessionDate={{
+              session_number: session?.session_number,
+              title: session?.title,
+              era_id: session?.era_id,
+              year: session?.year,
+              month_order: session?.month_order,
+              day: session?.day,
+              end_year: session?.end_year,
+              end_month_order: session?.end_month_order,
+              end_day: session?.end_day,
+            }}
           />
         </div>
       </div>

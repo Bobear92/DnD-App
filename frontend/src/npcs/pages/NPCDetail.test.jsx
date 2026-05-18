@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -26,7 +26,15 @@ vi.mock('../../locations/locationService', () => ({
   default: { getLocations: vi.fn() },
 }));
 vi.mock('../../settings/settingsService', () => ({
-  default: { getEventsForNpc: vi.fn() },
+  default: {
+    getEventsForNpc: vi.fn(),
+    getEvents: vi.fn(),
+    getCalendar: vi.fn(),
+    getEventNpcs: vi.fn(),
+    addEventNpc: vi.fn(),
+    removeEventNpc: vi.fn(),
+    createEvent: vi.fn(),
+  },
 }));
 vi.mock('../../sessions/sessionService', () => ({
   default: { listSessions: vi.fn() },
@@ -65,6 +73,12 @@ beforeEach(() => {
   npcService.getCampaignDetails.mockResolvedValue({ id: 1, members: [] });
   locationService.getLocations.mockResolvedValue([]);
   settingsService.getEventsForNpc.mockResolvedValue([]);
+  settingsService.getEvents.mockResolvedValue([]);
+  settingsService.getCalendar.mockResolvedValue({ eras: [], months: [] });
+  settingsService.getEventNpcs.mockResolvedValue([]);
+  settingsService.addEventNpc.mockResolvedValue({});
+  settingsService.removeEventNpc.mockResolvedValue(undefined);
+  settingsService.createEvent.mockResolvedValue({ id: 99, title: 'New Event' });
   sessionService.listSessions.mockResolvedValue([]);
 });
 
@@ -215,5 +229,107 @@ describe('NPCDetail — Sessions card', () => {
     ]);
     renderDetail();
     await waitFor(() => expect(screen.getByText(/Orc Princeling/)).toBeTruthy());
+  });
+});
+
+describe('NPCDetail — Timeline Events link/create/remove', () => {
+  it('GM view shows + toggle button in timeline events card header', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    expect(screen.getByTestId('timeline-events-toggle')).toBeTruthy();
+  });
+
+  it('player view does not show + toggle button', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Prince Thep')).toBeTruthy());
+    expect(screen.queryByTestId('timeline-events-toggle')).toBeNull();
+  });
+
+  it('clicking + button shows Link existing / Create new mode toggle', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+    await waitFor(() => {
+      expect(screen.getByText('Link existing')).toBeTruthy();
+      expect(screen.getByText('Create new')).toBeTruthy();
+    });
+  });
+
+  it('create new mode shows title input and Create & Link button', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('What happened?')).toBeTruthy();
+      expect(screen.getByText('Create & Link')).toBeTruthy();
+    });
+  });
+
+  it('Create & Link button is disabled when title is empty', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+    await waitFor(() => screen.getByText('Create & Link'));
+    const btn = screen.getByText('Create & Link').closest('button');
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('calls createEvent then addEventNpc and reloads on Create & Link', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    settingsService.createEvent.mockResolvedValue({ id: 77, title: 'The Ambush' });
+    settingsService.getEventsForNpc
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ id: 77, title: 'The Ambush', is_visible_to_players: false, era_dates: [] }]);
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+    await waitFor(() => screen.getByPlaceholderText('What happened?'));
+    fireEvent.change(screen.getByPlaceholderText('What happened?'), { target: { value: 'The Ambush' } });
+    fireEvent.click(screen.getByText('Create & Link'));
+    await waitFor(() => {
+      expect(settingsService.createEvent).toHaveBeenCalledWith(
+        '1',
+        expect.objectContaining({ title: 'The Ambush', is_visible_to_players: false })
+      );
+      expect(settingsService.addEventNpc).toHaveBeenCalledWith('1', 77, { npc_id: 1 });
+    });
+    await waitFor(() => expect(screen.getByText('The Ambush')).toBeTruthy());
+  });
+
+  it('clicking unlink button calls getEventNpcs then removeEventNpc', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    settingsService.getEventsForNpc
+      .mockResolvedValueOnce([{ id: 5, title: 'The Battle', is_visible_to_players: true, era_dates: [] }])
+      .mockResolvedValue([]);
+    settingsService.getEventNpcs.mockResolvedValue([{ id: 11, event_id: 5, npc_id: 1 }]);
+    renderDetail();
+    await waitFor(() => screen.getByText('The Battle'));
+    fireEvent.click(screen.getByTestId('unlink-event-5'));
+    await waitFor(() => {
+      expect(settingsService.getEventNpcs).toHaveBeenCalledWith('1', 5);
+      expect(settingsService.removeEventNpc).toHaveBeenCalledWith('1', 5, 11);
+    });
+    await waitFor(() => expect(screen.queryByText('The Battle')).toBeNull());
+  });
+
+  it('player view does not show unlink button on events', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    settingsService.getEventsForNpc.mockResolvedValue([
+      { id: 5, title: 'The Battle', is_visible_to_players: true, era_dates: [] },
+    ]);
+    renderDetail();
+    await waitFor(() => screen.getByText('The Battle'));
+    expect(screen.queryByTestId('unlink-event-5')).toBeNull();
   });
 });

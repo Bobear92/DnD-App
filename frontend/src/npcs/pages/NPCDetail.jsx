@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import npcService, { mapNpcImageUrl } from '../npcService';
@@ -111,6 +111,24 @@ export default function NPCDetail() {
   const [playerRelationships, setPlayerRelationships] = useState([]);
   const [timelineEvents, setTimelineEvents] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [allEvents, setAllEvents] = useState([]);
+  const [calendarEras, setCalendarEras] = useState([]);
+  const [calendarMonths, setCalendarMonths] = useState([]);
+
+  // Timeline event link form
+  const [showAddEventLink, setShowAddEventLink] = useState(false);
+  const [addEventMode, setAddEventMode] = useState('link');
+  const [eventLinkSelectedId, setEventLinkSelectedId] = useState('');
+  const [eventLinkDesc, setEventLinkDesc] = useState('');
+  const [newEventTitle, setNewEventTitle] = useState('');
+  const [newEventDesc, setNewEventDesc] = useState('');
+  const [newEventEraId, setNewEventEraId] = useState('__none__');
+  const [newEventYear, setNewEventYear] = useState('');
+  const [newEventMonth, setNewEventMonth] = useState('__none__');
+  const [newEventDay, setNewEventDay] = useState('');
+  const [newEventVisible, setNewEventVisible] = useState(false);
+  const [addingEventLink, setAddingEventLink] = useState(false);
+  const [deletingEventId, setDeletingEventId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [playerView, setPlayerView] = useState(false);
@@ -144,6 +162,16 @@ export default function NPCDetail() {
     if (!campaignId || !npcId) { navigate('/campaigns'); return; }
     loadAll();
   }, [npcId, campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isGm || !campaignId) return;
+    settingsService.getEvents(campaignId)
+      .then(data => setAllEvents(Array.isArray(data) ? data.map(e => ({ id: e.id, name: e.title })) : []))
+      .catch(() => {});
+    settingsService.getCalendar(campaignId)
+      .then(cal => { setCalendarEras(cal?.eras || []); setCalendarMonths(cal?.months || []); })
+      .catch(() => {});
+  }, [isGm, campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadAll = async () => {
     setLoading(true);
@@ -319,6 +347,64 @@ export default function NPCDetail() {
       setSaveError(err.response?.data?.detail || 'Failed to delete player relationship.');
     } finally {
       setDeletingPlayerRelId(null);
+    }
+  };
+
+  const handleLinkEvent = async (eventId, description) => {
+    setAddingEventLink(true);
+    try {
+      await settingsService.addEventNpc(campaignId, eventId, { npc_id: Number(npcId), description: description || null });
+      const updated = await settingsService.getEventsForNpc(campaignId, npcId).catch(() => []);
+      setTimelineEvents(updated);
+      setShowAddEventLink(false);
+      setEventLinkSelectedId('');
+      setEventLinkDesc('');
+    } catch (err) {
+      setSaveError(err.response?.data?.detail || 'Failed to link event.');
+    } finally {
+      setAddingEventLink(false);
+    }
+  };
+
+  const handleCreateAndLinkEvent = async () => {
+    if (!newEventTitle.trim()) return;
+    setAddingEventLink(true);
+    try {
+      const eventData = {
+        title: newEventTitle.trim(),
+        description: newEventDesc || null,
+        era_id: newEventEraId !== '__none__' ? Number(newEventEraId) : null,
+        year: newEventYear !== '' ? Number(String(newEventYear).replace(/,/g, '')) : null,
+        month_order: newEventMonth !== '__none__' ? Number(newEventMonth) : null,
+        day: newEventDay !== '' ? Number(newEventDay) : null,
+        is_visible_to_players: newEventVisible,
+      };
+      const newEvent = await settingsService.createEvent(campaignId, eventData);
+      await settingsService.addEventNpc(campaignId, newEvent.id, { npc_id: Number(npcId) });
+      const updated = await settingsService.getEventsForNpc(campaignId, npcId).catch(() => []);
+      setTimelineEvents(updated);
+      setAllEvents(prev => [...prev, { id: newEvent.id, name: newEvent.title }]);
+      setShowAddEventLink(false);
+      setNewEventTitle(''); setNewEventDesc(''); setNewEventEraId('__none__');
+      setNewEventYear(''); setNewEventMonth('__none__'); setNewEventDay(''); setNewEventVisible(false);
+    } catch (err) {
+      setSaveError(err.response?.data?.detail || 'Failed to create event.');
+    } finally {
+      setAddingEventLink(false);
+    }
+  };
+
+  const handleUnlinkEvent = async (eventId) => {
+    setDeletingEventId(eventId);
+    try {
+      const links = await settingsService.getEventNpcs(campaignId, eventId);
+      const link = links.find(l => l.npc_id === Number(npcId));
+      if (link) await settingsService.removeEventNpc(campaignId, eventId, link.id);
+      setTimelineEvents(prev => prev.filter(e => e.id !== eventId));
+    } catch (err) {
+      setSaveError(err.response?.data?.detail || 'Failed to unlink event.');
+    } finally {
+      setDeletingEventId(null);
     }
   };
 
@@ -856,37 +942,217 @@ export default function NPCDetail() {
             {/* Timeline Events */}
             {(viewOnly ? timelineEvents.length > 0 : true) && (
               <Card>
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 flex flex-row items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Clock className="w-4 h-4" /> Timeline Events
+                    <span className="text-muted-foreground font-normal text-sm">({timelineEvents.length})</span>
                   </CardTitle>
+                  {isGm && !playerView && (
+                    <button
+                      data-testid="timeline-events-toggle"
+                      onClick={() => {
+                        setShowAddEventLink(v => !v);
+                        setAddEventMode('link');
+                        setEventLinkSelectedId(''); setEventLinkDesc('');
+                        setNewEventTitle(''); setNewEventDesc(''); setNewEventEraId('__none__');
+                        setNewEventYear(''); setNewEventMonth('__none__'); setNewEventDay(''); setNewEventVisible(false);
+                      }}
+                      className="p-1 rounded hover:bg-muted"
+                    >
+                      {showAddEventLink ? <X className="w-4 h-4 text-muted-foreground" /> : <Plus className="w-4 h-4 text-muted-foreground" />}
+                    </button>
+                  )}
                 </CardHeader>
-                <CardContent>
-                  {timelineEvents.length === 0 ? (
+                <CardContent className="pt-0 space-y-2">
+                  {timelineEvents.length === 0 && !showAddEventLink && (
                     <p className="text-sm text-muted-foreground">No timeline events linked to this NPC.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {timelineEvents.map(ev => (
-                        <div key={ev.id} className="text-sm space-y-0.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-medium">{ev.title}</p>
-                            {isGm && !playerView && !ev.is_visible_to_players && (
-                              <Badge variant="outline" className="text-xs gap-1 shrink-0">
-                                <EyeOff className="w-3 h-3" /> Hidden
-                              </Badge>
-                            )}
-                          </div>
-                          {ev.era_dates && ev.era_dates.length > 0 ? (
-                            <p className="text-xs text-muted-foreground">
-                              {ev.era_dates.map((d, i) => (
-                                <span key={d.era_id}>{i > 0 && ' · '}{d.year} {d.abbreviation}</span>
-                              ))}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-muted-foreground italic">Unknown date</p>
+                  )}
+                  {timelineEvents.map(ev => (
+                    <div key={ev.id} className="flex items-start justify-between gap-2 py-1 border-b border-border/50 last:border-0">
+                      <div className="text-sm space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to={`/campaigns/${campaignId}/timeline`}
+                            className="font-medium hover:underline"
+                          >
+                            {ev.title}
+                          </Link>
+                          {isGm && !playerView && !ev.is_visible_to_players && (
+                            <Badge variant="outline" className="text-xs gap-1 shrink-0">
+                              <EyeOff className="w-3 h-3" /> Hidden
+                            </Badge>
                           )}
                         </div>
-                      ))}
+                        {ev.era_dates && ev.era_dates.length > 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            {ev.era_dates.map((d, i) => (
+                              <span key={d.era_id}>{i > 0 && ' · '}{d.year} {d.abbreviation}</span>
+                            ))}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic">Unknown date</p>
+                        )}
+                      </div>
+                      {isGm && !playerView && (
+                        <button
+                          data-testid={`unlink-event-${ev.id}`}
+                          onClick={() => handleUnlinkEvent(ev.id)}
+                          disabled={deletingEventId === ev.id}
+                          className="shrink-0 p-0.5 rounded hover:bg-destructive/10 mt-0.5"
+                        >
+                          {deletingEventId === ev.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                            : <X className="w-3.5 h-3.5 text-destructive" />}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  {isGm && !playerView && showAddEventLink && (
+                    <div className="pt-2 border-t border-border space-y-3">
+                      {/* Mode toggle */}
+                      <div className="flex gap-0.5 p-0.5 bg-muted rounded-md">
+                        <button
+                          className={cn('flex-1 py-1 rounded text-xs font-medium transition-colors', addEventMode === 'link' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                          onClick={() => setAddEventMode('link')}
+                        >
+                          Link existing
+                        </button>
+                        <button
+                          className={cn('flex-1 py-1 rounded text-xs font-medium transition-colors', addEventMode === 'create' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                          onClick={() => setAddEventMode('create')}
+                        >
+                          Create new
+                        </button>
+                      </div>
+
+                      {addEventMode === 'link' ? (
+                        <div className="space-y-2">
+                          <Select value={eventLinkSelectedId} onValueChange={setEventLinkSelectedId}>
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue placeholder="Select event…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {allEvents
+                                .filter(o => !timelineEvents.some(e => e.id === o.id))
+                                .map(o => (
+                                  <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            placeholder="Description (optional)"
+                            className="h-8 text-sm"
+                            value={eventLinkDesc}
+                            onChange={e => setEventLinkDesc(e.target.value)}
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm" className="h-7 text-xs"
+                              onClick={() => handleLinkEvent(Number(eventLinkSelectedId), eventLinkDesc || undefined)}
+                              disabled={!eventLinkSelectedId || addingEventLink}
+                            >
+                              {addingEventLink ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowAddEventLink(false)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div>
+                            <Label className="text-xs">Event Title *</Label>
+                            <Input
+                              className="h-8 text-sm"
+                              placeholder="What happened?"
+                              value={newEventTitle}
+                              onChange={e => setNewEventTitle(e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Description <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                            <Input
+                              className="h-8 text-sm"
+                              placeholder="Brief description…"
+                              value={newEventDesc}
+                              onChange={e => setNewEventDesc(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Date <span className="font-normal">(optional)</span></Label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs">Era</Label>
+                                <Select value={newEventEraId} onValueChange={setNewEventEraId}>
+                                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="None" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">None</SelectItem>
+                                    {calendarEras.map(era => (
+                                      <SelectItem key={era.id} value={String(era.id)}>{era.name} ({era.abbreviation})</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-xs">Year</Label>
+                                <Input
+                                  className="h-8 text-sm"
+                                  placeholder="e.g. 3739"
+                                  value={newEventYear}
+                                  onChange={e => setNewEventYear(e.target.value)}
+                                />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs">Month</Label>
+                                <Select value={newEventMonth} onValueChange={setNewEventMonth}>
+                                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">—</SelectItem>
+                                    {calendarMonths.map(m => (
+                                      <SelectItem key={m.order_index} value={String(m.order_index)}>
+                                        {m.name || `Month ${m.order_index}`}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-xs">Day</Label>
+                                <Input
+                                  type="number"
+                                  className="h-8 text-sm"
+                                  placeholder="1"
+                                  value={newEventDay}
+                                  onChange={e => setNewEventDay(e.target.value)}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={newEventVisible}
+                              onChange={e => setNewEventVisible(e.target.checked)}
+                            />
+                            Visible to players
+                          </label>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm" className="h-7 text-xs"
+                              onClick={handleCreateAndLinkEvent}
+                              disabled={!newEventTitle.trim() || addingEventLink}
+                            >
+                              {addingEventLink ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Create & Link'}
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowAddEventLink(false)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>

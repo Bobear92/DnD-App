@@ -15,11 +15,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, Trash2, Clock, Eye, EyeOff, ArrowUp, ArrowDown, ArrowUpDown,
-  ChevronDown, ChevronRight, Scroll, MoveRight, Users,
+  ChevronDown, ChevronRight, Scroll, MoveRight, Users, CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ── Era date helpers ──────────────────────────────────────────────────────────
+
+function formatOrdinal(n) {
+  if (n === 1) return 'first';
+  if (n === 2) return 'second';
+  if (n === 3) return 'third';
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th'
+    : n % 10 === 1 ? 'st'
+    : n % 10 === 2 ? 'nd'
+    : n % 10 === 3 ? 'rd'
+    : 'th';
+  return `${n.toLocaleString()}${suffix}`;
+}
+
+function formatDayLabel(monthName, day) {
+  if (monthName && day != null) return `The ${formatOrdinal(day)} day of ${monthName}`;
+  if (monthName) return monthName;
+  if (day != null) return `The ${formatOrdinal(day)} day`;
+  return null;
+}
 
 function EraDateList({ eraDates }) {
   if (!eraDates || eraDates.length === 0) {
@@ -29,31 +48,86 @@ function EraDateList({ eraDates }) {
       </span>
     );
   }
+  const hasDetail = eraDates.some(d => d.month_name || d.day != null);
+  if (hasDetail) {
+    const first = eraDates.find(d => d.month_name || d.day != null) || eraDates[0];
+    const label = formatDayLabel(first.month_name, first.day);
+    return (
+      <span className="text-xs text-muted-foreground italic">{label}</span>
+    );
+  }
   return (
     <span className="text-xs text-muted-foreground">
       {eraDates.map((d, i) => (
         <span key={d.era_id}>
           {i > 0 && ' · '}
           <span className="text-foreground font-medium">{d.year.toLocaleString()} {d.abbreviation}</span>
-          {d.month_name && <span> {d.month_name}</span>}
-          {d.day && <span> day {d.day}</span>}
         </span>
       ))}
     </span>
   );
 }
 
-function EndDateLabel({ event, eras }) {
-  if (!event.end_year && !event.end_era_id) return null;
-  const endEra = eras.find(e => e.id === event.end_era_id);
-  const label = endEra
-    ? `${event.end_year?.toLocaleString() ?? '?'} ${endEra.abbreviation}${event.end_month_order ? ` M${event.end_month_order}` : ''}${event.end_day ? ` D${event.end_day}` : ''}`
-    : `Year ${event.end_year?.toLocaleString() ?? '?'}`;
+function EndDateLabel({ event, eras, calendarMonths }) {
+  const hasEndDate = event.end_day != null || event.end_month_order != null
+    || event.end_year != null || event.end_era_id != null;
+  if (!hasEndDate) return null;
+
+  const effectiveEndEraId = event.end_era_id ?? event.era_id;
+  const effectiveEndYear = event.end_year ?? event.year;
+  const effectiveEndMonth = event.end_month_order ?? event.month_order;
+
+  const endEra = eras.find(e => e.id === effectiveEndEraId);
+  const monthEntry = calendarMonths?.find(m => m.order_index === effectiveEndMonth);
+  const monthLabel = monthEntry
+    ? (monthEntry.name || `Month ${effectiveEndMonth}`)
+    : (effectiveEndMonth != null ? `Month ${effectiveEndMonth}` : null);
+
+  const hasMonthOrDay = monthLabel != null || event.end_day != null;
+
+  if (hasMonthOrDay) {
+    const label = formatDayLabel(monthLabel, event.end_day) || '?';
+    return (
+      <span className="text-xs text-muted-foreground flex flex-col items-center gap-0.5">
+        <ArrowDown className="w-3 h-3 shrink-0" />
+        <span className="italic">{label}</span>
+      </span>
+    );
+  }
+
+  const parts = [];
+  if (effectiveEndYear != null) parts.push(effectiveEndYear.toLocaleString());
+  if (endEra) parts.push(endEra.abbreviation);
+
   return (
-    <span className="text-xs text-muted-foreground flex items-center gap-1">
-      <MoveRight className="w-3 h-3 shrink-0" />
-      <span className="text-foreground font-medium">{label}</span>
+    <span className="text-xs text-muted-foreground flex flex-col items-center gap-0.5">
+      <ArrowDown className="w-3 h-3 shrink-0" />
+      <span>{parts.join(' ') || '?'}</span>
     </span>
+  );
+}
+
+// ── Year banner (shown on center line before a year group) ────────────────────
+
+function YearBanner({ eraDates }) {
+  const yearLabel = eraDates
+    .filter(d => d.year != null)
+    .map(d => `${d.year.toLocaleString()} ${d.abbreviation}`)
+    .join(' · ');
+
+  return (
+    <div className="flex items-center py-1 my-1">
+      <div className="flex-1" />
+      <div className="flex flex-col items-center w-8 shrink-0">
+        <div className="w-0.5 h-3 bg-border" />
+        <div className="relative z-10 bg-background border border-border/70 rounded-full
+                        text-xs font-medium text-muted-foreground px-3 py-0.5 whitespace-nowrap">
+          {yearLabel}
+        </div>
+        <div className="w-0.5 h-3 bg-border" />
+      </div>
+      <div className="flex-1" />
+    </div>
   );
 }
 
@@ -77,10 +151,11 @@ function eraYearSpan(era) {
 // ── Event card (visual timeline) ──────────────────────────────────────────────
 
 function TimelineEventCard({
-  event, side, eras, isGm, campaignId, npcs, locations,
+  event, eraDates, side, eras, calendarMonths, isGm, campaignId, npcs, locations,
   expanded, onToggle, onEdit, onDelete, onToggleVisibility,
 }) {
-  const isSpan = event.end_absolute_year !== null || event.end_year != null;
+  const isSpan = event.end_absolute_year != null || event.end_year != null
+    || event.end_day != null || event.end_month_order != null;
 
   return (
     <div
@@ -93,9 +168,14 @@ function TimelineEventCard({
     >
       <div className={cn('p-3', side === 'left' ? 'text-right' : 'text-left')}>
         {/* Date */}
-        <div className={cn('flex items-center gap-1 flex-wrap mb-1.5', side === 'left' ? 'justify-end' : 'justify-start')}>
-          <EraDateList eraDates={event.era_dates} />
-          {isSpan && <EndDateLabel event={event} eras={eras} />}
+        <div className={cn(
+          'mb-1.5',
+          isSpan
+            ? 'flex flex-col items-center gap-0.5 w-full'
+            : cn('flex items-center gap-1 flex-wrap', side === 'left' ? 'justify-end' : 'justify-start'),
+        )}>
+          <EraDateList eraDates={eraDates} />
+          {isSpan && <EndDateLabel event={event} eras={eras} calendarMonths={calendarMonths} />}
         </div>
 
         {/* Title */}
@@ -837,7 +917,7 @@ function AddEraDialog({ open, onClose, eras, onSave }) {
 
 // ── Visual timeline ───────────────────────────────────────────────────────────
 
-function VisualTimeline({ events, eras, campaignId, isGm, npcs, locations, onEdit, onDelete, onToggleVisibility }) {
+function VisualTimeline({ events, eras, calendarMonths, campaignId, isGm, npcs, locations, onEdit, onDelete, onToggleVisibility }) {
   const [expandedId, setExpandedId] = useState(null);
 
   const datedEvents = events.filter(e => e.absolute_year !== null);
@@ -855,6 +935,27 @@ function VisualTimeline({ events, eras, campaignId, isGm, npcs, locations, onEdi
     }
   }
 
+  // Build render items: year banners interleaved with events for detailed-date events
+  const renderItems = [];
+  const filterEraDates = (eraDates) =>
+    isGm ? (eraDates ?? []) : (eraDates ?? []).filter(d => d.is_visible_to_players);
+
+  let lastYearKey = null;
+  datedEvents.forEach((event, eventIdx) => {
+    const visibleEraDates = filterEraDates(event.era_dates);
+    const hasDetail = visibleEraDates.some(d => d.month_name || d.day != null);
+    if (hasDetail) {
+      const yearKey = String(event.absolute_year);
+      if (yearKey !== lastYearKey) {
+        renderItems.push({ type: 'yearBanner', key: `banner-${yearKey}`, eraDates: visibleEraDates });
+        lastYearKey = yearKey;
+      }
+    } else {
+      lastYearKey = null;
+    }
+    renderItems.push({ type: 'event', key: `event-${event.id}`, event, eventIdx, visibleEraDates });
+  });
+
   const toggleExpand = (id) => setExpandedId(prev => (prev === id ? null : id));
 
   if (datedEvents.length === 0 && undatedEvents.length === 0) {
@@ -871,20 +972,26 @@ function VisualTimeline({ events, eras, campaignId, isGm, npcs, locations, onEdi
       {/* Dated events — visual center line */}
       {datedEvents.length > 0 && (
         <div className="relative">
-          {datedEvents.map((event, i) => {
-            const isLeft = i % 2 === 0;
-            const isSpan = event.end_absolute_year !== null;
-            const aboveColored = lineColoredAbove[i];
-            const belowColored = lineColoredAbove[i + 1] ?? false;
+          {renderItems.map(item => {
+            if (item.type === 'yearBanner') {
+              return <YearBanner key={item.key} eraDates={item.eraDates} />;
+            }
+
+            const { event, eventIdx, visibleEraDates: eventEraDates } = item;
+            const isLeft = eventIdx % 2 === 0;
+            const isSpan = event.end_absolute_year !== null || event.end_year != null
+              || event.end_day != null || event.end_month_order != null;
+            const aboveColored = lineColoredAbove[eventIdx];
+            const belowColored = lineColoredAbove[eventIdx + 1] ?? false;
             const isExpanded = expandedId === event.id;
 
             return (
-              <div key={event.id} className="flex items-start">
+              <div key={item.key} className="flex items-start">
                 {/* Left area */}
                 <div className="flex-1 flex justify-end pr-3 py-3 min-h-[80px]">
                   {isLeft && (
                     <TimelineEventCard
-                      event={event} side="left" eras={eras}
+                      event={event} eraDates={eventEraDates} side="left" eras={eras} calendarMonths={calendarMonths}
                       isGm={isGm} campaignId={campaignId} npcs={npcs} locations={locations}
                       expanded={isExpanded} onToggle={() => toggleExpand(event.id)}
                       onEdit={onEdit} onDelete={onDelete} onToggleVisibility={onToggleVisibility}
@@ -894,22 +1001,17 @@ function VisualTimeline({ events, eras, campaignId, isGm, npcs, locations, onEdi
 
                 {/* Center: line + dot */}
                 <div className="flex flex-col items-center w-8 shrink-0 self-stretch">
-                  {/* Line above dot */}
                   <div className={cn(
                     'w-0.5 flex-1',
-                    i === 0 ? 'invisible' : aboveColored ? 'bg-primary/50' : 'bg-border',
+                    eventIdx === 0 ? 'invisible' : aboveColored ? 'bg-primary/50' : 'bg-border',
                   )} />
-                  {/* Dot */}
                   <div className={cn(
                     'w-4 h-4 rounded-full border-2 z-10 shrink-0 my-1',
-                    isSpan
-                      ? 'bg-primary border-primary'
-                      : 'bg-background border-primary',
+                    isSpan ? 'bg-primary border-primary' : 'bg-background border-primary',
                   )} />
-                  {/* Line below dot */}
                   <div className={cn(
                     'w-0.5 flex-1',
-                    i === datedEvents.length - 1 ? 'invisible' : belowColored ? 'bg-primary/50' : 'bg-border',
+                    eventIdx === datedEvents.length - 1 ? 'invisible' : belowColored ? 'bg-primary/50' : 'bg-border',
                   )} />
                 </div>
 
@@ -917,7 +1019,7 @@ function VisualTimeline({ events, eras, campaignId, isGm, npcs, locations, onEdi
                 <div className="flex-1 flex justify-start pl-3 py-3 min-h-[80px]">
                   {!isLeft && (
                     <TimelineEventCard
-                      event={event} side="right" eras={eras}
+                      event={event} eraDates={eventEraDates} side="right" eras={eras} calendarMonths={calendarMonths}
                       isGm={isGm} campaignId={campaignId} npcs={npcs} locations={locations}
                       expanded={isExpanded} onToggle={() => toggleExpand(event.id)}
                       onEdit={onEdit} onDelete={onDelete} onToggleVisibility={onToggleVisibility}
@@ -1058,6 +1160,38 @@ function TimelineLanding({ onSetUp, isGm }) {
   );
 }
 
+// ── Current date helpers ──────────────────────────────────────────────────────
+
+function formatCurrentDate(calendar) {
+  if (!calendar) return null;
+  const { current_day, current_month_order, current_year, current_era_id, months, eras } = calendar;
+  if (current_day == null && current_month_order == null && current_year == null) return null;
+
+  const monthEntry = current_month_order != null
+    ? months?.find(m => m.order_index === current_month_order)
+    : null;
+  const monthName = monthEntry ? (monthEntry.name || `Month ${current_month_order}`) : null;
+
+  const parts = [];
+  if (current_day != null || monthName) {
+    parts.push(formatDayLabel(monthName, current_day) ?? '');
+  }
+  if (current_year != null) {
+    const era = current_era_id != null ? eras?.find(e => e.id === current_era_id) : null;
+    parts.push(`${current_year.toLocaleString()}${era ? ` ${era.abbreviation}` : ''}`);
+  }
+  return parts.filter(Boolean).join(', ');
+}
+
+function initDateDraft(cal) {
+  return {
+    era_id: cal?.current_era_id != null ? String(cal.current_era_id) : '__none__',
+    year: cal?.current_year ?? '',
+    month_order: cal?.current_month_order != null ? String(cal.current_month_order) : '__none__',
+    day: cal?.current_day ?? '',
+  };
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function TimelinePage() {
@@ -1078,6 +1212,10 @@ export default function TimelinePage() {
   const [showAddEra, setShowAddEra] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
+
+  const [dateDraft, setDateDraft] = useState(initDateDraft(null));
+  const [dateSaving, setDateSaving] = useState(false);
+  const [dateError, setDateError] = useState('');
 
   const eras = calendar?.eras ?? [];
 
@@ -1149,6 +1287,7 @@ export default function TimelinePage() {
         locationService.getLocations(campaignId).catch(() => []),
       ]);
       setCalendar(cal);
+      setDateDraft(initDateDraft(cal));
       setEvents(evts);
       setNpcs(npcList);
       setLocations(locList);
@@ -1199,6 +1338,26 @@ export default function TimelinePage() {
   const handleToggleEventVisibility = async (eventId, isVisible) => {
     await settingsService.patchEventVisibility(campaignId, eventId, isVisible);
     setEvents(prev => prev.map(e => e.id === eventId ? { ...e, is_visible_to_players: isVisible } : e));
+  };
+
+  const handleSaveDate = async () => {
+    setDateSaving(true);
+    setDateError('');
+    try {
+      const payload = {
+        current_era_id: dateDraft.era_id !== '__none__' ? Number(dateDraft.era_id) : null,
+        current_year: dateDraft.year !== '' ? Number(String(dateDraft.year).replace(/,/g, '')) : null,
+        current_month_order: dateDraft.month_order !== '__none__' ? Number(dateDraft.month_order) : null,
+        current_day: dateDraft.day !== '' ? Number(dateDraft.day) : null,
+      };
+      const cal = await settingsService.updateCalendar(campaignId, payload);
+      setCalendar(cal);
+      setDateDraft(initDateDraft(cal));
+    } catch (err) {
+      setDateError(err.response?.data?.detail || 'Failed to save date');
+    } finally {
+      setDateSaving(false);
+    }
   };
 
   if (loading) {
@@ -1322,7 +1481,8 @@ export default function TimelinePage() {
       {/* Visual timeline */}
       <VisualTimeline
         events={displayEvents}
-        eras={sortedEras}
+        eras={visibleEras}
+        calendarMonths={calendar?.months ?? []}
         campaignId={campaignId}
         isGm={effectiveIsGm}
         npcs={npcs}
@@ -1331,6 +1491,100 @@ export default function TimelinePage() {
         onDelete={handleDeleteEvent}
         onToggleVisibility={handleToggleEventVisibility}
       />
+
+      {/* Current Date */}
+      {calendar && (
+        <Card className="mt-2">
+          <CardHeader className="py-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CalendarDays className="w-4 h-4" />
+              Current Date
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-4">
+            {(() => {
+              const dateDisplay = formatCurrentDate(calendar);
+              const sortedMonths = [...(calendar.months || [])].sort((a, b) => a.order_index - b.order_index);
+              return (
+                <div className="space-y-4">
+                  {dateDisplay ? (
+                    <p className="text-xl font-semibold tracking-tight">{dateDisplay}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No current date set.
+                      {effectiveIsGm && ' Use the form below to set it.'}
+                    </p>
+                  )}
+
+                  {effectiveIsGm && (
+                    <div className={cn(dateDisplay && 'border-t pt-4', 'space-y-3')}>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        {dateDisplay ? 'Advance Date' : 'Set Date'}
+                      </p>
+                      {dateError && <p className="text-sm text-destructive">{dateError}</p>}
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Era</Label>
+                          <Select value={dateDraft.era_id} onValueChange={v => setDateDraft(d => ({ ...d, era_id: v }))}>
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue placeholder="None" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— None —</SelectItem>
+                              {(calendar.eras || []).map(era => (
+                                <SelectItem key={era.id} value={String(era.id)}>{era.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Year</Label>
+                          <Input
+                            type="text" inputMode="numeric" className="h-8 text-sm"
+                            value={dateDraft.year}
+                            onChange={e => setDateDraft(d => ({ ...d, year: e.target.value.replace(/,/g, '') }))}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Month</Label>
+                          <Select value={dateDraft.month_order} onValueChange={v => setDateDraft(d => ({ ...d, month_order: v }))}>
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue placeholder="None" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— None —</SelectItem>
+                              {sortedMonths.map(m => (
+                                <SelectItem key={m.id} value={String(m.order_index)}>
+                                  {m.name || `Month ${m.order_index}`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Day</Label>
+                          <Input
+                            type="number" className="h-8 text-sm"
+                            min={1} max={calendar.days_per_month}
+                            value={dateDraft.day}
+                            onChange={e => setDateDraft(d => ({ ...d, day: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={handleSaveDate} disabled={dateSaving}>
+                          {dateSaving && <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />}
+                          Save Date
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dialogs */}
       {showAddEra && (

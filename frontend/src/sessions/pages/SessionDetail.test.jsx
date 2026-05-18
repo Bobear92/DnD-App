@@ -28,9 +28,9 @@ vi.mock('../sessionService', () => ({
   },
   mapSessionImageUrl: (p) => `http://localhost:8000/${p}`,
 }));
-vi.mock('../../npcs/npcService', () => ({ default: { getNpcs: vi.fn() } }));
-vi.mock('../../locations/locationService', () => ({ default: { getLocations: vi.fn() } }));
-vi.mock('../../settings/settingsService', () => ({ default: { getEvents: vi.fn(), getCalendar: vi.fn() } }));
+vi.mock('../../npcs/npcService', () => ({ default: { getNpcs: vi.fn(), createNpc: vi.fn() } }));
+vi.mock('../../locations/locationService', () => ({ default: { getLocations: vi.fn(), createLocation: vi.fn() } }));
+vi.mock('../../settings/settingsService', () => ({ default: { getEvents: vi.fn(), getCalendar: vi.fn(), createEvent: vi.fn() } }));
 vi.mock('../../characters/characterService', () => ({
   default: { getCharactersByCampaign: vi.fn() },
 }));
@@ -296,5 +296,217 @@ describe('SessionDetail — SelectItem regression', () => {
     sessionService.getSession.mockResolvedValue(makeSession({ era_id: null }));
     renderDetail();
     await waitFor(() => expect(screen.getByText('Orc Princeling')).toBeTruthy());
+  });
+});
+
+describe('SessionDetail — Timeline Events create new', () => {
+  it('shows Link existing / Create new toggle when + is clicked', async () => {
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Link existing')).toBeTruthy();
+      expect(screen.getByText('Create new')).toBeTruthy();
+    });
+  });
+
+  it('shows date fields pre-filled from session when Create new is selected', async () => {
+    settingsService.getCalendar.mockResolvedValue({
+      eras: [{ id: 2, name: 'Old Free Calendar', abbreviation: 'OFC' }],
+      months: [{ order_index: 1, name: 'Frostfall' }],
+    });
+    sessionService.getSession.mockResolvedValue(
+      makeSession({ era_id: 2, year: 3739, month_order: 1, day: 14 })
+    );
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+
+    await waitFor(() => {
+      // "What happened?" uniquely identifies the create form
+      expect(screen.getByPlaceholderText('What happened?')).toBeTruthy();
+      // Year and day pre-fill — multiple inputs may share the value, so just confirm the form opened
+      const allYearInputs = screen.getAllByDisplayValue('3739');
+      expect(allYearInputs.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('calls createEvent then addEventLink and shows new event in list', async () => {
+    settingsService.createEvent.mockResolvedValue({ id: 99, title: 'The Battle Begins' });
+    sessionService.addEventLink.mockResolvedValue({ id: 55, event_id: 99, event_title: 'The Battle Begins', description: null });
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+
+    await waitFor(() => screen.getByPlaceholderText('What happened?'));
+    fireEvent.change(screen.getByPlaceholderText('What happened?'), { target: { value: 'The Battle Begins' } });
+    fireEvent.click(screen.getByText('Create & Link'));
+
+    await waitFor(() => {
+      expect(settingsService.createEvent).toHaveBeenCalledWith(
+        '5',
+        expect.objectContaining({ title: 'The Battle Begins', is_visible_to_players: false })
+      );
+      expect(sessionService.addEventLink).toHaveBeenCalledWith(
+        '5', '10', { event_id: 99, description: undefined }
+      );
+      expect(screen.getByText('The Battle Begins')).toBeTruthy();
+    });
+  });
+
+  it('pre-fills title with session number and title', async () => {
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Session 18 - Orc Princeling')).toBeTruthy();
+    });
+  });
+
+  it('pre-fills title with just the title when session has no number', async () => {
+    sessionService.getSession.mockResolvedValue(makeSession({ session_number: null }));
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Orc Princeling')).toBeTruthy();
+    });
+  });
+
+  it('disables Create & Link button when title is cleared', async () => {
+    renderDetail();
+    await waitFor(() => screen.getByTestId('timeline-events-toggle'));
+    fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+
+    await waitFor(() => screen.getByDisplayValue('Session 18 - Orc Princeling'));
+    fireEvent.change(screen.getByDisplayValue('Session 18 - Orc Princeling'), { target: { value: '' } });
+
+    await waitFor(() => {
+      const createBtn = screen.getByText('Create & Link');
+      expect(createBtn.closest('button')).toHaveProperty('disabled', true);
+    });
+  });
+});
+
+describe('SessionDetail — NPCs Featured create new', () => {
+  it('shows Link existing / Create new toggle when + is clicked', async () => {
+    renderDetail();
+    await waitFor(() => screen.getByTestId('npcs-toggle'));
+    fireEvent.click(screen.getByTestId('npcs-toggle'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Link existing')).toBeTruthy();
+      expect(screen.getByText('Create new')).toBeTruthy();
+    });
+  });
+
+  it('calls createNpc then addNpcLink and shows new NPC in list', async () => {
+    npcService.createNpc.mockResolvedValue({ id: 42, name: 'Tavern Keeper', campaign_id: 5 });
+    sessionService.addNpcLink.mockResolvedValue({ id: 7, npc_id: 42, npc_name: 'Tavern Keeper', description: null });
+
+    renderDetail();
+    await waitFor(() => screen.getByTestId('npcs-toggle'));
+    fireEvent.click(screen.getByTestId('npcs-toggle'));
+
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+
+    await waitFor(() => screen.getByPlaceholderText('NPC name'));
+    fireEvent.change(screen.getByPlaceholderText('NPC name'), { target: { value: 'Tavern Keeper' } });
+    fireEvent.click(screen.getByText('Create & Link'));
+
+    await waitFor(() => {
+      expect(npcService.createNpc).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Tavern Keeper', campaign_id: 5, status: 'alive', is_visible_to_players: false })
+      );
+      expect(sessionService.addNpcLink).toHaveBeenCalledWith(
+        '5', '10', { npc_id: 42, description: undefined }
+      );
+      expect(screen.getByText('Tavern Keeper')).toBeTruthy();
+    });
+  });
+
+  it('disables Create & Link when NPC name is empty', async () => {
+    renderDetail();
+    await waitFor(() => screen.getByTestId('npcs-toggle'));
+    fireEvent.click(screen.getByTestId('npcs-toggle'));
+
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+
+    await waitFor(() => screen.getByPlaceholderText('NPC name'));
+    const createBtn = screen.getByText('Create & Link');
+    expect(createBtn.closest('button')).toHaveProperty('disabled', true);
+  });
+});
+
+describe('SessionDetail — Locations Visited create new', () => {
+  it('shows Link existing / Create new toggle when + is clicked', async () => {
+    renderDetail();
+    await waitFor(() => screen.getByTestId('locations-toggle'));
+    fireEvent.click(screen.getByTestId('locations-toggle'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Link existing')).toBeTruthy();
+      expect(screen.getByText('Create new')).toBeTruthy();
+    });
+  });
+
+  it('calls createLocation then addLocationLink and shows new location in list', async () => {
+    locationService.createLocation.mockResolvedValue({ id: 77, name: 'The Rusty Flagon', campaign_id: 5 });
+    sessionService.addLocationLink.mockResolvedValue({ id: 9, location_id: 77, location_name: 'The Rusty Flagon', description: null });
+
+    renderDetail();
+    await waitFor(() => screen.getByTestId('locations-toggle'));
+    fireEvent.click(screen.getByTestId('locations-toggle'));
+
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+
+    await waitFor(() => screen.getByPlaceholderText('Location name'));
+    fireEvent.change(screen.getByPlaceholderText('Location name'), { target: { value: 'The Rusty Flagon' } });
+    fireEvent.click(screen.getByText('Create & Link'));
+
+    await waitFor(() => {
+      expect(locationService.createLocation).toHaveBeenCalledWith(
+        '5',
+        expect.objectContaining({ name: 'The Rusty Flagon', is_visible_to_players: false })
+      );
+      expect(sessionService.addLocationLink).toHaveBeenCalledWith(
+        '5', '10', { location_id: 77, description: undefined }
+      );
+      expect(screen.getByText('The Rusty Flagon')).toBeTruthy();
+    });
+  });
+
+  it('disables Create & Link when location name is empty', async () => {
+    renderDetail();
+    await waitFor(() => screen.getByTestId('locations-toggle'));
+    fireEvent.click(screen.getByTestId('locations-toggle'));
+
+    await waitFor(() => screen.getByText('Create new'));
+    fireEvent.click(screen.getByText('Create new'));
+
+    await waitFor(() => screen.getByPlaceholderText('Location name'));
+    const createBtn = screen.getByText('Create & Link');
+    expect(createBtn.closest('button')).toHaveProperty('disabled', true);
   });
 });

@@ -336,8 +336,8 @@ session_notes
   title,
   real_world_date (Date, nullable),           ← real-world date the session was played
   era_id (FK→calendar_eras SET NULL, nullable),
-  year, month_order, day (all nullable),
-  time_of_day (ENUM: morning/afternoon/evening/night/dawn, nullable),
+  year, month_order, day (all nullable),      ← in-world start date
+  end_year, end_month_order, end_day (all nullable), ← in-world end date; null = point-in-time session
   absolute_year (computed from era + year; used for era_dates display),
   summary,                                     ← short blurb for session list card
   content (Text, nullable),                    ← full Markdown prose ("chapter of a book")
@@ -779,7 +779,7 @@ frontend/src/
 - **NPCDetail portrait:** click or drag-drop to upload (10 MB limit, client-side check); remove button; upload overlay while in progress
 - **NPCDetail core fields:** name, status, race, occupation, alignment, visibility checkbox — inline editing in portrait row; per-section Save/Reset appear only when dirty
 - **Info tab sections:** Physical (age, gender, height, weight, appearance) | Personality (voice, traits, ideals, bonds, flaws, languages as removable tags) | Narrative (summary, description, backstory — labeled "Player visible") | GM Notes (amber-tinted "Private" card, GM only) | Location & Media (last known location select, last-seen notes, theme music URL with clickable link) | Combat Stats (freeform JSON textarea, GM only) | Timeline Events (loaded on mount via `GET /timeline?npc_id=N`)
-- **Timeline Events card (Info tab — NPCDetail):** GM view always shows the card (empty state: "No timeline events linked to this NPC.") with Hidden badges for non-visible events; player view shows only when events exist; each row shows title + era dates (`year abbreviation` separated by `·`) or "Unknown date" italic; events are managed from the Campaign Time page
+- **Timeline Events card (Info tab — NPCDetail):** GM view always shows the card (with count) and a `+` toggle button in the header; clicking `+` shows an inline form with two modes — "Link existing" (select from all campaign events not already linked, optional description) and "Create new" (title required, description, era/year/month/day date fields, visible-to-players checkbox); each event row has a `×` unlink button (GM only); remove fetches the junction link ID via `getEventNpcs` then calls `removeEventNpc`; player view shows only when events exist and has no add/remove controls; event titles link to the Timeline page; data-testid `timeline-events-toggle` on `+` button, `unlink-event-{id}` on remove buttons
 - **Sessions card (Info tab — NPCDetail):** loaded on mount via `GET /sessions?npc_id=N`; GM view always shows (empty state: "No session notes linked to this NPC.") with Hidden badges; player view shows only when sessions exist; each row shows `#N — Title` (or just title if no number) + real_world_date; clickable → SessionDetail
 - **Player view:** all GM-only cards (GM Notes, Combat Stats, Player Relationships tab) hidden; all fields read-only; empty sections suppressed entirely; Timeline Events and Sessions cards hidden when no events/sessions
 - **Relationships tab:** NPC-to-NPC list; related NPC name is a clickable link to their detail page; GM can add (select NPC + type + description) and delete
@@ -815,14 +815,30 @@ frontend/src/
   - **Player view:** Add Era / Add Event buttons hidden; visibility toggles hidden; sort toggle hidden; GM-only eras hidden from era list; Unknown Date section visible (shows events with empty era_dates that are `is_visible_to_players`)
   - **`settingsService.js`:** all calendar + timeline API methods; uses same axios pattern + token interceptor as npcService
 
+### TimelinePage UI — Key Behaviours
+- **Route:** `/campaigns/:campaignId/timeline` — standalone visual timeline page
+- **Visual center-line layout:** events alternate left/right in a zigzag column; a vertical center line connects them; span events color the line segment between their start and all events they encompass
+- **Event card:** shows `EraDateList` (start date), `EndDateLabel` (end date arrow label for span events), title, description snippet, Hidden/Span badges; GM sees Edit/visibility/delete controls
+- **`isSpan` detection:** `end_absolute_year != null || end_year != null || end_day != null || end_month_order != null` — any non-null end field makes an event a span
+- **Span badge:** shown on event card when `isSpan` is true; filled circle dot on center line (vs hollow for point-in-time)
+- **`EndDateLabel`:** rendered only when `isSpan`; shows `end_year end_era.abbreviation month day` joined by spaces; falls back to start date fields when end fields are null — `effectiveEndEraId = end_era_id ?? era_id`, `effectiveEndYear = end_year ?? year`; uses `calendarMonths` (from `calendar.months`) for month name lookup by `order_index`; renders "Month N" when month has no name; renders "?" when all parts are empty (defensive, hard to trigger)
+- **`EventFormDialog` (create + edit):** Start Date section (era, year, day) + End Date section (era, year, day) with label "leave blank for a point-in-time event"; both sections accept commas in year inputs; on edit, initializes `end_year`, `end_era_id`, `end_month_order`, `end_day` from event — null fields initialize to `''`/`'__none__'` not from start date fields
+- **Eras section:** collapsible card; same content as TimelineTab (name, abbreviation, Primary/Current/direction/visibility badges, sort toggle, Add Era button); GM can edit/delete eras; changes refresh full calendar+events load
+- **Unknown Date section:** events with `absolute_year === null` appear in a grid below the center-line; GM can edit these to assign an era
+- **Player View toggle (GM):** hides GM controls, New Event button, sort toggle, Edit/delete buttons; filters to `is_visible_to_players` events and eras; shows "Showing player view" subtitle; toggle persists for session only
+- **Expand:** clicking a card opens `ExpandedEventDetail` inline; loads NPC/location links and sessions; GM sees add/remove controls and GM Notes; player sees read-only links
+
 ### Sessions UI — Key Behaviours
-- **SessionList grid:** session number badge, title, real-world date, era dates (from `era_dates` list), time-of-day badge, summary, Hidden badge (GM view); GM eye/delete controls on hover
+- **SessionList grid:** session number badge, title, real-world date, era dates (from `era_dates` list), summary, Hidden badge (GM view); GM eye/delete controls on hover
 - **Create dialog:** session_number (optional), real_world_date (date picker), title (required), summary, is_visible_to_players → navigates to SessionDetail on create
-- **SessionDetail header:** session number + title, real-world date, in-world era dates, time-of-day badge, music URL link, eye toggle (GM)
-- **Metadata card (GM only):** session_number, real_world_date, time_of_day (Select with `__none__` sentinel), music_url, summary, is_visible_to_players — Save/Reset on dirty
+- **SessionDetail header:** session number + title, real-world date, in-world era dates, music URL link, eye toggle (GM)
+- **Metadata card (GM only):** session_number, real_world_date, music_url, summary, is_visible_to_players — Save/Reset on dirty
 - **Content card:** Write/Preview toggle; Markdown textarea (with `ref` for cursor tracking) for GM; read-only ReactMarkdown for players; Image Upload button (GM) inserts `\n![](http://localhost:8000/{image_url})\n` at cursor
 - **GM Notes card (GM only):** amber border/bg "Private" card with Save/Reset when dirty; always stripped from player responses
-- **Linked content (bottom grid):** Characters Present | NPCs Featured | Locations Visited | Timeline Events — each a `LinkCard` with + button (GM), Select + description input + Add/Cancel; read-only list for players; NPC/location names are `<Link>` components to their detail pages
+- **Linked content (bottom grid):** Characters Present | NPCs Featured | Locations Visited | Timeline Events — Characters use a generic `LinkCard` (link-only); NPCs use `NpcLinkCard`, Locations use `LocationLinkCard`, Timeline Events use `EventLinkCard` — all three support a "Link existing / Create new" mode toggle; read-only list for players; NPC/location names are `<Link>` components to their detail pages
+- **NpcLinkCard (create mode):** name (required), race, occupation, status select (alive/dead/missing/unknown), summary, link description, visible-to-players checkbox; calls `npcService.createNpc` then `sessionService.addNpcLink`; new NPC added to `allNpcs` state. Toggle button has `data-testid="npcs-toggle"`.
+- **LocationLinkCard (create mode):** name (required), location_type, link description, visible-to-players checkbox; calls `locationService.createLocation` then `sessionService.addLocationLink`; new location added to `allLocations` state. Toggle button has `data-testid="locations-toggle"`.
+- **Timeline Events card (SessionDetail):** uses `EventLinkCard` with a "Link existing / Create new" mode toggle. "Link existing" = standard select flow; "Create new" = inline form (title required, link description optional, date fields pre-filled from session's era/year/month/day). On create, calls `settingsService.createEvent` then `sessionService.addEventLink`; newly created event defaults to `is_visible_to_players: false` and is added to `allEvents` state. The toggle button has `data-testid="timeline-events-toggle"` for tests.
 - **Sessions listed in Sidebar** for both GM and player (`BookOpen` icon, "Session Notes" label)
 - **`react-markdown`** is installed for Markdown rendering in content card
 - **`mapSessionImageUrl(path)`** helper in `sessionService.js` → `http://localhost:8000/${path}`
@@ -979,7 +995,7 @@ frontend/src/
 ├── npcs/
 │   └── pages/
 │       ├── NPCDetail.jsx
-│       ├── NPCDetail.test.jsx        # render smoke test, SelectItem regression, error state, GM vs player visibility, Timeline Events card (GM empty/events/hidden badge, player hide/show), Sessions card (GM empty/sessions/hidden badge, player hide/show) (15 tests)
+│       ├── NPCDetail.test.jsx        # render smoke test, SelectItem regression, error state, GM vs player visibility, Timeline Events card (GM empty/events/hidden badge, player hide/show), Sessions card (GM empty/sessions/hidden badge, player hide/show), Timeline Events link/create/remove (GM toggle, create new flow, unlink, player view guards) (23 tests)
 │       ├── NPCList.jsx
 │       └── NPCList.test.jsx          # render, search (includes summary), location filter (unplaced + hierarchy subtree), sort, GM vs player view (10 tests)
 ├── locations/
@@ -990,12 +1006,16 @@ frontend/src/
 ├── sessions/
 │   └── pages/
 │       ├── SessionList.jsx
-│       ├── SessionList.test.jsx      # loading, empty state, card render (number, date, era dates, time of day, Hidden badge), GM New Session button/create/navigate, eye toggle, delete dialog, player view (no controls) (14 tests)
+│       ├── SessionList.test.jsx      # loading, empty state, card render (number, date, era dates, Hidden badge), GM New Session button/create/navigate, eye toggle, delete dialog, player view (no controls) (14 tests)
 │       ├── SessionDetail.jsx
-│       └── SessionDetail.test.jsx   # loading/error, header (title/date/era/time/Hidden), GM vs player view (Details card, GM Notes, Upload Image, content), updateSession, link cards, SelectItem regression (null time_of_day) (17 tests)
+│       └── SessionDetail.test.jsx   # loading/error, header (title/date/era/Hidden), GM vs player view (Details card, GM Notes, Upload Image, content), updateSession, link cards, SelectItem regression (null era_id), Timeline Events create new (toggle, pre-fill, createEvent+addEventLink, disabled state), NPCs create new (toggle, createNpc+addNpcLink, disabled), Locations create new (toggle, createLocation+addLocationLink, disabled) (27 tests)
 ├── dashboard/
 │   ├── Dashboard.jsx
 │   └── Dashboard.test.jsx            # loading spinner, 404 no-calendar (player/GM messages), date formatting (named month, Month N fallback), GM vs player gating, Player View toggle hides form, save date calls updateCalendar (9 tests)
+├── timeline/
+│   └── pages/
+│       ├── TimelinePage.jsx
+│       └── TimelinePage.test.jsx     # loading, no-calendar landing (GM/player), eras section (names/badges/GM controls), point-in-time events, span events (Span badge, end date label), unknown date section, GM actions (create/edit dialog, createEvent call), EndDateLabel (isSpan detection, era fallback, month name, Month N, end_day), Edit dialog pre-fills end date (regression: stale-server bug) (28 tests)
 ├── settings/
 │   └── pages/
 │       ├── CalendarTab.jsx
@@ -1048,6 +1068,8 @@ vi.mock('../../campaigns/CampaignContext', () => ({
 `MainLayout.test.jsx` — "calls enterCampaign with gm when created_by matches user.id but role is stored as player" — guards against stale `userRole` in localStorage surviving across sessions.
 
 `NPCDetail.test.jsx` — "does not crash with null last_known_location_id" — guards against the Radix UI `<SelectItem value="">` crash that blanks the entire React tree in React 19. Also guards GM vs player visibility of the GM Notes card.
+
+`TimelinePage.test.jsx` — "Edit dialog pre-fills end_year from span event" / "Edit dialog leaves end_year blank for point-in-time event" — guards against the stale uvicorn bug where the server silently drops `end_*` fields on INSERT because the ORM model was cached before the migration ran. The frontend form initialization is correct; the test ensures the full round-trip (event → API → state → form) preserves end date values. Also guards `isSpan` detection and `EndDateLabel` fallback logic.
 
 `LocationList.test.jsx` — "clicking the top-level node navigates with the correct campaignId — not undefined" — guards against `LocationTreeNode` and `LocationCard` being module-level components that can't close over `useParams()`'s `campaignId`. Without the prop fix, all tree/card clicks navigate to `/campaigns/undefined/locations/X`.
 
