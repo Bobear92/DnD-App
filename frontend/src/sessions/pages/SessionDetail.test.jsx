@@ -30,12 +30,26 @@ vi.mock('../sessionService', () => ({
 }));
 vi.mock('../../npcs/npcService', () => ({ default: { getNpcs: vi.fn() } }));
 vi.mock('../../locations/locationService', () => ({ default: { getLocations: vi.fn() } }));
-vi.mock('../../settings/settingsService', () => ({ default: { getEvents: vi.fn() } }));
+vi.mock('../../settings/settingsService', () => ({ default: { getEvents: vi.fn(), getCalendar: vi.fn() } }));
 vi.mock('../../characters/characterService', () => ({
   default: { getCharactersByCampaign: vi.fn() },
 }));
-vi.mock('react-markdown', () => ({
-  default: ({ children }) => <div data-testid="markdown">{children}</div>,
+vi.mock('../components/RichTextEditor', () => ({
+  default: ({ content, onChange, onImageUpload, readOnly }) =>
+    readOnly ? (
+      <div data-testid="rich-content">{content}</div>
+    ) : (
+      <div>
+        <textarea
+          placeholder="Write your session notes…"
+          defaultValue={content}
+          onChange={e => onChange?.(e.target.value)}
+        />
+        {onImageUpload && (
+          <button onClick={() => onImageUpload(new File([''], 'test.png'))}>Upload Image</button>
+        )}
+      </div>
+    ),
 }));
 
 const mockNavigate = vi.fn();
@@ -60,10 +74,10 @@ const makeSession = (overrides = {}) => ({
   content: 'The evening air hung thick...',
   gm_notes: 'Secret: prince is a doppelganger.',
   is_visible_to_players: true,
-  era_dates: [{ era_id: 1, year: 3739, abbreviation: 'OFC' }],
-  time_of_day: 'evening',
+  era_dates: [{ era_id: 1, era_name: 'Old Free Calendar', year: 3739, abbreviation: 'OFC', month_name: null, day: null, is_visible_to_players: true }],
   music_url: null,
   era_id: null, year: null, month_order: null, day: null,
+  end_year: null, end_month_order: null, end_day: null,
   npc_links: [], location_links: [], event_links: [], character_links: [],
   ...overrides,
 });
@@ -79,6 +93,7 @@ beforeEach(() => {
   npcService.getNpcs.mockResolvedValue([]);
   locationService.getLocations.mockResolvedValue([]);
   settingsService.getEvents.mockResolvedValue([]);
+  settingsService.getCalendar.mockResolvedValue({ eras: [], months: [] });
   characterService.getCharactersByCampaign.mockResolvedValue({ data: [] });
   mockNavigate.mockClear();
 });
@@ -122,11 +137,6 @@ describe('SessionDetail — header display', () => {
   it('renders era dates in header', async () => {
     renderDetail();
     await waitFor(() => expect(screen.getByText(/3739.*OFC/)).toBeTruthy());
-  });
-
-  it('renders time of day badge', async () => {
-    renderDetail();
-    await waitFor(() => expect(screen.getByText('evening')).toBeTruthy());
   });
 
   it('shows Hidden badge when session not visible to players', async () => {
@@ -173,7 +183,7 @@ describe('SessionDetail — GM view', () => {
     renderDetail();
     await waitFor(() => screen.getByText('Session Content'));
 
-    const textarea = screen.getByPlaceholderText(/Write your session notes/);
+    const textarea = screen.getByPlaceholderText('Write your session notes…');
     fireEvent.change(textarea, { target: { value: 'New content here' } });
     const saveButtons = screen.getAllByText('Save');
     fireEvent.click(saveButtons[saveButtons.length - 1]);
@@ -235,9 +245,14 @@ describe('SessionDetail — player view', () => {
     expect(screen.queryByText('Upload Image')).toBeNull();
   });
 
-  it('shows content in read-only markdown for player', async () => {
+  it('shows content in read-only view for player', async () => {
     renderDetail();
-    await waitFor(() => expect(screen.getByTestId('markdown')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('rich-content')).toBeTruthy());
+  });
+
+  it('shows era dates prominently in player view', async () => {
+    renderDetail();
+    await waitFor(() => expect(screen.getByText(/3739.*OFC/)).toBeTruthy());
   });
 
   it('shows linked content cards as read-only for player (no + buttons)', async () => {
@@ -249,9 +264,36 @@ describe('SessionDetail — player view', () => {
   });
 });
 
+describe('SessionDetail — Player View toggle (GM)', () => {
+  it('shows Player View button for GM', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Player View')).toBeTruthy());
+  });
+
+  it('hides Session Details card and GM Notes when Player View is active', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderDetail();
+    await waitFor(() => screen.getByText('Player View'));
+    fireEvent.click(screen.getByText('Player View'));
+    await waitFor(() => {
+      expect(screen.queryByText('Session Details')).toBeNull();
+      expect(screen.queryByText(/GM Notes/)).toBeNull();
+      expect(screen.getByText('Exit Player View')).toBeTruthy();
+    });
+  });
+
+  it('does not show Player View button for actual player', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    renderDetail();
+    await waitFor(() => screen.getByText('Orc Princeling'));
+    expect(screen.queryByText('Player View')).toBeNull();
+  });
+});
+
 describe('SessionDetail — SelectItem regression', () => {
-  it('does not crash when time_of_day is null (no empty-string SelectItem value)', async () => {
-    sessionService.getSession.mockResolvedValue(makeSession({ time_of_day: null }));
+  it('does not crash with null era_id (no empty-string SelectItem value)', async () => {
+    sessionService.getSession.mockResolvedValue(makeSession({ era_id: null }));
     renderDetail();
     await waitFor(() => expect(screen.getByText('Orc Princeling')).toBeTruthy());
   });

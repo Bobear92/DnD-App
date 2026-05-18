@@ -313,6 +313,10 @@ timeline_events
   era_id (FK→calendar_eras SET NULL, nullable),
   year, month_order, day (all nullable),
   absolute_year (computed from era + year; used for ORDER BY),
+  -- End date: null = point-in-time event; set = span event (days/weeks/months/years)
+  end_era_id (FK→calendar_eras SET NULL, nullable),
+  end_year, end_month_order, end_day (all nullable),
+  end_absolute_year (computed from end_era + end_year; used for span overlap detection),
   is_visible_to_players (boolean), created_at, updated_at
 
 timeline_event_npcs                  ← junction: NPC linked to a timeline event
@@ -600,6 +604,7 @@ Non-primary eras require `anchor_era_id` + `anchor_era_year` for epoch offset ma
 
 Events sorted by `absolute_year ASC NULLS FIRST, month_order ASC, day ASC`.
 Each event response includes `era_dates: List[EraDate]` — the event's date expressed in every era whose range covers the event's `absolute_year`. Hidden eras are excluded for players.
+Span events: `end_era_id`, `end_year`, `end_month_order`, `end_day`, `end_absolute_year` are all nullable; null = point-in-time event. Spans can cross era boundaries (start and end era may differ). `end_absolute_year` is computed from `end_era_id + end_year` using the same math as `absolute_year`.
 
 ### Session Notes (per-campaign)
 | Method | Endpoint | Auth Required |
@@ -735,7 +740,8 @@ frontend/src/
 | `/campaigns/:campaignId/locations/:locationId` | LocationDetail | ✅ Functional |
 | `/campaigns/:campaignId/npcs` | NPCList | ✅ Functional |
 | `/campaigns/:campaignId/npcs/:npcId` | NPCDetail | ✅ Functional |
-| `/campaigns/:campaignId/campaign-time` | CampaignSettings | ✅ Functional (GM only: Calendar + Timeline tabs) |
+| `/campaigns/:campaignId/campaign-time` | CampaignSettings | ✅ Functional (Calendar only — Timeline moved to its own route) |
+| `/campaigns/:campaignId/timeline` | TimelinePage | ✅ Functional (visual center-line timeline; GM + player) |
 | `/campaigns/:campaignId/sessions` | SessionList | ✅ Functional |
 | `/campaigns/:campaignId/sessions/:sessionId` | SessionDetail | ✅ Functional |
 | `/campaigns/:campaignId/characters/create` | — | ❌ Not built |

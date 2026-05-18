@@ -1,17 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, date
-from enum import Enum
 
 from gm.campaigns.campaign_tools.timeline.schemas import EraDate
-
-
-class TimeOfDayEnum(str, Enum):
-    morning = "morning"
-    afternoon = "afternoon"
-    evening = "evening"
-    night = "night"
-    dawn = "dawn"
 
 
 # ── Session Note CRUD ─────────────────────────────────────────────────────────
@@ -24,11 +15,14 @@ class SessionNoteCreate(BaseModel):
     year: Optional[int] = None
     month_order: Optional[int] = Field(None, ge=1)
     day: Optional[int] = Field(None, ge=1)
-    time_of_day: Optional[TimeOfDayEnum] = None
+    end_year: Optional[int] = None
+    end_month_order: Optional[int] = Field(None, ge=1)
+    end_day: Optional[int] = Field(None, ge=1)
     summary: Optional[str] = None
     content: Optional[str] = None
     gm_notes: Optional[str] = None
     music_url: Optional[str] = None
+    music_description: Optional[str] = None
     is_visible_to_players: bool = False
 
 
@@ -40,11 +34,14 @@ class SessionNoteUpdate(BaseModel):
     year: Optional[int] = None
     month_order: Optional[int] = Field(None, ge=1)
     day: Optional[int] = Field(None, ge=1)
-    time_of_day: Optional[TimeOfDayEnum] = None
+    end_year: Optional[int] = None
+    end_month_order: Optional[int] = Field(None, ge=1)
+    end_day: Optional[int] = Field(None, ge=1)
     summary: Optional[str] = None
     content: Optional[str] = None
     gm_notes: Optional[str] = None
     music_url: Optional[str] = None
+    music_description: Optional[str] = None
     is_visible_to_players: Optional[bool] = None
 
 
@@ -62,13 +59,16 @@ class SessionNoteResponse(BaseModel):
     year: Optional[int] = None
     month_order: Optional[int] = None
     day: Optional[int] = None
-    time_of_day: Optional[str] = None
+    end_year: Optional[int] = None
+    end_month_order: Optional[int] = None
+    end_day: Optional[int] = None
     absolute_year: Optional[int] = None
     era_dates: List[EraDate] = []
     summary: Optional[str] = None
     content: Optional[str] = None
     gm_notes: Optional[str] = None
     music_url: Optional[str] = None
+    music_description: Optional[str] = None
     is_visible_to_players: bool
     npc_links: List["SessionNoteNPCResponse"] = []
     location_links: List["SessionNoteLocationResponse"] = []
@@ -91,7 +91,9 @@ class SessionNoteListItem(BaseModel):
     year: Optional[int] = None
     month_order: Optional[int] = None
     day: Optional[int] = None
-    time_of_day: Optional[str] = None
+    end_year: Optional[int] = None
+    end_month_order: Optional[int] = None
+    end_day: Optional[int] = None
     absolute_year: Optional[int] = None
     era_dates: List[EraDate] = []
     summary: Optional[str] = None

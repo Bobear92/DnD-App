@@ -37,7 +37,8 @@ const makeSession = (overrides = {}) => ({
   summary: 'Adventurers gather.',
   is_visible_to_players: true,
   era_dates: [],
-  time_of_day: null,
+  day: null, month_order: null, year: null,
+  end_day: null, end_month_order: null, end_year: null,
   ...overrides,
 });
 
@@ -90,10 +91,10 @@ describe('SessionList — render', () => {
     await waitFor(() => expect(screen.getByText(/3739.*OFC/)).toBeTruthy());
   });
 
-  it('shows time of day badge', async () => {
-    sessionService.listSessions.mockResolvedValue([makeSession({ time_of_day: 'evening' })]);
+  it('shows day range when end_day differs from day', async () => {
+    sessionService.listSessions.mockResolvedValue([makeSession({ day: 1, month_order: 3, year: 100, end_day: 2, end_month_order: 3, end_year: 100 })]);
     renderList();
-    await waitFor(() => expect(screen.getByText('Evening')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Days 1–2/)).toBeTruthy());
   });
 
   it('shows Hidden badge for invisible session (GM view)', async () => {

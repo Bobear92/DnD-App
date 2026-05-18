@@ -184,6 +184,7 @@ def create_event(db: Session, campaign_id: int, data: EventCreate, user_id: int)
     _require_gm(db, campaign_id, user_id)
 
     absolute_year = _resolve_absolute_year(db, data.era_id, data.year)
+    end_absolute_year = _resolve_absolute_year(db, data.end_era_id, data.end_year)
 
     event = TimelineEvent(
         campaign_id=campaign_id,
@@ -195,6 +196,11 @@ def create_event(db: Session, campaign_id: int, data: EventCreate, user_id: int)
         month_order=data.month_order,
         day=data.day,
         absolute_year=absolute_year,
+        end_era_id=data.end_era_id,
+        end_year=data.end_year,
+        end_month_order=data.end_month_order,
+        end_day=data.end_day,
+        end_absolute_year=end_absolute_year,
         is_visible_to_players=data.is_visible_to_players,
     )
     db.add(event)
@@ -210,8 +216,9 @@ def update_event(db: Session, campaign_id: int, event_id: int, data: EventUpdate
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(event, field, value)
 
-    # Recompute absolute_year if era or year changed
+    # Recompute both absolute years in case era or year fields changed
     event.absolute_year = _resolve_absolute_year(db, event.era_id, event.year)
+    event.end_absolute_year = _resolve_absolute_year(db, event.end_era_id, event.end_year)
 
     db.commit()
     db.refresh(event)

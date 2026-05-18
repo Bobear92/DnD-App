@@ -1,15 +1,6 @@
-import enum
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Date, ForeignKey, UniqueConstraint, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Date, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from shared.database import Base
-
-
-class TimeOfDay(enum.Enum):
-    morning = "morning"
-    afternoon = "afternoon"
-    evening = "evening"
-    night = "night"
-    dawn = "dawn"
 
 
 class SessionNote(Base):
@@ -20,18 +11,22 @@ class SessionNote(Base):
     session_number = Column(Integer, nullable=True)
     title = Column(String(500), nullable=False)
     real_world_date = Column(Date, nullable=True)
-    # In-world calendar date
+    # In-world calendar date (start)
     era_id = Column(Integer, ForeignKey("calendar_eras.id", ondelete="SET NULL"), nullable=True)
     year = Column(Integer, nullable=True)
     month_order = Column(Integer, nullable=True)
     day = Column(Integer, nullable=True)
-    time_of_day = Column(SAEnum(TimeOfDay), nullable=True)
+    # In-world calendar date (end — for multi-day sessions)
+    end_year = Column(Integer, nullable=True)
+    end_month_order = Column(Integer, nullable=True)
+    end_day = Column(Integer, nullable=True)
     absolute_year = Column(Integer, nullable=True)  # computed for era_dates display
     # Content
     summary = Column(Text, nullable=True)
     content = Column(Text, nullable=True)
     gm_notes = Column(Text, nullable=True)
     music_url = Column(String(500), nullable=True)
+    music_description = Column(String(500), nullable=True)
     is_visible_to_players = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

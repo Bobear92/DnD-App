@@ -175,7 +175,9 @@ def create_session(db: Session, campaign_id: int, data: SessionNoteCreate, user_
         year=data.year,
         month_order=data.month_order,
         day=data.day,
-        time_of_day=data.time_of_day.value if data.time_of_day else None,
+        end_year=data.end_year,
+        end_month_order=data.end_month_order,
+        end_day=data.end_day,
         absolute_year=absolute_year,
         summary=data.summary,
         content=data.content,
@@ -194,8 +196,6 @@ def update_session(db: Session, campaign_id: int, session_id: int, data: Session
     session = _get_session_or_404(db, campaign_id, session_id)
 
     update_data = data.model_dump(exclude_unset=True)
-    if "time_of_day" in update_data and update_data["time_of_day"] is not None:
-        update_data["time_of_day"] = update_data["time_of_day"].value
     for field, value in update_data.items():
         setattr(session, field, value)
 

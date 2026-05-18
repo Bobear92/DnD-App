@@ -26,6 +26,10 @@ class EventCreate(BaseModel):
     year: Optional[int] = None
     month_order: Optional[int] = Field(None, ge=1)
     day: Optional[int] = Field(None, ge=1)
+    end_era_id: Optional[int] = None
+    end_year: Optional[int] = None
+    end_month_order: Optional[int] = Field(None, ge=1)
+    end_day: Optional[int] = Field(None, ge=1)
     is_visible_to_players: bool = False
 
 
@@ -37,6 +41,10 @@ class EventUpdate(BaseModel):
     year: Optional[int] = None
     month_order: Optional[int] = Field(None, ge=1)
     day: Optional[int] = Field(None, ge=1)
+    end_era_id: Optional[int] = None
+    end_year: Optional[int] = None
+    end_month_order: Optional[int] = Field(None, ge=1)
+    end_day: Optional[int] = Field(None, ge=1)
     is_visible_to_players: Optional[bool] = None
 
 
@@ -55,6 +63,11 @@ class EventResponse(BaseModel):
     month_order: Optional[int] = None
     day: Optional[int] = None
     absolute_year: Optional[int] = None
+    end_era_id: Optional[int] = None
+    end_year: Optional[int] = None
+    end_month_order: Optional[int] = None
+    end_day: Optional[int] = None
+    end_absolute_year: Optional[int] = None
     # Computed: this event's date expressed in every applicable era
     era_dates: List[EraDate] = []
     is_visible_to_players: bool
@@ -78,6 +91,11 @@ class EventListItem(BaseModel):
     month_order: Optional[int] = None
     day: Optional[int] = None
     absolute_year: Optional[int] = None
+    end_era_id: Optional[int] = None
+    end_year: Optional[int] = None
+    end_month_order: Optional[int] = None
+    end_day: Optional[int] = None
+    end_absolute_year: Optional[int] = None
     era_dates: List[EraDate] = []
     is_visible_to_players: bool
     created_at: datetime

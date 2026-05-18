@@ -2,7 +2,7 @@ import { NavLink, useParams } from 'react-router-dom';
 import { useCampaign } from '../../../campaigns/CampaignContext';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard, Users, Drama, Map, Clock, BookOpen, Menu, ChevronLeft,
+  LayoutDashboard, Users, Drama, Map, Clock, BookOpen, Menu, ChevronLeft, GitBranch,
 } from 'lucide-react';
 
 const Sidebar = ({ collapsed, toggleSidebar }) => {
@@ -16,7 +16,8 @@ const Sidebar = ({ collapsed, toggleSidebar }) => {
     { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'Characters' },
     { path: `/campaigns/${campaignId}/npcs`, icon: Drama, label: 'NPCs' },
     { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
-    { path: `/campaigns/${campaignId}/campaign-time`, icon: Clock, label: 'Campaign Time' },
+    { path: `/campaigns/${campaignId}/timeline`, icon: GitBranch, label: 'Timeline' },
+    { path: `/campaigns/${campaignId}/campaign-time`, icon: Clock, label: 'Calendar' },
     { path: `/campaigns/${campaignId}/sessions`, icon: BookOpen, label: 'Session Notes' },
   ];
 
@@ -24,6 +25,7 @@ const Sidebar = ({ collapsed, toggleSidebar }) => {
     { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'My Characters' },
     { path: `/campaigns/${campaignId}/npcs`, icon: Drama, label: 'NPCs' },
     { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
+    { path: `/campaigns/${campaignId}/timeline`, icon: GitBranch, label: 'Timeline' },
     { path: `/campaigns/${campaignId}/sessions`, icon: BookOpen, label: 'Session Notes' },
   ];
 

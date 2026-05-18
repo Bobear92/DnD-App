@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
 import MainLayout from '../../shared/components/layout/MainLayout';
+import RichTextEditor from '../components/RichTextEditor';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import sessionService, { mapSessionImageUrl } from '../sessionService';
 import npcService from '../../npcs/npcService';
@@ -16,22 +16,48 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  ArrowLeft, Eye, EyeOff, Save, RotateCcw, Loader2, ImagePlus,
-  Users, Drama, MapPin, Clock, Music, X, Plus, BookOpen,
+  ArrowLeft, Eye, EyeOff, Save, RotateCcw, Loader2,
+  Users, Drama, MapPin, Clock, Music, X, Plus,
   Calendar, FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const BACKEND = 'http://localhost:8000';
 
-const TIME_OF_DAY_OPTIONS = [
-  { value: '__none__', label: 'None' },
-  { value: 'dawn', label: 'Dawn' },
-  { value: 'morning', label: 'Morning' },
-  { value: 'afternoon', label: 'Afternoon' },
-  { value: 'evening', label: 'Evening' },
-  { value: 'night', label: 'Night' },
-];
+// Returns { prefix: string|null, visibleEras: EraDate[] }
+// Uses month_name from era_dates (backend-computed) so player-hidden eras don't leak month names.
+function buildSessionDate(session, eraDates, playerView, calendarMonths) {
+  const visibleEras = playerView
+    ? (eraDates || []).filter(ed => ed.is_visible_to_players)
+    : (eraDates || []);
+
+  const { day, month_order, end_day, end_month_order } = session;
+
+  // Prefer backend-computed month_name; fall back to calendarMonths lookup
+  const lookupMonth = (order) =>
+    calendarMonths.find(m => m.order_index === order)?.name ?? (order ? `Month ${order}` : null);
+  const startMonthName = visibleEras[0]?.month_name ?? lookupMonth(month_order);
+  const endMonthName = (end_month_order && end_month_order !== month_order)
+    ? lookupMonth(end_month_order)
+    : null;
+
+  let prefix = null;
+  if (day != null || startMonthName) {
+    const sameMo = !end_month_order || end_month_order === month_order;
+    const hasRange = end_day != null && end_day !== day;
+    if (hasRange && sameMo) {
+      prefix = [`Days ${day}–${end_day}`, startMonthName].filter(Boolean).join(', ');
+    } else if (hasRange && !sameMo) {
+      const s = [day != null && `Day ${day}`, startMonthName].filter(Boolean).join(' ');
+      const e = [end_day != null && `Day ${end_day}`, endMonthName].filter(Boolean).join(' ');
+      prefix = `${s} – ${e}`;
+    } else {
+      prefix = [day != null && `Day ${day}`, startMonthName].filter(Boolean).join(', ');
+    }
+  }
+
+  return { prefix, visibleEras };
+}
 
 function EraDateList({ eraDates }) {
   if (!eraDates || eraDates.length === 0) {
@@ -47,15 +73,6 @@ function EraDateList({ eraDates }) {
       ))}
     </span>
   );
-}
-
-function insertMarkdownAtCursor(textarea, insertion) {
-  if (!textarea) return insertion;
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const before = textarea.value.substring(0, start);
-  const after = textarea.value.substring(end);
-  return before + insertion + after;
 }
 
 function LinkCard({ title, icon: Icon, items, isGm, allOptions, optionLabel, onAdd, onRemove, renderItem }) {
@@ -147,6 +164,8 @@ export default function SessionDetail() {
   const { campaign } = useCampaign();
   const isGm = campaign?.userRole === 'gm';
 
+  const [playerView, setPlayerView] = useState(false);
+
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -160,17 +179,11 @@ export default function SessionDetail() {
   const [content, setContent] = useState('');
   const [contentDirty, setContentDirty] = useState(false);
   const [savingContent, setSavingContent] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
-  const contentRef = useRef(null);
 
   // GM notes
   const [gmNotes, setGmNotes] = useState('');
   const [gmNotesDirty, setGmNotesDirty] = useState(false);
   const [savingGmNotes, setSavingGmNotes] = useState(false);
-
-  // Image upload
-  const imageInputRef = useRef(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Link lists
   const [npcLinks, setNpcLinks] = useState([]);
@@ -183,6 +196,9 @@ export default function SessionDetail() {
   const [allLocations, setAllLocations] = useState([]);
   const [allEvents, setAllEvents] = useState([]);
   const [allCharacters, setAllCharacters] = useState([]);
+  const [calendarEras, setCalendarEras] = useState([]);
+  const [calendarMonths, setCalendarMonths] = useState([]);
+  const [calendarCurrentYear, setCalendarCurrentYear] = useState(null);
 
   const loadSession = useCallback(async () => {
     try {
@@ -214,6 +230,16 @@ export default function SessionDetail() {
     characterService.getCharactersByCampaign(campaignId).then(res => setAllCharacters(res?.data || [])).catch(() => {});
   }, [isGm, campaignId]);
 
+  // Load calendar for all users — needed for month names in the date header
+  useEffect(() => {
+    if (!campaignId) return;
+    settingsService.getCalendar(campaignId).then(cal => {
+      setCalendarEras(cal?.eras || []);
+      setCalendarMonths(cal?.months || []);
+      setCalendarCurrentYear(cal?.current_year ?? null);
+    }).catch(() => {});
+  }, [campaignId]);
+
   function toMetaForm(s) {
     return {
       session_number: s.session_number ?? '',
@@ -223,9 +249,12 @@ export default function SessionDetail() {
       year: s.year ?? '',
       month_order: s.month_order ?? '',
       day: s.day ?? '',
-      time_of_day: s.time_of_day || '__none__',
+      end_year: s.end_year ?? '',
+      end_month_order: s.end_month_order ?? '',
+      end_day: s.end_day ?? '',
       summary: s.summary || '',
       music_url: s.music_url || '',
+      music_description: s.music_description || '',
       is_visible_to_players: s.is_visible_to_players,
     };
   }
@@ -241,21 +270,19 @@ export default function SessionDetail() {
       const payload = {
         title: editMeta.title,
         is_visible_to_players: editMeta.is_visible_to_players,
+        session_number: editMeta.session_number !== '' ? Number(editMeta.session_number) : null,
+        real_world_date: editMeta.real_world_date || null,
+        summary: editMeta.summary || null,
+        music_url: editMeta.music_url || null,
+        music_description: editMeta.music_description || null,
+        era_id: editMeta.era_id || null,
+        year: editMeta.year !== '' ? Number(editMeta.year) : null,
+        month_order: editMeta.month_order !== '' ? Number(editMeta.month_order) : null,
+        day: editMeta.day !== '' ? Number(editMeta.day) : null,
+        end_year: editMeta.end_year !== '' ? Number(editMeta.end_year) : null,
+        end_month_order: editMeta.end_month_order !== '' ? Number(editMeta.end_month_order) : null,
+        end_day: editMeta.end_day !== '' ? Number(editMeta.end_day) : null,
       };
-      if (editMeta.session_number !== '') payload.session_number = Number(editMeta.session_number);
-      else payload.session_number = null;
-      if (editMeta.real_world_date) payload.real_world_date = editMeta.real_world_date;
-      else payload.real_world_date = null;
-      if (editMeta.time_of_day && editMeta.time_of_day !== '__none__') payload.time_of_day = editMeta.time_of_day;
-      else payload.time_of_day = null;
-      if (editMeta.summary) payload.summary = editMeta.summary;
-      if (editMeta.music_url) payload.music_url = editMeta.music_url;
-      if (editMeta.era_id) {
-        payload.era_id = editMeta.era_id;
-        payload.year = editMeta.year ? Number(editMeta.year) : null;
-        payload.month_order = editMeta.month_order ? Number(editMeta.month_order) : null;
-        payload.day = editMeta.day ? Number(editMeta.day) : null;
-      }
       const updated = await sessionService.updateSession(campaignId, sessionId, payload);
       setSession(updated);
       setEditMeta(toMetaForm(updated));
@@ -286,28 +313,9 @@ export default function SessionDetail() {
     }
   }
 
-  async function handleImageUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Image must be under 10 MB');
-      return;
-    }
-    setUploadingImage(true);
-    try {
-      const { image_url } = await sessionService.uploadImage(campaignId, sessionId, file);
-      const fullUrl = `${BACKEND}/${image_url}`;
-      const insertion = `\n![](${fullUrl})\n`;
-      const textarea = contentRef.current;
-      const newContent = insertMarkdownAtCursor(textarea, insertion);
-      setContent(newContent);
-      setContentDirty(true);
-    } catch {
-      alert('Image upload failed');
-    } finally {
-      setUploadingImage(false);
-      e.target.value = '';
-    }
+  async function uploadImage(file) {
+    const { image_url } = await sessionService.uploadImage(campaignId, sessionId, file);
+    return `${BACKEND}/${image_url}`;
   }
 
   async function handleVisibilityToggle() {
@@ -388,45 +396,100 @@ export default function SessionDetail() {
                   <span className="text-sm text-muted-foreground">Session #{session.session_number}</span>
                 )}
                 <h1 className="text-xl font-bold">{session.title}</h1>
-                {isGm && (
+                {isGm && !playerView && (
                   <button onClick={handleVisibilityToggle} className="p-1 rounded hover:bg-muted" title="Toggle player visibility">
                     {session.is_visible_to_players
                       ? <Eye className="w-4 h-4 text-green-600" />
                       : <EyeOff className="w-4 h-4 text-muted-foreground" />}
                   </button>
                 )}
-                {isGm && !session.is_visible_to_players && (
+                {isGm && !playerView && !session.is_visible_to_players && (
                   <Badge variant="secondary">Hidden</Badge>
                 )}
               </div>
               {/* Date info */}
-              <div className="flex items-center gap-3 mt-1 flex-wrap">
-                {session.real_world_date && (
-                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <Calendar className="w-3.5 h-3.5" /> {session.real_world_date}
-                  </span>
-                )}
-                {(session.era_dates?.length > 0) && (
-                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <Clock className="w-3.5 h-3.5" /> <EraDateList eraDates={session.era_dates} />
-                  </span>
-                )}
-                {session.time_of_day && (
-                  <Badge variant="outline" className="capitalize">{session.time_of_day}</Badge>
-                )}
-                {session.music_url && (
-                  <a href={session.music_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                    <Music className="w-3.5 h-3.5" /> Theme Music
-                  </a>
-                )}
-              </div>
+              {(() => {
+                const isPlayerMode = !isGm || playerView;
+                const { prefix, visibleEras } = buildSessionDate(session, session.era_dates, isPlayerMode, calendarMonths);
+                const hasInWorldDate = prefix || visibleEras.length > 0;
+                return isPlayerMode ? (
+                  <div className="mt-2 space-y-1">
+                    {hasInWorldDate && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Clock className="w-4 h-4 text-primary shrink-0" />
+                        <span className="text-base font-semibold">
+                          {prefix && <span>{prefix}</span>}
+                          {prefix && visibleEras.length > 0 && <span className="mx-2 opacity-40">·</span>}
+                          {visibleEras.map((ed, i) => (
+                            <span key={ed.era_id}>
+                              {i > 0 && <span className="mx-2 opacity-40">·</span>}
+                              {ed.year} {ed.abbreviation}
+                            </span>
+                          ))}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {session.real_world_date && (
+                        <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Calendar className="w-3.5 h-3.5" /> {session.real_world_date}
+                        </span>
+                      )}
+                      {session.music_url && (
+                        <a href={session.music_url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                          <Music className="w-3.5 h-3.5" />
+                          {session.music_description || 'Theme Music'}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 mt-1 flex-wrap">
+                    {session.real_world_date && (
+                      <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <Calendar className="w-3.5 h-3.5" /> {session.real_world_date}
+                      </span>
+                    )}
+                    {hasInWorldDate && (
+                      <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <Clock className="w-3.5 h-3.5" />
+                        {prefix && <span>{prefix}</span>}
+                        {prefix && visibleEras.length > 0 && <span className="mx-1.5 opacity-40">·</span>}
+                        {visibleEras.map((ed, i) => (
+                          <span key={ed.era_id}>
+                            {i > 0 && <span className="mx-1.5 opacity-40">·</span>}
+                            {ed.year} {ed.abbreviation}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                    {session.music_url && (
+                      <a href={session.music_url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                        <Music className="w-3.5 h-3.5" />
+                        {session.music_description || 'Theme Music'}
+                      </a>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
+          {isGm && (
+            <Button
+              variant={playerView ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPlayerView(v => !v)}
+            >
+              <Users className="w-4 h-4 mr-2" />
+              {playerView ? 'Exit Player View' : 'Player View'}
+            </Button>
+          )}
         </div>
 
         {/* Metadata card (GM editable) */}
-        {isGm && editMeta && (
+        {isGm && !playerView && editMeta && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Session Details</CardTitle>
@@ -452,23 +515,7 @@ export default function SessionDetail() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Time of Day</Label>
-                  <Select
-                    value={editMeta.time_of_day || '__none__'}
-                    onValueChange={v => handleMetaChange('time_of_day', v)}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIME_OF_DAY_OPTIONS.map(o => (
-                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs">Music URL</Label>
                   <Input
@@ -477,6 +524,135 @@ export default function SessionDetail() {
                     value={editMeta.music_url}
                     onChange={e => handleMetaChange('music_url', e.target.value)}
                   />
+                </div>
+                <div>
+                  <Label className="text-xs">Music Label</Label>
+                  <Input
+                    className="h-8 text-sm"
+                    placeholder="e.g. Battle theme"
+                    value={editMeta.music_description}
+                    onChange={e => handleMetaChange('music_description', e.target.value)}
+                  />
+                </div>
+              </div>
+              {/* In-world start date */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">In-World Start Date</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Era</Label>
+                    <Select
+                      value={editMeta.era_id ? String(editMeta.era_id) : '__none__'}
+                      onValueChange={v => handleMetaChange('era_id', v === '__none__' ? null : Number(v))}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {calendarEras.map(e => (
+                          <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.abbreviation})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <Label className="text-xs">Year</Label>
+                      {calendarCurrentYear != null && (
+                        <button
+                          type="button"
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => { handleMetaChange('year', String(calendarCurrentYear)); }}
+                        >
+                          Use current ({calendarCurrentYear})
+                        </button>
+                      )}
+                    </div>
+                    <Input
+                      className="h-8 text-sm"
+                      placeholder="e.g. 3739"
+                      value={editMeta.year}
+                      onChange={e => handleMetaChange('year', e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Month</Label>
+                    <Select
+                      value={editMeta.month_order ? String(editMeta.month_order) : '__none__'}
+                      onValueChange={v => handleMetaChange('month_order', v === '__none__' ? '' : v)}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {calendarMonths.map(m => (
+                          <SelectItem key={m.order_index} value={String(m.order_index)}>
+                            {m.name || `Month ${m.order_index}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Day</Label>
+                    <Input
+                      type="number"
+                      className="h-8 text-sm"
+                      placeholder="1"
+                      value={editMeta.day}
+                      onChange={e => handleMetaChange('day', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              {/* In-world end date */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+                  In-World End Date <span className="normal-case font-normal">(optional — for multi-day sessions)</span>
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">Month</Label>
+                    <Select
+                      value={editMeta.end_month_order ? String(editMeta.end_month_order) : '__none__'}
+                      onValueChange={v => handleMetaChange('end_month_order', v === '__none__' ? '' : v)}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {calendarMonths.map(m => (
+                          <SelectItem key={m.order_index} value={String(m.order_index)}>
+                            {m.name || `Month ${m.order_index}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Day</Label>
+                    <Input
+                      type="number"
+                      className="h-8 text-sm"
+                      placeholder="2"
+                      value={editMeta.end_day}
+                      onChange={e => handleMetaChange('end_day', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Year (if different)</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      placeholder="same"
+                      value={editMeta.end_year}
+                      onChange={e => handleMetaChange('end_year', e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
               <div>
@@ -515,74 +691,18 @@ export default function SessionDetail() {
         {/* Content editor */}
         <Card>
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <FileText className="w-4 h-4" /> Session Content
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                {isGm && (
-                  <>
-                    <input
-                      ref={imageInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="hidden"
-                      onChange={handleImageUpload}
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs"
-                      onClick={() => imageInputRef.current?.click()}
-                      disabled={uploadingImage}
-                    >
-                      {uploadingImage
-                        ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                        : <ImagePlus className="w-3 h-3 mr-1" />}
-                      Upload Image
-                    </Button>
-                  </>
-                )}
-                <button
-                  onClick={() => setPreviewMode(p => !p)}
-                  className={cn(
-                    'px-2.5 py-1 rounded text-xs font-medium transition-colors',
-                    previewMode ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {previewMode ? 'Edit' : 'Preview'}
-                </button>
-              </div>
-            </div>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <FileText className="w-4 h-4" /> Session Content
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {previewMode ? (
-              <div className={cn(
-                'prose prose-sm dark:prose-invert max-w-none min-h-[200px]',
-                'prose-headings:font-bold prose-p:leading-relaxed'
-              )}>
-                {content
-                  ? <ReactMarkdown>{content}</ReactMarkdown>
-                  : <p className="text-muted-foreground italic">No content yet.</p>}
-              </div>
-            ) : (
-              isGm ? (
-                <Textarea
-                  ref={contentRef}
-                  className="min-h-[300px] font-mono text-sm resize-y"
-                  placeholder="Write your session notes in Markdown…&#10;&#10;# Chapter Title&#10;&#10;The evening air hung thick with tension as the party descended into the ruins…"
-                  value={content}
-                  onChange={e => { setContent(e.target.value); setContentDirty(true); }}
-                />
-              ) : (
-                <div className={cn('prose prose-sm dark:prose-invert max-w-none min-h-[100px]')}>
-                  {content
-                    ? <ReactMarkdown>{content}</ReactMarkdown>
-                    : <p className="text-muted-foreground italic">No content yet.</p>}
-                </div>
-              )
-            )}
-            {isGm && contentDirty && (
+            <RichTextEditor
+              content={content}
+              onChange={isGm && !playerView ? (html) => { setContent(html); setContentDirty(true); } : undefined}
+              onImageUpload={isGm && !playerView ? uploadImage : undefined}
+              readOnly={!isGm || playerView}
+            />
+            {isGm && !playerView && contentDirty && (
               <div className="flex gap-2 mt-3">
                 <Button size="sm" onClick={saveContent} disabled={savingContent}>
                   {savingContent ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}
@@ -597,7 +717,7 @@ export default function SessionDetail() {
         </Card>
 
         {/* GM Notes */}
-        {isGm && (
+        {isGm && !playerView && (
           <Card className="border-amber-200 dark:border-amber-800">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-amber-700 dark:text-amber-400">
@@ -632,7 +752,7 @@ export default function SessionDetail() {
             title="Characters Present"
             icon={Users}
             items={characterLinks}
-            isGm={isGm}
+            isGm={isGm && !playerView}
             allOptions={allCharacters}
             optionLabel="character"
             onAdd={addCharacter}
@@ -647,7 +767,7 @@ export default function SessionDetail() {
             title="NPCs Featured"
             icon={Drama}
             items={npcLinks}
-            isGm={isGm}
+            isGm={isGm && !playerView}
             allOptions={allNpcs}
             optionLabel="NPC"
             onAdd={addNpc}
@@ -667,7 +787,7 @@ export default function SessionDetail() {
             title="Locations Visited"
             icon={MapPin}
             items={locationLinks}
-            isGm={isGm}
+            isGm={isGm && !playerView}
             allOptions={allLocations}
             optionLabel="location"
             onAdd={addLocation}
@@ -687,7 +807,7 @@ export default function SessionDetail() {
             title="Timeline Events"
             icon={Clock}
             items={eventLinks}
-            isGm={isGm}
+            isGm={isGm && !playerView}
             allOptions={allEvents}
             optionLabel="event"
             onAdd={addEvent}

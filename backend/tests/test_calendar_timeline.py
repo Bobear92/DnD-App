@@ -1009,3 +1009,133 @@ class TestLocationFilter:
             headers=other_h,
         )
         assert resp.status_code == 403
+
+
+# ── Multi-day / span events ───────────────────────────────────────────────────
+
+class TestMultiDayEvents:
+    """Events with an end date (spans) vs point-in-time events."""
+
+    def _setup(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        make_calendar(client, gm_h, cid)
+        era = make_primary_era(client, gm_h, cid, abbr="AK")
+        return gm_h, cid, era
+
+    def test_point_in_time_event_has_null_end_fields(self, client):
+        gm_h, cid, era = self._setup(client)
+        event = make_event(client, gm_h, cid, title="Instant", era_id=era["id"], year=100)
+        assert event["end_era_id"] is None
+        assert event["end_year"] is None
+        assert event["end_month_order"] is None
+        assert event["end_day"] is None
+        assert event["end_absolute_year"] is None
+
+    def test_create_span_event_same_era(self, client):
+        gm_h, cid, era = self._setup(client)
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/timeline",
+            json={
+                "title": "The Long War",
+                "era_id": era["id"], "year": 100,
+                "end_era_id": era["id"], "end_year": 150,
+            },
+            headers=gm_h,
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["end_era_id"] == era["id"]
+        assert data["end_year"] == 150
+        assert data["end_absolute_year"] == 150  # AK primary epoch=0
+
+    def test_create_span_event_with_month_and_day(self, client):
+        gm_h, cid, era = self._setup(client)
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/timeline",
+            json={
+                "title": "Siege of the Keep",
+                "era_id": era["id"], "year": 200, "month_order": 3, "day": 1,
+                "end_era_id": era["id"], "end_year": 200, "end_month_order": 3, "end_day": 14,
+            },
+            headers=gm_h,
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["month_order"] == 3
+        assert data["day"] == 1
+        assert data["end_month_order"] == 3
+        assert data["end_day"] == 14
+
+    def test_update_adds_end_date_to_point_event(self, client):
+        gm_h, cid, era = self._setup(client)
+        event = make_event(client, gm_h, cid, title="Battle", era_id=era["id"], year=50)
+        resp = client.put(
+            f"/api/gm/campaigns/{cid}/timeline/{event['id']}",
+            json={"end_era_id": era["id"], "end_year": 55},
+            headers=gm_h,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["end_year"] == 55
+        assert data["end_absolute_year"] == 55
+
+    def test_span_event_cross_era(self, client):
+        """An event can start in one era and end in another (different absolute_year values)."""
+        gm_h, cid, primary = self._setup(client)
+        secondary = make_secondary_era(
+            client, gm_h, cid, primary["id"],
+            name="Before AK", abbr="BAK",
+            direction="ascending",
+            anchor_era_year=1, anchor_this_year=500,
+        )
+        # secondary epoch: ref_absolute(1) - 500 = 1 - 500 = -499
+        # secondary year 100 → absolute 100 + (-499) = -399
+        # primary year 200 → absolute 200
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/timeline",
+            json={
+                "title": "Cross-Era Campaign",
+                "era_id": secondary["id"], "year": 100,
+                "end_era_id": primary["id"], "end_year": 200,
+            },
+            headers=gm_h,
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["absolute_year"] == 100 + secondary["epoch_offset"]
+        assert data["end_absolute_year"] == 200  # primary epoch=0
+
+    def test_end_date_fields_in_list_response(self, client):
+        gm_h, cid, era = self._setup(client)
+        client.post(
+            f"/api/gm/campaigns/{cid}/timeline",
+            json={"title": "Span", "era_id": era["id"], "year": 10,
+                  "end_era_id": era["id"], "end_year": 20},
+            headers=gm_h,
+        )
+        events = client.get(f"/api/gm/campaigns/{cid}/timeline", headers=gm_h).json()
+        assert events[0]["end_era_id"] == era["id"]
+        assert events[0]["end_year"] == 20
+        assert events[0]["end_absolute_year"] == 20
+
+    def test_clear_end_date_converts_to_point_event(self, client):
+        gm_h, cid, era = self._setup(client)
+        resp = client.post(
+            f"/api/gm/campaigns/{cid}/timeline",
+            json={"title": "Span", "era_id": era["id"], "year": 10,
+                  "end_era_id": era["id"], "end_year": 20},
+            headers=gm_h,
+        )
+        eid = resp.json()["id"]
+        # Clear end date by nulling end_era_id and end_year
+        resp = client.put(
+            f"/api/gm/campaigns/{cid}/timeline/{eid}",
+            json={"end_era_id": None, "end_year": None},
+            headers=gm_h,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["end_era_id"] is None
+        assert data["end_year"] is None
+        assert data["end_absolute_year"] is None

@@ -280,7 +280,6 @@ class TestSessionFields:
             title="Orc Princeling",
             session_number=18,
             real_world_date="2024-01-21",
-            time_of_day="evening",
             summary="Short blurb",
             content="# Chapter prose\n\nLong narrative here.",
             music_url="https://example.com/music.mp3",
@@ -288,10 +287,26 @@ class TestSessionFields:
         assert s["title"] == "Orc Princeling"
         assert s["session_number"] == 18
         assert s["real_world_date"] == "2024-01-21"
-        assert s["time_of_day"] == "evening"
+        assert "time_of_day" not in s
         assert s["summary"] == "Short blurb"
         assert s["content"] == "# Chapter prose\n\nLong narrative here."
         assert s["music_url"] == "https://example.com/music.mp3"
+
+    def test_end_date_fields_round_trip(self, client):
+        gm_h, _ = make_user(client, 1)
+        cid = make_campaign(client, gm_h)
+        s = make_session(
+            client, gm_h, cid,
+            title="Two-Day Adventure",
+            month_order=3, day=1, year=100,
+            end_month_order=3, end_day=2, end_year=100,
+        )
+        assert s["day"] == 1
+        assert s["month_order"] == 3
+        assert s["year"] == 100
+        assert s["end_day"] == 2
+        assert s["end_month_order"] == 3
+        assert s["end_year"] == 100
 
     def test_session_number_nullable(self, client):
         gm_h, _ = make_user(client, 1)
@@ -313,12 +328,13 @@ class TestSessionListFieldRoundTrip:
         items = self._list(client, cid, gm_h)
         assert items[0]["summary"] == "Short blurb"
 
-    def test_time_of_day_in_list_after_create(self, client):
+    def test_end_day_in_list_after_create(self, client):
         gm_h, _ = make_user(client, 1)
         cid = make_campaign(client, gm_h)
-        make_session(client, gm_h, cid, time_of_day="morning")
+        make_session(client, gm_h, cid, day=1, month_order=3, end_day=2, end_month_order=3)
         items = self._list(client, cid, gm_h)
-        assert items[0]["time_of_day"] == "morning"
+        assert items[0]["end_day"] == 2
+        assert items[0]["end_month_order"] == 3
 
     def test_real_world_date_in_list_after_update(self, client):
         gm_h, _ = make_user(client, 1)

@@ -16,6 +16,12 @@ class TimelineEvent(Base):
     month_order = Column(Integer, nullable=True)  # 1-based order_index of the calendar month
     day = Column(Integer, nullable=True)
     absolute_year = Column(Integer, nullable=True)  # computed from era + year for ORDER BY
+    # End date — null means point-in-time event; can span multiple eras via absolute_year math
+    end_era_id = Column(Integer, ForeignKey("calendar_eras.id", ondelete="SET NULL"), nullable=True)
+    end_year = Column(Integer, nullable=True)
+    end_month_order = Column(Integer, nullable=True)
+    end_day = Column(Integer, nullable=True)
+    end_absolute_year = Column(Integer, nullable=True)  # computed from end_era + end_year
     gm_notes = Column(Text, nullable=True)
     is_visible_to_players = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -12,6 +12,7 @@ import LocationDetail from './locations/pages/LocationDetail';
 import NPCList from './npcs/pages/NPCList';
 import NPCDetail from './npcs/pages/NPCDetail';
 import CampaignSettings from './settings/pages/CampaignSettings';
+import TimelinePage from './timeline/pages/TimelinePage';
 import SessionList from './sessions/pages/SessionList';
 import SessionDetail from './sessions/pages/SessionDetail';
 import MainLayout from './shared/components/layout/MainLayout';
@@ -32,6 +33,7 @@ function App() {
             <Route path="/campaigns/:campaignId/npcs" element={<ProtectedRoute><NPCList /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/npcs/:npcId" element={<ProtectedRoute><NPCDetail /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/campaign-time" element={<ProtectedRoute><MainLayout><CampaignSettings /></MainLayout></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/timeline" element={<ProtectedRoute><MainLayout><TimelinePage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/sessions" element={<ProtectedRoute><SessionList /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/sessions/:sessionId" element={<ProtectedRoute><SessionDetail /></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/campaigns" replace />} />

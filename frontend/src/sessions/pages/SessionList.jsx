@@ -13,15 +13,33 @@ import { Badge } from '@/components/ui/badge';
 import { BookOpen, Plus, Eye, EyeOff, Trash2, Clock, Loader2, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const TIME_OF_DAY_LABELS = {
-  morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening',
-  night: 'Night', dawn: 'Dawn',
-};
+function formatDateRange(session) {
+  const { day, month_order, end_day, end_month_order, era_dates = [] } = session;
+  if (day == null && !month_order) return null;
 
-function EraDateList({ eraDates }) {
+  // Use backend-computed month name from era_dates; fall back to raw ordinal
+  const startMonthName = era_dates[0]?.month_name ?? (month_order ? `Month ${month_order}` : null);
+  const endMonthName = (end_month_order && end_month_order !== month_order)
+    ? `Month ${end_month_order}` : null;
+
+  const sameMo = !end_month_order || end_month_order === month_order;
+  const hasRange = end_day != null && end_day !== day;
+
+  if (hasRange && sameMo) {
+    return [`Days ${day}–${end_day}`, startMonthName].filter(Boolean).join(', ');
+  }
+  if (hasRange && !sameMo) {
+    const s = [day != null && `Day ${day}`, startMonthName].filter(Boolean).join(' ');
+    const e = [end_day != null && `Day ${end_day}`, endMonthName].filter(Boolean).join(' ');
+    return `${s} – ${e}`;
+  }
+  return [day != null && `Day ${day}`, startMonthName].filter(Boolean).join(', ');
+}
+
+function EraDateList({ eraDates, prominent }) {
   if (!eraDates || eraDates.length === 0) return null;
   return (
-    <span className="text-xs text-muted-foreground">
+    <span className={cn(prominent ? "text-sm font-semibold text-foreground" : "text-xs text-muted-foreground")}>
       {eraDates.map((ed, i) => (
         <span key={ed.era_id}>
           {i > 0 && <span className="mx-1 opacity-40">·</span>}
@@ -72,28 +90,47 @@ function SessionCard({ session, isGm, onVisibilityToggle, onDelete, onClick }) {
         </div>
 
         {/* Dates row */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
-          {session.real_world_date && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Calendar className="w-3 h-3" />
-              {session.real_world_date}
-            </span>
-          )}
-          {session.era_dates?.length > 0 && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="w-3 h-3" />
-              <EraDateList eraDates={session.era_dates} />
-            </span>
-          )}
-          {session.time_of_day && (
-            <Badge variant="outline" className="text-xs h-4 px-1.5">
-              {TIME_OF_DAY_LABELS[session.time_of_day] || session.time_of_day}
-            </Badge>
-          )}
-          {isGm && !session.is_visible_to_players && (
-            <Badge variant="secondary" className="text-xs h-4 px-1.5">Hidden</Badge>
-          )}
-        </div>
+        {!isGm ? (
+          <div className="mb-2 space-y-0.5">
+            {(session.era_dates?.length > 0 || session.day || session.end_day) && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
+                {formatDateRange(session) && (
+                  <span className="text-sm font-semibold">{formatDateRange(session)}</span>
+                )}
+                {formatDateRange(session) && session.era_dates?.length > 0 && (
+                  <span className="opacity-40">·</span>
+                )}
+                <EraDateList eraDates={session.era_dates} prominent />
+              </div>
+            )}
+            {session.real_world_date && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Calendar className="w-3 h-3" />
+                {session.real_world_date}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
+            {session.real_world_date && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Calendar className="w-3 h-3" />
+                {session.real_world_date}
+              </span>
+            )}
+            {(session.era_dates?.length > 0 || session.day || session.end_day) && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                {formatDateRange(session) && <span>{formatDateRange(session)} · </span>}
+                <EraDateList eraDates={session.era_dates} />
+              </span>
+            )}
+            {!session.is_visible_to_players && (
+              <Badge variant="secondary" className="text-xs h-4 px-1.5">Hidden</Badge>
+            )}
+          </div>
+        )}
 
         {/* Summary */}
         {session.summary && (
