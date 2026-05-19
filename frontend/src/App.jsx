@@ -7,6 +7,8 @@ import Login from './auth/pages/Login';
 import CampaignSelection from './campaigns/pages/CampaignSelection';
 import Dashboard from './dashboard/Dashboard';
 import CharacterList from './characters/pages/CharacterList';
+import CharacterCreate from './characters/pages/CharacterCreate';
+import CharacterDetail from './characters/pages/CharacterDetail';
 import LocationList from './locations/pages/LocationList';
 import LocationDetail from './locations/pages/LocationDetail';
 import NPCList from './npcs/pages/NPCList';
@@ -15,6 +17,7 @@ import CampaignSettings from './settings/pages/CampaignSettings';
 import TimelinePage from './timeline/pages/TimelinePage';
 import SessionList from './sessions/pages/SessionList';
 import SessionDetail from './sessions/pages/SessionDetail';
+import CampaignMembers from './campaigns/pages/CampaignMembers';
 import MainLayout from './shared/components/layout/MainLayout';
 
 function App() {
@@ -28,6 +31,8 @@ function App() {
             <Route path="/campaigns" element={<ProtectedRoute><CampaignSelection /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/characters" element={<ProtectedRoute><CharacterList /></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/characters/create" element={<ProtectedRoute><CharacterCreate /></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/characters/:characterId" element={<ProtectedRoute><CharacterDetail /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/locations" element={<ProtectedRoute><LocationList /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/locations/:locationId" element={<ProtectedRoute><LocationDetail /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/npcs" element={<ProtectedRoute><NPCList /></ProtectedRoute>} />
@@ -36,6 +41,7 @@ function App() {
             <Route path="/campaigns/:campaignId/timeline" element={<ProtectedRoute><MainLayout><TimelinePage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/sessions" element={<ProtectedRoute><SessionList /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/sessions/:sessionId" element={<ProtectedRoute><SessionDetail /></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/members" element={<ProtectedRoute><CampaignMembers /></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/campaigns" replace />} />
           </Routes>
           </ErrorBoundary>

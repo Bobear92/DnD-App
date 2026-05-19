@@ -144,7 +144,8 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 - **Characters belong to ONE campaign** — no many-to-many
 - **A player can have multiple characters per campaign**
 - **Players see:** own characters + characters where `is_visible_to_players = true`
-- **GM sees:** ALL characters in their campaign (read-only)
+- **GM sees:** ALL characters in their campaign; can edit, delete, and write private `gm_notes`
+- **`gm_notes`** is always stripped from responses returned to players and character owners
 
 ### Content
 - **Only admin can create/edit/delete system (`owner_type='system'`) content**
@@ -155,7 +156,7 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 
 ---
 
-## Current Database Schema (33 Tables)
+## Current Database Schema (35 Tables)
 
 ```sql
 -- Core
@@ -164,7 +165,8 @@ users
   is_admin (boolean, default false), created_at, updated_at
 
 campaigns
-  id, name, description, created_by (FK→users), created_at, updated_at
+  id, name, description, edition (String(10), default "5e"),
+  created_by (FK→users), created_at, updated_at
 
 campaign_members
   id, campaign_id (FK→campaigns), user_id (FK→users),
@@ -174,9 +176,11 @@ campaign_members
 characters
   id, name, race, char_class, level, background, alignment,
   strength, dexterity, constitution, intelligence, wisdom, charisma,
-  character_data (JSONB),   ← class-specific flexible data
+  character_data (JSONB),   ← class-specific flexible data (HP, spell slots, features, skill profs, etc.)
   user_id (FK→users), campaign_id (FK→campaigns),
-  is_visible_to_players (boolean), notes, created_at, updated_at
+  is_visible_to_players (boolean), notes,
+  gm_notes (Text, nullable),   ← GM only; always stripped from player/owner responses
+  created_at, updated_at
 
 -- Player Reference Content (system + campaign ownership)
 races
@@ -460,6 +464,7 @@ Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs`
 | POST | /api/auth/register | No |
 | POST | /api/auth/login | No |
 | GET | /api/auth/me | Yes |
+| GET | /api/auth/users/search?q=X | Yes — returns up to 10 users matching username or email (min 2 chars); excludes requester; used in GM invite flow |
 
 ### Campaigns
 | Method | Endpoint | Auth Required |
@@ -480,8 +485,8 @@ Campaign creation uses `get_current_user` (any authenticated user). Member manag
 | POST | /api/characters | Yes |
 | GET | /api/characters/campaign/{id} | Yes (member) |
 | GET | /api/characters/{id} | Yes (owner or GM) |
-| PUT | /api/characters/{id} | Yes (owner) |
-| DELETE | /api/characters/{id} | Yes (owner) |
+| PUT | /api/characters/{id} | Yes (owner or GM); uses `CharacterGmUpdate` — only GM can set `gm_notes`/`is_visible_to_players` |
+| DELETE | /api/characters/{id} | Yes (owner or GM) |
 | PATCH | /api/characters/{id}/visibility | Yes (GM of campaign) |
 
 ### Races / Backgrounds / Feats (same pattern each)
@@ -661,7 +666,7 @@ Image upload stores to `uploads/sessions/{campaign_id}/{session_id}/uuid.ext`, s
 - `@/` resolves to `frontend/src/` — always use this for internal imports
 
 ### Existing CSS Files
-- The existing `.css` files in `auth/`, `campaigns/`, `characters/`, `dashboard/`, `shared/` were written before Tailwind was added
+- The existing `.css` files in `auth/`, `campaigns/`, `dashboard/`, `shared/` were written before Tailwind was added (`characters/` has been migrated)
 - When touching these pages, migrate styles to Tailwind classes and delete the old CSS file
 - Do NOT write new `.css` files for new components
 
@@ -684,11 +689,45 @@ frontend/src/
 │   └── authService.js
 ├── campaigns/
 │   ├── pages/CampaignSelection.jsx  # List campaigns, create modal, enter → sets CampaignContext ✅
+│   ├── pages/CampaignMembers.jsx    # Member list + invite (search → select → add) + remove; GM-only controls ✅
 │   ├── CampaignContext.jsx      # {campaign, enterCampaign, leaveCampaign}; persisted to localStorage
-│   └── campaignService.js
+│   └── campaignService.js       # getAllCampaigns, getCampaignById, createCampaign, updateCampaign, deleteCampaign,
+│                                #   addPlayer(campaignId, userId), removePlayer(campaignId, userId),
+│                                #   searchUsers(q) → GET /api/auth/users/search
 ├── characters/
-│   ├── pages/CharacterList.jsx  # List characters, visibility toggle (GM) ✅
-│   └── characterService.js
+│   ├── characterService.js      # API client: CRUD, toggleVisibility(id, isVisible), deleteCharacter
+│   ├── components/
+│   │   ├── BarbarianSheet.jsx   # Barbarian (5e): rage tracker, unarmored defense, reckless attack, Primal Path ✅
+│   │   ├── BardSheet.jsx        # Bard (5e): full caster, bardic inspiration die (LR until L5), expertise, College ✅
+│   │   ├── ClericSheet.jsx      # Cleric (5e): full caster, channel divinity (LR), Divine Domain at L1 ✅
+│   │   ├── DruidSheet.jsx       # Druid (5e): full caster, wild shape tracker, Druid Circle at L2 ✅
+│   │   ├── FighterSheet.jsx     # Fighter (5e): HP/AC/speed, fighting style, resource trackers, subclass ✅
+│   │   ├── MonkSheet.jsx        # Monk (5e): ki point tracker, martial arts die, unarmored defense ✅
+│   │   ├── PaladinSheet.jsx     # Paladin (5e): half-caster starting L2, lay on hands, sacred oath ✅
+│   │   ├── RangerSheet.jsx      # Ranger (5e): half-caster starting L1, favored enemy/terrain, Archetype ✅
+│   │   ├── RogueSheet.jsx       # Rogue (5e): sneak attack, expertise picker, roguish archetype ✅
+│   │   ├── SorcererSheet.jsx    # Sorcerer (5e): full caster, sorcery points, metamagic, Sorcerous Origin L1 ✅
+│   │   ├── WarlockSheet.jsx     # Warlock (5e): pact magic (short-rest slots), invocations L2+, Patron L1 ✅
+│   │   ├── WizardSheet.jsx      # Wizard (5e): full caster, spellbook, arcane recovery, Tradition L2 ✅
+│   │   ├── index.js             # Exports all 12 5e sheets + SUPPORTED_CLASSES_5E + CLASS_DESCRIPTIONS/HIT_DICE
+│   │   └── 5e2024/
+│   │       ├── BarbarianSheet.jsx # Barbarian (2024): weapon mastery, primal knowledge, updated features ✅
+│   │       ├── BardSheet.jsx      # Bard (2024): bardic inspiration short-rest from L1 ✅
+│   │       ├── ClericSheet.jsx    # Cleric (2024): divine order L1, subclass L3, channel divinity short-rest ✅
+│   │       ├── DruidSheet.jsx     # Druid (2024): primal order L1, subclass L3, wild resurgence L5 ✅
+│   │       ├── FighterSheet.jsx   # Fighter (2024): weapon mastery, tactical mind ✅
+│   │       ├── MonkSheet.jsx      # Monk (2024): focus points (renamed from ki), weapon mastery ✅
+│   │       ├── PaladinSheet.jsx   # Paladin (2024): spell slots from L1, weapon mastery ✅
+│   │       ├── RangerSheet.jsx    # Ranger (2024): weapon mastery, deft explorer ✅
+│   │       ├── RogueSheet.jsx     # Rogue (2024): weapon mastery, steady aim L3 ✅
+│   │       ├── SorcererSheet.jsx  # Sorcerer (2024): innate sorcery L1, subclass L3, sorcerous restoration L5 ✅
+│   │       ├── WarlockSheet.jsx   # Warlock (2024): invocations L1, magical cunning L2, subclass L3, boon L5 ✅
+│   │       ├── WizardSheet.jsx    # Wizard (2024): memorize spell L1, scholar L2, subclass L3 ✅
+│   │       └── index.js           # Exports all 12 2024 sheets + SUPPORTED_CLASSES_2024 + metadata
+│   └── pages/
+│       ├── CharacterList.jsx    # List characters, visibility toggle (GM), player view toggle ✅
+│       ├── CharacterCreate.jsx  # Class picker (step 1) + details form with class sheet (step 2); edition-aware ✅
+│       └── CharacterDetail.jsx  # Full character sheet: identity, ability scores, saves, skills, class features, GM notes; edition-aware ✅
 ├── npcs/
 │   ├── npcService.js            # Full API client: NPCs, relationships, player relationships, image upload
 │   └── pages/
@@ -720,7 +759,7 @@ frontend/src/
 
 ### Auth + Campaign Context Pattern
 - `AuthContext` — wraps the entire app; calls `/api/auth/me` on mount; `user` is null until resolved; exposes `setUser` so `Login` can update context without a page reload
-- `CampaignContext` — `campaign` shape: `{id, name, description, created_by, userRole: 'gm'|'player', ...}`
+- `CampaignContext` — `campaign` shape: `{id, name, description, edition, created_by, userRole: 'gm'|'player', ...}`
   - `userRole` is computed in CampaignSelection: `campaign.created_by === user.id ? 'gm' : 'player'`
   - `created_by` comes from `CampaignListItem` (the list endpoint includes it — required for role computation)
   - Persisted to localStorage so page refreshes restore context automatically
@@ -744,8 +783,9 @@ frontend/src/
 | `/campaigns/:campaignId/timeline` | TimelinePage | ✅ Functional (visual center-line timeline; GM + player) |
 | `/campaigns/:campaignId/sessions` | SessionList | ✅ Functional |
 | `/campaigns/:campaignId/sessions/:sessionId` | SessionDetail | ✅ Functional |
-| `/campaigns/:campaignId/characters/create` | — | ❌ Not built |
-| `/campaigns/:campaignId/characters/:id` | — | ❌ Not built |
+| `/campaigns/:campaignId/characters/create` | CharacterCreate | ✅ Functional (all 12 classes, 5e + 5.5e edition-aware) |
+| `/campaigns/:campaignId/characters/:characterId` | CharacterDetail | ✅ Functional |
+| `/campaigns/:campaignId/members` | CampaignMembers | ✅ Functional (GM: member list + invite + remove; visible to all members) |
 
 ### Locations UI — Key Behaviours
 - **Maps tab:** thumbnail strip (left) + scrollable map viewer (right) with zoom (+/−/scroll wheel) and dark background
@@ -843,8 +883,55 @@ frontend/src/
 - **`react-markdown`** is installed for Markdown rendering in content card
 - **`mapSessionImageUrl(path)`** helper in `sessionService.js` → `http://localhost:8000/${path}`
 
+### Members UI — Key Behaviours
+- **Route:** `/campaigns/:campaignId/members` — wrapped in `<MainLayout>`; accessible to all campaign members; GM-only controls gated on `campaign?.userRole === 'gm'`
+- **GM section:** top card showing the campaign's GM with a Crown icon and "You" badge for the current user
+- **Players section:** list of all players with avatar initials, username, email, join date; player count badge in card header; empty state with invite prompt if GM
+- **Remove button:** Trash icon per player row (GM only); disabled during removal; not shown for GM themselves; calls `removePlayer(campaignId, userId)` then reloads
+- **Invite section (GM only):** search input with magnifier icon; `searchUsers(q)` fires on change when `q ≥ 2 chars` (debounced via useEffect cancel); dropdown appears below input listing matching users; existing members are filtered out of results; selecting a user fills the input and shows a confirmation line ("Ready to invite username (email)"); Add button enabled only after selection; calls `addPlayer(campaignId, userId)` then reloads members
+- **`searchUsers(q)`:** calls `GET /api/auth/users/search?q=X` on the auth API; results include `{id, username, email}`; min 2 chars enforced client + server side; requester excluded server-side
+- **`data-testid` attributes:** `invite-search` on the search input, `search-dropdown` on the results dropdown, `search-result-{id}` on each result row
+
+### Characters UI — Key Behaviours
+- **CharacterList grid:** class color-coded header bar, ability score modifiers grid, level/class badge, race subtitle; clickable cards navigate to CharacterDetail; GM eye toggle + trash button appear on hover
+- **CharacterList — GM view:** title "All Characters"; sees all characters regardless of `is_visible_to_players`; Player View toggle (filters to visible-only, hides GM controls); visibility eye icon + delete dialog per card
+- **CharacterList — player view:** title "My Characters"; sees own characters + `is_visible_to_players=true` characters; no eye/delete controls; "Create Your First Character" empty state button
+- **CharacterCreate — edition switching:** `campaign.edition` drives which class sheets and metadata are used; `'5e'` → `components/` (5e rules); `'5.5e'` → `components/5e2024/` (2024 rules); class picker subtitle shows edition label
+- **CharacterCreate — step 1 (class picker):** color-coded class cards showing class name, hit die, description; back chevron navigates to character list; all 12 classes available for both editions
+- **CharacterCreate — step 2 (details form):** Identity section (name required, race, background, alignment, level); Ability Scores grid with computed modifier display; Class Features section (class-specific sheet component); Notes textarea; "Create Character" navigates to CharacterDetail on success
+- **CharacterDetail — edition switching:** `edition = campaign?.edition || '5e'`; selects `CLASS_SHEETS_5E` or `CLASS_SHEETS_2024` map to find the right sheet component for the character's class
+- **CharacterDetail — key logic:**
+  - `showEditable = isOwner || (isGm && !playerView)` — players always edit their own characters; GM edits freely unless in Player View preview mode
+  - `displayAsPlayer = !isGm || playerView` — controls which sections are hidden (GM Notes, Player View toggle itself)
+  - `useSection(initial)` hook: `{ draft, setDraft, isDirty, reset, commit }` — per-section Save/Reset buttons appear only when dirty
+- **Identity + Ability Scores card:** editable name, race, background, alignment, level; 6 ability score inputs with live modifier display; Saving Throws section (proficiency checkboxes, stored in `character_data`)
+- **Derived stats row:** Proficiency Bonus (`Math.ceil(level/4) + 1`), Initiative (DEX mod), Passive Perception (10 + WIS mod + prof if proficient), Inspiration toggle
+- **Skills display:** all 18 skills with proficiency/expertise indicators and computed bonus; expertise = double proficiency
+- **Class Features card:** renders class-specific sheet component — each accepts `{ data, onChange, readOnly, level }`
+- **GM Notes card (GM only):** amber-tinted "Private" card; always stripped from all responses returned to players and owners
+- **Player View toggle (GM):** preview what a player sees; hides GM Notes card and all editing controls; re-renders the class sheet in `readOnly` mode
+- **`CLASS_SAVE_PROFS` map:** default saving throw proficiencies per class stored in `character_data`; GM can override per-character via the save throw checkboxes
+- **5e spell slot tables (local to each sheet):** `PALADIN_SLOTS` (half-caster, Paladin starts at L2); `RANGER_SLOTS` (half-caster, Ranger starts at L1); `WIZARD_SLOTS` / `SPELL_SLOTS` (full caster, levels 1–9) for Bard/Cleric/Druid/Sorcerer/Wizard; `PACT_SLOTS` (Warlock Pact Magic, short-rest)
+- **5.5e (2024) key differences from 5e:**
+  - Weapon Mastery (Barbarian/Fighter/Monk/Paladin/Ranger/Rogue) — badge list of chosen weapons, stored as `weapon_masteries`
+  - Subclasses moved: Cleric L1→L3, Druid L2→L3, Sorcerer L1→L3, Warlock L1→L3
+  - Paladin spell slots start at L1 (same half-caster table as Ranger)
+  - Bardic Inspiration is Short Rest from L1 (not Long Rest until L5)
+  - Monk renames Ki to Focus Points (same key `ki_used`)
+  - Cleric Channel Divinity is Short Rest, 2 uses from L2; Divine Order choice at L1
+  - Druid Primal Order choice at L1; Wild Resurgence at L5
+  - Sorcerer Innate Sorcery at L1 (1×/LR toggle); Sorcerous Restoration at L5 (regain 4 SP on short rest)
+  - Warlock Eldritch Invocations at L1 (not L2); Pact Boon at L5 (not L3); Magical Cunning at L2 (1×/LR recover half slots)
+  - Wizard Memorize Spell at L1 (1×/LR); Scholar at L2; Arcane Tradition subclass at L3 (not L2)
+  - Fighter Tactical Mind at L2; larger Weapon Mastery pool (up to 6 weapons at L16)
+  - Rogue Steady Aim at L3 (bonus action → advantage)
+- **Spell tracking:** slot count grid (+/− buttons per slot level) + named spell lists (prepared spells, cantrips, spellbook for Wizard) stored as string arrays in `character_data`
+- **Class-specific resources:** `rages_used` (Barbarian), `ki_used` (Monk/Monk2024 Focus Points), `bardic_inspiration_used` (Bard), `channel_divinity_used` (Cleric), `wild_shape_used` (Druid), `sorcery_points_used` (Sorcerer), `pact_slots_used` (Warlock)
+
 ### Frontend Not Yet Built
-- Character creation and detail pages (`/campaigns/:campaignId/characters/create`, `/:id`)
+- Multiclassing support (deferred — will be its own feature after both editions complete)
+- Equipment / Inventory (deferred — own separate feature)
+- Feat selection UI (deferred — own separate feature; feat section placeholder visible in class sheets)
 - Loot table UI
 - Encyclopedia browsing UI (players read campaign-merged view)
 - Admin panels (manage base compendium: races, backgrounds, feats, spells, items, creatures)
@@ -891,11 +978,11 @@ The session fixture does `DROP SCHEMA public CASCADE` + `CREATE SCHEMA public` a
 backend/tests/
 ├── conftest.py                     # shared fixtures + helpers
 ├── test_auth.py                    # auth module
-├── test_campaigns.py               # campaign CRUD + member management
+├── test_campaigns.py               # campaign CRUD + member management + TestUserSearch (search by username/email, excludes self, min 2 chars, auth required, response shape)
 ├── test_calendar_timeline.py       # calendar (6+2+3+4+8+8), timeline events (13), event links (6), location filter (5) = 57 tests
                                     #   TestCalendarCRUD(6), TestSeasons(2), TestMonths(3), TestMonthOptionalName(4),
                                     #   TestWeekdays(7), TestEras(8), TestTimelineEvents(13, incl. gm_notes), TestEventListFieldRoundTrip(8), TestEventLinks(6), TestLocationFilter(5)
-├── test_characters.py              # character CRUD + visibility
+├── test_characters.py              # character CRUD + visibility, TestGmNotes (gm_can_set/get, stripped_from_owner, player_cannot_set), TestGmDelete (gm_can_delete, other_player_cannot), TestCampaignEdition (defaults_to_5e, create/update/list), TestCharacterListFieldRoundTrip incl. character_data (34 tests)
 ├── test_encyclopedia.py            # bestiary + spells + 6 item types (parametrized)
 ├── test_locations.py               # locations, maps, pins, location NPCs, hierarchy, pin→parent persistence (61 tests)
 ├── test_loot_tables.py             # loot tables (system/campaign ownership)
@@ -987,11 +1074,17 @@ frontend/src/
 ├── campaigns/
 │   └── pages/
 │       ├── CampaignSelection.jsx
-│       └── CampaignSelection.test.jsx  # load list, empty state, enter (role=gm/player), navigate to dashboard, create modal (submit+close+reload), logout (11 tests)
+│       ├── CampaignSelection.test.jsx  # load list, empty state, enter (role=gm/player), navigate to dashboard, create modal (submit+close+reload), logout (11 tests)
+│       ├── CampaignMembers.jsx         # Member list (GM + players), invite flow (search → select → add), remove player; GM-only controls ✅
+│       └── CampaignMembers.test.jsx    # load/render, GM badge, empty players, invite panel, search+dropdown, filter existing members, select enables Add, addPlayer+reload, addPlayer error, removePlayer+reload, GM not removable, load error (12 tests)
 ├── characters/
 │   └── pages/
 │       ├── CharacterList.jsx
-│       └── CharacterList.test.jsx    # loading, fetch with campaignId, error, empty state, card render, View Character navigate, GM title+visibility toggles, player title+no toggles (11 tests)
+│       ├── CharacterList.test.jsx    # loading, fetch with campaignId, error, empty state, card render, click-to-navigate, GM title+visibility toggles+reload, player title+no toggles (11 tests)
+│       ├── CharacterCreate.jsx
+│       ├── CharacterCreate.test.jsx  # class picker render (all 12 classes), class selection advance, back nav (list/class step), name validation, successful create+navigate, error display, Wizard fields, Fighter fields, Barbarian/Cleric/Warlock smoke (12 tests)
+│       ├── CharacterDetail.jsx
+│       └── CharacterDetail.test.jsx  # loading, error, name+class display, ability scores (waitFor), prof bonus, editable owner fields, GM Notes hidden (player), GM Notes shown (GM), Player View toggle, switching view hides GM Notes, updateCharacter with gm_notes, visibility toggle (GM), Fighter features, read-only non-owner (15 tests)
 ├── npcs/
 │   └── pages/
 │       ├── NPCDetail.jsx
@@ -1074,6 +1167,8 @@ vi.mock('../../campaigns/CampaignContext', () => ({
 `LocationList.test.jsx` — "clicking the top-level node navigates with the correct campaignId — not undefined" — guards against `LocationTreeNode` and `LocationCard` being module-level components that can't close over `useParams()`'s `campaignId`. Without the prop fix, all tree/card clicks navigate to `/campaigns/undefined/locations/X`.
 
 `NPCList.test.jsx` — "filters by summary text" — guards against search only checking name/race/occupation and missing the summary field. "location filter includes NPCs at child locations" — guards the hierarchy-aware subtree walk that must follow both `parent_location_id` and `pin_child_ids`.
+
+`CharacterDetail.test.jsx` — "shows ability score values" uses `waitFor` + `getByDisplayValue` — guards against the `showEditable` logic not rendering the input until data loads. `getAllByText('+3')` instead of `getByText` — guards against the ambiguity between proficiency bonus and STR modifier both rendering "+3" at level 5.
 
 ---
 

@@ -163,7 +163,7 @@ class TestUpdateCharacter:
         resp = client.put(f"/api/characters/{char_id}", json={"level": 20}, headers=h_p2)
         assert resp.status_code == 403
 
-    def test_gm_cannot_update_player_character(self, client):
+    def test_gm_can_update_player_character(self, client):
         h_gm, _ = make_user(client, 1)
         h_player, uid_player = make_user(client, 2)
         campaign_id = make_campaign(client, h_gm)
@@ -171,7 +171,8 @@ class TestUpdateCharacter:
         char_id = make_character(client, h_player, campaign_id)
 
         resp = client.put(f"/api/characters/{char_id}", json={"level": 20}, headers=h_gm)
-        assert resp.status_code == 403
+        assert resp.status_code == 200
+        assert resp.json()["level"] == 20
 
 
 class TestDeleteCharacter:
@@ -312,3 +313,119 @@ class TestCharacterListFieldRoundTrip:
         client.patch(f"{self.CHAR_URL}/{char_id}/visibility", json={"is_visible": True}, headers=h_gm)
         item = next(c for c in self._list(client, cid, h_gm) if c["id"] == char_id)
         assert item["is_visible_to_players"] is True
+
+    def test_character_data_in_list(self, client):
+        h_gm, h_player, cid = self._setup(client)
+        payload = {**CHAR_PAYLOAD, "campaign_id": cid, "character_data": {"current_hp": 42, "max_hp": 42}}
+        resp = client.post(self.CHAR_URL, json=payload, headers=h_player)
+        assert resp.status_code == 201
+        char_id = resp.json()["id"]
+        item = next(c for c in self._list(client, cid, h_gm) if c["id"] == char_id)
+        assert item["character_data"]["current_hp"] == 42
+
+
+# ── GM Notes ──────────────────────────────────────────────────────────────────
+
+class TestGmNotes:
+    def _setup(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_player, uid_player = make_user(client, 2)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid_player)
+        char_id = make_character(client, h_player, campaign_id)
+        return h_gm, h_player, campaign_id, char_id
+
+    def test_gm_can_set_gm_notes(self, client):
+        h_gm, _, _, char_id = self._setup(client)
+        resp = client.put(f"/api/characters/{char_id}", json={"gm_notes": "Secret info"}, headers=h_gm)
+        assert resp.status_code == 200
+        assert resp.json()["gm_notes"] == "Secret info"
+
+    def test_gm_notes_returned_to_gm(self, client):
+        h_gm, _, _, char_id = self._setup(client)
+        client.put(f"/api/characters/{char_id}", json={"gm_notes": "Secret"}, headers=h_gm)
+        resp = client.get(f"/api/characters/{char_id}", headers=h_gm)
+        assert resp.json()["gm_notes"] == "Secret"
+
+    def test_gm_notes_stripped_from_owner(self, client):
+        h_gm, h_player, _, char_id = self._setup(client)
+        client.put(f"/api/characters/{char_id}", json={"gm_notes": "Secret"}, headers=h_gm)
+        resp = client.get(f"/api/characters/{char_id}", headers=h_player)
+        assert resp.status_code == 200
+        assert resp.json()["gm_notes"] is None
+
+    def test_player_cannot_set_gm_notes(self, client):
+        h_gm, h_player, _, char_id = self._setup(client)
+        client.put(f"/api/characters/{char_id}", json={"gm_notes": "Sneaky"}, headers=h_player)
+        # Even if the request succeeds (player owns the character), gm_notes must not be set
+        resp = client.get(f"/api/characters/{char_id}", headers=h_gm)
+        assert resp.json()["gm_notes"] is None
+
+
+# ── GM Delete ─────────────────────────────────────────────────────────────────
+
+class TestGmDelete:
+    def test_gm_can_delete_player_character(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_player, uid_player = make_user(client, 2)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid_player)
+        char_id = make_character(client, h_player, campaign_id)
+
+        resp = client.delete(f"/api/characters/{char_id}", headers=h_gm)
+        assert resp.status_code == 204
+
+        resp = client.get(f"/api/characters/{char_id}", headers=h_gm)
+        assert resp.status_code == 404
+
+    def test_other_player_cannot_delete_character(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_p1, uid_p1 = make_user(client, 2)
+        h_p2, uid_p2 = make_user(client, 3)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid_p1)
+        invite_player(client, h_gm, campaign_id, uid_p2)
+        char_id = make_character(client, h_p1, campaign_id)
+
+        resp = client.delete(f"/api/characters/{char_id}", headers=h_p2)
+        assert resp.status_code == 403
+
+
+# ── Campaign Edition ──────────────────────────────────────────────────────────
+
+class TestCampaignEdition:
+    def test_campaign_defaults_to_5e(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        resp = client.get(f"/api/gm/campaigns/{campaign_id}", headers=h_gm)
+        assert resp.status_code == 200
+        assert resp.json()["edition"] == "5e"
+
+    def test_create_campaign_with_edition(self, client):
+        h_gm, _ = make_user(client, 1)
+        resp = client.post(
+            "/api/gm/campaigns",
+            json={"name": "5.5e Campaign", "edition": "5.5e"},
+            headers=h_gm,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["edition"] == "5.5e"
+
+    def test_update_campaign_edition(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        resp = client.put(
+            f"/api/gm/campaigns/{campaign_id}",
+            json={"edition": "5.5e"},
+            headers=h_gm,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["edition"] == "5.5e"
+
+    def test_edition_in_list(self, client):
+        h_gm, _ = make_user(client, 1)
+        make_campaign(client, h_gm)
+        resp = client.get("/api/gm/campaigns", headers=h_gm)
+        assert resp.status_code == 200
+        campaigns = resp.json()
+        assert all("edition" in c for c in campaigns)

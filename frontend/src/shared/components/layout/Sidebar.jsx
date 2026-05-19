@@ -2,7 +2,7 @@ import { NavLink, useParams } from 'react-router-dom';
 import { useCampaign } from '../../../campaigns/CampaignContext';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard, Users, Drama, Map, Clock, BookOpen, Menu, ChevronLeft, GitBranch,
+  LayoutDashboard, Users, Drama, Map, Clock, BookOpen, Menu, ChevronLeft, GitBranch, UserCog,
 } from 'lucide-react';
 
 const Sidebar = ({ collapsed, toggleSidebar }) => {
@@ -19,6 +19,7 @@ const Sidebar = ({ collapsed, toggleSidebar }) => {
     { path: `/campaigns/${campaignId}/timeline`, icon: GitBranch, label: 'Timeline' },
     { path: `/campaigns/${campaignId}/campaign-time`, icon: Clock, label: 'Calendar' },
     { path: `/campaigns/${campaignId}/sessions`, icon: BookOpen, label: 'Session Notes' },
+    { path: `/campaigns/${campaignId}/members`, icon: UserCog, label: 'Members' },
   ];
 
   const playerNavItems = [

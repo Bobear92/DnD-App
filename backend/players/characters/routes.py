@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from typing import List
 from players.characters.schemas import (
-    CharacterCreate, CharacterUpdate, CharacterResponse,
+    CharacterCreate, CharacterGmUpdate, CharacterResponse,
     CharacterListItem, ToggleVisibilityRequest
 )
 from players.characters.service import (
@@ -15,15 +15,15 @@ from auth.models import User
 
 router = APIRouter(prefix="/api/characters", tags=["Characters"])
 
+
 @router.post("", response_model=CharacterResponse, status_code=status.HTTP_201_CREATED)
 def create_new_character(
     character_data: CharacterCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new character in a campaign"""
-    character = create_character(character_data, current_user.id, db)
-    return character
+    return create_character(character_data, current_user.id, db)
+
 
 @router.get("/campaign/{campaign_id}", response_model=List[CharacterListItem])
 def list_characters_in_campaign(
@@ -31,9 +31,8 @@ def list_characters_in_campaign(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List characters in a campaign (own + visible)"""
-    characters = get_characters_for_user(current_user.id, campaign_id, current_user.is_admin, db)
-    return characters
+    return get_characters_for_user(current_user.id, campaign_id, current_user.is_admin, db)
+
 
 @router.get("/{character_id}", response_model=CharacterResponse)
 def get_character(
@@ -41,20 +40,19 @@ def get_character(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get a specific character"""
-    character = get_character_by_id(character_id, current_user.id, current_user.is_admin, db)
-    return character
+    return get_character_by_id(character_id, current_user.id, current_user.is_admin, db)
+
 
 @router.put("/{character_id}", response_model=CharacterResponse)
 def update_character_endpoint(
     character_id: int,
-    character_data: CharacterUpdate,
+    character_data: CharacterGmUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update a character (owner only)"""
-    character = update_character(character_id, character_data, current_user.id, db)
-    return character
+    """Update a character. Players may update their own fields; GMs may also update gm_notes and visibility."""
+    return update_character(character_id, character_data, current_user.id, current_user.is_admin, db)
+
 
 @router.delete("/{character_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_character_endpoint(
@@ -62,8 +60,9 @@ def delete_character_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete a character (owner only)"""
-    delete_character(character_id, current_user.id, db)
+    """Delete a character (owner or campaign GM)."""
+    delete_character(character_id, current_user.id, current_user.is_admin, db)
+
 
 @router.patch("/{character_id}/visibility", status_code=status.HTTP_200_OK)
 def toggle_visibility(
@@ -72,6 +71,6 @@ def toggle_visibility(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Toggle character visibility to other players (GM only)"""
+    """Toggle character visibility to other players (GM only)."""
     toggle_character_visibility(character_id, visibility_data.is_visible, current_user.id, current_user.is_admin, db)
     return {"message": "Character visibility updated"}

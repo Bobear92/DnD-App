@@ -226,3 +226,59 @@ class TestPlayerManagement:
             headers=headers,
         )
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# User search (for GM invite flow)
+# ---------------------------------------------------------------------------
+
+class TestUserSearch:
+    def test_search_by_username(self, client):
+        h1, _ = make_user(client, 1)
+        make_user(client, 2)  # username: user2
+        resp = client.get("/api/auth/users/search?q=user2", headers=h1)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert any(u["username"] == "user2" for u in data)
+
+    def test_search_by_email(self, client):
+        h1, _ = make_user(client, 1)
+        make_user(client, 2)  # email: user2@example.com
+        resp = client.get("/api/auth/users/search?q=user2@example.com", headers=h1)
+        assert resp.status_code == 200
+        assert any(u["email"] == "user2@example.com" for u in resp.json())
+
+    def test_search_excludes_self(self, client):
+        h1, uid1 = make_user(client, 1)
+        resp = client.get("/api/auth/users/search?q=user1", headers=h1)
+        assert resp.status_code == 200
+        assert not any(u["id"] == uid1 for u in resp.json())
+
+    def test_search_requires_min_2_chars(self, client):
+        h1, _ = make_user(client, 1)
+        resp = client.get("/api/auth/users/search?q=u", headers=h1)
+        assert resp.status_code == 422
+
+    def test_search_requires_auth(self, client):
+        resp = client.get("/api/auth/users/search?q=user")
+        assert resp.status_code == 401
+
+    def test_search_returns_partial_match(self, client):
+        h1, _ = make_user(client, 1)
+        make_user(client, 2)
+        make_user(client, 3)
+        resp = client.get("/api/auth/users/search?q=user", headers=h1)
+        assert resp.status_code == 200
+        # Should match user2 and user3 (user1 excluded as self)
+        usernames = {u["username"] for u in resp.json()}
+        assert "user2" in usernames
+        assert "user3" in usernames
+
+    def test_search_response_shape(self, client):
+        h1, _ = make_user(client, 1)
+        make_user(client, 2)
+        resp = client.get("/api/auth/users/search?q=user2", headers=h1)
+        u = resp.json()[0]
+        assert "id" in u
+        assert "username" in u
+        assert "email" in u

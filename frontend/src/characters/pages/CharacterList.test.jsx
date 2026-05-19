@@ -6,18 +6,20 @@ vi.mock('../../shared/components/layout/MainLayout', () => ({
   default: ({ children }) => <div data-testid="layout">{children}</div>,
 }));
 vi.mock('../../campaigns/CampaignContext', () => ({ useCampaign: vi.fn() }));
+vi.mock('../../auth/AuthContext', () => ({ useAuth: vi.fn() }));
 vi.mock('react-router-dom', async () => ({
   ...await vi.importActual('react-router-dom'),
   useParams: () => ({ campaignId: '5' }),
   useNavigate: () => mockNavigate,
 }));
 vi.mock('../characterService', () => ({
-  default: { getCharactersByCampaign: vi.fn(), toggleVisibility: vi.fn() },
+  default: { getCharactersByCampaign: vi.fn(), toggleVisibility: vi.fn(), deleteCharacter: vi.fn() },
 }));
 
 const mockNavigate = vi.fn();
 
 import { useCampaign } from '../../campaigns/CampaignContext';
+import { useAuth } from '../../auth/AuthContext';
 import characterService from '../characterService';
 import CharacterList from './CharacterList';
 
@@ -44,6 +46,7 @@ function renderList() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockNavigate.mockReset();
+  useAuth.mockReturnValue({ user: { id: 99 } });
 });
 
 describe('CharacterList — loading', () => {
@@ -74,11 +77,11 @@ describe('CharacterList — data fetching', () => {
 });
 
 describe('CharacterList — empty state', () => {
-  it('shows "No Characters Yet" when list is empty', async () => {
+  it('shows empty state when GM has no characters', async () => {
     useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
     characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [] });
     renderList();
-    await waitFor(() => expect(screen.getByText('No Characters Yet')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('No players have created characters yet.')).toBeTruthy());
   });
 
   it('player sees "Create Your First Character" button in empty state', async () => {
@@ -103,11 +106,11 @@ describe('CharacterList — character cards', () => {
     expect(screen.getByText('Fighter')).toBeTruthy();
   });
 
-  it('clicking "View Character" navigates to the character detail page', async () => {
+  it('clicking a character card navigates to the character detail page', async () => {
     useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
     renderList();
-    await waitFor(() => screen.getAllByText('View Character'));
-    fireEvent.click(screen.getAllByText('View Character')[0]);
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByText('Arathorn'));
     expect(mockNavigate).toHaveBeenCalledWith('/campaigns/5/characters/1');
   });
 });
@@ -137,7 +140,7 @@ describe('CharacterList — GM view', () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));
     fireEvent.click(screen.getAllByTitle(/Visible to players|Hidden from players/)[0]);
-    await waitFor(() => expect(characterService.toggleVisibility).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(characterService.toggleVisibility).toHaveBeenCalledWith(1, false));
     // reload: getCharactersByCampaign called a second time
     await waitFor(() =>
       expect(characterService.getCharactersByCampaign).toHaveBeenCalledTimes(2)

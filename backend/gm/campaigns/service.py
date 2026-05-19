@@ -8,6 +8,7 @@ def create_campaign(campaign_data: CampaignCreate, creator_id: int, db: Session)
     new_campaign = Campaign(
         name=campaign_data.name,
         description=campaign_data.description,
+        edition=campaign_data.edition,
         created_by=creator_id
     )
     db.add(new_campaign)
@@ -57,6 +58,8 @@ def update_campaign(campaign_id: int, campaign_data: CampaignUpdate, db: Session
         campaign.name = campaign_data.name
     if campaign_data.description is not None:
         campaign.description = campaign_data.description
+    if campaign_data.edition is not None:
+        campaign.edition = campaign_data.edition
 
     db.commit()
     db.refresh(campaign)

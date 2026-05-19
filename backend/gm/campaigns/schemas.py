@@ -6,10 +6,12 @@ from typing import List, Optional
 class CampaignCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    edition: str = "5e"
 
 class CampaignUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    edition: Optional[str] = None
 
 # First, add a simple UserInfo schema at the top (after the imports)
 class UserInfo(BaseModel):
@@ -44,11 +46,12 @@ class CampaignResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
+    edition: str
     created_by: int
     created_at: datetime
     updated_at: Optional[datetime]
     members: List[CampaignMemberResponse] = []
-    
+
     class Config:
         from_attributes = True
 
@@ -56,6 +59,7 @@ class CampaignListItem(BaseModel):
     id: int
     name: str
     description: Optional[str]
+    edition: str
     created_by: int
     created_at: datetime
 

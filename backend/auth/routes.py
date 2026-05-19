@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from auth.schemas import UserRegister, UserLogin, UserResponse, TokenResponse
+from typing import List
+from auth.schemas import UserRegister, UserLogin, UserResponse, TokenResponse, UserSearchResult
 from auth.service import register_user, login_user
 from shared.database import get_db
 from shared.dependencies import get_current_user
@@ -24,3 +25,20 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
 def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current authenticated user info"""
     return current_user
+
+@router.get("/users/search", response_model=List[UserSearchResult])
+def search_users(
+    q: str = Query(..., min_length=2),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Search users by username or email (for GM invite flow)"""
+    return (
+        db.query(User)
+        .filter(
+            (User.username.ilike(f"%{q}%")) | (User.email.ilike(f"%{q}%")),
+            User.id != current_user.id,
+        )
+        .limit(10)
+        .all()
+    )
