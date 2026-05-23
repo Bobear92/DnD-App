@@ -8,6 +8,27 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
+import { CLASS_FEATURES_5E } from './classFeatures5e';
+
+const WIZARD_CANTRIPS_5E = [
+  'Acid Splash', 'Blade Ward', 'Booming Blade', 'Chill Touch', 'Control Flames',
+  'Create Bonfire', 'Dancing Lights', 'Fire Bolt', 'Friends', 'Frostbite',
+  'Green-Flame Blade', 'Gust', 'Infestation', 'Light', 'Lightning Lure',
+  'Mage Hand', 'Mending', 'Message', 'Minor Illusion', 'Mold Earth',
+  'Poison Spray', 'Prestidigitation', 'Ray of Frost', 'Shape Water',
+  'Shocking Grasp', 'Sapping Sting', 'Thunderclap', 'Toll the Dead', 'True Strike',
+];
+
+const WIZARD_L1_SPELLS_5E = [
+  'Absorb Elements', 'Alarm', 'Burning Hands', 'Catapult', 'Cause Fear',
+  'Charm Person', 'Chromatic Orb', 'Color Spray', 'Comprehend Languages',
+  'Detect Magic', 'Disguise Self', 'Earth Tremor', 'Expeditious Retreat',
+  'False Life', 'Feather Fall', 'Find Familiar', 'Fog Cloud', 'Grease',
+  'Ice Knife', 'Identify', 'Illusory Script', 'Jump', 'Longstrider',
+  'Mage Armor', 'Magic Missile', 'Protection from Evil and Good',
+  'Ray of Sickness', 'Shield', 'Silent Image', 'Sleep', 'Snare',
+  "Tasha's Caustic Brew", 'Thunderwave', 'Unseen Servant', 'Witch Bolt',
+];
 
 const WIZARD_SUBCLASSES_5E = [
   'School of Abjuration', 'School of Conjuration', 'School of Divination',
@@ -48,7 +69,33 @@ function arcaneRecoveryLevels(level) {
   return Math.ceil(level / 2);
 }
 
-export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1 }) {
+function SpellPickerCreation({ label, limit, options, selected, onChange }) {
+  const toggle = (spell) => {
+    if (selected.includes(spell)) onChange(selected.filter(s => s !== spell));
+    else if (selected.length < limit) onChange([...selected, spell]);
+  };
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground">{label}</Label>
+        <span className="text-xs text-muted-foreground">{selected.length}/{limit} chosen</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(spell => (
+          <button key={spell} type="button" onClick={() => toggle(spell)}
+            className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+              selected.includes(spell) ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background hover:bg-muted border-border text-muted-foreground'
+            } ${!selected.includes(spell) && selected.length >= limit ? 'opacity-40 cursor-not-allowed' : ''}`}>
+            {spell}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const [newSpellbook, setNewSpellbook] = useState('');
   const [newPrepared, setNewPrepared] = useState('');
@@ -125,6 +172,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
       </div>
 
       {/* HP */}
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Current HP</Label>
@@ -139,8 +187,10 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </div>
       </div>
+      )}
 
       {/* AC / Speed / Hit Dice */}
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Armor Class</Label>
@@ -155,26 +205,29 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </div>
       </div>
+      )}
 
       {/* Arcane Recovery */}
-      <div className="flex items-center justify-between rounded-md border px-3 py-2">
-        <div>
-          <div className="text-sm font-medium">Arcane Recovery (Short Rest)</div>
-          <div className="text-xs text-muted-foreground">Recover up to {arcaneRecoveryLevels(level)} total spell slot levels</div>
+      {!creation && (
+        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+          <div>
+            <div className="text-sm font-medium">Arcane Recovery (Short Rest)</div>
+            <div className="text-xs text-muted-foreground">Recover up to {arcaneRecoveryLevels(level)} total spell slot levels</div>
+          </div>
+          {!readOnly && (
+            <button
+              className={`text-xs px-3 py-1 rounded border transition-colors ${
+                data.arcane_recovery_used
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-primary text-primary-foreground'
+              }`}
+              onClick={() => set('arcane_recovery_used', !data.arcane_recovery_used)}
+            >
+              {data.arcane_recovery_used ? 'Used' : 'Available'}
+            </button>
+          )}
         </div>
-        {!readOnly && (
-          <button
-            className={`text-xs px-3 py-1 rounded border transition-colors ${
-              data.arcane_recovery_used
-                ? 'bg-muted text-muted-foreground'
-                : 'bg-primary text-primary-foreground'
-            }`}
-            onClick={() => set('arcane_recovery_used', !data.arcane_recovery_used)}
-          >
-            {data.arcane_recovery_used ? 'Used' : 'Available'}
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Subclass (level 2) */}
       {level >= 2 && (
@@ -195,60 +248,88 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
         </div>
       )}
 
-      {/* Spell Slots */}
-      <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-          {slots.map((total, i) => {
-            if (total === 0) return null;
-            const slotLevel = i + 1;
-            const used = spellSlots[slotLevel]?.used ?? 0;
-            return (
-              <div key={slotLevel} className="rounded-md border text-center p-2">
-                <div className="text-xs text-muted-foreground">Level {slotLevel}</div>
-                <div className="font-bold text-sm">{total - used}/{total}</div>
-                {!readOnly && (
-                  <div className="flex justify-center gap-0.5 mt-1">
-                    <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                      disabled={used <= 0}
-                      onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
-                    <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                      disabled={used >= total}
-                      onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+      {/* Spell Slots — static info during creation, tracker during play */}
+      {creation ? (
+        <div className="rounded-md border px-3 py-2 space-y-1">
+          <Label className="text-xs text-muted-foreground">Spell Slots at Level 1</Label>
+          <div className="text-sm font-medium">2 × Level 1 spell slots</div>
+          <div className="text-xs text-muted-foreground">All slots recover on a Long Rest</div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            {slots.map((total, i) => {
+              if (total === 0) return null;
+              const slotLevel = i + 1;
+              const used = spellSlots[slotLevel]?.used ?? 0;
+              return (
+                <div key={slotLevel} className="rounded-md border text-center p-2">
+                  <div className="text-xs text-muted-foreground">Level {slotLevel}</div>
+                  <div className="font-bold text-sm">{total - used}/{total}</div>
+                  {!readOnly && (
+                    <div className="flex justify-center gap-0.5 mt-1">
+                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                        disabled={used <= 0}
+                        onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
+                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                        disabled={used >= total}
+                        onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-      {/* Cantrips */}
-      <SpellList
-        dataKey="cantrips"
-        label="Cantrips Known"
-        newValue={newCantrip}
-        setNew={setNewCantrip}
-        placeholder="Add cantrip…"
-      />
+      {/* Cantrips — picker during creation, free-text list during play */}
+      {creation ? (
+        <SpellPickerCreation
+          label="Cantrips Known (choose 3)"
+          limit={3}
+          options={WIZARD_CANTRIPS_5E}
+          selected={data.cantrips ?? []}
+          onChange={v => set('cantrips', v)}
+        />
+      ) : (
+        <SpellList
+          dataKey="cantrips"
+          label="Cantrips Known"
+          newValue={newCantrip}
+          setNew={setNewCantrip}
+          placeholder="Add cantrip…"
+        />
+      )}
 
-      {/* Spellbook */}
-      <SpellList
-        dataKey="spellbook"
-        label="Spellbook (all known spells)"
-        newValue={newSpellbook}
-        setNew={setNewSpellbook}
-        placeholder="Add spell to spellbook…"
-      />
-
-      {/* Prepared spells */}
-      <SpellList
-        dataKey="prepared_spells"
-        label="Prepared Spells (today)"
-        newValue={newPrepared}
-        setNew={setNewPrepared}
-        placeholder="Add prepared spell…"
-      />
+      {/* Spellbook — picker during creation, free-text list during play */}
+      {creation ? (
+        <SpellPickerCreation
+          label="Starting Spellbook (choose 6 × 1st-level spells)"
+          limit={6}
+          options={WIZARD_L1_SPELLS_5E}
+          selected={data.spellbook ?? []}
+          onChange={v => set('spellbook', v)}
+        />
+      ) : (
+        <>
+          <SpellList
+            dataKey="spellbook"
+            label="Spellbook (all known spells)"
+            newValue={newSpellbook}
+            setNew={setNewSpellbook}
+            placeholder="Add spell to spellbook…"
+          />
+          <SpellList
+            dataKey="prepared_spells"
+            label="Prepared Spells (today)"
+            newValue={newPrepared}
+            setNew={setNewPrepared}
+            placeholder="Add prepared spell…"
+          />
+        </>
+      )}
 
       {/* Skill proficiencies */}
       <div className="space-y-1">
@@ -263,20 +344,38 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
             onChange={v => set('skill_proficiencies', v)}
             max={2}
             allowed={['Arcana', 'History', 'Insight', 'Investigation', 'Medicine', 'Religion']}
+            backgroundSkills={backgroundSkills}
           />
         )}
       </div>
 
       {/* Class features */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Class Features</Label>
-        <div className="rounded-md border divide-y text-sm">
-          <FeatureRow name="Spellcasting + Arcane Recovery" earned={level >= 1} />
-          <FeatureRow name="Arcane Tradition (Subclass)" earned={level >= 2} />
-          <FeatureRow name="Spell Mastery" earned={level >= 18} />
-          <FeatureRow name="Signature Spells" earned={level >= 20} />
+      {creation ? (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+          {(CLASS_FEATURES_5E.Wizard[1] ?? []).map(feat => (
+            <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="font-semibold text-sm">{feat.name}</div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+              {feat.name === 'Arcane Recovery' && (
+                <div className="mt-1 text-xs font-medium text-foreground bg-background rounded px-2 py-1 border">
+                  Recover up to <span className="font-bold">{arcaneRecoveryLevels(level)} spell slot level{arcaneRecoveryLevels(level) > 1 ? 's' : ''}</span> on a short rest
+                </div>
+              )}
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Class Features</Label>
+          <div className="rounded-md border divide-y text-sm">
+            <FeatureRow name="Spellcasting + Arcane Recovery" earned={level >= 1} />
+            <FeatureRow name="Arcane Tradition (Subclass)" earned={level >= 2} />
+            <FeatureRow name="Spell Mastery" earned={level >= 18} />
+            <FeatureRow name="Signature Spells" earned={level >= 20} />
+          </div>
+        </div>
+      )}
 
       {/* ASI reminder */}
       {[4, 8, 12, 16, 19].some(l => l <= level) && (
@@ -298,28 +397,48 @@ function FeatureRow({ name, earned }) {
   );
 }
 
-function SkillPicker({ value, onChange, max, allowed }) {
+function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
   const toggle = (skill) => {
+    if (backgroundSkills.includes(skill)) return;
     if (value.includes(skill)) onChange(value.filter(s => s !== skill));
     else if (value.length < max) onChange([...value, skill]);
   };
+  const extraBgSkills = backgroundSkills.filter(s => !allowed.includes(s));
+  const hasBgOverlap = backgroundSkills.length > 0;
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {allowed.map(skill => (
-        <button
-          key={skill}
-          type="button"
-          onClick={() => toggle(skill)}
-          className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-            value.includes(skill)
-              ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-background hover:bg-muted border-border text-muted-foreground'
-          } ${!value.includes(skill) && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}
-        >
-          {skill}
-        </button>
-      ))}
-      <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {allowed.map(skill => {
+          const isFromBg = backgroundSkills.includes(skill);
+          const isSelected = value.includes(skill);
+          return (
+            <button
+              key={skill}
+              type="button"
+              onClick={() => toggle(skill)}
+              className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                isFromBg
+                  ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed'
+                  : isSelected
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!isFromBg && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}
+            >
+              {skill}
+            </button>
+          );
+        })}
+        {extraBgSkills.map(skill => (
+          <button key={skill} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed">
+            {skill}
+          </button>
+        ))}
+        <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+      </div>
+      {hasBgOverlap && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background</p>
+      )}
     </div>
   );
 }

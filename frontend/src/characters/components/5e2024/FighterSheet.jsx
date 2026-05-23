@@ -38,27 +38,46 @@ function FeatureRow({ name, earned }) {
   );
 }
 
-function SkillPicker({ value, onChange, max }) {
-  const ALL = [
-    'Acrobatics', 'Animal Handling', 'Athletics', 'History', 'Insight',
-    'Intimidation', 'Perception', 'Persuasion', 'Stealth', 'Survival',
+function SkillPicker({ value, onChange, max, backgroundSkills = [] }) {
+  const ALLOWED = [
+    'Acrobatics', 'Animal Handling', 'Athletics', 'History',
+    'Insight', 'Intimidation', 'Perception', 'Survival',
   ];
+  const extraBgSkills = backgroundSkills.filter(s => !ALLOWED.includes(s));
   const toggle = (s) => {
+    if (backgroundSkills.includes(s)) return;
     if (value.includes(s)) onChange(value.filter(x => x !== s));
     else if (value.length < max) onChange([...value, s]);
   };
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {ALL.map(s => (
-        <button key={s} type="button" onClick={() => toggle(s)}
-          className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-            value.includes(s) ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-background hover:bg-muted border-border text-muted-foreground'
-          } ${!value.includes(s) && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}>
-          {s}
-        </button>
-      ))}
-      <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {ALLOWED.map(s => {
+          const isFromBg = backgroundSkills.includes(s);
+          const isSelected = value.includes(s);
+          return (
+            <button key={s} type="button" onClick={() => toggle(s)}
+              className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                isFromBg
+                  ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed'
+                  : isSelected ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!isFromBg && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              {s}
+            </button>
+          );
+        })}
+        {extraBgSkills.map(s => (
+          <button key={s} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed">
+            {s}
+          </button>
+        ))}
+        <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+      </div>
+      {backgroundSkills.length > 0 && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background</p>
+      )}
     </div>
   );
 }
@@ -117,7 +136,7 @@ function ResourceTracker({ label, total, used, usedKey, set, readOnly }) {
   );
 }
 
-export default function FighterSheet({ data = {}, onChange, readOnly = false, level = 1 }) {
+export default function FighterSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
   const set = (key, value) => onChange?.({ [key]: value });
 
   const weaponMasteryMax = level >= 16 ? 6 : level >= 10 ? 5 : level >= 4 ? 4 : 3;
@@ -131,17 +150,20 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid gap-3 ${level >= 5 ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div className="rounded-md border px-3 py-2 text-center">
           <div className="text-xs text-muted-foreground">Hit Die</div>
           <div className="font-bold text-lg">d10</div>
         </div>
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Extra Attacks</div>
-          <div className="font-bold text-lg">{extraAttacks(level)}</div>
-        </div>
+        {level >= 5 && (
+          <div className="rounded-md border px-3 py-2 text-center">
+            <div className="text-xs text-muted-foreground">Extra Attacks</div>
+            <div className="font-bold text-lg">{extraAttacks(level)}</div>
+          </div>
+        )}
       </div>
 
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -153,7 +175,9 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+      )}
 
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -165,6 +189,7 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+      )}
 
       {/* Fighting Style */}
       <Field label="Fighting Style">
@@ -189,8 +214,10 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
         />
       </Field>
 
-      <ResourceTracker label="Second Wind (Short Rest)" total={1}
-        used={data.second_wind_used ? 1 : 0} usedKey="second_wind_used" set={set} readOnly={readOnly} />
+      {!creation && (
+        <ResourceTracker label="Second Wind (Short Rest)" total={1}
+          used={data.second_wind_used ? 1 : 0} usedKey="second_wind_used" set={set} readOnly={readOnly} />
+      )}
 
       {level >= 2 && (
         <ResourceTracker label="Action Surge (Short Rest)" total={actionSurgeTotal(level)}
@@ -253,7 +280,7 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
             {(data.skill_proficiencies ?? []).length === 0 && <span className="text-sm text-muted-foreground">None set</span>}
           </div>
         ) : (
-          <SkillPicker value={data.skill_proficiencies ?? []} onChange={v => set('skill_proficiencies', v)} max={2} />
+          <SkillPicker value={data.skill_proficiencies ?? []} onChange={v => set('skill_proficiencies', v)} max={2} backgroundSkills={backgroundSkills} />
         )}
       </Field>
     </div>

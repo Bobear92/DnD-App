@@ -24,6 +24,44 @@ const PACT_SLOTS = {
 
 function pactSlotsForLevel(lvl) { return PACT_SLOTS[Math.min(Math.max(lvl, 1), 20)]; }
 
+const WARLOCK_CANTRIPS_2024 = [
+  'Blade Ward', 'Chill Touch', 'Eldritch Blast', 'Friends',
+  'Mage Hand', 'Minor Illusion', 'Poison Spray', 'Prestidigitation',
+  'Toll the Dead', 'True Strike',
+];
+
+const WARLOCK_SPELLS_L1_2024 = [
+  'Armor of Agathys', 'Arms of Hadar', 'Charm Person', 'Comprehend Languages',
+  'Expeditious Retreat', 'Hellish Rebuke', 'Hex', 'Illusory Script',
+  'Protection from Evil and Good', 'Unseen Servant', 'Witch Bolt',
+];
+
+function SpellPickerCreation({ label, limit, options, selected, onChange }) {
+  const toggle = (spell) => {
+    if (selected.includes(spell)) onChange(selected.filter(s => s !== spell));
+    else if (selected.length < limit) onChange([...selected, spell]);
+  };
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground">{label}</Label>
+        <span className="text-xs text-muted-foreground">{selected.length}/{limit} chosen</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(spell => (
+          <button key={spell} type="button" onClick={() => toggle(spell)}
+            className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+              selected.includes(spell) ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background hover:bg-muted border-border text-muted-foreground'
+            } ${!selected.includes(spell) && selected.length >= limit ? 'opacity-40 cursor-not-allowed' : ''}`}>
+            {spell}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function invocationCount(level) {
   if (level >= 15) return 8;
   if (level >= 12) return 7;
@@ -44,29 +82,48 @@ function FeatureRow({ name, earned }) {
   );
 }
 
-function SkillPicker({ value, onChange, max }) {
+function SkillPicker({ value, onChange, max, backgroundSkills = [] }) {
   const ALLOWED = ['Arcana', 'Deception', 'History', 'Intimidation', 'Investigation', 'Nature', 'Religion'];
+  const extraBgSkills = backgroundSkills.filter(s => !ALLOWED.includes(s));
   const toggle = (s) => {
+    if (backgroundSkills.includes(s)) return;
     if (value.includes(s)) onChange(value.filter(x => x !== s));
     else if (value.length < max) onChange([...value, s]);
   };
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {ALLOWED.map(s => (
-        <button key={s} type="button" onClick={() => toggle(s)}
-          className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-            value.includes(s) ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-background hover:bg-muted border-border text-muted-foreground'
-          } ${!value.includes(s) && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}>
-          {s}
-        </button>
-      ))}
-      <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {ALLOWED.map(s => {
+          const isFromBg = backgroundSkills.includes(s);
+          const isSelected = value.includes(s);
+          return (
+            <button key={s} type="button" onClick={() => toggle(s)}
+              className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                isFromBg
+                  ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed'
+                  : isSelected ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!isFromBg && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              {s}
+            </button>
+          );
+        })}
+        {extraBgSkills.map(s => (
+          <button key={s} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed">
+            {s}
+          </button>
+        ))}
+        <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+      </div>
+      {backgroundSkills.length > 0 && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background</p>
+      )}
     </div>
   );
 }
 
-export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1 }) {
+export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
@@ -137,6 +194,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         </div>
       </div>
 
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -148,7 +206,9 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+      )}
 
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -160,22 +220,25 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+      )}
 
       {/* Pact Magic slot tracker */}
-      <div className="flex items-center justify-between rounded-md border px-3 py-2">
-        <div>
-          <div className="text-sm font-medium">Pact Magic Slots (Short Rest)</div>
-          <div className="text-xs text-muted-foreground">{slotCount - slotsUsed} / {slotCount} level-{slotLevel} slots remaining</div>
-        </div>
-        {!readOnly && (
-          <div className="flex items-center gap-1">
-            <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-              onClick={() => set('pact_slots_used', Math.max(0, slotsUsed - 1))} disabled={slotsUsed <= 0}>−</button>
-            <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-              onClick={() => set('pact_slots_used', Math.min(slotCount, slotsUsed + 1))} disabled={slotsUsed >= slotCount}>+</button>
+      {!creation && (
+        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+          <div>
+            <div className="text-sm font-medium">Pact Magic Slots (Short Rest)</div>
+            <div className="text-xs text-muted-foreground">{slotCount - slotsUsed} / {slotCount} level-{slotLevel} slots remaining</div>
           </div>
-        )}
-      </div>
+          {!readOnly && (
+            <div className="flex items-center gap-1">
+              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+                onClick={() => set('pact_slots_used', Math.max(0, slotsUsed - 1))} disabled={slotsUsed <= 0}>−</button>
+              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+                onClick={() => set('pact_slots_used', Math.min(slotCount, slotsUsed + 1))} disabled={slotsUsed >= slotCount}>+</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Magical Cunning (L2) */}
       {level >= 2 && (
@@ -265,8 +328,26 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         </Field>
       )}
 
-      <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
-      <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
+      {creation ? (
+        <SpellPickerCreation label="Cantrips Known (choose 2)" limit={2} options={WARLOCK_CANTRIPS_2024}
+          selected={data.cantrips ?? []} onChange={v => set('cantrips', v)} />
+      ) : (
+        <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
+      )}
+      {creation ? (
+        <SpellPickerCreation label="Spells Known at Level 1 (choose 2)" limit={2} options={WARLOCK_SPELLS_L1_2024}
+          selected={data.known_spells ?? []} onChange={v => set('known_spells', v)} />
+      ) : (
+        <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
+      )}
+
+      {creation && (
+        <div className="rounded-md border px-3 py-2 space-y-1">
+          <Label className="text-xs text-muted-foreground">Pact Magic — Level 1</Label>
+          <div className="text-sm font-medium">1 × Level 1 pact magic slot</div>
+          <div className="text-xs text-muted-foreground">Slot recovers on a Short Rest · Warlocks cannot swap spells freely — choose carefully</div>
+        </div>
+      )}
 
       {level >= 11 && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
@@ -304,7 +385,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
             {(data.skill_proficiencies ?? []).length === 0 && <span className="text-sm text-muted-foreground">None set</span>}
           </div>
         ) : (
-          <SkillPicker value={data.skill_proficiencies ?? []} onChange={v => set('skill_proficiencies', v)} max={2} />
+          <SkillPicker value={data.skill_proficiencies ?? []} onChange={v => set('skill_proficiencies', v)} max={2} backgroundSkills={backgroundSkills} />
         )}
       </Field>
     </div>

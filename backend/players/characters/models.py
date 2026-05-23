@@ -31,9 +31,13 @@ class Character(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
     
+    # Leveling
+    experience_points = Column(Integer, default=0, nullable=False)
+    level_up_pending = Column(Boolean, default=False, nullable=False)
+
     # Visibility (GM controls)
     is_visible_to_players = Column(Boolean, default=False, nullable=False)
-    
+
     # Notes
     notes = Column(Text, nullable=True)
     gm_notes = Column(Text, nullable=True)

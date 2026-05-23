@@ -9,8 +9,8 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "cd c:/Users/rober/Documents/Projects/dnd-app/frontend && export R=$(npm test -- --run 2>&1 | tail -10) && node -e \"process.stdout.write(JSON.stringify({systemMessage:'Post-turn checklist: (1) confirm .test.jsx for every new/changed .jsx; (2) audit CLAUDE.md schema/endpoint/UI/test-file-listing; (3) check .claude/agents and .claude/commands for stale refs; (4) if any backend file changed → restart uvicorn NOW yourself (kill python*, start fresh) — never ask user to restart\\n\\n--- npm test (last 10 lines) ---\\n'+(process.env.R||'')}));\"",
-            "timeout": 60,
+            "command": "cd c:/Users/rober/Documents/Projects/dnd-app/frontend && export OUT=$(npm test -- --run 2>&1); if printf '%s' \"$OUT\" | grep -qE '[0-9]+ failed'; then node -e \"process.stdout.write(JSON.stringify({decision:'block',reason:'Tests are failing — you MUST fix them before this turn ends. Run npm test to see which tests fail.'}))\" ; else export TAIL=$(printf '%s' \"$OUT\" | tail -5); node -e \"process.stdout.write(JSON.stringify({systemMessage:'Tests pass.\\n\\nPOST-TURN CHECKLIST — required after every code change:\\n1. Every new/changed .jsx has a matching .test.jsx that covers the new behaviour\\n2. Audit CLAUDE.md: schema, endpoints, UI behaviours, test listing, What\\'s NOT Built Yet\\n3. Check .claude/agents/ for stale refs to changed patterns\\n4. Backend .py changed? Restart uvicorn yourself — kill python*, start uvicorn main:app --reload\\n\\n--- npm test tail ---\\n'+(process.env.TAIL||'')}))\" ; fi",
+            "timeout": 90,
             "statusMessage": "Running npm test..."
           }
         ]

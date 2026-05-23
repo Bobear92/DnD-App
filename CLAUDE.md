@@ -1,5 +1,18 @@
 # D&D RPG Application — Project Context
 
+## Post-Turn Requirements (ENFORCE AFTER EVERY CODE CHANGE)
+
+After every turn that modifies `.jsx` or `.py` files, complete ALL of these before finishing:
+
+1. **Tests** — Run `npm test` in `frontend/`. All tests must pass. The Stop hook **blocks** if tests fail — you cannot end the turn until they pass.
+2. **CLAUDE.md audit** — Update schema, endpoints, UI behaviours, test file listing (with count), and "What's NOT Built Yet" as needed.
+3. **Agents audit** — Check `.claude/agents/` for stale references to patterns you changed.
+4. **Backend restart** — If any `.py` file changed, kill python* and start `uvicorn main:app --reload` yourself. Never ask the user to restart.
+
+The Stop hook runs after every turn and blocks completion if `npm test` reports failures.
+
+---
+
 ## What This Is
 A full-stack D&D campaign organizer and compendium. Users create campaigns, invite players, and manage all campaign content — with a customizable ruleset layered on top of the official D&D base compendium.
 
@@ -166,6 +179,10 @@ users
 
 campaigns
   id, name, description, edition (String(10), default "5e"),
+  use_alignment (boolean, default true),                    ← GM toggle; hides alignment field when false
+  ability_score_method (String(20), default "standard_spread"), ← "standard_spread" | "point_buy" | "roll"
+  allow_reroll_ones (boolean, default false),               ← only applies when ability_score_method="roll"
+  leveling_type (String(20), default "milestone"),          ← "milestone" | "experience"
   created_by (FK→users), created_at, updated_at
 
 campaign_members
@@ -177,6 +194,8 @@ characters
   id, name, race, char_class, level, background, alignment,
   strength, dexterity, constitution, intelligence, wisdom, charisma,
   character_data (JSONB),   ← class-specific flexible data (HP, spell slots, features, skill profs, etc.)
+  experience_points (integer, default 0),   ← XP total; used when leveling_type="experience"
+  level_up_pending (boolean, default false), ← set true when XP threshold crossed or GM triggers milestone LU
   user_id (FK→users), campaign_id (FK→campaigns),
   is_visible_to_players (boolean), notes,
   gm_notes (Text, nullable),   ← GM only; always stripped from player/owner responses
@@ -478,6 +497,7 @@ Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs`
 | DELETE | /api/gm/campaigns/{id}/players/{user_id} | Yes (GM of campaign) |
 
 Campaign creation uses `get_current_user` (any authenticated user). Member management uses `require_campaign_gm`.
+Campaign PUT accepts all four new settings fields: `use_alignment`, `ability_score_method`, `allow_reroll_ones`, `leveling_type`.
 
 ### Characters
 | Method | Endpoint | Auth Required |
@@ -690,6 +710,7 @@ frontend/src/
 ├── campaigns/
 │   ├── pages/CampaignSelection.jsx  # List campaigns, create modal, enter → sets CampaignContext ✅
 │   ├── pages/CampaignMembers.jsx    # Member list + invite (search → select → add) + remove; GM-only controls ✅
+│   ├── pages/CampaignSettingsPage.jsx # /settings route — General tab (edition, alignment, ability score method, leveling) + Members tab ✅
 │   ├── CampaignContext.jsx      # {campaign, enterCampaign, leaveCampaign}; persisted to localStorage
 │   └── campaignService.js       # getAllCampaigns, getCampaignById, createCampaign, updateCampaign, deleteCampaign,
 │                                #   addPlayer(campaignId, userId), removePlayer(campaignId, userId),
@@ -701,11 +722,11 @@ frontend/src/
 │   │   ├── BardSheet.jsx        # Bard (5e): full caster, bardic inspiration die (LR until L5), expertise, College ✅
 │   │   ├── ClericSheet.jsx      # Cleric (5e): full caster, channel divinity (LR), Divine Domain at L1 ✅
 │   │   ├── DruidSheet.jsx       # Druid (5e): full caster, wild shape tracker, Druid Circle at L2 ✅
-│   │   ├── FighterSheet.jsx     # Fighter (5e): HP/AC/speed, fighting style, resource trackers, subclass ✅
+│   │   ├── FighterSheet.jsx     # Fighter (5e): HP/AC/speed, fighting style, resource trackers, subclass; skill picker restricted to 8 Fighter skills (Acrobatics, Animal Handling, Athletics, History, Insight, Intimidation, Perception, Survival) ✅
 │   │   ├── MonkSheet.jsx        # Monk (5e): ki point tracker, martial arts die, unarmored defense ✅
 │   │   ├── PaladinSheet.jsx     # Paladin (5e): half-caster starting L2, lay on hands, sacred oath ✅
 │   │   ├── RangerSheet.jsx      # Ranger (5e): half-caster starting L1, favored enemy/terrain, Archetype ✅
-│   │   ├── RogueSheet.jsx       # Rogue (5e): sneak attack, expertise picker, roguish archetype ✅
+│   │   ├── RogueSheet.jsx       # Rogue (5e): sneak attack, expertise picker (all 18 skills), roguish archetype; skill proficiency picker restricted to 11 Rogue skills (Acrobatics, Athletics, Deception, Insight, Intimidation, Investigation, Perception, Performance, Persuasion, Sleight of Hand, Stealth) ✅
 │   │   ├── SorcererSheet.jsx    # Sorcerer (5e): full caster, sorcery points, metamagic, Sorcerous Origin L1 ✅
 │   │   ├── WarlockSheet.jsx     # Warlock (5e): pact magic (short-rest slots), invocations L2+, Patron L1 ✅
 │   │   ├── WizardSheet.jsx      # Wizard (5e): full caster, spellbook, arcane recovery, Tradition L2 ✅
@@ -715,19 +736,23 @@ frontend/src/
 │   │       ├── BardSheet.jsx      # Bard (2024): bardic inspiration short-rest from L1 ✅
 │   │       ├── ClericSheet.jsx    # Cleric (2024): divine order L1, subclass L3, channel divinity short-rest ✅
 │   │       ├── DruidSheet.jsx     # Druid (2024): primal order L1, subclass L3, wild resurgence L5 ✅
-│   │       ├── FighterSheet.jsx   # Fighter (2024): weapon mastery, tactical mind ✅
+│   │       ├── FighterSheet.jsx   # Fighter (2024): weapon mastery, tactical mind; skill picker restricted to 8 Fighter skills (same as 5e) ✅
 │   │       ├── MonkSheet.jsx      # Monk (2024): focus points (renamed from ki), weapon mastery ✅
 │   │       ├── PaladinSheet.jsx   # Paladin (2024): spell slots from L1, weapon mastery ✅
 │   │       ├── RangerSheet.jsx    # Ranger (2024): weapon mastery, deft explorer ✅
-│   │       ├── RogueSheet.jsx     # Rogue (2024): weapon mastery, steady aim L3 ✅
+│   │       ├── RogueSheet.jsx     # Rogue (2024): weapon mastery, steady aim L3; skill proficiency picker restricted to 11 Rogue skills via ROGUE_ALLOWED; expertise picker keeps ALL_SKILLS ✅
 │   │       ├── SorcererSheet.jsx  # Sorcerer (2024): innate sorcery L1, subclass L3, sorcerous restoration L5 ✅
 │   │       ├── WarlockSheet.jsx   # Warlock (2024): invocations L1, magical cunning L2, subclass L3, boon L5 ✅
 │   │       ├── WizardSheet.jsx    # Wizard (2024): memorize spell L1, scholar L2, subclass L3 ✅
 │   │       └── index.js           # Exports all 12 2024 sheets + SUPPORTED_CLASSES_2024 + metadata
+│   │   ├── AbilityScoreAssignment.jsx # Three ability score methods: StandardSpreadAssignment, PointBuyAssignment, DiceRollAssignment ✅
+│   │   ├── classFeatures5e.js   # HIT_DICE_5E + CLASS_FEATURES_5E: all 12 classes × 20 levels, 2014 rules ✅
+│   │   ├── classFeatures2024.js # HIT_DICE_2024 + CLASS_FEATURES_2024: all 12 classes × 20 levels, 2024 rules ✅
+│   │   └── LevelUpWizard.jsx    # 3-step modal: HP roll/average → new features → confirm; saves level + hp_max ✅
 │   └── pages/
 │       ├── CharacterList.jsx    # List characters, visibility toggle (GM), player view toggle ✅
-│       ├── CharacterCreate.jsx  # Class picker (step 1) + details form with class sheet (step 2); edition-aware ✅
-│       └── CharacterDetail.jsx  # Full character sheet: identity, ability scores, saves, skills, class features, GM notes; edition-aware ✅
+│       ├── CharacterCreate.jsx  # Class picker (step 1) + details form with class sheet (step 2); edition-aware; uses campaign ability score method ✅
+│       └── CharacterDetail.jsx  # Full character sheet: identity, ability scores, saves, skills, class features, GM notes; leveling card (XP bar, add XP, milestone LU); LevelUpWizard; edition-aware ✅
 ├── npcs/
 │   ├── npcService.js            # Full API client: NPCs, relationships, player relationships, image upload
 │   └── pages/
@@ -786,6 +811,7 @@ frontend/src/
 | `/campaigns/:campaignId/characters/create` | CharacterCreate | ✅ Functional (all 12 classes, 5e + 5.5e edition-aware) |
 | `/campaigns/:campaignId/characters/:characterId` | CharacterDetail | ✅ Functional |
 | `/campaigns/:campaignId/members` | CampaignMembers | ✅ Functional (GM: member list + invite + remove; visible to all members) |
+| `/campaigns/:campaignId/settings` | CampaignSettingsPage | ✅ Functional (GM: General tab — edition, alignment, ability score method, leveling; Members tab — invite/remove) |
 
 ### Locations UI — Key Behaviours
 - **Maps tab:** thumbnail strip (left) + scrollable map viewer (right) with zoom (+/−/scroll wheel) and dark background
@@ -828,7 +854,12 @@ frontend/src/
 - **Last Known Location:** select from all campaign locations; in player view shows as a clickable link to that location's detail page
 - **Portrait display note:** images are served via `app.mount("/uploads", StaticFiles(...))` in `main.py` — upload/delete/display are all functional
 
-### Settings UI — Key Behaviours
+### Campaign Settings UI — Key Behaviours
+- **Route:** `/campaigns/:campaignId/settings` — wrapped in `<MainLayout>`; GM-only editing controls; accessible to all members (read-only for players); "Campaign Settings" link (Settings icon) in GM section of Sidebar
+- **General tab:** Campaign Identity section (name, description, edition select — 5e/5.5e), Roleplaying Options (alignment toggle — hides alignment from all character forms when off), Ability Score Assignment (method select: Standard Array / Point Buy / Dice Roll; conditional "Allow reroll 1s" toggle appears when Dice Roll chosen), Leveling section (Milestone / Experience XP select); Save/Reset buttons appear per section when dirty; players see read-only view of settings
+- **Members tab:** full member management (extracted from old /members page); GM section (crown icon, "You" badge); players list with invite/remove; invite search (≥2 chars, debounced); same `data-testid` attributes as CampaignMembers.jsx
+
+### Calendar/Timeline Settings UI — Key Behaviours
 - **Route:** `/campaigns/:campaignId/campaign-time` — wrapped in `<MainLayout>` in App.jsx (not internally); GM-only controls; "Campaign Time" link in GM section of Sidebar
 - **Calendar tab:** landing page (explainer + defaults bullet list + "Set Up Calendar" button) when 404; management UI when calendar exists
   - **General card:** calendar name, days_per_month, `use_weeks` toggle (ToggleLeft/ToggleRight icon), `days_per_week` input (shown only when `use_weeks=true`); Save button appears when dirty
@@ -898,16 +929,29 @@ frontend/src/
 - **CharacterList — player view:** title "My Characters"; sees own characters + `is_visible_to_players=true` characters; no eye/delete controls; "Create Your First Character" empty state button
 - **CharacterCreate — edition switching:** `campaign.edition` drives which class sheets and metadata are used; `'5e'` → `components/` (5e rules); `'5.5e'` → `components/5e2024/` (2024 rules); class picker subtitle shows edition label
 - **CharacterCreate — step 1 (class picker):** color-coded class cards showing class name, hit die, description; back chevron navigates to character list; all 12 classes available for both editions
-- **CharacterCreate — step 2 (details form):** Identity section (name required, race, background, alignment, level); Ability Scores grid with computed modifier display; Class Features section (class-specific sheet component); Notes textarea; "Create Character" navigates to CharacterDetail on success
+- **CharacterCreate — step 2 (details form):** Identity section (name required, race, background, alignment — hidden when `campaign.use_alignment === false`; no Level field — characters always start at level 1); Ability Scores section renders based on `campaign.ability_score_method` — `StandardSpreadAssignment` (default), `PointBuyAssignment` (27-pt tiered, starts all stats at 8), or `DiceRollAssignment` (4d6 drop lowest, with optional reroll-1s when `allow_reroll_ones=true`; stats reset to 8 via `useEffect` when method is `point_buy`); Class Features section (passed `creation={true}` — hides HP, AC, Speed, Temp HP, Hit Dice Used grids); `hp_max` is auto-calculated on submit as `hitDie + CON modifier` (min 1) and injected into `character_data`; Personal Notes textarea; "Create Character" navigates to CharacterDetail on success
+- **CharacterCreate — background skill highlighting:** all 24 class sheets (12 × 5e + 12 × 5e2024) accept a `backgroundSkills = []` prop; when a background is selected, `selectedBackground?.skills` is passed down to the skill proficiency picker; (1) skills in the background that ARE in the class's allowed list appear amber and non-clickable in place; (2) skills in the background that are NOT in the class's allowed list appear as extra amber disabled buttons appended after the class list; the legend "Amber = already granted by your background" appears whenever `backgroundSkills.length > 0`; `backgroundSkills` is NOT passed to Expertise pickers (Bard/Rogue), only to skill proficiency pickers; background select has `data-testid="background-select"`
+- **CharacterCreate — SpellPickerCreation:** curated toggle-list only (no free-text custom spell input); GM creates new spells; players pick from the provided list
+- **CharacterCreate — spell slot display during creation:** all magic classes show a static info box ("2 × Level 1 spell slots / All slots recover on a Long Rest") instead of the +/− tracker; Paladin 5e has no slots at level 1 so hidden entirely; Warlock uses the `!creation` gate on the pact magic tracker
+- **CharacterCreate — spell lists hidden during creation:** all `SpellList` components (cantrips, prepared spells, known spells, spellbook) are wrapped in `{!creation && (...)}` across most spellcasting class sheets; spells are managed from CharacterDetail after creation. **Exceptions — shown during creation:** 5e BardSheet uses `SpellPickerCreation` curated toggle list (Bard has fixed known spells); both WarlockSheets (5e + 2024) show free-text `SpellList` for cantrips and known_spells during creation because Warlocks cannot freely swap spells between rests
+- **CharacterCreate — InstrumentPicker (Bard):** standard instruments shown as toggle buttons; custom instruments entered via "Other instrument…" input + Enter or `+` button; custom instruments are stored in the `value` array alongside standard ones; after adding, custom instruments appear as selected (primary-colored) toggle buttons rendered after the standard list (`customInstruments = value.filter(i => !MUSICAL_INSTRUMENTS.includes(i))`)
 - **CharacterDetail — edition switching:** `edition = campaign?.edition || '5e'`; selects `CLASS_SHEETS_5E` or `CLASS_SHEETS_2024` map to find the right sheet component for the character's class
 - **CharacterDetail — key logic:**
   - `showEditable = isOwner || (isGm && !playerView)` — players always edit their own characters; GM edits freely unless in Player View preview mode
   - `displayAsPlayer = !isGm || playerView` — controls which sections are hidden (GM Notes, Player View toggle itself)
   - `useSection(initial)` hook: `{ draft, setDraft, isDirty, reset, commit }` — per-section Save/Reset buttons appear only when dirty
-- **Identity + Ability Scores card:** editable name, race, background, alignment, level; 6 ability score inputs with live modifier display; Saving Throws section (proficiency checkboxes, stored in `character_data`)
+- **Leveling card:** shown above Identity; adapts to `campaign.leveling_type` — milestone or experience
+  - **Milestone:** GM sees "Level Up" button → sets `level_up_pending: true`; player sees amber "Level Up Available!" banner when `level_up_pending=true`
+  - **Experience:** XP bar shows progress to next level (using `XP_THRESHOLDS`); GM gets "Add XP" input; when XP crosses next-level threshold, `level_up_pending` auto-sets to true alongside the XP update
+  - **Level-up wizard trigger:** when `isOwner && level_up_pending`, clicking the banner opens `LevelUpWizard`
+- **LevelUpWizard (3-step modal):**
+  - Step 1 HP: shows class hit die from `HIT_DICE_5E`/`HIT_DICE_2024`; "Roll the Dice" (random d{hitDie}) or "Take Average" (⌊die/2⌋+1); CON modifier applied; shows HP gained + new HP max preview
+  - Step 2 Features: lists all features from `CLASS_FEATURES_5E`/`CLASS_FEATURES_2024` at the new level — feature name + full description; "No new features" state for empty levels
+  - Step 3 Confirm: summary card (level jump, HP gained, features gained); "Confirm Level Up" calls `onComplete(newLevel, { ...character_data, hp_max: newHpMax })` + sets `level_up_pending: false`
+- **Identity + Ability Scores card:** editable name, race, background, alignment (hidden when `campaign.use_alignment === false`), level; 6 ability score inputs with live modifier display; Saving Throws section (proficiency checkboxes, stored in `character_data`)
 - **Derived stats row:** Proficiency Bonus (`Math.ceil(level/4) + 1`), Initiative (DEX mod), Passive Perception (10 + WIS mod + prof if proficient), Inspiration toggle
 - **Skills display:** all 18 skills with proficiency/expertise indicators and computed bonus; expertise = double proficiency
-- **Class Features card:** renders class-specific sheet component — each accepts `{ data, onChange, readOnly, level }`
+- **Class Features card:** renders class-specific sheet component — each accepts `{ data, onChange, readOnly, level, creation }`. When `creation=true` (CharacterCreate only), the HP grid (current/max/temp HP), AC grid (armor class, speed, hit dice used) are hidden — these are irrelevant at creation since HP is auto-calculated and AC depends on armor/DEX
 - **GM Notes card (GM only):** amber-tinted "Private" card; always stripped from all responses returned to players and owners
 - **Player View toggle (GM):** preview what a player sees; hides GM Notes card and all editing controls; re-renders the class sheet in `readOnly` mode
 - **`CLASS_SAVE_PROFS` map:** default saving throw proficiencies per class stored in `character_data`; GM can override per-character via the save throw checkboxes
@@ -937,6 +981,7 @@ frontend/src/
 - Admin panels (manage base compendium: races, backgrounds, feats, spells, items, creatures)
 - GM panels (campaign overrides + homebrew content management)
 - Token refresh / expiration handling
+- LevelUpWizard tests (CharacterDetail tests exist but don't cover the full wizard modal flow)
 
 
 ---
@@ -1082,9 +1127,9 @@ frontend/src/
 │       ├── CharacterList.jsx
 │       ├── CharacterList.test.jsx    # loading, fetch with campaignId, error, empty state, card render, click-to-navigate, GM title+visibility toggles+reload, player title+no toggles (11 tests)
 │       ├── CharacterCreate.jsx
-│       ├── CharacterCreate.test.jsx  # class picker render (all 12 classes), class selection advance, back nav (list/class step), name validation, successful create+navigate, error display, Wizard fields, Fighter fields, Barbarian/Cleric/Warlock smoke (12 tests)
+│       ├── CharacterCreate.test.jsx  # class picker render (all 12 classes), class selection advance, back nav (list/class step), name validation, successful create+navigate, error display, Wizard fields, Fighter fields, Barbarian/Cleric/Warlock smoke, no Level field, level:1 in payload, hp_max auto-calculated, HP/AC fields hidden during creation, alignment toggle, point buy starts at 8, background skill legend appears on overlap, extra amber buttons for non-class bg skills + legend, custom instrument appears as button after Enter (22 tests)
 │       ├── CharacterDetail.jsx
-│       └── CharacterDetail.test.jsx  # loading, error, name+class display, ability scores (waitFor), prof bonus, editable owner fields, GM Notes hidden (player), GM Notes shown (GM), Player View toggle, switching view hides GM Notes, updateCharacter with gm_notes, visibility toggle (GM), Fighter features, read-only non-owner (15 tests)
+│       └── CharacterDetail.test.jsx  # loading, error, name+class display, ability scores (waitFor), prof bonus, editable owner fields, GM Notes hidden (player), GM Notes shown (GM), Player View toggle, switching view hides GM Notes, updateCharacter with gm_notes, visibility toggle (GM), Fighter features, read-only non-owner; Leveling card — milestone (GM Level Up button, calls updateCharacter, owner sees pending banner), experience (XP label, GM Add XP input, add XP calls updateCharacter, threshold triggers level_up_pending) (22 tests)
 ├── npcs/
 │   └── pages/
 │       ├── NPCDetail.jsx

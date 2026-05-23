@@ -10,6 +10,7 @@ import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { CLASS_FEATURES_5E } from './classFeatures5e';
 
 const FIGHTING_STYLES_5E = [
   'Archery', 'Defense', 'Dueling', 'Great Weapon Fighting',
@@ -52,7 +53,7 @@ function hasIndomitable(level) { return level >= 9; }
 const ASI_LEVELS = [4, 6, 8, 12, 14, 16, 19];
 function hasAsi(level) { return ASI_LEVELS.some(l => l <= level); }
 
-export default function FighterSheet({ data = {}, onChange, readOnly = false, level = 1 }) {
+export default function FighterSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
   const set = (key, value) => onChange?.({ [key]: value });
 
   const Field = ({ label, children }) => (
@@ -88,18 +89,21 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
   return (
     <div className="space-y-4">
       {/* Combat info */}
-      <div className="grid grid-cols-2 gap-3 text-sm">
+      <div className={`grid gap-3 text-sm ${level >= 5 ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div className="rounded-md border px-3 py-2 text-center">
           <div className="text-xs text-muted-foreground">Hit Die</div>
           <div className="font-bold text-lg">d10</div>
         </div>
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Extra Attacks</div>
-          <div className="font-bold text-lg">{extraAttacks(level)}</div>
-        </div>
+        {level >= 5 && (
+          <div className="rounded-md border px-3 py-2 text-center">
+            <div className="text-xs text-muted-foreground">Extra Attacks</div>
+            <div className="font-bold text-lg">{extraAttacks(level)}</div>
+          </div>
+        )}
       </div>
 
       {/* HP tracking */}
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input
@@ -129,8 +133,10 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           />
         </Field>
       </div>
+      )}
 
       {/* AC / Speed / Initiative */}
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Armor Class">
           <Input
@@ -160,6 +166,7 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           />
         </Field>
       </div>
+      )}
 
       {/* Fighting Style */}
       {hasFightingStyle(level) && (
@@ -182,12 +189,14 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
       )}
 
       {/* Second Wind */}
-      <ResourceTracker
-        label="Second Wind (Short Rest)"
-        total={1}
-        used={data.second_wind_used ? 1 : 0}
-        usedKey="second_wind_used"
-      />
+      {!creation && (
+        <ResourceTracker
+          label="Second Wind (Short Rest)"
+          total={1}
+          used={data.second_wind_used ? 1 : 0}
+          usedKey="second_wind_used"
+        />
+      )}
 
       {/* Action Surge */}
       {hasActionSurge(level) && (
@@ -237,6 +246,33 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
+      {/* Class features — creation: descriptions; normal: feature list */}
+      {creation ? (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+          {(CLASS_FEATURES_5E.Fighter[1] ?? []).map(feat => (
+            <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="font-semibold text-sm">{feat.name}</div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Class Features</Label>
+          <div className="rounded-md border divide-y text-sm">
+            <FeatureRow name="Fighting Style + Second Wind" earned={level >= 1} />
+            <FeatureRow name="Action Surge (1/rest)" earned={level >= 2} />
+            <FeatureRow name="Martial Archetype (Subclass)" earned={level >= 3} />
+            <FeatureRow name="Extra Attack (2)" earned={level >= 5} />
+            <FeatureRow name="Indomitable (1/rest)" earned={level >= 9} />
+            <FeatureRow name="Extra Attack (3)" earned={level >= 11} />
+            <FeatureRow name="Action Surge (2/rest)" earned={level >= 17} />
+            <FeatureRow name="Extra Attack (4)" earned={level >= 20} />
+          </div>
+        </div>
+      )}
+
       {/* Skill proficiencies */}
       <Field label="Skill Proficiencies">
         {readOnly ? (
@@ -251,6 +287,7 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
             value={data.skill_proficiencies ?? []}
             onChange={v => set('skill_proficiencies', v)}
             max={2}
+            backgroundSkills={backgroundSkills}
           />
         )}
       </Field>
@@ -258,14 +295,23 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
   );
 }
 
-function SkillProficiencyPicker({ value, onChange, max }) {
-  const ALL_SKILLS = [
-    'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics', 'Deception',
-    'History', 'Insight', 'Intimidation', 'Investigation', 'Medicine',
-    'Nature', 'Perception', 'Performance', 'Persuasion', 'Religion',
-    'Sleight of Hand', 'Stealth', 'Survival',
+function FeatureRow({ name, earned }) {
+  return (
+    <div className={`px-3 py-2 flex justify-between items-center ${earned ? '' : 'opacity-40'}`}>
+      <span>{name}</span>
+      {earned && <Badge variant="outline" className="text-xs">Unlocked</Badge>}
+    </div>
+  );
+}
+
+function SkillProficiencyPicker({ value, onChange, max, backgroundSkills = [] }) {
+  const ALLOWED = [
+    'Acrobatics', 'Animal Handling', 'Athletics', 'History',
+    'Insight', 'Intimidation', 'Perception', 'Survival',
   ];
+  const extraBgSkills = backgroundSkills.filter(s => !ALLOWED.includes(s));
   const toggle = (skill) => {
+    if (backgroundSkills.includes(skill)) return;
     if (value.includes(skill)) {
       onChange(value.filter(s => s !== skill));
     } else if (value.length < max) {
@@ -273,22 +319,39 @@ function SkillProficiencyPicker({ value, onChange, max }) {
     }
   };
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {ALL_SKILLS.map(skill => (
-        <button
-          key={skill}
-          type="button"
-          onClick={() => toggle(skill)}
-          className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-            value.includes(skill)
-              ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-background hover:bg-muted border-border text-muted-foreground'
-          } ${!value.includes(skill) && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}
-        >
-          {skill}
-        </button>
-      ))}
-      <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {ALLOWED.map(skill => {
+          const isFromBg = backgroundSkills.includes(skill);
+          const isSelected = value.includes(skill);
+          return (
+            <button
+              key={skill}
+              type="button"
+              onClick={() => toggle(skill)}
+              className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                isFromBg
+                  ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed'
+                  : isSelected
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!isFromBg && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}
+            >
+              {skill}
+            </button>
+          );
+        })}
+        {extraBgSkills.map(skill => (
+          <button key={skill} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed">
+            {skill}
+          </button>
+        ))}
+        <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+      </div>
+      {backgroundSkills.length > 0 && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background</p>
+      )}
     </div>
   );
 }

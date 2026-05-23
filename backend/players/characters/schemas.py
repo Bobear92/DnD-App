@@ -19,6 +19,7 @@ class CharacterCreate(BaseModel):
 
     character_data: Dict[str, Any] = {}
     notes: Optional[str] = None
+    experience_points: int = 0
     campaign_id: int
 
 class CharacterUpdate(BaseModel):
@@ -39,9 +40,12 @@ class CharacterUpdate(BaseModel):
 
     character_data: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
+    experience_points: Optional[int] = None
+    level_up_pending: Optional[bool] = None
+
 
 class CharacterGmUpdate(CharacterUpdate):
-    """GM update — extends player update with gm_notes."""
+    """GM update — extends player update with gm_notes and GM-only fields."""
     gm_notes: Optional[str] = None
     is_visible_to_players: Optional[bool] = None
 
@@ -66,6 +70,8 @@ class CharacterResponse(BaseModel):
     user_id: int
     campaign_id: int
     is_visible_to_players: bool
+    experience_points: int
+    level_up_pending: bool
 
     notes: Optional[str]
     gm_notes: Optional[str]
@@ -75,6 +81,7 @@ class CharacterResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 class CharacterListItem(BaseModel):
     id: int
@@ -87,6 +94,8 @@ class CharacterListItem(BaseModel):
     campaign_id: int
     user_id: int
     is_visible_to_players: bool
+    experience_points: int
+    level_up_pending: bool
 
     strength: int
     dexterity: int

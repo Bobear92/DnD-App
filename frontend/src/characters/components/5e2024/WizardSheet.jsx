@@ -5,6 +5,23 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 
+const WIZARD_CANTRIPS_2024 = [
+  'Acid Splash', 'Blade Ward', 'Chill Touch', 'Dancing Lights', 'Elementalism',
+  'Fire Bolt', 'Friends', 'Light', 'Mage Hand', 'Mending', 'Message',
+  'Minor Illusion', 'Poison Spray', 'Prestidigitation', 'Ray of Frost',
+  'Shocking Grasp', 'Thunderclap', 'Toll the Dead', 'True Strike',
+];
+
+const WIZARD_L1_SPELLS_2024 = [
+  'Absorb Elements', 'Alarm', 'Burning Hands', 'Charm Person', 'Chromatic Orb',
+  'Color Spray', 'Comprehend Languages', 'Detect Magic', 'Disguise Self',
+  'Earth Tremor', 'Expeditious Retreat', 'False Life', 'Feather Fall',
+  'Find Familiar', 'Fog Cloud', 'Grease', 'Ice Knife', 'Identify',
+  'Illusory Script', 'Jump', 'Longstrider', 'Mage Armor', 'Magic Missile',
+  'Protection from Evil and Good', 'Ray of Sickness', 'Shield', 'Silent Image',
+  'Sleep', 'Thunderwave', 'Unseen Servant', 'Witch Bolt',
+];
+
 const SUBCLASSES = [
   'Abjurer', 'Bladesinging', 'Chronurgy Magic', 'Conjurer', 'Diviner',
   'Enchanter', 'Evoker', 'Graviturgy Magic', 'Illusionist',
@@ -36,29 +53,74 @@ function FeatureRow({ name, earned }) {
   );
 }
 
-function SkillPicker({ value, onChange, max }) {
+function SkillPicker({ value, onChange, max, backgroundSkills = [] }) {
   const ALLOWED = ['Arcana', 'History', 'Insight', 'Investigation', 'Medicine', 'Religion'];
+  const extraBgSkills = backgroundSkills.filter(s => !ALLOWED.includes(s));
   const toggle = (s) => {
+    if (backgroundSkills.includes(s)) return;
     if (value.includes(s)) onChange(value.filter(x => x !== s));
     else if (value.length < max) onChange([...value, s]);
   };
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {ALLOWED.map(s => (
-        <button key={s} type="button" onClick={() => toggle(s)}
-          className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-            value.includes(s) ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-background hover:bg-muted border-border text-muted-foreground'
-          } ${!value.includes(s) && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}>
-          {s}
-        </button>
-      ))}
-      <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {ALLOWED.map(s => {
+          const isFromBg = backgroundSkills.includes(s);
+          const isSelected = value.includes(s);
+          return (
+            <button key={s} type="button" onClick={() => toggle(s)}
+              className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                isFromBg
+                  ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed'
+                  : isSelected ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!isFromBg && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              {s}
+            </button>
+          );
+        })}
+        {extraBgSkills.map(s => (
+          <button key={s} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed">
+            {s}
+          </button>
+        ))}
+        <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+      </div>
+      {backgroundSkills.length > 0 && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background</p>
+      )}
     </div>
   );
 }
 
-export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1 }) {
+function SpellPickerCreation({ label, limit, options, selected, onChange }) {
+  const toggle = (spell) => {
+    if (selected.includes(spell)) onChange(selected.filter(s => s !== spell));
+    else if (selected.length < limit) onChange([...selected, spell]);
+  };
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground">{label}</Label>
+        <span className="text-xs text-muted-foreground">{selected.length}/{limit} chosen</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(spell => (
+          <button key={spell} type="button" onClick={() => toggle(spell)}
+            className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+              selected.includes(spell) ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background hover:bg-muted border-border text-muted-foreground'
+            } ${!selected.includes(spell) && selected.length >= limit ? 'opacity-40 cursor-not-allowed' : ''}`}>
+            {spell}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const [newSpellbook, setNewSpellbook] = useState('');
   const [newPrepared, setNewPrepared] = useState('');
@@ -129,6 +191,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
         </div>
       </div>
 
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -140,7 +203,9 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+      )}
 
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -152,6 +217,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+      )}
 
       {/* Memorize Spell (L1) */}
       <div className="flex items-center justify-between rounded-md border px-3 py-2">
@@ -170,20 +236,22 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
       </div>
 
       {/* Arcane Recovery */}
-      <div className="flex items-center justify-between rounded-md border px-3 py-2">
-        <div>
-          <div className="text-sm font-medium">Arcane Recovery (Short Rest)</div>
-          <div className="text-xs text-muted-foreground">Recover up to {arcaneRecoveryLevels(level)} total spell slot levels</div>
+      {!creation && (
+        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+          <div>
+            <div className="text-sm font-medium">Arcane Recovery (Short Rest)</div>
+            <div className="text-xs text-muted-foreground">Recover up to {arcaneRecoveryLevels(level)} total spell slot levels</div>
+          </div>
+          {!readOnly && (
+            <button
+              className={`text-xs px-3 py-1 rounded border transition-colors ${
+                data.arcane_recovery_used ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
+              onClick={() => set('arcane_recovery_used', !data.arcane_recovery_used)}>
+              {data.arcane_recovery_used ? 'Used' : 'Available'}
+            </button>
+          )}
         </div>
-        {!readOnly && (
-          <button
-            className={`text-xs px-3 py-1 rounded border transition-colors ${
-              data.arcane_recovery_used ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
-            onClick={() => set('arcane_recovery_used', !data.arcane_recovery_used)}>
-            {data.arcane_recovery_used ? 'Used' : 'Available'}
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Scholar (L2) */}
       {level >= 2 && (
@@ -208,35 +276,68 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
         </Field>
       )}
 
-      {/* Spell Slots */}
-      <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-          {slots.map((total, i) => {
-            if (total === 0) return null;
-            const sl = i + 1;
-            const used = spellSlots[sl]?.used ?? 0;
-            return (
-              <div key={sl} className="rounded-md border text-center p-2">
-                <div className="text-xs text-muted-foreground">Level {sl}</div>
-                <div className="font-bold text-sm">{total - used}/{total}</div>
-                {!readOnly && (
-                  <div className="flex justify-center gap-0.5 mt-1">
-                    <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                      disabled={used <= 0} onClick={() => setSlotUsed(sl, used - 1)}>−</button>
-                    <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                      disabled={used >= total} onClick={() => setSlotUsed(sl, used + 1)}>+</button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+      {/* Spell Slots — static info during creation, tracker during play */}
+      {creation ? (
+        <div className="rounded-md border px-3 py-2 space-y-1">
+          <Label className="text-xs text-muted-foreground">Spell Slots at Level 1</Label>
+          <div className="text-sm font-medium">2 × Level 1 spell slots</div>
+          <div className="text-xs text-muted-foreground">All slots recover on a Long Rest</div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            {slots.map((total, i) => {
+              if (total === 0) return null;
+              const sl = i + 1;
+              const used = spellSlots[sl]?.used ?? 0;
+              return (
+                <div key={sl} className="rounded-md border text-center p-2">
+                  <div className="text-xs text-muted-foreground">Level {sl}</div>
+                  <div className="font-bold text-sm">{total - used}/{total}</div>
+                  {!readOnly && (
+                    <div className="flex justify-center gap-0.5 mt-1">
+                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                        disabled={used <= 0} onClick={() => setSlotUsed(sl, used - 1)}>−</button>
+                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                        disabled={used >= total} onClick={() => setSlotUsed(sl, used + 1)}>+</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-      <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
-      <SpellList dataKey="spellbook" label="Spellbook (all known spells)" newValue={newSpellbook} setNew={setNewSpellbook} placeholder="Add spell to spellbook…" />
-      <SpellList dataKey="prepared_spells" label="Prepared Spells (today)" newValue={newPrepared} setNew={setNewPrepared} placeholder="Add prepared spell…" />
+      {/* Cantrips — picker during creation, free-text list during play */}
+      {creation ? (
+        <SpellPickerCreation
+          label="Cantrips Known (choose 3)"
+          limit={3}
+          options={WIZARD_CANTRIPS_2024}
+          selected={data.cantrips ?? []}
+          onChange={v => set('cantrips', v)}
+        />
+      ) : (
+        <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
+      )}
+
+      {/* Spellbook — picker during creation, free-text list during play */}
+      {creation ? (
+        <SpellPickerCreation
+          label="Starting Spellbook (choose 6 × 1st-level spells)"
+          limit={6}
+          options={WIZARD_L1_SPELLS_2024}
+          selected={data.spellbook ?? []}
+          onChange={v => set('spellbook', v)}
+        />
+      ) : (
+        <>
+          <SpellList dataKey="spellbook" label="Spellbook (all known spells)" newValue={newSpellbook} setNew={setNewSpellbook} placeholder="Add spell to spellbook…" />
+          <SpellList dataKey="prepared_spells" label="Prepared Spells (today)" newValue={newPrepared} setNew={setNewPrepared} placeholder="Add prepared spell…" />
+        </>
+      )}
 
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Class Features</Label>
@@ -263,7 +364,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
             {(data.skill_proficiencies ?? []).length === 0 && <span className="text-sm text-muted-foreground">None set</span>}
           </div>
         ) : (
-          <SkillPicker value={data.skill_proficiencies ?? []} onChange={v => set('skill_proficiencies', v)} max={2} />
+          <SkillPicker value={data.skill_proficiencies ?? []} onChange={v => set('skill_proficiencies', v)} max={2} backgroundSkills={backgroundSkills} />
         )}
       </Field>
     </div>

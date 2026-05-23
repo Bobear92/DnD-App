@@ -27,6 +27,9 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
+# SRD seed cache (fetched from https://www.dnd5eapi.co)
+backend/scripts/cache/
+
 # Uploads (user files)
 uploads/*
 !uploads/.gitkeep

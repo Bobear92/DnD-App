@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
+import { CLASS_FEATURES_5E } from './classFeatures5e';
 
 const WARLOCK_SUBCLASSES_5E = [
   'The Archfey', 'The Fiend', 'The Great Old One',
@@ -44,6 +45,44 @@ function invocationCount(level) {
 
 const ASI_LEVELS = [4, 8, 12, 16, 19];
 
+const WARLOCK_CANTRIPS_5E = [
+  'Blade Ward', 'Chill Touch', 'Eldritch Blast', 'Friends',
+  'Mage Hand', 'Minor Illusion', 'Poison Spray', 'Prestidigitation',
+  'Toll the Dead', 'True Strike',
+];
+
+const WARLOCK_SPELLS_L1_5E = [
+  'Armor of Agathys', 'Arms of Hadar', 'Charm Person', 'Comprehend Languages',
+  'Expeditious Retreat', 'Hellish Rebuke', 'Hex', 'Illusory Script',
+  'Protection from Evil and Good', 'Unseen Servant', 'Witch Bolt',
+];
+
+function SpellPickerCreation({ label, limit, options, selected, onChange }) {
+  const toggle = (spell) => {
+    if (selected.includes(spell)) onChange(selected.filter(s => s !== spell));
+    else if (selected.length < limit) onChange([...selected, spell]);
+  };
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground">{label}</Label>
+        <span className="text-xs text-muted-foreground">{selected.length}/{limit} chosen</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(spell => (
+          <button key={spell} type="button" onClick={() => toggle(spell)}
+            className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+              selected.includes(spell) ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background hover:bg-muted border-border text-muted-foreground'
+            } ${!selected.includes(spell) && selected.length >= limit ? 'opacity-40 cursor-not-allowed' : ''}`}>
+            {spell}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FeatureRow({ name, earned }) {
   return (
     <div className={`px-3 py-2 flex justify-between items-center ${earned ? '' : 'opacity-40'}`}>
@@ -53,28 +92,49 @@ function FeatureRow({ name, earned }) {
   );
 }
 
-function SkillPicker({ value, onChange, max, allowed }) {
+function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
   const toggle = (skill) => {
+    if (backgroundSkills.includes(skill)) return;
     if (value.includes(skill)) onChange(value.filter(s => s !== skill));
     else if (value.length < max) onChange([...value, skill]);
   };
+  const extraBgSkills = backgroundSkills.filter(s => !allowed.includes(s));
+  const hasBgOverlap = backgroundSkills.length > 0;
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {allowed.map(skill => (
-        <button key={skill} type="button" onClick={() => toggle(skill)}
-          className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-            value.includes(skill) ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-background hover:bg-muted border-border text-muted-foreground'
-          } ${!value.includes(skill) && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}>
-          {skill}
-        </button>
-      ))}
-      <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {allowed.map(skill => {
+          const isFromBg = backgroundSkills.includes(skill);
+          const isSelected = value.includes(skill);
+          return (
+            <button key={skill} type="button" onClick={() => toggle(skill)}
+              className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                isFromBg
+                  ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed'
+                  : isSelected
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!isFromBg && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              {skill}
+            </button>
+          );
+        })}
+        {extraBgSkills.map(skill => (
+          <button key={skill} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed">
+            {skill}
+          </button>
+        ))}
+        <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+      </div>
+      {hasBgOverlap && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background</p>
+      )}
     </div>
   );
 }
 
-export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1 }) {
+export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
@@ -146,6 +206,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
       </div>
 
       {/* HP */}
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -157,8 +218,10 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+      )}
 
       {/* AC / Speed / Hit Dice */}
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -170,22 +233,25 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+      )}
 
       {/* Pact Magic slot tracker */}
-      <div className="flex items-center justify-between rounded-md border px-3 py-2">
-        <div>
-          <div className="text-sm font-medium">Pact Magic Slots (Short Rest)</div>
-          <div className="text-xs text-muted-foreground">{slotCount - slotsUsed} / {slotCount} level-{slotLevel} slots remaining</div>
-        </div>
-        {!readOnly && (
-          <div className="flex items-center gap-1">
-            <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-              onClick={() => set('pact_slots_used', Math.max(0, slotsUsed - 1))} disabled={slotsUsed <= 0}>−</button>
-            <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-              onClick={() => set('pact_slots_used', Math.min(slotCount, slotsUsed + 1))} disabled={slotsUsed >= slotCount}>+</button>
+      {!creation && (
+        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+          <div>
+            <div className="text-sm font-medium">Pact Magic Slots (Short Rest)</div>
+            <div className="text-xs text-muted-foreground">{slotCount - slotsUsed} / {slotCount} level-{slotLevel} slots remaining</div>
           </div>
-        )}
-      </div>
+          {!readOnly && (
+            <div className="flex items-center gap-1">
+              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+                onClick={() => set('pact_slots_used', Math.max(0, slotsUsed - 1))} disabled={slotsUsed <= 0}>−</button>
+              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+                onClick={() => set('pact_slots_used', Math.min(slotCount, slotsUsed + 1))} disabled={slotsUsed >= slotCount}>+</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Otherworldly Patron subclass (level 1) */}
       <Field label="Otherworldly Patron (Subclass)">
@@ -257,8 +323,26 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
-      <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
+      {creation ? (
+        <SpellPickerCreation label="Cantrips Known (choose 2)" limit={2} options={WARLOCK_CANTRIPS_5E}
+          selected={data.cantrips ?? []} onChange={v => set('cantrips', v)} />
+      ) : (
+        <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
+      )}
+      {creation ? (
+        <SpellPickerCreation label="Spells Known at Level 1 (choose 2)" limit={2} options={WARLOCK_SPELLS_L1_5E}
+          selected={data.known_spells ?? []} onChange={v => set('known_spells', v)} />
+      ) : (
+        <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
+      )}
+
+      {creation && (
+        <div className="rounded-md border px-3 py-2 space-y-1">
+          <Label className="text-xs text-muted-foreground">Pact Magic — Level 1</Label>
+          <div className="text-sm font-medium">1 × Level 1 pact magic slot</div>
+          <div className="text-xs text-muted-foreground">Slot recovers on a Short Rest · Warlocks cannot swap spells freely — choose carefully</div>
+        </div>
+      )}
 
       {/* Mystic Arcanum */}
       {level >= 11 && (
@@ -268,20 +352,38 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {/* Class features list */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Class Features</Label>
-        <div className="rounded-md border divide-y text-sm">
-          <FeatureRow name="Otherworldly Patron (Subclass) + Pact Magic" earned={level >= 1} />
-          <FeatureRow name="Eldritch Invocations" earned={level >= 2} />
-          <FeatureRow name="Pact Boon" earned={level >= 3} />
-          <FeatureRow name="Mystic Arcanum (6th level)" earned={level >= 11} />
-          <FeatureRow name="Mystic Arcanum (7th level)" earned={level >= 13} />
-          <FeatureRow name="Mystic Arcanum (8th level)" earned={level >= 15} />
-          <FeatureRow name="Mystic Arcanum (9th level)" earned={level >= 17} />
-          <FeatureRow name="Eldritch Master" earned={level >= 20} />
+      {/* Class features */}
+      {creation ? (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+          {(CLASS_FEATURES_5E.Warlock[1] ?? []).map(feat => (
+            <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="font-semibold text-sm">{feat.name}</div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+              {feat.name === 'Pact Magic' && (
+                <div className="mt-1 text-xs font-medium text-foreground bg-background rounded px-2 py-1 border">
+                  Starting slots: <span className="font-bold">{slotCount} × level {slotLevel}</span>
+                  <span className="font-normal text-muted-foreground ml-1">— regain on short rest</span>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Class Features</Label>
+          <div className="rounded-md border divide-y text-sm">
+            <FeatureRow name="Otherworldly Patron (Subclass) + Pact Magic" earned={level >= 1} />
+            <FeatureRow name="Eldritch Invocations" earned={level >= 2} />
+            <FeatureRow name="Pact Boon" earned={level >= 3} />
+            <FeatureRow name="Mystic Arcanum (6th level)" earned={level >= 11} />
+            <FeatureRow name="Mystic Arcanum (7th level)" earned={level >= 13} />
+            <FeatureRow name="Mystic Arcanum (8th level)" earned={level >= 15} />
+            <FeatureRow name="Mystic Arcanum (9th level)" earned={level >= 17} />
+            <FeatureRow name="Eldritch Master" earned={level >= 20} />
+          </div>
+        </div>
+      )}
 
       {/* ASI reminder */}
       {ASI_LEVELS.some(l => l <= level) && (
@@ -304,6 +406,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
             onChange={v => set('skill_proficiencies', v)}
             max={2}
             allowed={['Arcana', 'Deception', 'History', 'Intimidation', 'Investigation', 'Nature', 'Religion']}
+            backgroundSkills={backgroundSkills}
           />
         )}
       </Field>

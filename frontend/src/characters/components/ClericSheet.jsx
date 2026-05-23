@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
+import { CLASS_FEATURES_5E } from './classFeatures5e';
 
 const CLERIC_SUBCLASSES_5E = [
   'Life Domain', 'Light Domain', 'Trickery Domain', 'Knowledge Domain',
@@ -50,28 +51,49 @@ function FeatureRow({ name, earned }) {
   );
 }
 
-function SkillPicker({ value, onChange, max, allowed }) {
+function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
   const toggle = (skill) => {
+    if (backgroundSkills.includes(skill)) return;
     if (value.includes(skill)) onChange(value.filter(s => s !== skill));
     else if (value.length < max) onChange([...value, skill]);
   };
+  const extraBgSkills = backgroundSkills.filter(s => !allowed.includes(s));
+  const hasBgOverlap = backgroundSkills.length > 0;
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {allowed.map(skill => (
-        <button key={skill} type="button" onClick={() => toggle(skill)}
-          className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-            value.includes(skill) ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-background hover:bg-muted border-border text-muted-foreground'
-          } ${!value.includes(skill) && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}>
-          {skill}
-        </button>
-      ))}
-      <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {allowed.map(skill => {
+          const isFromBg = backgroundSkills.includes(skill);
+          const isSelected = value.includes(skill);
+          return (
+            <button key={skill} type="button" onClick={() => toggle(skill)}
+              className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                isFromBg
+                  ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed'
+                  : isSelected
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!isFromBg && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              {skill}
+            </button>
+          );
+        })}
+        {extraBgSkills.map(skill => (
+          <button key={skill} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed">
+            {skill}
+          </button>
+        ))}
+        <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
+      </div>
+      {hasBgOverlap && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background</p>
+      )}
     </div>
   );
 }
 
-export default function ClericSheet({ data = {}, onChange, readOnly = false, level = 1 }) {
+export default function ClericSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
@@ -138,18 +160,21 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
   return (
     <div className="space-y-4">
       {/* Combat info */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid gap-3 ${level >= 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div className="rounded-md border px-3 py-2 text-center">
           <div className="text-xs text-muted-foreground">Hit Die</div>
           <div className="font-bold text-lg">d8</div>
         </div>
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Channel Divinity</div>
-          <div className="font-bold text-lg">{cdTotal}×/rest</div>
-        </div>
+        {level >= 2 && (
+          <div className="rounded-md border px-3 py-2 text-center">
+            <div className="text-xs text-muted-foreground">Channel Divinity</div>
+            <div className="font-bold text-lg">{cdTotal}×/rest</div>
+          </div>
+        )}
       </div>
 
       {/* HP */}
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -161,8 +186,10 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+      )}
 
       {/* AC / Speed / Hit Dice */}
+      {!creation && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -174,22 +201,25 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
           <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+      )}
 
       {/* Channel Divinity tracker */}
-      <div className="flex items-center justify-between rounded-md border px-3 py-2">
-        <div>
-          <div className="text-sm font-medium">Channel Divinity (Short Rest)</div>
-          <div className="text-xs text-muted-foreground">{cdTotal - cdUsed} / {cdTotal} remaining</div>
-        </div>
-        {!readOnly && (
-          <div className="flex items-center gap-1">
-            <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-              onClick={() => set('channel_divinity_used', Math.max(0, cdUsed - 1))} disabled={cdUsed <= 0}>−</button>
-            <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-              onClick={() => set('channel_divinity_used', Math.min(cdTotal, cdUsed + 1))} disabled={cdUsed >= cdTotal}>+</button>
+      {!creation && (
+        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+          <div>
+            <div className="text-sm font-medium">Channel Divinity (Short Rest)</div>
+            <div className="text-xs text-muted-foreground">{cdTotal - cdUsed} / {cdTotal} remaining</div>
           </div>
-        )}
-      </div>
+          {!readOnly && (
+            <div className="flex items-center gap-1">
+              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+                onClick={() => set('channel_divinity_used', Math.max(0, cdUsed - 1))} disabled={cdUsed <= 0}>−</button>
+              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+                onClick={() => set('channel_divinity_used', Math.min(cdTotal, cdUsed + 1))} disabled={cdUsed >= cdTotal}>+</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Divine Domain subclass (level 1) */}
       <Field label="Divine Domain (Subclass)">
@@ -204,48 +234,72 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
         )}
       </Field>
 
-      {/* Spell Slots */}
-      <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-          {slots.map((total, i) => {
-            if (total === 0) return null;
-            const slotLevel = i + 1;
-            const used = spellSlots[slotLevel]?.used ?? 0;
-            return (
-              <div key={slotLevel} className="rounded-md border text-center p-2">
-                <div className="text-xs text-muted-foreground">Level {slotLevel}</div>
-                <div className="font-bold text-sm">{total - used}/{total}</div>
-                {!readOnly && (
-                  <div className="flex justify-center gap-0.5 mt-1">
-                    <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                      disabled={used <= 0} onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
-                    <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                      disabled={used >= total} onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+      {/* Spell Slots — static info during creation, tracker during play */}
+      {creation ? (
+        <div className="rounded-md border px-3 py-2 space-y-1">
+          <Label className="text-xs text-muted-foreground">Spell Slots at Level 1</Label>
+          <div className="text-sm font-medium">2 × Level 1 spell slots</div>
+          <div className="text-xs text-muted-foreground">All slots recover on a Long Rest</div>
         </div>
-      </div>
-
-      <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
-      <SpellList dataKey="prepared_spells" label="Prepared Spells (WIS mod + level)" newValue={newSpell} setNew={setNewSpell} placeholder="Add prepared spell…" />
-
-      {/* Class features list */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Class Features</Label>
-        <div className="rounded-md border divide-y text-sm">
-          <FeatureRow name="Spellcasting + Divine Domain (Subclass)" earned={level >= 1} />
-          <FeatureRow name="Channel Divinity (1×/rest)" earned={level >= 2} />
-          <FeatureRow name="Destroy Undead (CR 1/2)" earned={level >= 5} />
-          <FeatureRow name="Channel Divinity (2×/rest)" earned={level >= 6} />
-          <FeatureRow name="Divine Intervention" earned={level >= 10} />
-          <FeatureRow name="Destroy Undead (CR 4)" earned={level >= 17} />
-          <FeatureRow name="Channel Divinity (3×/rest)" earned={level >= 18} />
+      ) : (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            {slots.map((total, i) => {
+              if (total === 0) return null;
+              const slotLevel = i + 1;
+              const used = spellSlots[slotLevel]?.used ?? 0;
+              return (
+                <div key={slotLevel} className="rounded-md border text-center p-2">
+                  <div className="text-xs text-muted-foreground">Level {slotLevel}</div>
+                  <div className="font-bold text-sm">{total - used}/{total}</div>
+                  {!readOnly && (
+                    <div className="flex justify-center gap-0.5 mt-1">
+                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                        disabled={used <= 0} onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
+                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                        disabled={used >= total} onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
+
+      {!creation && (
+        <>
+          <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
+          <SpellList dataKey="prepared_spells" label="Prepared Spells (WIS mod + level)" newValue={newSpell} setNew={setNewSpell} placeholder="Add prepared spell…" />
+        </>
+      )}
+
+      {/* Class features */}
+      {creation ? (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+          {(CLASS_FEATURES_5E.Cleric[1] ?? []).map(feat => (
+            <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="font-semibold text-sm">{feat.name}</div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Class Features</Label>
+          <div className="rounded-md border divide-y text-sm">
+            <FeatureRow name="Spellcasting + Divine Domain (Subclass)" earned={level >= 1} />
+            <FeatureRow name="Channel Divinity (1×/rest)" earned={level >= 2} />
+            <FeatureRow name="Destroy Undead (CR 1/2)" earned={level >= 5} />
+            <FeatureRow name="Channel Divinity (2×/rest)" earned={level >= 6} />
+            <FeatureRow name="Divine Intervention" earned={level >= 10} />
+            <FeatureRow name="Destroy Undead (CR 4)" earned={level >= 17} />
+            <FeatureRow name="Channel Divinity (3×/rest)" earned={level >= 18} />
+          </div>
+        </div>
+      )}
 
       {/* ASI reminder */}
       {ASI_LEVELS.some(l => l <= level) && (
@@ -268,6 +322,7 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
             onChange={v => set('skill_proficiencies', v)}
             max={2}
             allowed={['History', 'Insight', 'Medicine', 'Persuasion', 'Religion']}
+            backgroundSkills={backgroundSkills}
           />
         )}
       </Field>

@@ -197,6 +197,118 @@ describe('CharacterDetail', () => {
     });
   });
 
+  describe('Leveling card — milestone mode', () => {
+    it('GM sees Level Up button when level_up_pending is false', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'milestone' } });
+      useAuth.mockReturnValue({ user: { id: 1, username: 'gm' } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, level_up_pending: false, experience_points: 0 },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Level Up')).toBeInTheDocument());
+    });
+
+    it('GM Level Up button calls updateCharacter with level_up_pending:true', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'milestone' } });
+      useAuth.mockReturnValue({ user: { id: 1, username: 'gm' } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, level_up_pending: false, experience_points: 0 },
+      });
+      characterService.updateCharacter.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, level_up_pending: true, experience_points: 0 },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Level Up')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Level Up'));
+      await waitFor(() => {
+        expect(characterService.updateCharacter).toHaveBeenCalledWith('1', { level_up_pending: true });
+      });
+    });
+
+    it('owner player sees Level Up Available banner when level_up_pending is true', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player', leveling_type: 'milestone' } });
+      useAuth.mockReturnValue({ user: { id: 2, username: 'player' } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, level_up_pending: true, experience_points: 0 },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText(/Level Up Available/)).toBeInTheDocument());
+    });
+  });
+
+  describe('Leveling card — experience mode', () => {
+    it('shows Experience Points label when leveling_type is experience', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player', leveling_type: 'experience' } });
+      useAuth.mockReturnValue({ user: { id: 2 } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, experience_points: 500, level_up_pending: false },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Experience Points')).toBeInTheDocument());
+    });
+
+    it('GM sees Add XP input in experience mode', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'experience' } });
+      useAuth.mockReturnValue({ user: { id: 1 } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, experience_points: 0, level_up_pending: false },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByPlaceholderText('Add XP…')).toBeInTheDocument());
+    });
+
+    it('adds XP and calls updateCharacter with summed total', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'experience' } });
+      useAuth.mockReturnValue({ user: { id: 1 } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, experience_points: 100, level_up_pending: false },
+      });
+      characterService.updateCharacter.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, experience_points: 350, level_up_pending: false },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByPlaceholderText('Add XP…')).toBeInTheDocument());
+      fireEvent.change(screen.getByPlaceholderText('Add XP…'), { target: { value: '250' } });
+      fireEvent.click(screen.getByText('Add XP'));
+      await waitFor(() => {
+        expect(characterService.updateCharacter).toHaveBeenCalledWith('1',
+          expect.objectContaining({ experience_points: 350 })
+        );
+      });
+    });
+
+    it('sets level_up_pending:true when XP addition crosses next-level threshold', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'experience' } });
+      useAuth.mockReturnValue({ user: { id: 1 } });
+      // Level 5 — threshold for level 6 is 14000 XP; start at 13900
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, level: 5, experience_points: 13900, level_up_pending: false },
+      });
+      characterService.updateCharacter.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, level: 5, experience_points: 14100, level_up_pending: true },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByPlaceholderText('Add XP…')).toBeInTheDocument());
+      fireEvent.change(screen.getByPlaceholderText('Add XP…'), { target: { value: '200' } });
+      fireEvent.click(screen.getByText('Add XP'));
+      await waitFor(() => {
+        expect(characterService.updateCharacter).toHaveBeenCalledWith('1',
+          expect.objectContaining({ experience_points: 14100, level_up_pending: true })
+        );
+      });
+    });
+  });
+
   describe('player viewing another player\'s visible character', () => {
     beforeEach(() => {
       useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player' } });

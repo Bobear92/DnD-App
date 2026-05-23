@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Eye, EyeOff, Trash2, Save, RotateCcw } from 'lucide-react';
+import { ChevronLeft, Eye, EyeOff, Trash2, Save, RotateCcw, TrendingUp, Star, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,6 +79,12 @@ const SKILL_MAP = [
   { skill: 'Survival', ability: 'wisdom' },
 ];
 
+// XP thresholds to reach each level (index = target level)
+const XP_THRESHOLDS = [0, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000,
+  64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
+
+function xpForLevel(level) { return XP_THRESHOLDS[Math.min(level, 20)] ?? 355000; }
+
 function mod(score) { return Math.floor((score - 10) / 2); }
 function modStr(score) { const m = mod(score); return m >= 0 ? `+${m}` : `${m}`; }
 function profBonus(level) { return Math.ceil(level / 4) + 1; }
@@ -121,6 +127,11 @@ export default function CharacterDetail() {
   const [error, setError] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [playerView, setPlayerView] = useState(false);
+
+  // Leveling
+  const [xpInput, setXpInput] = useState('');
+  const [addingXp, setAddingXp] = useState(false);
+  const [levelUpWizardOpen, setLevelUpWizardOpen] = useState(false);
 
   // Section drafts
   const identity = useSection(null);
@@ -225,6 +236,48 @@ export default function CharacterDetail() {
     else setError(result.error);
   };
 
+  const handleAddXp = async () => {
+    const toAdd = parseInt(xpInput.replace(/,/g, ''));
+    if (isNaN(toAdd) || toAdd <= 0) return;
+    const newXp = (character.experience_points ?? 0) + toAdd;
+    const nextLevel = (character.level ?? 1) + 1;
+    const pendingLevelUp = nextLevel <= 20 && newXp >= xpForLevel(nextLevel);
+    setAddingXp(true);
+    const result = await characterService.updateCharacter(characterId, {
+      experience_points: newXp,
+      ...(pendingLevelUp ? { level_up_pending: true } : {}),
+    });
+    setAddingXp(false);
+    if (result.success) {
+      setCharacter(result.data);
+      setXpInput('');
+    } else {
+      setError(result.error);
+    }
+  };
+
+  const handleMilestoneLevelUp = async () => {
+    const result = await characterService.updateCharacter(characterId, { level_up_pending: true });
+    if (result.success) setCharacter(result.data);
+    else setError(result.error);
+  };
+
+  const handleLevelUpComplete = async (newLevel, newCharacterData) => {
+    const result = await characterService.updateCharacter(characterId, {
+      level: newLevel,
+      character_data: newCharacterData,
+      level_up_pending: false,
+    });
+    if (result.success) {
+      setCharacter(result.data);
+      identity.commit({ ...identity.draft, level: newLevel });
+      classSection.commit(newCharacterData);
+      setLevelUpWizardOpen(false);
+    } else {
+      setError(result.error);
+    }
+  };
+
   if (loading) {
     return (
       <MainLayout>
@@ -300,6 +353,33 @@ export default function CharacterDetail() {
           </div>
         )}
 
+        {/* Leveling card */}
+        {character && (
+          <LevelingCard
+            character={character}
+            campaign={campaign}
+            isGm={isGm}
+            isOwner={isOwner}
+            displayAsPlayer={displayAsPlayer}
+            xpInput={xpInput}
+            setXpInput={setXpInput}
+            addingXp={addingXp}
+            onAddXp={handleAddXp}
+            onMilestoneLevelUp={handleMilestoneLevelUp}
+            onOpenWizard={() => setLevelUpWizardOpen(true)}
+          />
+        )}
+
+        {/* Level-up wizard */}
+        {levelUpWizardOpen && character && (
+          <LevelUpWizard
+            character={character}
+            campaign={campaign}
+            onComplete={handleLevelUpComplete}
+            onClose={() => setLevelUpWizardOpen(false)}
+          />
+        )}
+
         {/* Identity + Ability Scores */}
         {identity.draft && (
           <SectionCard
@@ -330,24 +410,26 @@ export default function CharacterDetail() {
                     <Label className="text-xs">Background</Label>
                     <Input value={identity.draft.background} onChange={e => identity.setDraft(d => ({ ...d, background: e.target.value }))} />
                   </div>
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-xs">Alignment</Label>
-                    <select
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                      value={identity.draft.alignment}
-                      onChange={e => identity.setDraft(d => ({ ...d, alignment: e.target.value }))}
-                    >
-                      <option value="">Select alignment…</option>
-                      {ALIGNMENTS.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                  </div>
+                  {campaign?.use_alignment !== false && (
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs">Alignment</Label>
+                      <select
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        value={identity.draft.alignment}
+                        onChange={e => identity.setDraft(d => ({ ...d, alignment: e.target.value }))}
+                      >
+                        <option value="">Select alignment…</option>
+                        {ALIGNMENTS.map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2 text-sm">
                   <Badge variant="outline">{identity.draft.race || 'Unknown race'}</Badge>
                   <Badge variant="outline">Level {identity.draft.level}</Badge>
                   {identity.draft.background && <Badge variant="outline">{identity.draft.background}</Badge>}
-                  {identity.draft.alignment && <Badge variant="outline">{identity.draft.alignment}</Badge>}
+                  {campaign?.use_alignment !== false && identity.draft.alignment && <Badge variant="outline">{identity.draft.alignment}</Badge>}
                 </div>
               )}
 
@@ -511,6 +593,111 @@ export default function CharacterDetail() {
     </MainLayout>
   );
 }
+
+// ─── Leveling Card ────────────────────────────────────────────────────────────
+
+function LevelingCard({ character, campaign, isGm, isOwner, displayAsPlayer, xpInput, setXpInput, addingXp, onAddXp, onMilestoneLevelUp, onOpenWizard }) {
+  const isXp = campaign?.leveling_type === 'experience';
+  const level = character.level ?? 1;
+  const xp = character.experience_points ?? 0;
+  const nextLevelThreshold = level < 20 ? xpForLevel(level + 1) : null;
+  const prevLevelThreshold = xpForLevel(level);
+  const progressPct = nextLevelThreshold
+    ? Math.min(100, Math.round(((xp - prevLevelThreshold) / (nextLevelThreshold - prevLevelThreshold)) * 100))
+    : 100;
+
+  const canLevelUp = isOwner && character.level_up_pending;
+  const showGmControls = isGm && !displayAsPlayer;
+
+  return (
+    <div className="rounded-lg border bg-card p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          <h2 className="font-semibold text-sm">Leveling</h2>
+          <span className="text-xs text-muted-foreground">
+            {campaign?.leveling_type === 'experience' ? 'Experience Points' : 'Milestone'}
+          </span>
+        </div>
+        {showGmControls && campaign?.leveling_type === 'milestone' && !character.level_up_pending && (
+          <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={onMilestoneLevelUp}>
+            <Star className="h-3.5 w-3.5" /> Level Up
+          </Button>
+        )}
+      </div>
+
+      {isXp && (
+        <div className="space-y-1.5">
+          <div className="flex items-end justify-between text-xs">
+            <span className="text-muted-foreground">Level {level}</span>
+            {nextLevelThreshold ? (
+              <span className="font-medium">{xp.toLocaleString()} / {nextLevelThreshold.toLocaleString()} XP</span>
+            ) : (
+              <span className="font-medium text-amber-600">{xp.toLocaleString()} XP · Max Level</span>
+            )}
+          </div>
+          {nextLevelThreshold && (
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {showGmControls && isXp && (
+        <div className="flex items-center gap-2">
+          <Input
+            type="text"
+            inputMode="numeric"
+            placeholder="Add XP…"
+            value={xpInput}
+            onChange={e => setXpInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && onAddXp()}
+            className="h-8 w-28 text-sm"
+          />
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={onAddXp} disabled={addingXp || !xpInput}>
+            <Plus className="h-3.5 w-3.5" /> Add XP
+          </Button>
+        </div>
+      )}
+
+      {canLevelUp && (
+        <button
+          type="button"
+          onClick={onOpenWizard}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md bg-amber-100 dark:bg-amber-900/30 border border-amber-300 text-amber-800 dark:text-amber-300 text-sm font-semibold hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+        >
+          <Star className="h-4 w-4" />
+          Level Up Available! — Click to open wizard
+        </button>
+      )}
+
+      {isGm && !displayAsPlayer && character.level_up_pending && (
+        <p className="text-xs text-amber-600">
+          Waiting for {isOwner ? 'you' : 'player'} to complete the level-up wizard.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// LevelUpWizard is defined in LevelUpWizard.jsx and imported dynamically — placeholder below
+// until the full wizard is built
+
+function LevelUpWizard({ character, campaign, onComplete, onClose }) {
+  // Loaded dynamically from LevelUpWizard component
+  const [LevelUpWizardComponent, setComponent] = React.useState(null);
+  React.useEffect(() => {
+    import('../components/LevelUpWizard').then(m => setComponent(() => m.default)).catch(() => {});
+  }, []);
+  if (!LevelUpWizardComponent) return null;
+  return <LevelUpWizardComponent character={character} campaign={campaign} onComplete={onComplete} onClose={onClose} />;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function SectionCard({ title, children, isDirty, onSave, onReset, canEdit, variant }) {
   return (

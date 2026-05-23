@@ -60,6 +60,14 @@ def update_campaign(campaign_id: int, campaign_data: CampaignUpdate, db: Session
         campaign.description = campaign_data.description
     if campaign_data.edition is not None:
         campaign.edition = campaign_data.edition
+    if campaign_data.use_alignment is not None:
+        campaign.use_alignment = campaign_data.use_alignment
+    if campaign_data.ability_score_method is not None:
+        campaign.ability_score_method = campaign_data.ability_score_method
+    if campaign_data.allow_reroll_ones is not None:
+        campaign.allow_reroll_ones = campaign_data.allow_reroll_ones
+    if campaign_data.leveling_type is not None:
+        campaign.leveling_type = campaign_data.leveling_type
 
     db.commit()
     db.refresh(campaign)
