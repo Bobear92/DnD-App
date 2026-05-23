@@ -4,11 +4,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
-
-const SUBCLASSES = [
-  'Aberrant Mind', 'Clockwork Soul', 'Draconic Sorcery',
-  'Divine Soul', 'Shadow Magic', 'Storm Sorcery', 'Wild Magic',
-];
+import OptionCardPicker from '../OptionCardPicker';
+import { SORCERER_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
 
 const METAMAGIC_OPTIONS = [
   'Careful Spell', 'Distant Spell', 'Empowered Spell',
@@ -236,11 +233,11 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-              <option value="">Select origin…</option>
-              {SUBCLASSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={SUBCLASSES}
+              value={data.subclass ?? ''}
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

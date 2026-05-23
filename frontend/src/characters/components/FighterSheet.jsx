@@ -11,16 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
-
-const FIGHTING_STYLES_5E = [
-  'Archery', 'Defense', 'Dueling', 'Great Weapon Fighting',
-  'Protection', 'Two-Weapon Fighting',
-];
-
-const FIGHTER_SUBCLASSES_5E = [
-  'Champion', 'Battle Master', 'Eldritch Knight',
-  'Arcane Archer', 'Cavalier', 'Echo Knight', 'Psi Warrior', 'Rune Knight', 'Samurai',
-];
+import OptionCardPicker from './OptionCardPicker';
+import { FIGHTER_FIGHTING_STYLES_5E, FIGHTER_SUBCLASSES_5E } from './classChoicesData';
 
 function proficiencyBonus(level) {
   return Math.ceil(level / 4) + 1;
@@ -174,16 +166,11 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           {readOnly ? (
             <div className="text-sm py-2">{data.fighting_style || '—'}</div>
           ) : (
-            <select
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            <OptionCardPicker
+              options={FIGHTER_FIGHTING_STYLES_5E}
               value={data.fighting_style ?? ''}
-              onChange={e => set('fighting_style', e.target.value)}
-            >
-              <option value="">Select fighting style…</option>
-              {FIGHTING_STYLES_5E.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+              onChange={v => set('fighting_style', v)}
+            />
           )}
         </Field>
       )}
@@ -224,16 +211,11 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            <OptionCardPicker
+              options={FIGHTER_SUBCLASSES_5E}
               value={data.subclass ?? ''}
-              onChange={e => set('subclass', e.target.value)}
-            >
-              <option value="">Select subclass…</option>
-              {FIGHTER_SUBCLASSES_5E.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

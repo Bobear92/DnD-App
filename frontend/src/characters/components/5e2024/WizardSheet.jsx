@@ -4,6 +4,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
+import OptionCardPicker from '../OptionCardPicker';
+import { WIZARD_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
 
 const WIZARD_CANTRIPS_2024 = [
   'Acid Splash', 'Blade Ward', 'Chill Touch', 'Dancing Lights', 'Elementalism',
@@ -20,12 +22,6 @@ const WIZARD_L1_SPELLS_2024 = [
   'Illusory Script', 'Jump', 'Longstrider', 'Mage Armor', 'Magic Missile',
   'Protection from Evil and Good', 'Ray of Sickness', 'Shield', 'Silent Image',
   'Sleep', 'Thunderwave', 'Unseen Servant', 'Witch Bolt',
-];
-
-const SUBCLASSES = [
-  'Abjurer', 'Bladesinging', 'Chronurgy Magic', 'Conjurer', 'Diviner',
-  'Enchanter', 'Evoker', 'Graviturgy Magic', 'Illusionist',
-  'Necromancer', 'Order of Scribes', 'Transmuter', 'War Magic',
 ];
 
 const SPELL_SLOTS = {
@@ -267,11 +263,11 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-              <option value="">Select tradition…</option>
-              {SUBCLASSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={SUBCLASSES}
+              value={data.subclass ?? ''}
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

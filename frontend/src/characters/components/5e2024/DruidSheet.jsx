@@ -4,12 +4,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
-
-const SUBCLASSES = [
-  'Circle of the Land', 'Circle of the Moon', 'Circle of the Sea',
-  'Circle of the Stars', 'Circle of Wildfire', 'Circle of Spores',
-  'Circle of Dreams', 'Circle of Shepherd',
-];
+import OptionCardPicker from '../OptionCardPicker';
+import { DRUID_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
 
 const SPELL_SLOTS = {
   1:  [2, 0, 0, 0, 0, 0, 0, 0, 0], 2:  [3, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -231,11 +227,11 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-              <option value="">Select circle…</option>
-              {SUBCLASSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={SUBCLASSES}
+              value={data.subclass ?? ''}
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

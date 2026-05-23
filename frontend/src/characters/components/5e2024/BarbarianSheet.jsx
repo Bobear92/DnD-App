@@ -4,11 +4,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
-
-const SUBCLASSES = [
-  'Path of the Berserker', 'Path of the Wild Heart', 'Path of the World Tree',
-  'Path of the Zealot', 'Path of Wild Magic',
-];
+import OptionCardPicker from '../OptionCardPicker';
+import { BARBARIAN_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
 
 function rageCount(level) {
   if (level >= 17) return '∞';
@@ -234,11 +231,11 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-              <option value="">Select primal path…</option>
-              {SUBCLASSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={SUBCLASSES}
+              value={data.subclass ?? ''}
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

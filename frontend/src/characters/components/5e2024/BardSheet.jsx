@@ -4,11 +4,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
-
-const SUBCLASSES = [
-  'College of Dance', 'College of Glamour', 'College of Lore',
-  'College of Valor', 'College of Swords', 'College of Whispers',
-];
+import OptionCardPicker from '../OptionCardPicker';
+import { BARD_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
 
 const ALL_SKILLS = [
   'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics', 'Deception',
@@ -213,11 +210,11 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-              <option value="">Select college…</option>
-              {SUBCLASSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={SUBCLASSES}
+              value={data.subclass ?? ''}
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

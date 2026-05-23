@@ -9,15 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
-
-const RANGER_SUBCLASSES_5E = [
-  'Beast Master', 'Gloom Stalker', 'Horizon Walker', 'Hunter',
-  'Monster Slayer', 'Fey Wanderer', 'Swarmkeeper', 'Drakewarden',
-];
-
-const FIGHTING_STYLES_5E = [
-  'Archery', 'Defense', 'Dueling', 'Two-Weapon Fighting',
-];
+import OptionCardPicker from './OptionCardPicker';
+import { RANGER_FIGHTING_STYLES_5E, RANGER_SUBCLASSES_5E } from './classChoicesData';
 
 const FAVORED_ENEMY_OPTIONS = [
   'Aberrations', 'Beasts', 'Celestials', 'Constructs', 'Dragons',
@@ -274,14 +267,11 @@ export default function RangerSheet({ data = {}, onChange, readOnly = false, lev
           {readOnly ? (
             <div className="text-sm py-2">{data.fighting_style || '—'}</div>
           ) : (
-            <select
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            <OptionCardPicker
+              options={RANGER_FIGHTING_STYLES_5E}
               value={data.fighting_style ?? ''}
-              onChange={e => set('fighting_style', e.target.value)}
-            >
-              <option value="">Select fighting style…</option>
-              {FIGHTING_STYLES_5E.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              onChange={v => set('fighting_style', v)}
+            />
           )}
         </Field>
       )}
@@ -352,14 +342,11 @@ export default function RangerSheet({ data = {}, onChange, readOnly = false, lev
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            <OptionCardPicker
+              options={RANGER_SUBCLASSES_5E}
               value={data.subclass ?? ''}
-              onChange={e => set('subclass', e.target.value)}
-            >
-              <option value="">Select archetype…</option>
-              {RANGER_SUBCLASSES_5E.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

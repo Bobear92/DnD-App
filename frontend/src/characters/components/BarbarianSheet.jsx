@@ -7,12 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
-
-const BARBARIAN_SUBCLASSES_5E = [
-  'Path of the Berserker', 'Path of the Totem Warrior', 'Path of the Ancestral Guardian',
-  'Path of the Storm Herald', 'Path of the Zealot', 'Path of the Beast',
-  'Path of Wild Magic',
-];
+import OptionCardPicker from './OptionCardPicker';
+import { BARBARIAN_SUBCLASSES_5E } from './classChoicesData';
 
 // Rage count by level
 function rageCount(level) {
@@ -217,14 +213,11 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            <OptionCardPicker
+              options={BARBARIAN_SUBCLASSES_5E}
               value={data.subclass ?? ''}
-              onChange={e => set('subclass', e.target.value)}
-            >
-              <option value="">Select primal path…</option>
-              {BARBARIAN_SUBCLASSES_5E.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

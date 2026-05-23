@@ -4,10 +4,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
-
-const SUBCLASSES = [
-  'Arcane Trickster', 'Assassin', 'Soulknife', 'Swashbuckler', 'Thief',
-];
+import OptionCardPicker from '../OptionCardPicker';
+import { ROGUE_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
 
 const ROGUE_ALLOWED = [
   'Acrobatics', 'Athletics', 'Deception', 'Insight', 'Intimidation',
@@ -187,11 +185,11 @@ export default function RogueSheet({ data = {}, onChange, readOnly = false, leve
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-              <option value="">Select archetype…</option>
-              {SUBCLASSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={SUBCLASSES}
+              value={data.subclass ?? ''}
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

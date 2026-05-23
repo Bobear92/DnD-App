@@ -5,11 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 
-const SUBCLASSES = [
-  'Oath of Devotion', 'Oath of the Ancients', 'Oath of Glory',
-  'Oath of Vengeance', 'Oath of Conquest', 'Oath of Redemption',
-  'Oathbreaker',
-];
+import OptionCardPicker from '../OptionCardPicker';
+import { PALADIN_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
 
 // Paladin is half-caster; in 2024 slots start at L1
 const PALADIN_SLOTS = {
@@ -258,11 +255,11 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
             {readOnly ? (
               <div className="text-sm py-2">{data.subclass || '—'}</div>
             ) : (
-              <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-                <option value="">Select sacred oath…</option>
-                {SUBCLASSES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <OptionCardPicker
+                options={SUBCLASSES}
+                value={data.subclass ?? ''}
+                onChange={v => set('subclass', v)}
+              />
             )}
           </Field>
 

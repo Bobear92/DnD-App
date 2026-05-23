@@ -4,15 +4,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
-
-const SUBCLASSES = [
-  'The Archfey', 'The Celestial', 'The Fathomless',
-  'The Fiend', 'The Great Old One', 'The Undead',
-];
-
-const PACT_BOONS = [
-  'Pact of the Blade', 'Pact of the Chain', 'Pact of the Tome', 'Pact of the Talisman',
-];
+import OptionCardPicker from '../OptionCardPicker';
+import { WARLOCK_SUBCLASSES_2024 as SUBCLASSES, PACT_BOONS_2024 as PACT_BOONS } from '../classChoicesData';
 
 const PACT_SLOTS = {
   1:  [1, 1], 2:  [2, 1], 3:  [2, 2], 4:  [2, 2],
@@ -304,11 +297,11 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-              <option value="">Select patron…</option>
-              {SUBCLASSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={SUBCLASSES}
+              value={data.subclass ?? ''}
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}
@@ -319,11 +312,11 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           {readOnly ? (
             <div className="text-sm py-2">{data.pact_boon || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.pact_boon ?? ''} onChange={e => set('pact_boon', e.target.value)}>
-              <option value="">Select pact boon…</option>
-              {PACT_BOONS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={PACT_BOONS}
+              value={data.pact_boon ?? ''}
+              onChange={v => set('pact_boon', v)}
+            />
           )}
         </Field>
       )}

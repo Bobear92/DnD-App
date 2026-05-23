@@ -4,12 +4,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
-
-const SUBCLASSES = [
-  'Warrior of the Open Hand', 'Warrior of Shadow', 'Warrior of the Elements',
-  'Warrior of Mercy', 'Warrior of the Astral Self',
-  'Warrior of the Drunken Master', 'Warrior of the Kensei', 'Warrior of the Sun Soul',
-];
+import OptionCardPicker from '../OptionCardPicker';
+import { MONK_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
 
 function martialArtsDie(level) {
   if (level >= 17) return 'd12';
@@ -210,11 +206,11 @@ export default function MonkSheet({ data = {}, onChange, readOnly = false, level
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-              <option value="">Select tradition…</option>
-              {SUBCLASSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={SUBCLASSES}
+              value={data.subclass ?? ''}
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

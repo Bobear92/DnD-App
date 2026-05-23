@@ -399,6 +399,9 @@ export default function CharacterDetail() {
                   <div className="space-y-1">
                     <Label className="text-xs">Race / Species</Label>
                     <Input value={identity.draft.race} onChange={e => identity.setDraft(d => ({ ...d, race: e.target.value }))} />
+                    {character?.character_data?.subrace && (
+                      <p className="text-xs text-muted-foreground mt-0.5">Subrace: <span className="font-medium text-foreground">{character.character_data.subrace}</span></p>
+                    )}
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Level</Label>
@@ -427,9 +430,38 @@ export default function CharacterDetail() {
               ) : (
                 <div className="flex flex-wrap gap-2 text-sm">
                   <Badge variant="outline">{identity.draft.race || 'Unknown race'}</Badge>
+                  {character?.character_data?.subrace && (
+                    <Badge variant="outline">{character.character_data.subrace}</Badge>
+                  )}
                   <Badge variant="outline">Level {identity.draft.level}</Badge>
                   {identity.draft.background && <Badge variant="outline">{identity.draft.background}</Badge>}
                   {campaign?.use_alignment !== false && identity.draft.alignment && <Badge variant="outline">{identity.draft.alignment}</Badge>}
+                </div>
+              )}
+
+              {/* Racial traits and languages (stored in character_data at creation) */}
+              {(character?.character_data?.race_traits?.length > 0 || character?.character_data?.race_languages?.length > 0) && (
+                <div className="space-y-2">
+                  {character.character_data.race_traits?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Racial Traits</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {character.character_data.race_traits.map(t => (
+                          <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {character.character_data.race_languages?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Languages</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {character.character_data.race_languages.map(l => (
+                          <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

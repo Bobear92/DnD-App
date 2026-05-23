@@ -9,16 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
-
-const FIGHTING_STYLES_5E = [
-  'Defense', 'Dueling', 'Great Weapon Fighting', 'Protection',
-];
-
-const PALADIN_SUBCLASSES_5E = [
-  'Oath of Devotion', 'Oath of the Ancients', 'Oath of Vengeance',
-  'Oath of Conquest', 'Oath of Redemption', 'Oath of Glory',
-  'Oath of the Watchers', 'Oathbreaker',
-];
+import OptionCardPicker from './OptionCardPicker';
+import { PALADIN_FIGHTING_STYLES_5E, PALADIN_SUBCLASSES_5E } from './classChoicesData';
 
 // Paladin spell slot table (half-caster)
 const PALADIN_SLOTS = {
@@ -199,14 +191,11 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
           {readOnly ? (
             <div className="text-sm py-2">{data.fighting_style || '—'}</div>
           ) : (
-            <select
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            <OptionCardPicker
+              options={PALADIN_FIGHTING_STYLES_5E}
               value={data.fighting_style ?? ''}
-              onChange={e => set('fighting_style', e.target.value)}
-            >
-              <option value="">Select fighting style…</option>
-              {FIGHTING_STYLES_5E.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              onChange={v => set('fighting_style', v)}
+            />
           )}
         </Field>
       )}
@@ -217,14 +206,11 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            <OptionCardPicker
+              options={PALADIN_SUBCLASSES_5E}
               value={data.subclass ?? ''}
-              onChange={e => set('subclass', e.target.value)}
-            >
-              <option value="">Select oath…</option>
-              {PALADIN_SUBCLASSES_5E.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

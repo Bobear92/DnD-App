@@ -6,11 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
-
-const ROGUE_SUBCLASSES_5E = [
-  'Thief', 'Arcane Trickster', 'Assassin', 'Inquisitive',
-  'Mastermind', 'Phantom', 'Scout', 'Soul Knife', 'Swashbuckler',
-];
+import OptionCardPicker from './OptionCardPicker';
+import { ROGUE_SUBCLASSES_5E } from './classChoicesData';
 
 const ALL_SKILLS = [
   'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics', 'Deception',
@@ -91,14 +88,11 @@ export default function RogueSheet({ data = {}, onChange, readOnly = false, leve
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            <OptionCardPicker
+              options={ROGUE_SUBCLASSES_5E}
               value={data.subclass ?? ''}
-              onChange={e => set('subclass', e.target.value)}
-            >
-              <option value="">Select subclass…</option>
-              {ROGUE_SUBCLASSES_5E.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

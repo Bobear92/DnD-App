@@ -9,12 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
-
-const BARD_SUBCLASSES_5E = [
-  'College of Lore', 'College of Valor', 'College of Glamour',
-  'College of Swords', 'College of Whispers', 'College of Creation',
-  'College of Eloquence', 'College of Spirits',
-];
+import OptionCardPicker from './OptionCardPicker';
+import { BARD_SUBCLASSES_5E } from './classChoicesData';
 
 const BARD_SLOT_TABLE = {
   1:  [2,0,0,0,0,0,0,0,0], 2:  [3,0,0,0,0,0,0,0,0],
@@ -345,11 +341,11 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-              <option value="">Select college…</option>
-              {BARD_SUBCLASSES_5E.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={BARD_SUBCLASSES_5E}
+              value={data.subclass ?? ''}
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

@@ -4,16 +4,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
-
-const FIGHTING_STYLES = [
-  'Archery', 'Blind Fighting', 'Defense', 'Dueling',
-  'Great Weapon Fighting', 'Interception', 'Protection',
-  'Thrown Weapon Fighting', 'Two-Weapon Fighting', 'Unarmed Fighting',
-];
-
-const SUBCLASSES = [
-  'Battle Master', 'Champion', 'Eldritch Knight', 'Psi Warrior',
-];
+import OptionCardPicker from '../OptionCardPicker';
+import { FIGHTER_FIGHTING_STYLES_2024 as FIGHTING_STYLES, FIGHTER_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
 
 function actionSurgeTotal(level) { return level >= 17 ? 2 : level >= 2 ? 1 : 0; }
 function indomitableTotal(level) {
@@ -196,11 +188,11 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
         {readOnly ? (
           <div className="text-sm py-2">{data.fighting_style || '—'}</div>
         ) : (
-          <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            value={data.fighting_style ?? ''} onChange={e => set('fighting_style', e.target.value)}>
-            <option value="">Select fighting style…</option>
-            {FIGHTING_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <OptionCardPicker
+            options={FIGHTING_STYLES}
+            value={data.fighting_style ?? ''}
+            onChange={v => set('fighting_style', v)}
+          />
         )}
       </Field>
 
@@ -242,11 +234,11 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           {readOnly ? (
             <div className="text-sm py-2">{data.subclass || '—'}</div>
           ) : (
-            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-              <option value="">Select subclass…</option>
-              {SUBCLASSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <OptionCardPicker
+              options={SUBCLASSES}
+              value={data.subclass ?? ''}
+              onChange={v => set('subclass', v)}
+            />
           )}
         </Field>
       )}

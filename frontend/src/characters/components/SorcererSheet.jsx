@@ -9,11 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
-
-const SORCERER_SUBCLASSES_5E = [
-  'Draconic Bloodline', 'Wild Magic', 'Divine Soul', 'Shadow Magic',
-  'Storm Sorcery', 'Aberrant Mind', 'Clockwork Soul',
-];
+import OptionCardPicker from './OptionCardPicker';
+import { SORCERER_SUBCLASSES_5E } from './classChoicesData';
 
 const METAMAGIC_OPTIONS = [
   'Careful Spell', 'Distant Spell', 'Empowered Spell', 'Extended Spell',
@@ -239,11 +236,11 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
         {readOnly ? (
           <div className="text-sm py-2">{data.subclass || '—'}</div>
         ) : (
-          <select className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            value={data.subclass ?? ''} onChange={e => set('subclass', e.target.value)}>
-            <option value="">Select origin…</option>
-            {SORCERER_SUBCLASSES_5E.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <OptionCardPicker
+            options={SORCERER_SUBCLASSES_5E}
+            value={data.subclass ?? ''}
+            onChange={v => set('subclass', v)}
+          />
         )}
       </Field>
 

@@ -309,6 +309,68 @@ describe('CharacterDetail', () => {
     });
   });
 
+  describe('subrace and racial data display', () => {
+    it('shows subrace badge alongside race in read-only view', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player' } });
+      useAuth.mockReturnValue({ user: { id: 3, username: 'other' } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Elf',
+          user_id: 3,
+          character_data: { ...BASE_CHARACTER.character_data, subrace: 'Wood Elf' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Wood Elf')).toBeInTheDocument());
+    });
+
+    it('shows subrace label in editable view when character has a subrace', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Dwarf',
+          user_id: 2,
+          character_data: { ...BASE_CHARACTER.character_data, subrace: 'Hill Dwarf' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText(/Subrace:/)).toBeInTheDocument());
+      expect(screen.getByText('Hill Dwarf')).toBeInTheDocument();
+    });
+
+    it('shows racial traits when present in character_data', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Elf',
+          user_id: 2,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            subrace: 'Wood Elf',
+            race_traits: ['Darkvision', 'Fey Ancestry', 'Fleet of Foot'],
+            race_languages: ['Common', 'Elvish'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Racial Traits')).toBeInTheDocument());
+      expect(screen.getByText('Darkvision')).toBeInTheDocument();
+      expect(screen.getByText('Fleet of Foot')).toBeInTheDocument();
+      expect(screen.getByText('Languages')).toBeInTheDocument();
+      expect(screen.getByText('Elvish')).toBeInTheDocument();
+    });
+
+    it('does not show racial traits section when character_data has no race_traits', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByText('Racial Traits')).not.toBeInTheDocument();
+    });
+  });
+
   describe('player viewing another player\'s visible character', () => {
     beforeEach(() => {
       useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player' } });
