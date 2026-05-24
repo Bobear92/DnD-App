@@ -36,6 +36,14 @@ import {
 import { HIT_DICE_2024 } from '../components/classFeatures2024';
 import { cn } from '@/lib/utils';
 
+// ─── Ability score validation constants ──────────────────────────────────────
+
+const SCORE_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+const STANDARD_SPREAD_VALUES = [15, 14, 13, 12, 10, 8];
+const POINT_BUY_COSTS = [0, 1, 2, 3, 4, 5, 7, 9]; // index = score - 8
+const POINT_BUY_TOTAL = 27;
+const EMPTY_DICE_ASSIGNMENT = Object.fromEntries(SCORE_KEYS.map(k => [k, null]));
+
 // ─── Static data ────────────────────────────────────────────────────────────
 
 const ALIGNMENTS = [
@@ -293,19 +301,25 @@ const CLASS_PROFICIENCIES_5E = {
   Wizard:    { armor: 'None', weapons: 'Daggers, darts, slings, quarterstaffs, light crossbows', tools: null, saving_throws: ['Intelligence', 'Wisdom'] },
 };
 
+const CLASS_SKILL_REQUIRED = {
+  Barbarian: 2, Bard: 3, Cleric: 2, Druid: 2, Fighter: 2,
+  Monk: 2, Paladin: 2, Ranger: 3, Rogue: 4, Sorcerer: 2,
+  Warlock: 2, Wizard: 2,
+};
+
 const CLASS_COLORS = {
-  Barbarian: 'border-orange-500 bg-orange-50 dark:bg-orange-950/30 hover:border-orange-600',
-  Bard:      'border-pink-500 bg-pink-50 dark:bg-pink-950/30 hover:border-pink-600',
-  Cleric:    'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/30 hover:border-yellow-600',
-  Druid:     'border-green-500 bg-green-50 dark:bg-green-950/30 hover:border-green-600',
-  Fighter:   'border-red-500 bg-red-50 dark:bg-red-950/30 hover:border-red-600',
-  Monk:      'border-cyan-500 bg-cyan-50 dark:bg-cyan-950/30 hover:border-cyan-600',
-  Paladin:   'border-amber-500 bg-amber-50 dark:bg-amber-950/30 hover:border-amber-600',
-  Ranger:    'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 hover:border-emerald-600',
-  Rogue:     'border-purple-500 bg-purple-50 dark:bg-purple-950/30 hover:border-purple-600',
-  Sorcerer:  'border-rose-500 bg-rose-50 dark:bg-rose-950/30 hover:border-rose-600',
-  Warlock:   'border-violet-500 bg-violet-50 dark:bg-violet-950/30 hover:border-violet-600',
-  Wizard:    'border-blue-500 bg-blue-50 dark:bg-blue-950/30 hover:border-blue-600',
+  Barbarian: 'border-orange-500 bg-card hover:bg-orange-50 dark:hover:bg-orange-950/20 hover:border-orange-600',
+  Bard:      'border-pink-500 bg-card hover:bg-pink-50 dark:hover:bg-pink-950/20 hover:border-pink-600',
+  Cleric:    'border-yellow-500 bg-card hover:bg-yellow-50 dark:hover:bg-yellow-950/20 hover:border-yellow-600',
+  Druid:     'border-green-500 bg-card hover:bg-green-50 dark:hover:bg-green-950/20 hover:border-green-600',
+  Fighter:   'border-red-500 bg-card hover:bg-red-50 dark:hover:bg-red-950/20 hover:border-red-600',
+  Monk:      'border-cyan-500 bg-card hover:bg-cyan-50 dark:hover:bg-cyan-950/20 hover:border-cyan-600',
+  Paladin:   'border-amber-500 bg-card hover:bg-amber-50 dark:hover:bg-amber-950/20 hover:border-amber-600',
+  Ranger:    'border-emerald-500 bg-card hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:border-emerald-600',
+  Rogue:     'border-purple-500 bg-card hover:bg-purple-50 dark:hover:bg-purple-950/20 hover:border-purple-600',
+  Sorcerer:  'border-rose-500 bg-card hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:border-rose-600',
+  Warlock:   'border-violet-500 bg-card hover:bg-violet-50 dark:hover:bg-violet-950/20 hover:border-violet-600',
+  Wizard:    'border-blue-500 bg-card hover:bg-blue-50 dark:hover:bg-blue-950/20 hover:border-blue-600',
 };
 
 const CLASS_ACCENT = {
@@ -347,6 +361,77 @@ function formatAsiBonus(asiObj) {
     .map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${STAT_ABBREV[k] ?? k}`)
     .join(', ');
 }
+
+// ─── Race / background choice data ──────────────────────────────────────────
+
+const SUBRACE_GRANTED_CANTRIPS = {
+  'Forest Gnome': 'Minor Illusion',
+  'Dark Elf (Drow)': 'Dancing Lights',
+};
+
+const RACE_GRANTED_CANTRIPS_MAP = {
+  'Tiefling': 'Thaumaturgy',
+};
+
+const DRACONIC_ANCESTRIES = [
+  { name: 'Black',  damage: 'Acid',      breath: '5×30 ft line' },
+  { name: 'Blue',   damage: 'Lightning', breath: '5×30 ft line' },
+  { name: 'Brass',  damage: 'Fire',      breath: '5×30 ft line' },
+  { name: 'Bronze', damage: 'Lightning', breath: '5×30 ft line' },
+  { name: 'Copper', damage: 'Acid',      breath: '5×30 ft line' },
+  { name: 'Gold',   damage: 'Fire',      breath: '15 ft cone' },
+  { name: 'Green',  damage: 'Poison',    breath: '15 ft cone' },
+  { name: 'Red',    damage: 'Fire',      breath: '15 ft cone' },
+  { name: 'Silver', damage: 'Cold',      breath: '15 ft cone' },
+  { name: 'White',  damage: 'Cold',      breath: '15 ft cone' },
+];
+
+const WIZARD_CANTRIPS_5E = [
+  'Acid Splash', 'Blade Ward', 'Chill Touch', 'Dancing Lights', 'Fire Bolt',
+  'Friends', 'Light', 'Mage Hand', 'Mending', 'Message', 'Minor Illusion',
+  'Poison Spray', 'Prestidigitation', 'Ray of Frost', 'Shocking Grasp', 'True Strike',
+];
+
+const STANDARD_LANGUAGES_LIST = [
+  'Abyssal', 'Celestial', 'Deep Speech', 'Draconic', 'Dwarvish', 'Elvish',
+  'Giant', 'Gnomish', 'Goblin', 'Halfling', 'Infernal', 'Orc',
+  'Primordial', 'Sylvan', 'Undercommon',
+];
+
+const ALL_SKILLS_18 = [
+  'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics', 'Deception',
+  'History', 'Insight', 'Intimidation', 'Investigation', 'Medicine',
+  'Nature', 'Perception', 'Performance', 'Persuasion', 'Religion',
+  'Sleight of Hand', 'Stealth', 'Survival',
+];
+
+const GAMING_SETS = ['Dice set', 'Dragonchess set', 'Playing card set', 'Three-Dragon Ante set'];
+
+const MUSICAL_INSTRUMENTS_BG = [
+  'Bagpipes', 'Drum', 'Dulcimer', 'Flute', 'Lute', 'Lyre', 'Horn', 'Pan flute', 'Shawm', 'Viol',
+];
+
+const ARTISANS_TOOLS_LIST = [
+  "Alchemist's supplies", "Brewer's supplies", "Calligrapher's supplies",
+  "Carpenter's tools", "Cartographer's tools", "Cobbler's tools",
+  "Cook's utensils", "Glassblower's tools", "Jeweler's tools",
+  "Leatherworker's tools", "Mason's tools", "Painter's supplies",
+  "Potter's tools", "Smith's tools", "Tinker's tools",
+  "Weaver's tools", "Woodcarver's tools",
+];
+
+const BACKGROUND_CHOICES_MAP = {
+  'Acolyte':       { languages: 2 },
+  'Criminal':      { tool: 'gaming_set' },
+  'Entertainer':   { tool: 'musical_instrument' },
+  'Folk Hero':     { tool: 'artisans_tools' },
+  'Guild Artisan': { tool: 'artisans_tools' },
+  'Hermit':        { languages: 1 },
+  'Noble':         { tool: 'gaming_set' },
+  'Outlander':     { tool: 'musical_instrument' },
+  'Sage':          { languages: 2 },
+  'Soldier':       { tool: 'gaming_set' },
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -585,9 +670,267 @@ function BgDetail({ bg }) {
   );
 }
 
-function AbilityScoreSection({ method, allowRerollOnes, scores, onChange }) {
+function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [] }) {
+  const isDragonborn = race?.name === 'Dragonborn';
+  const isHighElf    = subrace?.name === 'High Elf';
+  const isHalfElf    = race?.name === 'Half-Elf';
+  const isHuman      = race?.name === 'Human';
+  if (!isDragonborn && !isHighElf && !isHalfElf && !isHuman) return null;
+
+  return (
+    <div className="space-y-4 pt-3 border-t" data-testid="race-choices-section">
+      <div>
+        <p className="text-sm font-semibold">Racial Choices</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Additional options from your race or subrace</p>
+      </div>
+
+      {/* Dragonborn: Draconic Ancestry */}
+      {isDragonborn && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Draconic Ancestry <span className="text-destructive">*</span>
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Choose your draconic ancestry — determines your breath weapon damage type and resistance.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {DRACONIC_ANCESTRIES.map(anc => (
+              <button
+                key={anc.name}
+                type="button"
+                data-testid={`draconic-ancestry-${anc.name}`}
+                onClick={() => onChange({ ...choices, draconic_ancestry: anc })}
+                className={cn(
+                  'rounded-lg border-2 p-2.5 text-left transition-all',
+                  choices.draconic_ancestry?.name === anc.name
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border bg-card hover:border-primary/50',
+                )}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-semibold text-sm">{anc.name} Dragon</span>
+                  {choices.draconic_ancestry?.name === anc.name && (
+                    <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">{anc.damage} · {anc.breath}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* High Elf: Wizard cantrip (required) */}
+      {isHighElf && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Wizard Cantrip <span className="text-destructive">*</span>
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            High elves know one cantrip of their choice from the wizard spell list.
+          </p>
+          <select
+            data-testid="high-elf-cantrip-select"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            value={choices.high_elf_cantrip || ''}
+            onChange={e => onChange({ ...choices, high_elf_cantrip: e.target.value })}
+          >
+            <option value="">Select a cantrip…</option>
+            {WIZARD_CANTRIPS_5E.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      )}
+
+      {/* High Elf: Extra language (optional) */}
+      {isHighElf && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Extra Language</Label>
+          <p className="text-xs text-muted-foreground">High elves speak one additional language of your choice.</p>
+          <select
+            data-testid="high-elf-language-select"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            value={choices.high_elf_language || '__none__'}
+            onChange={e => onChange({ ...choices, high_elf_language: e.target.value === '__none__' ? '' : e.target.value })}
+          >
+            <option value="__none__">Select a language… (optional)</option>
+            {STANDARD_LANGUAGES_LIST.filter(l => !knownLanguages.includes(l)).map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+      )}
+
+      {/* Half-Elf: +1 to 2 different ability scores (required) */}
+      {isHalfElf && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Ability Score Increases <span className="text-destructive">*</span>
+          </Label>
+          <p className="text-xs text-muted-foreground">Choose 2 different ability scores to each gain +1.</p>
+          <div className="grid grid-cols-3 gap-2">
+            {SCORE_KEYS.map(stat => {
+              const selected = choices.half_elf_asi_stats?.includes(stat);
+              const atLimit  = (choices.half_elf_asi_stats?.length ?? 0) >= 2 && !selected;
+              return (
+                <button
+                  key={stat}
+                  type="button"
+                  data-testid={`half-elf-asi-${stat}`}
+                  disabled={atLimit}
+                  onClick={() => {
+                    const cur  = choices.half_elf_asi_stats ?? [];
+                    const next = selected ? cur.filter(s => s !== stat) : [...cur, stat];
+                    onChange({ ...choices, half_elf_asi_stats: next });
+                  }}
+                  className={cn(
+                    'rounded-lg border-2 p-2 text-sm font-medium transition-all text-center',
+                    selected ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card',
+                    atLimit ? 'opacity-40 cursor-not-allowed' : 'hover:border-primary/50',
+                  )}
+                >
+                  {STAT_ABBREV[stat]}
+                  {selected && <Check className="h-3 w-3 inline ml-1" />}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">{choices.half_elf_asi_stats?.length ?? 0}/2 chosen</p>
+        </div>
+      )}
+
+      {/* Half-Elf: Skill Versatility — 2 skill proficiencies (required) */}
+      {isHalfElf && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Skill Versatility <span className="text-destructive">*</span>
+          </Label>
+          <p className="text-xs text-muted-foreground">Choose 2 skill proficiencies from any skills.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {ALL_SKILLS_18.map(skill => {
+              const selected = choices.half_elf_skills?.includes(skill);
+              const atLimit  = (choices.half_elf_skills?.length ?? 0) >= 2 && !selected;
+              return (
+                <button
+                  key={skill}
+                  type="button"
+                  data-testid={`half-elf-skill-${skill.replace(/\s+/g, '-')}`}
+                  disabled={atLimit}
+                  onClick={() => {
+                    const cur  = choices.half_elf_skills ?? [];
+                    const next = selected ? cur.filter(s => s !== skill) : [...cur, skill];
+                    onChange({ ...choices, half_elf_skills: next });
+                  }}
+                  className={cn(
+                    'rounded px-2 py-1 text-xs font-medium border transition-all',
+                    selected ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border',
+                    atLimit ? 'opacity-40 cursor-not-allowed' : 'hover:border-primary',
+                  )}
+                >
+                  {skill}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">{choices.half_elf_skills?.length ?? 0}/2 chosen</p>
+        </div>
+      )}
+
+      {/* Human: Extra Language */}
+      {isHuman && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Extra Language</Label>
+          <p className="text-xs text-muted-foreground">
+            Humans can speak, read, and write one extra language of their choice.
+          </p>
+          <select
+            data-testid="human-language-select"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            value={choices.human_language || '__none__'}
+            onChange={e => onChange({ ...choices, human_language: e.target.value === '__none__' ? '' : e.target.value })}
+          >
+            <option value="__none__">Select a language… (optional)</option>
+            {STANDARD_LANGUAGES_LIST.filter(l => !knownLanguages.includes(l)).map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BackgroundChoicesSection({ bg, choices, onChange, knownLanguages = [] }) {
+  if (!bg) return null;
+  const spec = BACKGROUND_CHOICES_MAP[bg.name];
+  if (!spec) return null;
+
+  const toolOptions = {
+    gaming_set:         GAMING_SETS,
+    musical_instrument: MUSICAL_INSTRUMENTS_BG,
+    artisans_tools:     ARTISANS_TOOLS_LIST,
+  };
+  const toolLabel = {
+    gaming_set:         'Gaming Set',
+    musical_instrument: 'Musical Instrument',
+    artisans_tools:     "Artisan's Tools",
+  };
+
+  return (
+    <div className="space-y-3 pt-3 border-t" data-testid="bg-choices-section">
+      <p className="text-sm font-semibold text-muted-foreground">Background Choices</p>
+
+      {spec.tool && (
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">{toolLabel[spec.tool]}</Label>
+          <p className="text-xs text-muted-foreground">Choose which type you gain proficiency with.</p>
+          <select
+            data-testid="bg-tool-choice-select"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            value={choices.tool_choice || '__none__'}
+            onChange={e => onChange({ ...choices, tool_choice: e.target.value === '__none__' ? '' : e.target.value })}
+          >
+            <option value="__none__">Select… (optional)</option>
+            {toolOptions[spec.tool].map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+      )}
+
+      {spec.languages && Array.from({ length: spec.languages }).map((_, i) => {
+        const otherSlots = (choices.language_choices ?? []).filter((v, idx) => idx !== i && v);
+        const excluded   = [...knownLanguages, ...otherSlots];
+        return (
+          <div key={i} className="space-y-1.5">
+            <Label className="text-sm font-medium">Language{spec.languages > 1 ? ` ${i + 1}` : ''}</Label>
+            <select
+              data-testid={`bg-language-${i}-select`}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              value={choices.language_choices?.[i] || '__none__'}
+              onChange={e => {
+                const val  = e.target.value === '__none__' ? '' : e.target.value;
+                const next = [...(choices.language_choices ?? [])];
+                next[i]   = val;
+                onChange({ ...choices, language_choices: next });
+              }}
+            >
+              <option value="__none__">Select a language… (optional)</option>
+              {STANDARD_LANGUAGES_LIST.filter(l => !excluded.includes(l)).map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AbilityScoreSection({ method, allowRerollOnes, scores, onChange, diceRolls, onDiceRollsChange, diceAssignment, onDiceAssignmentChange }) {
   if (method === 'point_buy') return <PointBuyAssignment scores={scores} onChange={onChange} />;
-  if (method === 'roll') return <DiceRollAssignment scores={scores} onChange={onChange} allowRerollOnes={allowRerollOnes} />;
+  if (method === 'roll') return (
+    <DiceRollAssignment
+      scores={scores}
+      onChange={onChange}
+      allowRerollOnes={allowRerollOnes}
+      rolls={diceRolls}
+      onRollsChange={onDiceRollsChange}
+      assignment={diceAssignment}
+      onAssignmentChange={onDiceAssignmentChange}
+    />
+  );
   return <StandardSpreadAssignment scores={scores} onChange={onChange} />;
 }
 
@@ -646,14 +989,23 @@ export default function CharacterCreate() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Dice roll assignment state (lifted here so it survives step navigation)
+  const [diceRolls, setDiceRolls] = useState([null, null, null, null, null, null]);
+  const [diceAssignment, setDiceAssignment] = useState(EMPTY_DICE_ASSIGNMENT);
+
   // Identity step state
   const [apiRaces, setApiRaces] = useState([]);
   const [apiBackgrounds, setApiBackgrounds] = useState([]);
   const [selectedRaceObj, setSelectedRaceObj] = useState(null);
   const [selectedSubraceObj, setSelectedSubraceObj] = useState(null);
   const [selectedBgObj, setSelectedBgObj] = useState(null);
-  const [customRace, setCustomRace] = useState('');
+
   const [raceSearch, setRaceSearch] = useState('');
+
+  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], human_language: '' };
+  const EMPTY_BG_CHOICES   = { tool_choice: '', language_choices: [] };
+  const [raceChoices, setRaceChoices] = useState(EMPTY_RACE_CHOICES);
+  const [bgChoices,   setBgChoices]   = useState(EMPTY_BG_CHOICES);
 
   // Fetch races + backgrounds when entering identity step
   useEffect(() => {
@@ -704,8 +1056,19 @@ export default function CharacterCreate() {
   // Background skills passed to class sheet in step 3
   const backgroundSkills = selectedBgObj?.skills ?? [];
 
-  // Combined racial ASI (base race + subrace) — used in submit and previews
-  const combinedRaceAsi = mergeAsi(selectedRaceObj?.asiBonus, selectedSubraceObj?.asiBonus);
+  // Combined racial ASI (base race + subrace + Half-Elf chosen stats) — used in submit and previews
+  const halfElfExtraAsi = (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_asi_stats.length > 0)
+    ? Object.fromEntries(raceChoices.half_elf_asi_stats.map(s => [s, 1]))
+    : {};
+  const combinedRaceAsi = mergeAsi(selectedRaceObj?.asiBonus, selectedSubraceObj?.asiBonus, halfElfExtraAsi);
+
+  const raceGrantedCantrips = [
+    ...(raceChoices.high_elf_cantrip ? [raceChoices.high_elf_cantrip] : []),
+    ...(selectedSubraceObj?.name && SUBRACE_GRANTED_CANTRIPS[selectedSubraceObj.name]
+      ? [SUBRACE_GRANTED_CANTRIPS[selectedSubraceObj.name]] : []),
+    ...(selectedRaceObj?.name && RACE_GRANTED_CANTRIPS_MAP[selectedRaceObj.name]
+      ? [RACE_GRANTED_CANTRIPS_MAP[selectedRaceObj.name]] : []),
+  ];
 
   const handleClassSelect = (cls) => {
     setSelectedClass(cls);
@@ -714,36 +1077,36 @@ export default function CharacterCreate() {
     setSelectedRaceObj(null);
     setSelectedSubraceObj(null);
     setSelectedBgObj(null);
-    setCustomRace('');
     setRaceSearch('');
+    setDiceRolls([null, null, null, null, null, null]);
+    setDiceAssignment(EMPTY_DICE_ASSIGNMENT);
+    setRaceChoices(EMPTY_RACE_CHOICES);
+    setBgChoices(EMPTY_BG_CHOICES);
     setStep('identity');
   };
 
   const handleRaceSelect = (race) => {
     setSelectedRaceObj(race);
     setSelectedSubraceObj(null);
-    setCustomRace('');
     setForm(f => ({ ...f, race: race.name }));
+    setRaceChoices(EMPTY_RACE_CHOICES);
   };
 
   const handleSubraceSelect = (subrace) => {
     setSelectedSubraceObj(subrace);
-  };
-
-  const handleCustomRaceChange = (val) => {
-    setCustomRace(val);
-    setSelectedRaceObj(null);
-    setSelectedSubraceObj(null);
-    setForm(f => ({ ...f, race: val }));
+    // Clear subrace-specific choices when switching subraces
+    setRaceChoices(prev => ({ ...prev, high_elf_cantrip: '', high_elf_language: '' }));
   };
 
   const handleBgSelect = (bg) => {
     if (selectedBgObj?.name === bg.name) {
       setSelectedBgObj(null);
       setForm(f => ({ ...f, background: '' }));
+      setBgChoices(EMPTY_BG_CHOICES);
     } else {
       setSelectedBgObj(bg);
       setForm(f => ({ ...f, background: bg.name }));
+      setBgChoices(EMPTY_BG_CHOICES);
     }
   };
 
@@ -775,7 +1138,10 @@ export default function CharacterCreate() {
     const allRaceLanguages = [
       ...(selectedRaceObj?.languages ?? []),
       ...(selectedSubraceObj?.languages ?? []),
+      ...(raceChoices.high_elf_language ? [raceChoices.high_elf_language] : []),
+      ...(raceChoices.human_language ? [raceChoices.human_language] : []),
     ];
+    const bgLanguages = (bgChoices.language_choices ?? []).filter(Boolean);
 
     const result = await characterService.createCharacter({
       ...form,
@@ -786,9 +1152,18 @@ export default function CharacterCreate() {
       character_data: {
         ...classData,
         hp_max,
+        skill_proficiencies: [...new Set([
+          ...(classData.skill_proficiencies ?? []),
+          ...backgroundSkills,
+          ...(raceChoices.half_elf_skills ?? []),
+        ])],
         subrace: selectedSubraceObj?.name ?? null,
         race_traits: allRaceTraits,
         race_languages: allRaceLanguages,
+        draconic_ancestry: raceChoices.draconic_ancestry ?? null,
+        high_elf_cantrip: raceChoices.high_elf_cantrip || null,
+        background_tool_choice: bgChoices.tool_choice || null,
+        ...(bgLanguages.length > 0 ? { background_languages: bgLanguages } : {}),
       },
     });
 
@@ -821,9 +1196,37 @@ export default function CharacterCreate() {
     ? 'Step 3 of 4 — Class Features & Ability Scores'
     : 'Step 4 of 4 — Review & Create';
 
-  // Next is blocked when name is missing, or a race with subraces is selected but no subrace chosen
+  // Next is blocked when name is missing, subrace not chosen, or required race choices incomplete
   const identityNextBlocked = !form.name.trim() ||
-    (selectedRaceObj?.subraces?.length > 0 && !selectedSubraceObj);
+    (selectedRaceObj?.subraces?.length > 0 && !selectedSubraceObj) ||
+    (selectedRaceObj?.name === 'Dragonborn' && !raceChoices.draconic_ancestry) ||
+    (selectedSubraceObj?.name === 'High Elf' && !raceChoices.high_elf_cantrip) ||
+    (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_asi_stats.length < 2) ||
+    (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_skills.length < 2);
+
+  // Ability scores are complete when all 6 values are fully assigned per the campaign method
+  const abilityScoresReady = (() => {
+    const method = campaign?.ability_score_method ?? 'standard_spread';
+    if (method === 'standard_spread') {
+      const vals = SCORE_KEYS.map(k => form[k]).sort((a, b) => a - b);
+      const spread = [...STANDARD_SPREAD_VALUES].sort((a, b) => a - b);
+      return vals.join(',') === spread.join(',');
+    }
+    if (method === 'point_buy') {
+      const spent = SCORE_KEYS.reduce((sum, k) => {
+        const s = form[k];
+        return (s >= 8 && s <= 15) ? sum + POINT_BUY_COSTS[s - 8] : sum;
+      }, 0);
+      return spent === POINT_BUY_TOTAL;
+    }
+    // roll: all 6 slots rolled and all 6 stats assigned
+    return diceRolls.every(r => r !== null) && SCORE_KEYS.every(k => diceAssignment[k] !== null);
+  })();
+
+  const skillsRequired = CLASS_SKILL_REQUIRED[selectedClass] ?? 0;
+  const skillsChosen = (classData.skill_proficiencies ?? []).length;
+  const skillsReady = skillsChosen >= skillsRequired;
+  const skillsNeeded = skillsRequired - skillsChosen;
 
   return (
     <MainLayout>
@@ -857,7 +1260,7 @@ export default function CharacterCreate() {
                   <span className={cn('font-extrabold text-xl', CLASS_ACCENT[cls])}>{cls}</span>
                   <span className={cn('text-sm font-semibold', CLASS_ACCENT[cls])}>{HIT_DICE[cls]}</span>
                 </div>
-                <p className="text-sm text-foreground/70">{DESCRIPTIONS[cls]}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{DESCRIPTIONS[cls]}</p>
                 <div className={cn('mt-3 flex items-center text-sm font-semibold', CLASS_ACCENT[cls])}>
                   Select <ChevronRight className="h-4 w-4 ml-1" />
                 </div>
@@ -884,7 +1287,7 @@ export default function CharacterCreate() {
             <section className="rounded-lg border bg-card p-4 space-y-4">
               <div>
                 <h2 className="font-semibold">Race / Species</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Click a race to learn more — or type a custom race below</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Click a race to learn more</p>
               </div>
 
               {/* Search */}
@@ -942,19 +1345,19 @@ export default function CharacterCreate() {
                 </div>
               )}
 
-              {/* Custom race input */}
-              <div className="space-y-1 pt-1 border-t">
-                <Label className="text-xs text-muted-foreground">Custom / Homebrew Race</Label>
-                <Input
-                  value={customRace}
-                  onChange={e => handleCustomRaceChange(e.target.value)}
-                  placeholder="Type a custom race name…"
-                  data-testid="custom-race-input"
-                />
-                {customRace && (
-                  <p className="text-xs text-muted-foreground">Using custom race: <span className="font-medium text-foreground">{customRace}</span></p>
-                )}
-              </div>
+              {/* Race-specific choices (cantrip, ancestry, Half-Elf ASI/skills) */}
+              <RaceChoicesSection
+                race={selectedRaceObj}
+                subrace={selectedSubraceObj}
+                choices={raceChoices}
+                onChange={setRaceChoices}
+                knownLanguages={[
+                  ...(selectedRaceObj?.languages ?? []),
+                  ...(selectedSubraceObj?.languages ?? []),
+                ]}
+              />
+
+
             </section>
 
             {/* Background */}
@@ -978,6 +1381,21 @@ export default function CharacterCreate() {
 
               {/* Selected background detail */}
               {selectedBgObj && <BgDetail bg={selectedBgObj} />}
+
+              {/* Background-specific choices (tool type, languages) */}
+              {selectedBgObj && (
+                <BackgroundChoicesSection
+                  bg={selectedBgObj}
+                  choices={bgChoices}
+                  onChange={setBgChoices}
+                  knownLanguages={[
+                    ...(selectedRaceObj?.languages ?? []),
+                    ...(selectedSubraceObj?.languages ?? []),
+                    ...(raceChoices.high_elf_language ? [raceChoices.high_elf_language] : []),
+                    ...(raceChoices.human_language ? [raceChoices.human_language] : []),
+                  ]}
+                />
+              )}
             </section>
 
             {/* Alignment */}
@@ -1037,6 +1455,30 @@ export default function CharacterCreate() {
             {/* Class proficiencies */}
             <ProficienciesCard cls={selectedClass} />
 
+            {/* Monk-specific: choose one artisan's tool or one musical instrument */}
+            {selectedClass === 'Monk' && (
+              <section className="rounded-lg border bg-card p-4 space-y-3">
+                <h2 className="font-semibold">Tool Proficiency</h2>
+                <p className="text-sm text-muted-foreground">
+                  Monks gain proficiency with one type of artisan's tools <em>or</em> one musical instrument of their choice.
+                </p>
+                <select
+                  data-testid="monk-tool-choice-select"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  value={classData.tool_choice || '__none__'}
+                  onChange={e => setClassData(prev => ({ ...prev, tool_choice: e.target.value === '__none__' ? '' : e.target.value }))}
+                >
+                  <option value="__none__">Select a tool or instrument… (optional)</option>
+                  <optgroup label="Artisan's Tools">
+                    {ARTISANS_TOOLS_LIST.map(t => <option key={t} value={t}>{t}</option>)}
+                  </optgroup>
+                  <optgroup label="Musical Instruments">
+                    {MUSICAL_INSTRUMENTS_BG.map(i => <option key={i} value={i}>{i}</option>)}
+                  </optgroup>
+                </select>
+              </section>
+            )}
+
             {/* Ability scores */}
             <section className="rounded-lg border bg-card p-4 space-y-4">
               <h2 className="font-semibold">Ability Scores</h2>
@@ -1049,6 +1491,10 @@ export default function CharacterCreate() {
                   intelligence: form.intelligence, wisdom: form.wisdom, charisma: form.charisma,
                 }}
                 onChange={updated => setForm(f => ({ ...f, ...updated }))}
+                diceRolls={diceRolls}
+                onDiceRollsChange={setDiceRolls}
+                diceAssignment={diceAssignment}
+                onDiceAssignmentChange={setDiceAssignment}
               />
 
               {/* Racial ASI totals — shown when a race with bonuses is selected */}
@@ -1123,6 +1569,7 @@ export default function CharacterCreate() {
                   creation={true}
                   scores={form}
                   backgroundSkills={backgroundSkills}
+                  raceGrantedCantrips={raceGrantedCantrips}
                 />
               </section>
             )}
@@ -1139,13 +1586,25 @@ export default function CharacterCreate() {
             </section>
 
             {/* Actions */}
-            <div className="flex justify-between gap-3">
-              <Button type="button" variant="outline" onClick={() => setStep('identity')}>
-                <ChevronLeft className="h-4 w-4 mr-1" /> Back
-              </Button>
-              <Button type="button" onClick={() => setStep('overview')} data-testid="details-next">
-                Next: Review <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
+            <div className="space-y-2">
+              {!abilityScoresReady && (
+                <p className="text-xs text-muted-foreground text-right">
+                  Complete ability score assignment to continue.
+                </p>
+              )}
+              {abilityScoresReady && !skillsReady && (
+                <p className="text-xs text-muted-foreground text-right">
+                  Select {skillsNeeded} more skill{skillsNeeded !== 1 ? 's' : ''} to continue.
+                </p>
+              )}
+              <div className="flex justify-between gap-3">
+                <Button type="button" variant="outline" onClick={() => setStep('identity')}>
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Back
+                </Button>
+                <Button type="button" onClick={() => setStep('overview')} disabled={!abilityScoresReady || !skillsReady} data-testid="details-next">
+                  Next: Review <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -1219,16 +1678,136 @@ export default function CharacterCreate() {
                       </div>
                     )}
                   </div>
-                  {selectedBgObj?.skills?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      <span className="text-xs text-muted-foreground self-center mr-1">Background skills:</span>
-                      {selectedBgObj.skills.map(s => (
-                        <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </section>
+
+              {/* Race details */}
+              {selectedRaceObj && (
+                <section className="rounded-lg border bg-card p-4 space-y-3">
+                  <h2 className="font-semibold">Race Details</h2>
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-medium">{selectedRaceObj.name}</span>
+                    {selectedSubraceObj && <span className="text-muted-foreground">· {selectedSubraceObj.name}</span>}
+                    <span className="text-xs text-muted-foreground">{selectedRaceObj.size} · {selectedRaceObj.speed}{selectedSubraceObj?.speedBonus ? ` (+${selectedSubraceObj.speedBonus})` : ''} ft</span>
+                    {selectedRaceObj.asi && <Badge variant="secondary" className="text-xs">{selectedRaceObj.asi}</Badge>}
+                    {selectedSubraceObj?.asi && <Badge variant="secondary" className="text-xs">{selectedSubraceObj.asi}</Badge>}
+                  </div>
+                  {selectedRaceObj.description && (
+                    <p className="text-sm text-muted-foreground leading-relaxed">{selectedRaceObj.description}</p>
+                  )}
+                  {selectedSubraceObj?.description && (
+                    <p className="text-sm text-muted-foreground leading-relaxed border-l-2 border-primary/30 pl-3 italic">{selectedSubraceObj.description}</p>
+                  )}
+                  {(() => {
+                    const allTraits = [...(selectedRaceObj.traits ?? []), ...(selectedSubraceObj?.traits ?? [])];
+                    return allTraits.length > 0 ? (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Racial Traits</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {allTraits.map(t => <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>)}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                  {(() => {
+                    const allLangs = [
+                      ...(selectedRaceObj.languages ?? []),
+                      ...(selectedSubraceObj?.languages ?? []),
+                      ...(raceChoices.high_elf_language ? [raceChoices.high_elf_language] : []),
+                      ...(raceChoices.human_language ? [raceChoices.human_language] : []),
+                    ];
+                    return allLangs.length > 0 ? (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Languages</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {allLangs.map(l => <Badge key={l} variant="outline" className="text-xs">{l}</Badge>)}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                  {raceChoices.draconic_ancestry && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Draconic Ancestry</div>
+                      <div className="text-sm">
+                        <span className="font-medium">{raceChoices.draconic_ancestry.name} Dragon</span>
+                        <span className="text-muted-foreground ml-2">{raceChoices.draconic_ancestry.damage} · {raceChoices.draconic_ancestry.breath}</span>
+                      </div>
+                    </div>
+                  )}
+                  {raceGrantedCantrips.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Race-Granted Cantrips</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {raceGrantedCantrips.map(c => (
+                          <Badge key={c} className="text-xs bg-violet-100 text-violet-800 border border-violet-300 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-600">{c}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {raceChoices.half_elf_skills?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Skill Versatility</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {raceChoices.half_elf_skills.map(s => <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>)}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* Background details */}
+              {selectedBgObj && (
+                <section className="rounded-lg border bg-card p-4 space-y-3">
+                  <h2 className="font-semibold">Background Details</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-sm">{selectedBgObj.name}</span>
+                    {selectedBgObj.feature && (
+                      <span className="text-xs text-muted-foreground italic">· {selectedBgObj.feature}</span>
+                    )}
+                  </div>
+                  {selectedBgObj.description && (
+                    <p className="text-sm text-muted-foreground leading-relaxed">{selectedBgObj.description}</p>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {selectedBgObj.skills?.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Skill Proficiencies</div>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedBgObj.skills.map(s => <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>)}
+                        </div>
+                      </div>
+                    )}
+                    {selectedBgObj.tools && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Tool Proficiencies</div>
+                        <div className="text-sm text-muted-foreground">{selectedBgObj.tools}</div>
+                      </div>
+                    )}
+                    {bgChoices.tool_choice && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Chosen Tool</div>
+                        <div className="text-sm text-muted-foreground">{bgChoices.tool_choice}</div>
+                      </div>
+                    )}
+                    {(bgChoices.language_choices ?? []).filter(Boolean).length > 0 && (
+                      <div className="sm:col-span-2">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Chosen Languages</div>
+                        <div className="flex flex-wrap gap-1">
+                          {bgChoices.language_choices.filter(Boolean).map(l => (
+                            <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {selectedBgObj.equipment && (
+                      <div className="sm:col-span-2">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Starting Equipment</div>
+                        <div className="text-sm text-muted-foreground">{selectedBgObj.equipment}</div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
 
               {/* Ability scores */}
               <section className="rounded-lg border bg-card p-4 space-y-3">
@@ -1299,13 +1878,17 @@ export default function CharacterCreate() {
                     </button>
                   </div>
                   <ClassSheet
-                    data={classData}
+                    data={{
+                      ...classData,
+                      skill_proficiencies: [...new Set([...(classData.skill_proficiencies ?? []), ...backgroundSkills])],
+                    }}
                     onChange={() => {}}
                     readOnly={true}
                     level={1}
                     creation={true}
                     scores={finalScores}
                     backgroundSkills={backgroundSkills}
+                    raceGrantedCantrips={raceGrantedCantrips}
                   />
                 </section>
               )}

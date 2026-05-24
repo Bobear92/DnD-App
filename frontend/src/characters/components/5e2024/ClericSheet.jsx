@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import OptionCardPicker from '../OptionCardPicker';
 import { CLERIC_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
+import { CLASS_FEATURES_2024 } from '../classFeatures2024';
 
 const SPELL_SLOTS = {
   1:  [2, 0, 0, 0, 0, 0, 0, 0, 0], 2:  [3, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -271,19 +272,31 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
         </>
       )}
 
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Class Features</Label>
-        <div className="rounded-md border divide-y text-sm">
-          <FeatureRow name="Spellcasting + Divine Order" earned={level >= 1} />
-          <FeatureRow name="Channel Divinity (2×/Short Rest)" earned={level >= 2} />
-          <FeatureRow name="Divine Domain (Subclass)" earned={level >= 3} />
-          <FeatureRow name="Sear Undead (L2)" earned={level >= 2} />
-          <FeatureRow name="Blessed Strikes" earned={level >= 7} />
-          <FeatureRow name="Divine Intervention" earned={level >= 10} />
-          <FeatureRow name="Channel Divinity (3×)" earned={level >= 6} />
-          <FeatureRow name="Greater Divine Intervention" earned={level >= 20} />
+      {creation ? (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+          {(CLASS_FEATURES_2024.Cleric[1] ?? []).map(feat => (
+            <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="font-semibold text-sm">{feat.name}</div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Class Features</Label>
+          <div className="rounded-md border divide-y text-sm">
+            <FeatureRow name="Spellcasting + Divine Order" earned={level >= 1} />
+            <FeatureRow name="Channel Divinity (2×/Short Rest)" earned={level >= 2} />
+            <FeatureRow name="Divine Domain (Subclass)" earned={level >= 3} />
+            <FeatureRow name="Sear Undead (L2)" earned={level >= 2} />
+            <FeatureRow name="Blessed Strikes" earned={level >= 7} />
+            <FeatureRow name="Divine Intervention" earned={level >= 10} />
+            <FeatureRow name="Channel Divinity (3×)" earned={level >= 6} />
+            <FeatureRow name="Greater Divine Intervention" earned={level >= 20} />
+          </div>
+        </div>
+      )}
 
       {[4, 8, 12, 16, 19].some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">

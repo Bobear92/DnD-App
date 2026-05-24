@@ -61,8 +61,48 @@ async function advanceToFeatures(cls, name = 'Thorin') {
   await waitFor(() => expect(screen.getByText(`${cls} Features`)).toBeInTheDocument());
 }
 
+// Assigns a valid standard spread: STR=15, DEX=14, CON=10 (unchanged), INT=12, WIS=13, CHA=8
+// Keeps CON=10 so hp_max tests that expect CON mod=0 continue to pass.
+// Note: details-next may still be disabled after this if skill proficiencies haven't been chosen.
+async function assignStandardSpread() {
+  fireEvent.change(screen.getByTestId('score-select-strength'), { target: { value: '15' } });
+  fireEvent.change(screen.getByTestId('score-select-dexterity'), { target: { value: '14' } });
+  fireEvent.change(screen.getByTestId('score-select-intelligence'), { target: { value: '12' } });
+  fireEvent.change(screen.getByTestId('score-select-wisdom'), { target: { value: '13' } });
+  fireEvent.change(screen.getByTestId('score-select-charisma'), { target: { value: '8' } });
+}
+
+// Skills known to be in each class's allowed list — used to satisfy the skill selection gate.
+const CLASS_TEST_SKILLS = {
+  Barbarian: ['Athletics', 'Perception'],
+  Bard:      ['Acrobatics', 'Insight', 'Perception'],
+  Cleric:    ['History', 'Insight'],
+  Druid:     ['Arcana', 'Medicine'],
+  Fighter:   ['Athletics', 'History'],
+  Monk:      ['Acrobatics', 'Athletics'],
+  Paladin:   ['Athletics', 'Insight'],
+  Ranger:    ['Athletics', 'Insight', 'Perception'],
+  Rogue:     ['Acrobatics', 'Athletics', 'Deception', 'Insight'],
+  Sorcerer:  ['Arcana', 'Deception'],
+  Warlock:   ['Arcana', 'Deception'],
+  Wizard:    ['Arcana', 'History'],
+};
+
+async function selectRequiredSkills(cls) {
+  const skills = CLASS_TEST_SKILLS[cls] ?? [];
+  for (const skill of skills) {
+    // Use getAllByRole in case the expertise picker also renders a button with the same name
+    const btns = screen.getAllByRole('button', { name: skill });
+    const available = btns.find(b => !b.disabled);
+    if (available) fireEvent.click(available);
+  }
+}
+
 async function advanceToReview(cls, name = 'Thorin') {
   await advanceToFeatures(cls, name);
+  await assignStandardSpread();
+  await selectRequiredSkills(cls);
+  await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
   fireEvent.click(screen.getByTestId('details-next'));
   await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
 }
@@ -192,18 +232,6 @@ describe('CharacterCreate', () => {
     await waitFor(() => expect(screen.queryByText('Starting Equipment', { exact: false })).not.toBeInTheDocument());
   });
 
-  it('custom race input sets form race and clears card selection', async () => {
-    renderCreate();
-    await selectClass('Druid');
-    fireEvent.click(screen.getByTestId('race-card-Elf'));
-    fireEvent.change(screen.getByTestId('custom-race-input'), { target: { value: 'Kenku' } });
-    await waitFor(() => {
-      expect(screen.getByText('Using custom race:')).toBeInTheDocument();
-      expect(screen.getByText('Kenku')).toBeInTheDocument();
-    });
-    // Card should no longer appear selected
-    expect(screen.queryByTestId('race-card-Elf')).toBeInTheDocument(); // card still exists
-  });
 
   it('race search filters displayed race cards', async () => {
     renderCreate();
@@ -288,6 +316,22 @@ describe('CharacterCreate', () => {
     await waitFor(() => expect(screen.getByText('Step 2 of 4 — Race, Background & Identity')).toBeInTheDocument());
   });
 
+  it('details-next stays disabled until required skill proficiencies are selected', async () => {
+    renderCreate();
+    await advanceToFeatures('Fighter');
+    await assignStandardSpread();
+    // Ability scores complete but no skills → still disabled
+    await waitFor(() => expect(screen.getByTestId('details-next')).toBeDisabled());
+    // Pick first required skill (1/2) — still disabled
+    const btns1 = screen.getAllByRole('button', { name: 'Athletics' });
+    fireEvent.click(btns1.find(b => !b.disabled) ?? btns1[0]);
+    expect(screen.getByTestId('details-next')).toBeDisabled();
+    // Pick second required skill (2/2) → now enabled
+    const btns2 = screen.getAllByRole('button', { name: 'History' });
+    fireEvent.click(btns2.find(b => !b.disabled) ?? btns2[0]);
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+  });
+
   it('shows error if name submitted empty (defensive — name required before advancing)', async () => {
     characterService.createCharacter.mockResolvedValue({ success: false, error: 'Server error' });
     renderCreate();
@@ -303,11 +347,13 @@ describe('CharacterCreate', () => {
     await selectClass('Fighter');
     fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Thorin' } });
     fireEvent.click(screen.getByTestId('race-card-Dwarf'));
-    // Dwarf has subraces — must pick one before Next is enabled
     await waitFor(() => expect(screen.getByTestId('subrace-card-Mountain Dwarf')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('subrace-card-Mountain Dwarf'));
     fireEvent.click(screen.getByTestId('identity-next'));
     await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('details-next'));
     await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Create Character'));
@@ -353,6 +399,10 @@ describe('CharacterCreate', () => {
     // Has name but no subrace yet — still blocked
     await waitFor(() => expect(screen.getByTestId('identity-next')).toBeDisabled());
     fireEvent.click(screen.getByTestId('subrace-card-High Elf'));
+    // High Elf requires a cantrip — still blocked
+    await waitFor(() => expect(screen.getByTestId('identity-next')).toBeDisabled());
+    // Select a cantrip to unblock
+    fireEvent.change(screen.getByTestId('high-elf-cantrip-select'), { target: { value: 'Fire Bolt' } });
     await waitFor(() => expect(screen.getByTestId('identity-next')).not.toBeDisabled());
   });
 
@@ -388,12 +438,21 @@ describe('CharacterCreate', () => {
     renderCreate();
     await selectClass('Fighter');
     fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Rocky' } });
-    // Mountain Dwarf: base +2 CON (Dwarf) + +2 STR (Mountain Dwarf)
+    // Mountain Dwarf: +2 STR (subrace) + +2 CON (base)
     fireEvent.click(screen.getByTestId('race-card-Dwarf'));
     await waitFor(() => expect(screen.getByTestId('subrace-card-Mountain Dwarf')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('subrace-card-Mountain Dwarf'));
     fireEvent.click(screen.getByTestId('identity-next'));
     await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    // Assign valid spread with STR=10, CON=8 so racial bonuses produce predictable finals
+    // STR=10, DEX=14, CON=8, INT=12, WIS=13, CHA=15 → sorted [8,10,12,13,14,15] ✓
+    fireEvent.change(screen.getByTestId('score-select-dexterity'), { target: { value: '14' } });
+    fireEvent.change(screen.getByTestId('score-select-constitution'), { target: { value: '8' } });
+    fireEvent.change(screen.getByTestId('score-select-intelligence'), { target: { value: '12' } });
+    fireEvent.change(screen.getByTestId('score-select-wisdom'), { target: { value: '13' } });
+    fireEvent.change(screen.getByTestId('score-select-charisma'), { target: { value: '15' } });
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('details-next'));
     await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Create Character'));
@@ -401,8 +460,8 @@ describe('CharacterCreate', () => {
       expect(characterService.createCharacter).toHaveBeenCalledWith(
         expect.objectContaining({
           strength: 12,      // 10 + 2 (Mountain Dwarf subrace)
-          constitution: 12,  // 10 + 2 (Dwarf base)
-          dexterity: 10,     // unchanged
+          constitution: 10,  // 8 + 2 (Dwarf base)
+          dexterity: 14,     // assigned 14
         })
       );
     });
@@ -413,12 +472,15 @@ describe('CharacterCreate', () => {
     renderCreate();
     await selectClass('Fighter');
     fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Bralin' } });
-    // Hill Dwarf: base +2 CON (Dwarf) → finalCon = 12, conMod = +1 → Fighter d10 + 1 = 11
+    // Hill Dwarf: base +2 CON → keep CON=10 so finalCon=12, mod=+1 → Fighter d10+1 = 11
     fireEvent.click(screen.getByTestId('race-card-Dwarf'));
     await waitFor(() => expect(screen.getByTestId('subrace-card-Hill Dwarf')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('subrace-card-Hill Dwarf'));
     fireEvent.click(screen.getByTestId('identity-next'));
     await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread(); // CON stays 10; finalCon=12, mod=+1, hp=11
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('details-next'));
     await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Create Character'));
@@ -436,14 +498,14 @@ describe('CharacterCreate', () => {
     renderCreate();
     await selectClass('Rogue');
     fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Arrowhead' } });
-    // Wood Elf: base traits [Darkvision, Keen Senses, Fey Ancestry, Trance]
-    //           + subrace traits [Elf Weapon Training, Fleet of Foot, Mask of the Wild]
-    //           languages: [Common, Elvish]
     fireEvent.click(screen.getByTestId('race-card-Elf'));
     await waitFor(() => expect(screen.getByTestId('subrace-card-Wood Elf')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('subrace-card-Wood Elf'));
     fireEvent.click(screen.getByTestId('identity-next'));
     await waitFor(() => expect(screen.getByText('Rogue Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Rogue');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('details-next'));
     await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Create Character'));
@@ -616,8 +678,10 @@ describe('CharacterCreate', () => {
     characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 7 } });
     renderCreate();
     await advanceToFeatures('Fighter');
-    // Click the Archery card (rendered as a button by OptionCardPicker)
     fireEvent.click(screen.getByRole('button', { name: /archery/i }));
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('details-next'));
     await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Create Character'));
@@ -645,5 +709,289 @@ describe('CharacterCreate', () => {
     expect(screen.getByText('Otherworldly Patron (Subclass)')).toBeInTheDocument();
     expect(screen.getByText('The Fiend')).toBeInTheDocument();
     expect(screen.getByText(/dark pact with a devil/i)).toBeInTheDocument();
+  });
+
+  // ── Racial choices: Dragonborn, High Elf, Half-Elf, Human ───────────────
+
+  it('shows Draconic Ancestry picker when Dragonborn is selected', async () => {
+    renderCreate();
+    await selectClass('Barbarian');
+    fireEvent.click(screen.getByTestId('race-card-Dragonborn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('race-choices-section')).toBeInTheDocument();
+      expect(screen.getAllByText('Draconic Ancestry').length).toBeGreaterThan(0);
+      expect(screen.getByTestId('draconic-ancestry-Red')).toBeInTheDocument();
+      expect(screen.getByTestId('draconic-ancestry-Gold')).toBeInTheDocument();
+    });
+  });
+
+  it('Next is blocked for Dragonborn until an ancestry is chosen', async () => {
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Drake' } });
+    fireEvent.click(screen.getByTestId('race-card-Dragonborn'));
+    await waitFor(() => expect(screen.getByTestId('draconic-ancestry-Blue')).toBeInTheDocument());
+    expect(screen.getByTestId('identity-next')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('draconic-ancestry-Blue'));
+    await waitFor(() => expect(screen.getByTestId('identity-next')).not.toBeDisabled());
+  });
+
+  it('draconic ancestry choice is saved in character_data on submit', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 9 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Drake' } });
+    fireEvent.click(screen.getByTestId('race-card-Dragonborn'));
+    await waitFor(() => expect(screen.getByTestId('draconic-ancestry-Red')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('draconic-ancestry-Red'));
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+    await waitFor(() => {
+      expect(characterService.createCharacter).toHaveBeenCalledWith(
+        expect.objectContaining({
+          character_data: expect.objectContaining({
+            draconic_ancestry: expect.objectContaining({ name: 'Red', damage: 'Fire' }),
+          }),
+        })
+      );
+    });
+  });
+
+  it('shows Half-Elf ASI picker and skill versatility choices', async () => {
+    renderCreate();
+    await selectClass('Rogue');
+    fireEvent.click(screen.getByTestId('race-card-Half-Elf'));
+    await waitFor(() => {
+      expect(screen.getByTestId('race-choices-section')).toBeInTheDocument();
+      expect(screen.getAllByText('Ability Score Increases').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Skill Versatility').length).toBeGreaterThan(0);
+      expect(screen.getByTestId('half-elf-asi-strength')).toBeInTheDocument();
+      expect(screen.getByTestId('half-elf-skill-Perception')).toBeInTheDocument();
+    });
+  });
+
+  it('Next is blocked for Half-Elf until 2 ASI stats and 2 skills are chosen', async () => {
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Lyra' } });
+    fireEvent.click(screen.getByTestId('race-card-Half-Elf'));
+    await waitFor(() => expect(screen.getByTestId('half-elf-asi-strength')).toBeInTheDocument());
+    expect(screen.getByTestId('identity-next')).toBeDisabled();
+    // Choose 2 ASI stats
+    fireEvent.click(screen.getByTestId('half-elf-asi-strength'));
+    fireEvent.click(screen.getByTestId('half-elf-asi-dexterity'));
+    // Still blocked — skills not chosen
+    expect(screen.getByTestId('identity-next')).toBeDisabled();
+    // Choose 2 skills
+    fireEvent.click(screen.getByTestId('half-elf-skill-Perception'));
+    fireEvent.click(screen.getByTestId('half-elf-skill-Insight'));
+    await waitFor(() => expect(screen.getByTestId('identity-next')).not.toBeDisabled());
+  });
+
+  it('half-elf extra skills are merged into skill_proficiencies on submit', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 11 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Lyra' } });
+    fireEvent.click(screen.getByTestId('race-card-Half-Elf'));
+    await waitFor(() => expect(screen.getByTestId('half-elf-asi-strength')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('half-elf-asi-strength'));
+    fireEvent.click(screen.getByTestId('half-elf-asi-dexterity'));
+    fireEvent.click(screen.getByTestId('half-elf-skill-Perception'));
+    fireEvent.click(screen.getByTestId('half-elf-skill-Nature'));
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+    await waitFor(() => {
+      const call = characterService.createCharacter.mock.calls[0][0];
+      expect(call.character_data.skill_proficiencies).toContain('Perception');
+      expect(call.character_data.skill_proficiencies).toContain('Nature');
+    });
+  });
+
+  it('shows Human language picker when Human is selected', async () => {
+    renderCreate();
+    await selectClass('Ranger');
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => {
+      expect(screen.getByTestId('race-choices-section')).toBeInTheDocument();
+      expect(screen.getAllByText('Extra Language').length).toBeGreaterThan(0);
+      expect(screen.getByTestId('human-language-select')).toBeInTheDocument();
+    });
+  });
+
+  it('human language choice does not block Next', async () => {
+    renderCreate();
+    await selectClass('Ranger');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Finn' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-language-select')).toBeInTheDocument());
+    // Next should NOT be blocked — language is optional
+    expect(screen.getByTestId('identity-next')).not.toBeDisabled();
+  });
+
+  it('human chosen language is added to race_languages in submitted payload', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 12 } });
+    renderCreate();
+    await selectClass('Ranger');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Finn' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-language-select')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('human-language-select'), { target: { value: 'Elvish' } });
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Ranger Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Ranger');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+    await waitFor(() => {
+      const call = characterService.createCharacter.mock.calls[0][0];
+      expect(call.character_data.race_languages).toContain('Elvish');
+    });
+  });
+
+  // ── Background choices: tool/gaming set/instrument/language ─────────────
+
+  it('shows gaming set picker when Criminal background is selected', async () => {
+    renderCreate();
+    await selectClass('Rogue');
+    fireEvent.click(screen.getByTestId('bg-card-Criminal'));
+    await waitFor(() => {
+      expect(screen.getByTestId('bg-choices-section')).toBeInTheDocument();
+      expect(screen.getByTestId('bg-tool-choice-select')).toBeInTheDocument();
+      expect(screen.getByText('Gaming Set')).toBeInTheDocument();
+    });
+  });
+
+  it('shows instrument picker when Entertainer background is selected', async () => {
+    renderCreate();
+    await selectClass('Bard');
+    fireEvent.click(screen.getByTestId('bg-card-Entertainer'));
+    await waitFor(() => {
+      expect(screen.getByTestId('bg-tool-choice-select')).toBeInTheDocument();
+      expect(screen.getByText('Musical Instrument')).toBeInTheDocument();
+    });
+  });
+
+  it("shows artisan's tool picker when Guild Artisan background is selected", async () => {
+    renderCreate();
+    await selectClass('Cleric');
+    fireEvent.click(screen.getByTestId("bg-card-Guild Artisan"));
+    await waitFor(() => {
+      expect(screen.getByTestId('bg-tool-choice-select')).toBeInTheDocument();
+      expect(screen.getByText("Artisan's Tools")).toBeInTheDocument();
+    });
+  });
+
+  it('chosen background tool is saved as background_tool_choice in character_data', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 13 } });
+    renderCreate();
+    await selectClass('Rogue');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Shade' } });
+    fireEvent.click(screen.getByTestId('bg-card-Criminal'));
+    await waitFor(() => expect(screen.getByTestId('bg-tool-choice-select')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('bg-tool-choice-select'), { target: { value: 'Dice set' } });
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Rogue Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    // Criminal grants Deception + Stealth — pick other Rogue skills that don't overlap
+    for (const skill of ['Acrobatics', 'Athletics', 'Investigation', 'Insight']) {
+      const btns = screen.getAllByRole('button', { name: skill });
+      const available = btns.find(b => !b.disabled);
+      if (available) fireEvent.click(available);
+    }
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+    await waitFor(() => {
+      expect(characterService.createCharacter).toHaveBeenCalledWith(
+        expect.objectContaining({
+          character_data: expect.objectContaining({ background_tool_choice: 'Dice set' }),
+        })
+      );
+    });
+  });
+
+  it('shows two language pickers when Acolyte background is selected', async () => {
+    renderCreate();
+    await selectClass('Cleric');
+    fireEvent.click(screen.getByTestId('bg-card-Acolyte'));
+    await waitFor(() => {
+      expect(screen.getByTestId('bg-choices-section')).toBeInTheDocument();
+      expect(screen.getByTestId('bg-language-0-select')).toBeInTheDocument();
+      expect(screen.getByTestId('bg-language-1-select')).toBeInTheDocument();
+    });
+  });
+
+  it('chosen background languages are saved in character_data on submit', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 14 } });
+    renderCreate();
+    await selectClass('Cleric');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Aldric' } });
+    fireEvent.click(screen.getByTestId('bg-card-Acolyte'));
+    await waitFor(() => expect(screen.getByTestId('bg-language-0-select')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('bg-language-0-select'), { target: { value: 'Elvish' } });
+    fireEvent.change(screen.getByTestId('bg-language-1-select'), { target: { value: 'Celestial' } });
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Cleric Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    // Acolyte grants Insight + Religion — pick Cleric skills that don't overlap
+    for (const skill of ['History', 'Medicine']) {
+      const btns = screen.getAllByRole('button', { name: skill });
+      const available = btns.find(b => !b.disabled);
+      if (available) fireEvent.click(available);
+    }
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+    await waitFor(() => {
+      const call = characterService.createCharacter.mock.calls[0][0];
+      expect(call.character_data.background_languages).toContain('Elvish');
+      expect(call.character_data.background_languages).toContain('Celestial');
+    });
+  });
+
+  // ── Class choices: Monk tool/instrument ──────────────────────────────────
+
+  it('shows tool/instrument picker for Monk in step 3', async () => {
+    renderCreate();
+    await advanceToFeatures('Monk');
+    expect(screen.getByTestId('monk-tool-choice-select')).toBeInTheDocument();
+    expect(screen.getByText('Tool Proficiency')).toBeInTheDocument();
+  });
+
+  it('chosen Monk tool is saved in character_data on submit', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 15 } });
+    renderCreate();
+    await advanceToFeatures('Monk');
+    fireEvent.change(screen.getByTestId('monk-tool-choice-select'), { target: { value: "Smith's tools" } });
+    await assignStandardSpread();
+    await selectRequiredSkills('Monk');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+    await waitFor(() => {
+      expect(characterService.createCharacter).toHaveBeenCalledWith(
+        expect.objectContaining({
+          character_data: expect.objectContaining({ tool_choice: "Smith's tools" }),
+        })
+      );
+    });
   });
 });

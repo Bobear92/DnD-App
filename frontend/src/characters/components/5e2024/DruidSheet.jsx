@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import OptionCardPicker from '../OptionCardPicker';
 import { DRUID_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
+import { CLASS_FEATURES_2024 } from '../classFeatures2024';
 
 const SPELL_SLOTS = {
   1:  [2, 0, 0, 0, 0, 0, 0, 0, 0], 2:  [3, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -277,19 +278,31 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
         </>
       )}
 
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Class Features</Label>
-        <div className="rounded-md border divide-y text-sm">
-          <FeatureRow name="Spellcasting + Primalcraft + Primal Order" earned={level >= 1} />
-          <FeatureRow name="Wild Shape (2×/Short Rest)" earned={level >= 2} />
-          <FeatureRow name="Druid Circle (Subclass)" earned={level >= 3} />
-          <FeatureRow name="Wild Shape Improvement" earned={level >= 4} />
-          <FeatureRow name="Wild Resurgence" earned={level >= 5} />
-          <FeatureRow name="Elemental Fury" earned={level >= 9} />
-          <FeatureRow name="Beast Spells" earned={level >= 18} />
-          <FeatureRow name="Archdruid" earned={level >= 20} />
+      {creation ? (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+          {(CLASS_FEATURES_2024.Druid[1] ?? []).map(feat => (
+            <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="font-semibold text-sm">{feat.name}</div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Class Features</Label>
+          <div className="rounded-md border divide-y text-sm">
+            <FeatureRow name="Spellcasting + Primalcraft + Primal Order" earned={level >= 1} />
+            <FeatureRow name="Wild Shape (2×/Short Rest)" earned={level >= 2} />
+            <FeatureRow name="Druid Circle (Subclass)" earned={level >= 3} />
+            <FeatureRow name="Wild Shape Improvement" earned={level >= 4} />
+            <FeatureRow name="Wild Resurgence" earned={level >= 5} />
+            <FeatureRow name="Elemental Fury" earned={level >= 9} />
+            <FeatureRow name="Beast Spells" earned={level >= 18} />
+            <FeatureRow name="Archdruid" earned={level >= 20} />
+          </div>
+        </div>
+      )}
 
       {[4, 8, 12, 16, 19].some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">

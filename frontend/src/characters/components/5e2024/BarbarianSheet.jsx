@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import OptionCardPicker from '../OptionCardPicker';
 import { BARBARIAN_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
+import { CLASS_FEATURES_2024 } from '../classFeatures2024';
 
 function rageCount(level) {
   if (level >= 17) return '∞';
@@ -240,23 +241,34 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
         </Field>
       )}
 
-      {/* Class features */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Class Features</Label>
-        <div className="rounded-md border divide-y text-sm">
-          <FeatureRow name="Rage + Unarmored Defense + Weapon Mastery" earned={level >= 1} />
-          <FeatureRow name="Reckless Attack + Danger Sense" earned={level >= 2} />
-          <FeatureRow name="Primal Knowledge + Primal Path (Subclass)" earned={level >= 3} />
-          <FeatureRow name="Extra Attack" earned={level >= 5} />
-          <FeatureRow name="Fast Movement" earned={level >= 5} />
-          <FeatureRow name="Feral Instinct + Instinctive Pounce" earned={level >= 7} />
-          <FeatureRow name="Brutal Strike" earned={level >= 9} />
-          <FeatureRow name="Relentless Rage" earned={level >= 11} />
-          <FeatureRow name="Persistent Rage" earned={level >= 15} />
-          <FeatureRow name="Indomitable Might" earned={level >= 18} />
-          <FeatureRow name="Primal Champion" earned={level >= 20} />
+      {creation ? (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+          {(CLASS_FEATURES_2024.Barbarian[1] ?? []).map(feat => (
+            <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="font-semibold text-sm">{feat.name}</div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Class Features</Label>
+          <div className="rounded-md border divide-y text-sm">
+            <FeatureRow name="Rage + Unarmored Defense + Weapon Mastery" earned={level >= 1} />
+            <FeatureRow name="Reckless Attack + Danger Sense" earned={level >= 2} />
+            <FeatureRow name="Primal Knowledge + Primal Path (Subclass)" earned={level >= 3} />
+            <FeatureRow name="Extra Attack" earned={level >= 5} />
+            <FeatureRow name="Fast Movement" earned={level >= 5} />
+            <FeatureRow name="Feral Instinct + Instinctive Pounce" earned={level >= 7} />
+            <FeatureRow name="Brutal Strike" earned={level >= 9} />
+            <FeatureRow name="Relentless Rage" earned={level >= 11} />
+            <FeatureRow name="Persistent Rage" earned={level >= 15} />
+            <FeatureRow name="Indomitable Might" earned={level >= 18} />
+            <FeatureRow name="Primal Champion" earned={level >= 20} />
+          </div>
+        </div>
+      )}
 
       {[4, 8, 12, 16, 19].some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">

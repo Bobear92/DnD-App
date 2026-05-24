@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import OptionCardPicker from '../OptionCardPicker';
 import { FIGHTER_FIGHTING_STYLES_2024 as FIGHTING_STYLES, FIGHTER_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
+import { CLASS_FEATURES_2024 } from '../classFeatures2024';
 
 function actionSurgeTotal(level) { return level >= 17 ? 2 : level >= 2 ? 1 : 0; }
 function indomitableTotal(level) {
@@ -243,20 +244,32 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
         </Field>
       )}
 
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Class Features</Label>
-        <div className="rounded-md border divide-y text-sm">
-          <FeatureRow name="Fighting Style + Second Wind + Weapon Mastery" earned={level >= 1} />
-          <FeatureRow name="Action Surge + Tactical Mind" earned={level >= 2} />
-          <FeatureRow name="Warrior Subclass" earned={level >= 3} />
-          <FeatureRow name="Extra Attack" earned={level >= 5} />
-          <FeatureRow name="Tactical Shift (L5)" earned={level >= 5} />
-          <FeatureRow name="Indomitable" earned={level >= 9} />
-          <FeatureRow name="Two Extra Attacks" earned={level >= 11} />
-          <FeatureRow name="Studied Attacks (L13)" earned={level >= 13} />
-          <FeatureRow name="Three Extra Attacks" earned={level >= 20} />
+      {creation ? (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+          {(CLASS_FEATURES_2024.Fighter[1] ?? []).map(feat => (
+            <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="font-semibold text-sm">{feat.name}</div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Class Features</Label>
+          <div className="rounded-md border divide-y text-sm">
+            <FeatureRow name="Fighting Style + Second Wind + Weapon Mastery" earned={level >= 1} />
+            <FeatureRow name="Action Surge + Tactical Mind" earned={level >= 2} />
+            <FeatureRow name="Warrior Subclass" earned={level >= 3} />
+            <FeatureRow name="Extra Attack" earned={level >= 5} />
+            <FeatureRow name="Tactical Shift (L5)" earned={level >= 5} />
+            <FeatureRow name="Indomitable" earned={level >= 9} />
+            <FeatureRow name="Two Extra Attacks" earned={level >= 11} />
+            <FeatureRow name="Studied Attacks (L13)" earned={level >= 13} />
+            <FeatureRow name="Three Extra Attacks" earned={level >= 20} />
+          </div>
+        </div>
+      )}
 
       {[4, 6, 8, 12, 14, 16, 19].some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import { Dices, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,6 +60,7 @@ export function StandardSpreadAssignment({ scores, onChange }) {
               <label className="text-xs font-medium text-muted-foreground uppercase">{STAT_ABBREVS[i]}</label>
               <div className="flex items-center gap-2">
                 <select
+                  data-testid={`score-select-${key}`}
                   className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
                   value={scores[key]}
                   onChange={e => onChange({ ...scores, [key]: parseInt(e.target.value) })}
@@ -165,32 +166,24 @@ function roll4d6DropLowest(allowRerollOnes) {
   return { dice, dropped, kept, total };
 }
 
-export function DiceRollAssignment({ scores, onChange, allowRerollOnes }) {
-  // rolls: array of 6 { dice, dropped, kept, total } | null (unrolled)
-  const [rolls, setRolls] = useState([null, null, null, null, null, null]);
-  // assignment: { strength: rollIndex | null, ... }
-  const [assignment, setAssignment] = useState(
-    Object.fromEntries(STAT_KEYS.map(k => [k, null]))
-  );
-
+export function DiceRollAssignment({ scores, onChange, allowRerollOnes, rolls, onRollsChange, assignment, onAssignmentChange }) {
   const allRolled = rolls.every(r => r !== null);
 
   const rollOne = (i) => {
     const newRolls = [...rolls];
     newRolls[i] = roll4d6DropLowest(allowRerollOnes);
-    setRolls(newRolls);
-    // Clear any stat assignment using old roll
+    onRollsChange(newRolls);
     const newAssignment = { ...assignment };
     Object.keys(newAssignment).forEach(k => {
       if (newAssignment[k] === i) newAssignment[k] = null;
     });
-    setAssignment(newAssignment);
+    onAssignmentChange(newAssignment);
   };
 
   const rollAll = () => {
     const newRolls = Array.from({ length: 6 }, () => roll4d6DropLowest(allowRerollOnes));
-    setRolls(newRolls);
-    setAssignment(Object.fromEntries(STAT_KEYS.map(k => [k, null])));
+    onRollsChange(newRolls);
+    onAssignmentChange(Object.fromEntries(STAT_KEYS.map(k => [k, null])));
   };
 
   const rerollOnesInSlot = (i) => {
@@ -203,8 +196,7 @@ export function DiceRollAssignment({ scores, onChange, allowRerollOnes }) {
     const total = kept.reduce((s, d) => s + d, 0);
     const newRolls = [...rolls];
     newRolls[i] = { dice: newDice, dropped, kept, total };
-    setRolls(newRolls);
-    // Update score for any stat assigned to this slot
+    onRollsChange(newRolls);
     const stat = Object.keys(assignment).find(k => assignment[k] === i);
     if (stat) {
       onChange({ ...scores, [stat]: total });
@@ -213,12 +205,11 @@ export function DiceRollAssignment({ scores, onChange, allowRerollOnes }) {
 
   const assign = (statKey, rollIdx) => {
     const newAssignment = { ...assignment };
-    // Unassign any stat currently using this roll index
     Object.keys(newAssignment).forEach(k => {
       if (newAssignment[k] === rollIdx) newAssignment[k] = null;
     });
     newAssignment[statKey] = rollIdx;
-    setAssignment(newAssignment);
+    onAssignmentChange(newAssignment);
     const newScores = { ...scores };
     if (rollIdx !== null) {
       newScores[statKey] = rolls[rollIdx].total;
@@ -231,7 +222,7 @@ export function DiceRollAssignment({ scores, onChange, allowRerollOnes }) {
     if (isNaN(parsed) || parsed < 3 || parsed > 18) return;
     const newRolls = [...rolls];
     newRolls[i] = { dice: [], dropped: null, kept: [], total: parsed };
-    setRolls(newRolls);
+    onRollsChange(newRolls);
     const stat = Object.keys(assignment).find(k => assignment[k] === i);
     if (stat) onChange({ ...scores, [stat]: parsed });
   };

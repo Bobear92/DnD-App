@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import OptionCardPicker from '../OptionCardPicker';
 import { WARLOCK_SUBCLASSES_2024 as SUBCLASSES, PACT_BOONS_2024 as PACT_BOONS } from '../classChoicesData';
+import { CLASS_FEATURES_2024 } from '../classFeatures2024';
 
 const PACT_SLOTS = {
   1:  [1, 1], 2:  [2, 1], 3:  [2, 2], 4:  [2, 2],
@@ -29,11 +30,13 @@ const WARLOCK_SPELLS_L1_2024 = [
   'Protection from Evil and Good', 'Unseen Servant', 'Witch Bolt',
 ];
 
-function SpellPickerCreation({ label, limit, options, selected, onChange }) {
+function SpellPickerCreation({ label, limit, options, selected, onChange, raceGrantedSpells = [] }) {
   const toggle = (spell) => {
+    if (raceGrantedSpells.includes(spell)) return;
     if (selected.includes(spell)) onChange(selected.filter(s => s !== spell));
     else if (selected.length < limit) onChange([...selected, spell]);
   };
+  const extraRaceSpells = raceGrantedSpells.filter(s => !options.includes(s));
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
@@ -41,16 +44,32 @@ function SpellPickerCreation({ label, limit, options, selected, onChange }) {
         <span className="text-xs text-muted-foreground">{selected.length}/{limit} chosen</span>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        {options.map(spell => (
-          <button key={spell} type="button" onClick={() => toggle(spell)}
-            className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-              selected.includes(spell) ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background hover:bg-muted border-border text-muted-foreground'
-            } ${!selected.includes(spell) && selected.length >= limit ? 'opacity-40 cursor-not-allowed' : ''}`}>
+        {options.map(spell => {
+          const isRace = raceGrantedSpells.includes(spell);
+          const isSel  = selected.includes(spell);
+          return (
+            <button key={spell} type="button" onClick={() => toggle(spell)}
+              className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                isRace
+                  ? 'bg-violet-100 text-violet-800 border-violet-400 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-600 cursor-not-allowed'
+                  : isSel
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!isRace && !isSel && selected.length >= limit ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              {spell}
+            </button>
+          );
+        })}
+        {extraRaceSpells.map(spell => (
+          <button key={spell} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-violet-100 text-violet-800 border-violet-400 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-600 cursor-not-allowed">
             {spell}
           </button>
         ))}
       </div>
+      {raceGrantedSpells.length > 0 && (
+        <p className="text-xs text-violet-700 dark:text-violet-400">Violet = already granted by your race or subrace</p>
+      )}
     </div>
   );
 }
@@ -116,7 +135,7 @@ function SkillPicker({ value, onChange, max, backgroundSkills = [] }) {
   );
 }
 
-export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
+export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [] }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
@@ -323,7 +342,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
 
       {creation ? (
         <SpellPickerCreation label="Cantrips Known (choose 2)" limit={2} options={WARLOCK_CANTRIPS_2024}
-          selected={data.cantrips ?? []} onChange={v => set('cantrips', v)} />
+          selected={data.cantrips ?? []} onChange={v => set('cantrips', v)} raceGrantedSpells={raceGrantedCantrips} />
       ) : (
         <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
       )}
@@ -349,20 +368,32 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Class Features</Label>
-        <div className="rounded-md border divide-y text-sm">
-          <FeatureRow name="Spellcasting + Pact Magic + Eldritch Invocations" earned={level >= 1} />
-          <FeatureRow name="Magical Cunning" earned={level >= 2} />
-          <FeatureRow name="Otherworldly Patron (Subclass)" earned={level >= 3} />
-          <FeatureRow name="Pact Boon" earned={level >= 5} />
-          <FeatureRow name="Mystic Arcanum (6th)" earned={level >= 11} />
-          <FeatureRow name="Mystic Arcanum (7th)" earned={level >= 13} />
-          <FeatureRow name="Mystic Arcanum (8th)" earned={level >= 15} />
-          <FeatureRow name="Mystic Arcanum (9th)" earned={level >= 17} />
-          <FeatureRow name="Eldritch Master" earned={level >= 20} />
+      {creation ? (
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+          {(CLASS_FEATURES_2024.Warlock[1] ?? []).map(feat => (
+            <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="font-semibold text-sm">{feat.name}</div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Class Features</Label>
+          <div className="rounded-md border divide-y text-sm">
+            <FeatureRow name="Spellcasting + Pact Magic + Eldritch Invocations" earned={level >= 1} />
+            <FeatureRow name="Magical Cunning" earned={level >= 2} />
+            <FeatureRow name="Otherworldly Patron (Subclass)" earned={level >= 3} />
+            <FeatureRow name="Pact Boon" earned={level >= 5} />
+            <FeatureRow name="Mystic Arcanum (6th)" earned={level >= 11} />
+            <FeatureRow name="Mystic Arcanum (7th)" earned={level >= 13} />
+            <FeatureRow name="Mystic Arcanum (8th)" earned={level >= 15} />
+            <FeatureRow name="Mystic Arcanum (9th)" earned={level >= 17} />
+            <FeatureRow name="Eldritch Master" earned={level >= 20} />
+          </div>
+        </div>
+      )}
 
       {[4, 8, 12, 16, 19].some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
