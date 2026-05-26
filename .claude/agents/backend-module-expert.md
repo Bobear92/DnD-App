@@ -192,6 +192,18 @@ class MyRelationship(Base):
 - Routes: `GET /{id}/relationships`, `POST /{id}/relationships`, `DELETE /{id}/relationships/{rel_id}`
 - Service builds a response DTO by joining the related record for its name/username
 
+## Before Building a Complex Module
+When a module involves 4+ files or non-obvious cross-module relationships, state your plan **before writing any code**:
+- Files to create and their purpose
+- Access control approach (admin / GM / player / owner)
+- Any Enum types that need manual migration steps
+- Which test class template to follow (campaign-scoped / system-campaign / admin-only / user-owned)
+
+Post this checklist first, then proceed.
+
+## Preserved Intent Rule
+**Never re-introduce a feature or field the user has explicitly removed** — if something is absent from the current codebase, confirm with the user before adding it back.
+
 ## After Creating Files
 Always:
 1. Register the router in `backend/main.py`

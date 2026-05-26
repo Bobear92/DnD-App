@@ -2,7 +2,7 @@ import { NavLink, useParams } from 'react-router-dom';
 import { useCampaign } from '../../../campaigns/CampaignContext';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard, Users, Drama, Map, Clock, BookOpen, Menu, ChevronLeft, GitBranch, Settings,
+  LayoutDashboard, Users, Drama, Map, Clock, BookOpen, Menu, ChevronLeft, GitBranch, Settings, Library,
 } from 'lucide-react';
 
 const Sidebar = ({ collapsed, toggleSidebar }) => {
@@ -20,6 +20,7 @@ const Sidebar = ({ collapsed, toggleSidebar }) => {
     { path: `/campaigns/${campaignId}/campaign-time`, icon: Clock, label: 'Calendar' },
     { path: `/campaigns/${campaignId}/sessions`, icon: BookOpen, label: 'Session Notes' },
     { path: `/campaigns/${campaignId}/settings`, icon: Settings, label: 'Campaign Settings' },
+    { path: `/campaigns/${campaignId}/encyclopedia`, icon: Library, label: 'Encyclopedia' },
   ];
 
   const playerNavItems = [
@@ -28,6 +29,7 @@ const Sidebar = ({ collapsed, toggleSidebar }) => {
     { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
     { path: `/campaigns/${campaignId}/timeline`, icon: GitBranch, label: 'Timeline' },
     { path: `/campaigns/${campaignId}/sessions`, icon: BookOpen, label: 'Session Notes' },
+    { path: `/campaigns/${campaignId}/encyclopedia`, icon: Library, label: 'Encyclopedia' },
   ];
 
   const navItems = isGm ? gmNavItems : playerNavItems;

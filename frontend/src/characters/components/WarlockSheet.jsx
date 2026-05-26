@@ -10,7 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
 import OptionCardPicker from './OptionCardPicker';
+import SubclassPickerWithDetail from './SubclassPickerWithDetail';
+import SubclassDetails from './SubclassDetails';
 import { WARLOCK_SUBCLASSES_5E, PACT_BOONS_5E } from './classChoicesData';
+import HitDiceTracker from './HitDiceTracker';
 
 // Pact Magic slot table: [slot_count, slot_level]
 const PACT_SLOTS = {
@@ -93,15 +96,6 @@ function SpellPickerCreation({ label, limit, options, selected, onChange, raceGr
   );
 }
 
-function FeatureRow({ name, earned }) {
-  return (
-    <div className={`px-3 py-2 flex justify-between items-center ${earned ? '' : 'opacity-40'}`}>
-      <span>{name}</span>
-      {earned && <Badge variant="outline" className="text-xs">Unlocked</Badge>}
-    </div>
-  );
-}
-
 function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
   const toggle = (skill) => {
     if (backgroundSkills.includes(skill)) return;
@@ -144,8 +138,10 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
   );
 }
 
-export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [] }) {
+export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
+  const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
+  const showFeatures = section !== 'stats';
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
   const [newInvocation, setNewInvocation] = useState('');
@@ -203,26 +199,22 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
 
   return (
     <div className="space-y-4">
-      {/* Combat info */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Hit Die</div>
-          <div className="font-bold text-lg">d8</div>
-        </div>
+      {showFeatures && (
+      <div className="grid grid-cols-1 gap-3">
         <div className="rounded-md border px-3 py-2 text-center">
           <div className="text-xs text-muted-foreground">Pact Slots</div>
           <div className="font-bold text-lg">{slotCount} × level {slotLevel}</div>
         </div>
       </div>
+      )}
 
-      {/* HP */}
-      {!creation && (
+      {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
         <Field label="Max HP">
-          <Input type="number" value={data.max_hp ?? ''} onChange={e => set('max_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
         </Field>
         <Field label="Temp HP">
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -230,23 +222,33 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
       </div>
       )}
 
-      {/* AC / Speed / Hit Dice */}
-      {!creation && (
-      <div className="grid grid-cols-3 gap-3">
+      {/* Hit Dice */}
+      {showCombat && (
+        <HitDiceTracker hitDie={8} level={level} used={data.hit_dice_used} onChange={v => set('hit_dice_used', v)} readOnly={readOnly} creation={creation} />
+      )}
+
+      {/* AC */}
+      {showCombat && (
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
+      )}
+
+      {showCombat && (
+      <div className="grid grid-cols-3 gap-3">
         <Field label="Speed (ft)">
-          <Input type="number" value={data.speed ?? 30} onChange={e => set('speed', parseInt(e.target.value) || 30)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.speed ?? 30}</div>
         </Field>
-        <Field label="Hit Dice Used">
-          <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        <Field label="Speed Bonus (ft)">
+          <Input type="number" value={data.speed_bonus ?? 0} onChange={e => set('speed_bonus', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        </Field>
+        <Field label="Total Speed (ft)">
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{(data.speed ?? 30) + (data.speed_bonus ?? 0)}</div>
         </Field>
       </div>
       )}
 
-      {/* Pact Magic slot tracker */}
-      {!creation && (
+      {showFeatures && !creation && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2">
           <div>
             <div className="text-sm font-medium">Pact Magic Slots (Short Rest)</div>
@@ -263,21 +265,27 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {/* Otherworldly Patron subclass (level 1) */}
+      {showFeatures && (
       <Field label="Otherworldly Patron (Subclass)">
-        {readOnly ? (
-          <div className="text-sm py-2">{data.subclass || '—'}</div>
+        {(readOnly || !!data.subclass) ? (
+          data.subclass ? (
+            <SubclassDetails className="Warlock" edition="5e" subclassName={data.subclass} level={level} />
+          ) : (
+            <div className="text-sm py-2">—</div>
+          )
         ) : (
-          <OptionCardPicker
+          <SubclassPickerWithDetail
             options={WARLOCK_SUBCLASSES_5E}
             value={data.subclass ?? ''}
             onChange={v => set('subclass', v)}
+            className="Warlock"
+            edition="5e"
           />
         )}
       </Field>
+      )}
 
-      {/* Pact Boon (level 3) */}
-      {level >= 3 && (
+      {showFeatures && level >= 3 && (
         <Field label="Pact Boon">
           {readOnly ? (
             <div className="text-sm py-2">{data.pact_boon || '—'}</div>
@@ -291,8 +299,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         </Field>
       )}
 
-      {/* Eldritch Invocations (level 2+) */}
-      {level >= 2 && (
+      {showFeatures && level >= 2 && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Eldritch Invocations ({invocationCount(level)} max)</Label>
           <div className="flex flex-wrap gap-1 min-h-8 rounded-md border p-2">
@@ -333,16 +340,18 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {creation ? (
+      {creation && (
         <SpellPickerCreation label="Cantrips Known (choose 2)" limit={2} options={WARLOCK_CANTRIPS_5E}
           selected={data.cantrips ?? []} onChange={v => set('cantrips', v)} raceGrantedSpells={raceGrantedCantrips} />
-      ) : (
+      )}
+      {!creation && section !== 'features' && (
         <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
       )}
-      {creation ? (
+      {creation && (
         <SpellPickerCreation label="Spells Known at Level 1 (choose 2)" limit={2} options={WARLOCK_SPELLS_L1_5E}
           selected={data.known_spells ?? []} onChange={v => set('known_spells', v)} />
-      ) : (
+      )}
+      {!creation && section !== 'features' && (
         <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
       )}
 
@@ -354,16 +363,15 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {/* Mystic Arcanum */}
-      {level >= 11 && (
+      {showFeatures && level >= 11 && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Mystic Arcanum</span>
           {' '}— 6th level (L11), 7th (L13), 8th (L15), 9th (L17). One casting each per long rest. Track with your spell list.
         </div>
       )}
 
-      {/* Class features */}
-      {creation ? (
+      {showFeatures && (
+      creation ? (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
           {(CLASS_FEATURES_5E.Warlock[1] ?? []).map(feat => (
@@ -380,30 +388,31 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           ))}
         </div>
       ) : (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Class Features</Label>
-          <div className="rounded-md border divide-y text-sm">
-            <FeatureRow name="Otherworldly Patron (Subclass) + Pact Magic" earned={level >= 1} />
-            <FeatureRow name="Eldritch Invocations" earned={level >= 2} />
-            <FeatureRow name="Pact Boon" earned={level >= 3} />
-            <FeatureRow name="Mystic Arcanum (6th level)" earned={level >= 11} />
-            <FeatureRow name="Mystic Arcanum (7th level)" earned={level >= 13} />
-            <FeatureRow name="Mystic Arcanum (8th level)" earned={level >= 15} />
-            <FeatureRow name="Mystic Arcanum (9th level)" earned={level >= 17} />
-            <FeatureRow name="Eldritch Master" earned={level >= 20} />
-          </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Class Features</Label>
+          {Array.from({ length: level }, (_, i) => i + 1).flatMap(lvl =>
+            (CLASS_FEATURES_5E.Warlock[lvl] ?? []).map(feat => ({ ...feat, lvl }))
+          ).map(feat => (
+            <div key={`${feat.lvl}-${feat.name}`} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {feat.lvl}</span>
+                <div className="font-semibold text-sm">{feat.name}</div>
+              </div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
+      )
       )}
 
-      {/* ASI reminder */}
-      {ASI_LEVELS.some(l => l <= level) && (
+      {showFeatures && ASI_LEVELS.some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Ability Score Improvements / Feats</span>
           {' '}— at levels 4, 8, 12, 16, 19.
         </div>
       )}
 
-      {/* Skill proficiencies */}
+      {showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">
@@ -420,6 +429,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           />
         )}
       </Field>
+      )}
     </div>
   );
 }

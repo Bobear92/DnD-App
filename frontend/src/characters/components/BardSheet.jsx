@@ -10,7 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
 import OptionCardPicker from './OptionCardPicker';
+import SubclassPickerWithDetail from './SubclassPickerWithDetail';
+import SubclassDetails from './SubclassDetails';
 import { BARD_SUBCLASSES_5E } from './classChoicesData';
+import HitDiceTracker from './HitDiceTracker';
 
 const BARD_SLOT_TABLE = {
   1:  [2,0,0,0,0,0,0,0,0], 2:  [3,0,0,0,0,0,0,0,0],
@@ -64,15 +67,6 @@ const ALL_SKILLS = [
   'Nature', 'Perception', 'Performance', 'Persuasion', 'Religion',
   'Sleight of Hand', 'Stealth', 'Survival',
 ];
-
-function FeatureRow({ name, earned }) {
-  return (
-    <div className={`px-3 py-2 flex justify-between items-center ${earned ? '' : 'opacity-40'}`}>
-      <span>{name}</span>
-      {earned && <Badge variant="outline" className="text-xs">Unlocked</Badge>}
-    </div>
-  );
-}
 
 function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
   const toggle = (skill) => {
@@ -208,8 +202,10 @@ function SpellPickerCreation({ label, limit, options, selected, onChange, raceGr
   );
 }
 
-export default function BardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [] }) {
+export default function BardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
+  const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
+  const showFeatures = section !== 'stats';
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
 
@@ -274,26 +270,24 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
 
   return (
     <div className="space-y-4">
-      {/* Combat info */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Hit Die</div>
-          <div className="font-bold text-lg">d8</div>
-        </div>
+      {/* Combat info — features only */}
+      {showFeatures && (
+      <div className="grid grid-cols-1 gap-3">
         <div className="rounded-md border px-3 py-2 text-center">
           <div className="text-xs text-muted-foreground">Bardic Inspiration</div>
           <div className="font-bold text-lg">{biDie}</div>
         </div>
       </div>
+      )}
 
-      {/* HP */}
-      {!creation && (
+      {/* HP — features only */}
+      {showCombat && (
         <div className="grid grid-cols-3 gap-3">
           <Field label="Current HP">
             <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
           </Field>
           <Field label="Max HP">
-            <Input type="number" value={data.max_hp ?? ''} onChange={e => set('max_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
           </Field>
           <Field label="Temp HP">
             <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -301,23 +295,35 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
         </div>
       )}
 
-      {/* AC / Speed / Hit Dice */}
-      {!creation && (
+      {/* Hit Dice — features only */}
+      {showCombat && (
+        <HitDiceTracker hitDie={8} level={level} used={data.hit_dice_used} onChange={v => set('hit_dice_used', v)} readOnly={readOnly} creation={creation} />
+      )}
+
+      {/* AC — features only */}
+      {showCombat && (
+        <Field label="Armor Class">
+          <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        </Field>
+      )}
+
+      {/* Speed — features only */}
+      {showCombat && (
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Armor Class">
-            <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
-          </Field>
           <Field label="Speed (ft)">
-            <Input type="number" value={data.speed ?? 30} onChange={e => set('speed', parseInt(e.target.value) || 30)} readOnly={readOnly} className="text-center" />
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.speed ?? 30}</div>
           </Field>
-          <Field label="Hit Dice Used">
-            <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+          <Field label="Speed Bonus (ft)">
+            <Input type="number" value={data.speed_bonus ?? 0} onChange={e => set('speed_bonus', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+          </Field>
+          <Field label="Total Speed (ft)">
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{(data.speed ?? 30) + (data.speed_bonus ?? 0)}</div>
           </Field>
         </div>
       )}
 
-      {/* Bardic Inspiration tracker */}
-      {!creation && (
+      {/* Bardic Inspiration tracker — features only */}
+      {showFeatures && !creation && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2">
           <div>
             <div className="text-sm font-medium">Bardic Inspiration ({level >= 5 ? 'Short' : 'Long'} Rest)</div>
@@ -341,41 +347,50 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
         </div>
       )}
 
-      {/* Instrument proficiencies */}
-      <Field label="Instrument Proficiencies">
-        {readOnly ? (
-          <div className="flex flex-wrap gap-1">
-            {(data.instrument_proficiencies ?? []).map(i => <Badge key={i} variant="secondary">{i}</Badge>)}
-            {(data.instrument_proficiencies ?? []).length === 0 && <span className="text-sm text-muted-foreground">None set</span>}
-          </div>
-        ) : (
-          <InstrumentPicker value={data.instrument_proficiencies ?? []} onChange={v => set('instrument_proficiencies', v)} />
-        )}
-      </Field>
-
-      {/* Subclass (level 3) */}
-      {level >= 3 && (
-        <Field label="Bard College (Subclass)">
+      {/* Instrument proficiencies — features only */}
+      {showFeatures && (
+        <Field label="Instrument Proficiencies">
           {readOnly ? (
-            <div className="text-sm py-2">{data.subclass || '—'}</div>
+            <div className="flex flex-wrap gap-1">
+              {(data.instrument_proficiencies ?? []).map(i => <Badge key={i} variant="secondary">{i}</Badge>)}
+              {(data.instrument_proficiencies ?? []).length === 0 && <span className="text-sm text-muted-foreground">None set</span>}
+            </div>
           ) : (
-            <OptionCardPicker
+            <InstrumentPicker value={data.instrument_proficiencies ?? []} onChange={v => set('instrument_proficiencies', v)} />
+          )}
+        </Field>
+      )}
+
+      {/* Subclass (level 3) — features only */}
+      {showFeatures && level >= 3 && (
+        <Field label="Bard College (Subclass)">
+          {(readOnly || !!data.subclass) ? (
+            data.subclass ? (
+              <SubclassDetails className="Bard" edition="5e" subclassName={data.subclass} level={level} />
+            ) : (
+              <div className="text-sm py-2">—</div>
+            )
+          ) : (
+            <SubclassPickerWithDetail
               options={BARD_SUBCLASSES_5E}
               value={data.subclass ?? ''}
               onChange={v => set('subclass', v)}
+              className="Bard"
+              edition="5e"
             />
           )}
         </Field>
       )}
 
-      {/* Spell Slots — static info during creation, tracker during play */}
-      {creation ? (
+      {/* Spell Slots — spells section only */}
+      {creation && (
         <div className="rounded-md border px-3 py-2 space-y-1">
           <Label className="text-xs text-muted-foreground">Spell Slots at Level 1</Label>
           <div className="text-sm font-medium">2 × Level 1 spell slots</div>
           <div className="text-xs text-muted-foreground">All slots recover on a Long Rest</div>
         </div>
-      ) : (
+      )}
+      {!creation && section !== 'features' && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
@@ -402,8 +417,8 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
         </div>
       )}
 
-      {/* Cantrips — picker during creation, free-text list during play */}
-      {creation ? (
+      {/* Cantrips — spells section only */}
+      {creation && (
         <SpellPickerCreation
           label="Cantrips Known (choose 2)"
           limit={2}
@@ -412,12 +427,13 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
           onChange={v => set('cantrips', v)}
           raceGrantedSpells={raceGrantedCantrips}
         />
-      ) : (
+      )}
+      {!creation && section !== 'features' && (
         <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
       )}
 
-      {/* Spells Known — picker during creation, free-text list during play */}
-      {creation ? (
+      {/* Spells Known — spells section only */}
+      {creation && (
         <SpellPickerCreation
           label="Spells Known at Level 1 (choose 4)"
           limit={4}
@@ -425,73 +441,80 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
           selected={data.known_spells ?? []}
           onChange={v => set('known_spells', v)}
         />
-      ) : (
+      )}
+      {!creation && section !== 'features' && (
         <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
       )}
 
-      {/* Class features */}
-      {creation ? (
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
-          {(CLASS_FEATURES_5E.Bard[1] ?? []).map(feat => (
-            <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
-              <div className="font-semibold text-sm">{feat.name}</div>
-              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
-              {feat.name === 'Bardic Inspiration' && (
-                <div className="mt-1 text-xs font-medium text-foreground bg-background rounded px-2 py-1 border">
-                  Inspiration die: <span className="font-bold">{biDie}</span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Class Features</Label>
-          <div className="rounded-md border divide-y text-sm">
-            <FeatureRow name="Spellcasting + Bardic Inspiration" earned={level >= 1} />
-            <FeatureRow name="Jack of All Trades + Song of Rest" earned={level >= 2} />
-            <FeatureRow name="Bard College (Subclass) + Expertise (2)" earned={level >= 3} />
-            <FeatureRow name="Font of Inspiration" earned={level >= 5} />
-            <FeatureRow name="Countercharm + Expertise (4 total)" earned={level >= 6} />
-            <FeatureRow name="Magical Secrets" earned={level >= 10} />
-            <FeatureRow name="Superior Inspiration" earned={level >= 20} />
+      {/* Class features — features only */}
+      {showFeatures && (
+        creation ? (
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+            {(CLASS_FEATURES_5E.Bard[1] ?? []).map(feat => (
+              <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+                <div className="font-semibold text-sm">{feat.name}</div>
+                <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+                {feat.name === 'Bardic Inspiration' && (
+                  <div className="mt-1 text-xs font-medium text-foreground bg-background rounded px-2 py-1 border">
+                    Inspiration die: <span className="font-bold">{biDie}</span>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        </div>
+        ) : (
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground uppercase tracking-wide">Class Features</Label>
+            {Array.from({ length: level }, (_, i) => i + 1).flatMap(lvl =>
+              (CLASS_FEATURES_5E.Bard[lvl] ?? []).map(feat => ({ ...feat, lvl }))
+            ).map(feat => (
+              <div key={`${feat.lvl}-${feat.name}`} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {feat.lvl}</span>
+                  <div className="font-semibold text-sm">{feat.name}</div>
+                </div>
+                <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+              </div>
+            ))}
+          </div>
+        )
       )}
 
-      {/* ASI reminder */}
-      {ASI_LEVELS.some(l => l <= level) && (
+      {/* ASI reminder — features only */}
+      {showFeatures && ASI_LEVELS.some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Ability Score Improvements / Feats</span>
           {' '}— at levels 4, 8, 12, 16, 19.
         </div>
       )}
 
-      {/* Skill proficiencies */}
-      <Field label="Skill Proficiencies (choose any 3)">
-        {readOnly ? (
-          <div className="flex flex-wrap gap-1">
-            {(data.skill_proficiencies ?? []).map(s => <Badge key={s} variant="secondary">{s}</Badge>)}
-            {(data.skill_proficiencies ?? []).length === 0 && <span className="text-sm text-muted-foreground">None set</span>}
-          </div>
-        ) : (
-          <SkillPicker
-            value={data.skill_proficiencies ?? []}
-            onChange={v => {
-              const pool = [...new Set([...v, ...backgroundSkills])];
-              const cleanedExpertise = (data.expertise ?? []).filter(s => pool.includes(s));
-              onChange?.({ skill_proficiencies: v, expertise: cleanedExpertise });
-            }}
-            max={3}
-            allowed={ALL_SKILLS}
-            backgroundSkills={backgroundSkills}
-          />
-        )}
-      </Field>
+      {/* Skill proficiencies — features only */}
+      {showFeatures && (
+        <Field label="Skill Proficiencies (choose any 3)">
+          {readOnly ? (
+            <div className="flex flex-wrap gap-1">
+              {(data.skill_proficiencies ?? []).map(s => <Badge key={s} variant="secondary">{s}</Badge>)}
+              {(data.skill_proficiencies ?? []).length === 0 && <span className="text-sm text-muted-foreground">None set</span>}
+            </div>
+          ) : (
+            <SkillPicker
+              value={data.skill_proficiencies ?? []}
+              onChange={v => {
+                const pool = [...new Set([...v, ...backgroundSkills])];
+                const cleanedExpertise = (data.expertise ?? []).filter(s => pool.includes(s));
+                onChange?.({ skill_proficiencies: v, expertise: cleanedExpertise });
+              }}
+              max={3}
+              allowed={ALL_SKILLS}
+              backgroundSkills={backgroundSkills}
+            />
+          )}
+        </Field>
+      )}
 
-      {/* Expertise — level 3+ only; shown after skill proficiencies */}
-      {level >= 3 && (
+      {/* Expertise — features only */}
+      {showFeatures && level >= 3 && (
         <Field label="Expertise (double proficiency — choose 2)">
           {readOnly ? (
             <div className="flex flex-wrap gap-1">

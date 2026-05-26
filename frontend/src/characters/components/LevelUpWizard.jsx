@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Dices, ChevronRight, ChevronLeft, Star, Check } from 'lucide-react';
+import { Dices, ChevronRight, ChevronLeft, Star, Check, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -7,11 +7,13 @@ import {
 import { cn } from '@/lib/utils';
 import { HIT_DICE_5E, CLASS_FEATURES_5E } from './classFeatures5e';
 import { HIT_DICE_2024, CLASS_FEATURES_2024 } from './classFeatures2024';
+import {
+  SUBCLASS_UNLOCK_LEVEL_5E, SUBCLASS_UNLOCK_LEVEL_2024,
+  SUBCLASS_OPTIONS_5E, SUBCLASS_OPTIONS_2024,
+} from './classChoicesData';
+import SubclassPickerWithDetail from './SubclassPickerWithDetail';
 
 function conMod(score) { return Math.floor((score - 10) / 2); }
-
-const STEPS = ['hp', 'features', 'confirm'];
-const STEP_LABELS = ['Hit Points', 'New Features', 'Confirm'];
 
 export default function LevelUpWizard({ character, campaign, onComplete, onClose }) {
   const edition = campaign?.edition || '5e';
@@ -19,11 +21,24 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
 
   const HIT_DICE = is2024 ? HIT_DICE_2024 : HIT_DICE_5E;
   const CLASS_FEATURES = is2024 ? CLASS_FEATURES_2024 : CLASS_FEATURES_5E;
+  const SUBCLASS_UNLOCK = is2024 ? SUBCLASS_UNLOCK_LEVEL_2024 : SUBCLASS_UNLOCK_LEVEL_5E;
+  const SUBCLASS_OPTS = is2024 ? SUBCLASS_OPTIONS_2024 : SUBCLASS_OPTIONS_5E;
 
   const newLevel = (character.level ?? 1) + 1;
   const hitDie = HIT_DICE[character.char_class] ?? 8;
   const con = conMod(character.constitution ?? 10);
   const average = Math.floor(hitDie / 2) + 1;
+
+  const needsSubclass = newLevel === SUBCLASS_UNLOCK[character.char_class]
+    && !character.character_data?.subclass;
+  const subclassOptions = SUBCLASS_OPTS[character.char_class] ?? [];
+
+  const STEPS = needsSubclass
+    ? ['hp', 'subclass', 'features', 'confirm']
+    : ['hp', 'features', 'confirm'];
+  const STEP_LABELS = needsSubclass
+    ? ['Hit Points', 'Subclass', 'New Features', 'Confirm']
+    : ['Hit Points', 'New Features', 'Confirm'];
 
   const features = useMemo(() => {
     const classFeats = CLASS_FEATURES[character.char_class];
@@ -33,9 +48,10 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
 
   const currentHpMax = character.character_data?.hp_max ?? null;
 
-  const [step, setStep] = useState(0); // index into STEPS
+  const [step, setStep] = useState(0);
   const [hpChoice, setHpChoice] = useState(null); // 'roll' | 'average'
   const [rolledValue, setRolledValue] = useState(null);
+  const [subclassChoice, setSubclassChoice] = useState('');
   const [saving, setSaving] = useState(false);
 
   const hpGain = hpChoice !== null
@@ -53,6 +69,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
 
   const canAdvance = () => {
     if (STEPS[step] === 'hp') return hpChoice !== null;
+    if (STEPS[step] === 'subclass') return !!subclassChoice;
     return true;
   };
 
@@ -61,6 +78,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     const newCharacterData = {
       ...(character.character_data ?? {}),
       ...(newHpMax != null ? { hp_max: newHpMax } : {}),
+      ...(subclassChoice ? { subclass: subclassChoice } : {}),
     };
     await onComplete(newLevel, newCharacterData);
     setSaving(false);
@@ -183,6 +201,27 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
           </div>
         )}
 
+        {/* ── Step: Subclass ── */}
+        {STEPS[step] === 'subclass' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+              <Lock className="h-4 w-4 shrink-0" />
+              This choice is permanent and cannot be changed after level-up.
+            </div>
+            <p className="text-sm text-muted-foreground">
+              At level {newLevel}, your <span className="font-medium text-foreground">{character.char_class}</span> permanently
+              chooses a subclass. Pick the one that best fits your character.
+            </p>
+            <SubclassPickerWithDetail
+              options={subclassOptions}
+              value={subclassChoice}
+              onChange={setSubclassChoice}
+              className={character.char_class}
+              edition={is2024 ? '5.5e' : '5e'}
+            />
+          </div>
+        )}
+
         {/* ── Step: Features ── */}
         {STEPS[step] === 'features' && (
           <div className="space-y-3">
@@ -241,6 +280,12 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">New HP max</span>
                     <span className="font-medium">{currentHpMax + Math.max(1, hpGain)}</span>
+                  </div>
+                )}
+                {subclassChoice && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subclass chosen</span>
+                    <span className="font-medium text-primary">{subclassChoice}</span>
                   </div>
                 )}
                 <div className="flex justify-between">

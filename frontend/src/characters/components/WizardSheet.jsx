@@ -10,7 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
 import OptionCardPicker from './OptionCardPicker';
+import SubclassPickerWithDetail from './SubclassPickerWithDetail';
+import SubclassDetails from './SubclassDetails';
 import { WIZARD_SUBCLASSES_5E } from './classChoicesData';
+import HitDiceTracker from './HitDiceTracker';
 
 const WIZARD_CANTRIPS_5E = [
   'Acid Splash', 'Blade Ward', 'Booming Blade', 'Chill Touch', 'Control Flames',
@@ -108,8 +111,10 @@ function SpellPickerCreation({ label, limit, options, selected, onChange, raceGr
   );
 }
 
-export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [] }) {
+export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
+  const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
+  const showFeatures = section !== 'stats';
   const [newSpellbook, setNewSpellbook] = useState('');
   const [newPrepared, setNewPrepared] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
@@ -172,20 +177,16 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
 
   return (
     <div className="space-y-4">
-      {/* Combat info */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Hit Die</div>
-          <div className="font-bold text-lg">d6</div>
-        </div>
+      {showFeatures && (
+      <div className="grid grid-cols-1 gap-3">
         <div className="rounded-md border px-3 py-2 text-center">
           <div className="text-xs text-muted-foreground">Arcane Recovery</div>
           <div className="font-bold text-lg">{arcaneRecoveryLevels(level)} levels</div>
         </div>
       </div>
+      )}
 
-      {/* HP */}
-      {!creation && (
+      {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Current HP</Label>
@@ -193,7 +194,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Max HP</Label>
-          <Input type="number" value={data.max_hp ?? ''} onChange={e => set('max_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Temp HP</Label>
@@ -202,26 +203,37 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
       </div>
       )}
 
-      {/* AC / Speed / Hit Dice */}
-      {!creation && (
+      {/* Hit Dice */}
+      {showCombat && (
+        <HitDiceTracker hitDie={6} level={level} used={data.hit_dice_used} onChange={v => set('hit_dice_used', v)} readOnly={readOnly} creation={creation} />
+      )}
+
+      {/* AC */}
+      {showCombat && (
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Armor Class</Label>
+        <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+      </div>
+      )}
+
+      {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Armor Class</Label>
-          <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
-        </div>
-        <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Speed (ft)</Label>
-          <Input type="number" value={data.speed ?? 30} onChange={e => set('speed', parseInt(e.target.value) || 30)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.speed ?? 30}</div>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Hit Dice Used</Label>
-          <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+          <Label className="text-xs text-muted-foreground">Speed Bonus (ft)</Label>
+          <Input type="number" value={data.speed_bonus ?? 0} onChange={e => set('speed_bonus', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Total Speed (ft)</Label>
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{(data.speed ?? 30) + (data.speed_bonus ?? 0)}</div>
         </div>
       </div>
       )}
 
-      {/* Arcane Recovery */}
-      {!creation && (
+      {showFeatures && !creation && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2">
           <div>
             <div className="text-sm font-medium">Arcane Recovery (Short Rest)</div>
@@ -242,30 +254,35 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
         </div>
       )}
 
-      {/* Subclass (level 2) */}
-      {level >= 2 && (
+      {showFeatures && level >= 2 && (
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Arcane Tradition (Subclass)</Label>
-          {readOnly ? (
-            <div className="text-sm py-2">{data.subclass || '—'}</div>
+          {(readOnly || !!data.subclass) ? (
+            data.subclass ? (
+              <SubclassDetails className="Wizard" edition="5e" subclassName={data.subclass} level={level} />
+            ) : (
+              <div className="text-sm py-2">—</div>
+            )
           ) : (
-            <OptionCardPicker
+            <SubclassPickerWithDetail
               options={WIZARD_SUBCLASSES_5E}
               value={data.subclass ?? ''}
               onChange={v => set('subclass', v)}
+              className="Wizard"
+              edition="5e"
             />
           )}
         </div>
       )}
 
-      {/* Spell Slots — static info during creation, tracker during play */}
-      {creation ? (
+      {creation && (
         <div className="rounded-md border px-3 py-2 space-y-1">
           <Label className="text-xs text-muted-foreground">Spell Slots at Level 1</Label>
           <div className="text-sm font-medium">2 × Level 1 spell slots</div>
           <div className="text-xs text-muted-foreground">All slots recover on a Long Rest</div>
         </div>
-      ) : (
+      )}
+      {!creation && section !== 'features' && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
@@ -294,8 +311,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
         </div>
       )}
 
-      {/* Cantrips — picker during creation, free-text list during play */}
-      {creation ? (
+      {creation && (
         <SpellPickerCreation
           label="Cantrips Known (choose 3)"
           limit={3}
@@ -304,7 +320,8 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           onChange={v => set('cantrips', v)}
           raceGrantedSpells={raceGrantedCantrips}
         />
-      ) : (
+      )}
+      {!creation && section !== 'features' && (
         <SpellList
           dataKey="cantrips"
           label="Cantrips Known"
@@ -314,8 +331,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
         />
       )}
 
-      {/* Spellbook — picker during creation, free-text list during play */}
-      {creation ? (
+      {creation && (
         <SpellPickerCreation
           label="Starting Spellbook (choose 6 × 1st-level spells)"
           limit={6}
@@ -323,7 +339,8 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           selected={data.spellbook ?? []}
           onChange={v => set('spellbook', v)}
         />
-      ) : (
+      )}
+      {!creation && section !== 'features' && (
         <>
           <SpellList
             dataKey="spellbook"
@@ -342,7 +359,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
         </>
       )}
 
-      {/* Skill proficiencies */}
+      {showFeatures && (
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Skill Proficiencies (choose 2)</Label>
         {readOnly ? (
@@ -359,9 +376,10 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           />
         )}
       </div>
+      )}
 
-      {/* Class features */}
-      {creation ? (
+      {showFeatures && (
+      creation ? (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
           {(CLASS_FEATURES_5E.Wizard[1] ?? []).map(feat => (
@@ -377,33 +395,29 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           ))}
         </div>
       ) : (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Class Features</Label>
-          <div className="rounded-md border divide-y text-sm">
-            <FeatureRow name="Spellcasting + Arcane Recovery" earned={level >= 1} />
-            <FeatureRow name="Arcane Tradition (Subclass)" earned={level >= 2} />
-            <FeatureRow name="Spell Mastery" earned={level >= 18} />
-            <FeatureRow name="Signature Spells" earned={level >= 20} />
-          </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Class Features</Label>
+          {Array.from({ length: level }, (_, i) => i + 1).flatMap(lvl =>
+            (CLASS_FEATURES_5E.Wizard[lvl] ?? []).map(feat => ({ ...feat, lvl }))
+          ).map(feat => (
+            <div key={`${feat.lvl}-${feat.name}`} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {feat.lvl}</span>
+                <div className="font-semibold text-sm">{feat.name}</div>
+              </div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
+      )
       )}
 
-      {/* ASI reminder */}
-      {[4, 8, 12, 16, 19].some(l => l <= level) && (
+      {showFeatures && [4, 8, 12, 16, 19].some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Ability Score Improvements / Feats</span>
           {' '}— at levels 4, 8, 12, 16, 19.
         </div>
       )}
-    </div>
-  );
-}
-
-function FeatureRow({ name, earned }) {
-  return (
-    <div className={`px-3 py-2 flex justify-between items-center ${earned ? '' : 'opacity-40'}`}>
-      <span>{name}</span>
-      {earned && <Badge variant="outline" className="text-xs">Unlocked</Badge>}
     </div>
   );
 }

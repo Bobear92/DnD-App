@@ -181,6 +181,26 @@ frontend/src/<module>/
     └── <Module>Detail.test.jsx
 ```
 
+## Before Editing Multiple Files
+When a change touches 3 or more files, produce a brief plan **before making any edits**:
+- Which files will change and what specifically changes in each
+- Any class-specific exceptions (e.g. Fighter/Rogue skill list restrictions)
+- Which tests will be written or updated
+- What CLAUDE.md line(s) need updating
+
+Post this checklist first, then proceed. This prevents wrong-approach detours.
+
+## Class Sheet Constraints (enforce always)
+When editing any class sheet in `characters/components/` or `characters/components/5e2024/`:
+- **Never apply "all 18 skills"** to any class — always validate the class's restricted list
+- Fighter skill picker: exactly 8 skills (Acrobatics, Animal Handling, Athletics, History, Insight, Intimidation, Perception, Survival)
+- Rogue skill proficiency: exactly 11 Rogue skills; Rogue Expertise picker uses all 18
+- Spell picker at creation: use `SpellPickerCreation` curated toggle list, NOT free-text `SpellList`
+- Player View = whole-page GM preview toggle; NOT per-item visibility flag
+
+## Preserved Intent Rule
+**Never re-introduce a feature the user has explicitly removed** — if something is deliberately absent from the codebase, do not add it back without explicit confirmation from the user.
+
 ## After Creating Files
 Always:
 1. Register the route in `frontend/src/App.jsx`

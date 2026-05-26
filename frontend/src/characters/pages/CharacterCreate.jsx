@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import characterService from '../characterService';
 import referenceService from '../referenceService';
+import classService from '../classService';
+import ClassOverview from '../components/ClassOverview';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import {
   BarbarianSheet, BardSheet, ClericSheet, DruidSheet,
@@ -474,7 +476,7 @@ function normalizeApiBg(bg) {
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 function StepIndicator({ current }) {
-  const steps = ['Class', 'Identity', 'Features', 'Review'];
+  const steps = ['Class', 'Overview', 'Identity', 'Features', 'Review'];
   return (
     <div className="flex items-center gap-2 text-sm">
       {steps.map((label, i) => {
@@ -971,8 +973,10 @@ export default function CharacterCreate() {
   const { campaignId } = useParams();
   const { campaign } = useCampaign();
 
-  const [step, setStep] = useState('class'); // 'class' | 'identity' | 'details' | 'overview'
+  const [step, setStep] = useState('class'); // 'class' | 'class_overview' | 'identity' | 'details' | 'overview'
   const [selectedClass, setSelectedClass] = useState('');
+  const [classOverviewData, setClassOverviewData] = useState(null);
+  const [classOverviewLoading, setClassOverviewLoading] = useState(false);
 
   const initialForm = (method) => {
     const base = method === 'point_buy' ? 8 : 10;
@@ -1070,7 +1074,7 @@ export default function CharacterCreate() {
       ? [RACE_GRANTED_CANTRIPS_MAP[selectedRaceObj.name]] : []),
   ];
 
-  const handleClassSelect = (cls) => {
+  const handleClassSelect = async (cls) => {
     setSelectedClass(cls);
     setClassData({});
     setForm(initialForm(campaign?.ability_score_method));
@@ -1082,7 +1086,13 @@ export default function CharacterCreate() {
     setDiceAssignment(EMPTY_DICE_ASSIGNMENT);
     setRaceChoices(EMPTY_RACE_CHOICES);
     setBgChoices(EMPTY_BG_CHOICES);
-    setStep('identity');
+    setClassOverviewData(null);
+    setClassOverviewLoading(true);
+    setStep('class_overview');
+    const edition = campaign?.edition === '5.5e' ? '5.5e' : '5e';
+    const data = await classService.getClassByName(cls, edition, campaign?.id);
+    setClassOverviewData(data);
+    setClassOverviewLoading(false);
   };
 
   const handleRaceSelect = (race) => {
@@ -1152,6 +1162,7 @@ export default function CharacterCreate() {
       character_data: {
         ...classData,
         hp_max,
+        speed: selectedRaceObj?.speed ?? 30,
         skill_proficiencies: [...new Set([
           ...(classData.skill_proficiencies ?? []),
           ...backgroundSkills,
@@ -1175,12 +1186,17 @@ export default function CharacterCreate() {
     }
   };
 
-  const stepNum = step === 'class' ? 1 : step === 'identity' ? 2 : step === 'details' ? 3 : 4;
+  const stepNum = step === 'class' ? 1
+    : step === 'class_overview' ? 2
+    : step === 'identity' ? 3
+    : step === 'details' ? 4
+    : 5;
 
   const handleBack = () => {
     if (step === 'overview') { setStep('details'); return; }
     if (step === 'details') { setStep('identity'); return; }
-    if (step === 'identity') { setStep('class'); return; }
+    if (step === 'identity') { setStep('class_overview'); return; }
+    if (step === 'class_overview') { setStep('class'); return; }
     navigate(`/campaigns/${campaignId}/characters`);
   };
 
@@ -1190,11 +1206,13 @@ export default function CharacterCreate() {
 
   const headerSub = step === 'class'
     ? `${campaign?.edition?.toUpperCase() ?? '5E'} · Select a class to continue`
+    : step === 'class_overview'
+    ? 'Step 2 of 5 — Class Overview'
     : step === 'identity'
-    ? 'Step 2 of 4 — Race, Background & Identity'
+    ? 'Step 3 of 5 — Race, Background & Identity'
     : step === 'details'
-    ? 'Step 3 of 4 — Class Features & Ability Scores'
-    : 'Step 4 of 4 — Review & Create';
+    ? 'Step 4 of 5 — Class Features & Ability Scores'
+    : 'Step 5 of 5 — Review & Create';
 
   // Next is blocked when name is missing, subrace not chosen, or required race choices incomplete
   const identityNextBlocked = !form.name.trim() ||
@@ -1242,7 +1260,7 @@ export default function CharacterCreate() {
           </div>
         </div>
 
-        {/* Step indicator (steps 2 + 3) */}
+        {/* Step indicator */}
         {step !== 'class' && (
           <StepIndicator current={stepNum} />
         )}
@@ -1269,7 +1287,22 @@ export default function CharacterCreate() {
           </div>
         )}
 
-        {/* ── Step 2: Identity ─────────────────────────────────────────────── */}
+        {/* ── Step 2: Class Overview ──────────────────────────────────────── */}
+        {step === 'class_overview' && (
+          <div className="space-y-4">
+            <ClassOverview classData={classOverviewData} loading={classOverviewLoading} />
+            <div className="flex justify-between pt-2">
+              <Button type="button" variant="outline" onClick={handleBack}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+              <Button type="button" onClick={() => setStep('identity')} data-testid="overview-next">
+                Continue to Identity <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: Identity ─────────────────────────────────────────────── */}
         {step === 'identity' && (
           <div className="space-y-6">
             {/* Character Name */}

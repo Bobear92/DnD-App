@@ -10,7 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
 import OptionCardPicker from './OptionCardPicker';
+import SubclassPickerWithDetail from './SubclassPickerWithDetail';
+import SubclassDetails from './SubclassDetails';
 import { PALADIN_FIGHTING_STYLES_5E, PALADIN_SUBCLASSES_5E } from './classChoicesData';
+import HitDiceTracker from './HitDiceTracker';
 
 // Paladin spell slot table (half-caster)
 const PALADIN_SLOTS = {
@@ -40,8 +43,10 @@ function slotsForLevel(level) {
   return entry ?? [0, 0, 0, 0, 0];
 }
 
-export default function PaladinSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
+export default function PaladinSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
+  const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
+  const showFeatures = section !== 'stats';
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
 
@@ -94,12 +99,8 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
 
   return (
     <div className="space-y-4">
-      {/* Combat info */}
-      <div className={`grid gap-3 ${level >= 5 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Hit Die</div>
-          <div className="font-bold text-lg">d10</div>
-        </div>
+      {showFeatures && (
+      <div className={`grid gap-3 ${level >= 5 ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {level >= 5 && (
           <div className="rounded-md border px-3 py-2 text-center">
             <div className="text-xs text-muted-foreground">Extra Attack</div>
@@ -111,15 +112,15 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
           <div className="font-bold text-lg">{layOnHandsPool}</div>
         </div>
       </div>
+      )}
 
-      {/* HP */}
-      {!creation && (
+      {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
         <Field label="Max HP">
-          <Input type="number" value={data.max_hp ?? ''} onChange={e => set('max_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
         </Field>
         <Field label="Temp HP">
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -127,23 +128,33 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
       </div>
       )}
 
-      {/* AC / Speed / Hit Dice */}
-      {!creation && (
-      <div className="grid grid-cols-3 gap-3">
+      {/* Hit Dice */}
+      {showCombat && (
+        <HitDiceTracker hitDie={10} level={level} used={data.hit_dice_used} onChange={v => set('hit_dice_used', v)} readOnly={readOnly} creation={creation} />
+      )}
+
+      {/* AC */}
+      {showCombat && (
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
+      )}
+
+      {showCombat && (
+      <div className="grid grid-cols-3 gap-3">
         <Field label="Speed (ft)">
-          <Input type="number" value={data.speed ?? 30} onChange={e => set('speed', parseInt(e.target.value) || 30)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.speed ?? 30}</div>
         </Field>
-        <Field label="Hit Dice Used">
-          <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        <Field label="Speed Bonus (ft)">
+          <Input type="number" value={data.speed_bonus ?? 0} onChange={e => set('speed_bonus', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        </Field>
+        <Field label="Total Speed (ft)">
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{(data.speed ?? 30) + (data.speed_bonus ?? 0)}</div>
         </Field>
       </div>
       )}
 
-      {/* Lay on Hands */}
-      {!creation && (
+      {showFeatures && !creation && (
         <div className="rounded-md border px-3 py-2">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium">Lay on Hands Pool</span>
@@ -164,8 +175,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {/* Divine Sense */}
-      {!creation && level >= 1 && (
+      {showFeatures && !creation && level >= 1 && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2">
           <span className="text-sm font-medium">Divine Sense (Long Rest)</span>
           <div className="flex items-center gap-2">
@@ -185,8 +195,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {/* Fighting Style */}
-      {hasFightingStyle && (
+      {showFeatures && hasFightingStyle && (
         <Field label="Fighting Style">
           {readOnly ? (
             <div className="text-sm py-2">{data.fighting_style || '—'}</div>
@@ -200,23 +209,27 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
         </Field>
       )}
 
-      {/* Subclass */}
-      {hasSubclass && (
+      {showFeatures && hasSubclass && (
         <Field label="Sacred Oath (Subclass)">
-          {readOnly ? (
-            <div className="text-sm py-2">{data.subclass || '—'}</div>
+          {(readOnly || !!data.subclass) ? (
+            data.subclass ? (
+              <SubclassDetails className="Paladin" edition="5e" subclassName={data.subclass} level={level} />
+            ) : (
+              <div className="text-sm py-2">—</div>
+            )
           ) : (
-            <OptionCardPicker
+            <SubclassPickerWithDetail
               options={PALADIN_SUBCLASSES_5E}
               value={data.subclass ?? ''}
               onChange={v => set('subclass', v)}
+              className="Paladin"
+              edition="5e"
             />
           )}
         </Field>
       )}
 
-      {/* Spell Slots */}
-      {hasCasting && (
+      {hasCasting && section !== 'features' && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
           <div className="grid grid-cols-5 gap-2">
@@ -241,8 +254,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {/* Prepared Spells */}
-      {hasCasting && (
+      {hasCasting && section !== 'features' && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Prepared Spells</Label>
           <div className="flex flex-wrap gap-1 min-h-8">
@@ -268,7 +280,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {/* Cantrips (none by default but Blessed Warrior fighting style gives 2) */}
+      {!creation && section !== 'features' && (
       <div className="space-y-2">
         <Label className="text-xs text-muted-foreground">Cantrips</Label>
         <div className="flex flex-wrap gap-1 min-h-6">
@@ -292,8 +304,9 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
           </div>
         )}
       </div>
+      )}
 
-      {/* Skill proficiencies */}
+      {showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">
@@ -309,9 +322,10 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
           />
         )}
       </Field>
+      )}
 
-      {/* Class features */}
-      {creation ? (
+      {showFeatures && (
+      creation ? (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
           {(CLASS_FEATURES_5E.Paladin[1] ?? []).map(feat => (
@@ -328,37 +342,29 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
           ))}
         </div>
       ) : (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Class Features</Label>
-          <div className="rounded-md border divide-y text-sm">
-            <FeatureRow name="Divine Smite" earned={level >= 2} />
-            <FeatureRow name="Divine Health" earned={level >= 3} />
-            <FeatureRow name="Extra Attack" earned={level >= 5} />
-            <FeatureRow name="Aura of Protection (10 ft)" earned={level >= 6} />
-            <FeatureRow name="Aura of Courage (10 ft)" earned={level >= 10} />
-            <FeatureRow name="Improved Divine Smite" earned={level >= 11} />
-            <FeatureRow name="Cleansing Touch" earned={level >= 14} />
-            <FeatureRow name="Aura improvements (30 ft)" earned={level >= 18} />
-          </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Class Features</Label>
+          {Array.from({ length: level }, (_, i) => i + 1).flatMap(lvl =>
+            (CLASS_FEATURES_5E.Paladin[lvl] ?? []).map(feat => ({ ...feat, lvl }))
+          ).map(feat => (
+            <div key={`${feat.lvl}-${feat.name}`} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {feat.lvl}</span>
+                <div className="font-semibold text-sm">{feat.name}</div>
+              </div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
+      )
       )}
 
-      {/* ASI reminder */}
-      {[4, 8, 12, 16, 19].some(l => l <= level) && (
+      {showFeatures && [4, 8, 12, 16, 19].some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Ability Score Improvements / Feats</span>
           {' '}— at levels 4, 8, 12, 16, 19.
         </div>
       )}
-    </div>
-  );
-}
-
-function FeatureRow({ name, earned }) {
-  return (
-    <div className={`px-3 py-2 flex justify-between items-center ${earned ? '' : 'opacity-40'}`}>
-      <span>{name}</span>
-      {earned && <Badge variant="outline" className="text-xs">Unlocked</Badge>}
     </div>
   );
 }

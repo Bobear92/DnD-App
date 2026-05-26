@@ -5,7 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import OptionCardPicker from '../OptionCardPicker';
+import SubclassPickerWithDetail from '../SubclassPickerWithDetail';
+import SubclassDetails from '../SubclassDetails';
 import { BARBARIAN_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
+import HitDiceTracker from '../HitDiceTracker';
 import { CLASS_FEATURES_2024 } from '../classFeatures2024';
 
 function rageCount(level) {
@@ -21,15 +24,6 @@ function rageDamage(level) {
   if (level >= 16) return '+4';
   if (level >= 9)  return '+3';
   return '+2';
-}
-
-function FeatureRow({ name, earned }) {
-  return (
-    <div className={`px-3 py-2 flex justify-between items-center ${earned ? '' : 'opacity-40'}`}>
-      <span>{name}</span>
-      {earned && <Badge variant="outline" className="text-xs">Unlocked</Badge>}
-    </div>
-  );
 }
 
 function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
@@ -107,8 +101,11 @@ function WeaponMasteryList({ value, onChange, readOnly, max }) {
   );
 }
 
-export default function BarbarianSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
+export default function BarbarianSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
+  if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
+  const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
+  const showFeatures = section !== 'stats';
   const rages = rageCount(level);
   const rageDmg = rageDamage(level);
   const usedRages = data.rages_used ?? 0;
@@ -122,11 +119,8 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Hit Die</div>
-          <div className="font-bold text-lg">d12</div>
-        </div>
+      {showFeatures && (
+      <div className="grid grid-cols-2 gap-3">
         <div className="rounded-md border px-3 py-2 text-center">
           <div className="text-xs text-muted-foreground">Rage Damage</div>
           <div className="font-bold text-lg">{rageDmg}</div>
@@ -136,14 +130,15 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
           <div className="font-bold text-lg">{level >= 5 ? 2 : 1}</div>
         </div>
       </div>
+      )}
 
-      {!creation && (
+      {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
         <Field label="Max HP">
-          <Input type="number" value={data.max_hp ?? ''} onChange={e => set('max_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
         </Field>
         <Field label="Temp HP">
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -151,22 +146,34 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
       </div>
       )}
 
-      {!creation && (
-      <div className="grid grid-cols-3 gap-3">
+      {/* Hit Dice */}
+      {showCombat && (
+        <HitDiceTracker hitDie={12} level={level} used={data.hit_dice_used} onChange={v => set('hit_dice_used', v)} readOnly={readOnly} creation={creation} />
+      )}
+
+      {/* AC */}
+      {showCombat && (
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
+      )}
+
+      {showCombat && (
+      <div className="grid grid-cols-3 gap-3">
         <Field label="Speed (ft)">
-          <Input type="number" value={data.speed ?? 30} onChange={e => set('speed', parseInt(e.target.value) || 30)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.speed ?? 30}</div>
         </Field>
-        <Field label="Hit Dice Used">
-          <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        <Field label="Speed Bonus (ft)">
+          <Input type="number" value={data.speed_bonus ?? 0} onChange={e => set('speed_bonus', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        </Field>
+        <Field label="Total Speed (ft)">
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{(data.speed ?? 30) + (data.speed_bonus ?? 0)}</div>
         </Field>
       </div>
       )}
 
       {/* Rage tracker */}
-      {!creation && (
+      {showFeatures && !creation && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2">
           <div>
             <div className="text-sm font-medium">Rage (Long Rest)</div>
@@ -185,13 +192,15 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
         </div>
       )}
 
+      {showFeatures && (
       <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
         <span className="font-medium text-foreground">Unarmored Defense</span>
         {' '}— AC = 10 + DEX mod + CON mod when not wearing armor.
       </div>
+      )}
 
       {/* Reckless Attack */}
-      {!creation && (
+      {showFeatures && !creation && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2">
           <div>
             <div className="text-sm font-medium">Reckless Attack</div>
@@ -209,6 +218,7 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
       )}
 
       {/* Weapon Mastery */}
+      {showFeatures && (
       <Field label="Weapon Mastery (choose 2, change on long rest)">
         <WeaponMasteryList
           value={data.weapon_masteries ?? []}
@@ -217,9 +227,10 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
           max={level >= 7 ? 3 : 2}
         />
       </Field>
+      )}
 
       {/* Primal Knowledge (L3) */}
-      {level >= 3 && (
+      {showFeatures && level >= 3 && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Primal Knowledge</span>
           {' '}— Use STR modifier for Acrobatics, Stealth, or Thievery checks.
@@ -227,21 +238,27 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
       )}
 
       {/* Subclass */}
-      {level >= 3 && (
+      {showFeatures && level >= 3 && (
         <Field label="Primal Path (Subclass)">
-          {readOnly ? (
-            <div className="text-sm py-2">{data.subclass || '—'}</div>
+          {(readOnly || !!data.subclass) ? (
+            data.subclass ? (
+              <SubclassDetails className="Barbarian" edition="5.5e" subclassName={data.subclass} level={level} />
+            ) : (
+              <div className="text-sm py-2">—</div>
+            )
           ) : (
-            <OptionCardPicker
+            <SubclassPickerWithDetail
               options={SUBCLASSES}
               value={data.subclass ?? ''}
               onChange={v => set('subclass', v)}
+              className="Barbarian"
+              edition="5.5e"
             />
           )}
         </Field>
       )}
 
-      {creation ? (
+      {showFeatures && (creation ? (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
           {(CLASS_FEATURES_2024.Barbarian[1] ?? []).map(feat => (
@@ -252,31 +269,30 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
           ))}
         </div>
       ) : (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Class Features</Label>
-          <div className="rounded-md border divide-y text-sm">
-            <FeatureRow name="Rage + Unarmored Defense + Weapon Mastery" earned={level >= 1} />
-            <FeatureRow name="Reckless Attack + Danger Sense" earned={level >= 2} />
-            <FeatureRow name="Primal Knowledge + Primal Path (Subclass)" earned={level >= 3} />
-            <FeatureRow name="Extra Attack" earned={level >= 5} />
-            <FeatureRow name="Fast Movement" earned={level >= 5} />
-            <FeatureRow name="Feral Instinct + Instinctive Pounce" earned={level >= 7} />
-            <FeatureRow name="Brutal Strike" earned={level >= 9} />
-            <FeatureRow name="Relentless Rage" earned={level >= 11} />
-            <FeatureRow name="Persistent Rage" earned={level >= 15} />
-            <FeatureRow name="Indomitable Might" earned={level >= 18} />
-            <FeatureRow name="Primal Champion" earned={level >= 20} />
-          </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Class Features</Label>
+          {Array.from({ length: level }, (_, i) => i + 1).flatMap(lvl =>
+            (CLASS_FEATURES_2024.Barbarian[lvl] ?? []).map(feat => ({ ...feat, lvl }))
+          ).map(feat => (
+            <div key={`${feat.lvl}-${feat.name}`} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {feat.lvl}</span>
+                <div className="font-semibold text-sm">{feat.name}</div>
+              </div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
-      )}
+      ))}
 
-      {[4, 8, 12, 16, 19].some(l => l <= level) && (
+      {showFeatures && [4, 8, 12, 16, 19].some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Ability Score Improvements / Feats</span>
           {' '}— at levels 4, 8, 12, 16, 19.
         </div>
       )}
 
+      {showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">
@@ -288,6 +304,7 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
             max={2} allowed={['Animal Handling', 'Athletics', 'Intimidation', 'Nature', 'Perception', 'Survival']} backgroundSkills={backgroundSkills} />
         )}
       </Field>
+      )}
     </div>
   );
 }

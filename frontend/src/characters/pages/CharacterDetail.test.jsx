@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import CharacterDetail from './CharacterDetail';
@@ -27,6 +27,14 @@ vi.mock('../../shared/components/layout/MainLayout', () => ({
   default: ({ children }) => <div>{children}</div>,
 }));
 
+// Render all tab panels unconditionally so tests can find content without clicking tabs
+vi.mock('@/components/ui/tabs', () => ({
+  Tabs: ({ children }) => <div>{children}</div>,
+  TabsList: ({ children }) => <div role="tablist">{children}</div>,
+  TabsTrigger: ({ value, children }) => <button role="tab" data-value={value}>{children}</button>,
+  TabsContent: ({ children }) => <div>{children}</div>,
+}));
+
 const mockNavigate = vi.fn();
 
 const BASE_CHARACTER = {
@@ -40,7 +48,7 @@ const BASE_CHARACTER = {
   strength: 16, dexterity: 12, constitution: 14,
   intelligence: 10, wisdom: 12, charisma: 8,
   character_data: {
-    current_hp: 45, max_hp: 52,
+    current_hp: 45, hp_max: 52,
     fighting_style: 'Defense',
     skill_proficiencies: ['Athletics'],
   },
@@ -125,8 +133,19 @@ describe('CharacterDetail', () => {
 
   it('shows Fighter Features section with class data', async () => {
     renderDetail();
+    // Tabs mock renders all panels unconditionally — no tab click needed
     await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
     expect(screen.getByText('Second Wind (Short Rest)')).toBeInTheDocument();
+  });
+
+  it('shows class features earned at or below current level and hides future features', async () => {
+    // BASE_CHARACTER is a level 5 Fighter
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+    // "Extra Attack (2 attacks)" is the level 5 Fighter feature name — must be shown
+    expect(screen.getAllByText('Extra Attack (2 attacks)').length).toBeGreaterThan(0);
+    // Indomitable variants are level 9+ — none should appear at level 5
+    expect(screen.queryByText(/Indomitable/)).not.toBeInTheDocument();
   });
 
   describe('GM view', () => {
@@ -369,6 +388,102 @@ describe('CharacterDetail', () => {
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText('Racial Traits')).not.toBeInTheDocument();
     });
+
+    it('shows background_languages merged with race_languages in Languages section', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          user_id: 2,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_languages: ['Common', 'Elvish'],
+            background_languages: ['Draconic', 'Elvish'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Languages')).toBeInTheDocument());
+      expect(screen.getByText('Common')).toBeInTheDocument();
+      expect(screen.getByText('Elvish')).toBeInTheDocument();
+      expect(screen.getByText('Draconic')).toBeInTheDocument();
+      // Elvish appears only once (deduped)
+      expect(screen.getAllByText('Elvish')).toHaveLength(1);
+    });
+
+    it('shows Languages section from background_languages when race_languages is absent', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          user_id: 2,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            background_languages: ['Abyssal', 'Celestial'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Languages')).toBeInTheDocument());
+      expect(screen.getByText('Abyssal')).toBeInTheDocument();
+      expect(screen.getByText('Celestial')).toBeInTheDocument();
+    });
+  });
+
+  describe('max HP is read-only', () => {
+    it('max HP value is displayed from hp_max key in character_data', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      // hp_max: 52 — shown as static text in the Fighter sheet HP section
+      expect(screen.getByText('52')).toBeInTheDocument();
+    });
+
+    it('max HP is not an editable input (no display value for hp_max)', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByDisplayValue('Aldric')).toBeInTheDocument());
+      // 52 should not be an input value — it's rendered as a static div
+      expect(screen.queryByDisplayValue('52')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('speed fields', () => {
+    it('shows Speed (ft), Speed Bonus (ft), and Total Speed (ft) labels', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText('Speed (ft)')).toBeInTheDocument();
+      expect(screen.getByText('Speed Bonus (ft)')).toBeInTheDocument();
+      expect(screen.getByText('Total Speed (ft)')).toBeInTheDocument();
+    });
+
+    it('base speed is a static display, not an editable input', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      // character_data.speed is undefined → defaults to 30 in the static div
+      // should NOT appear as an input value
+      expect(screen.queryByDisplayValue('30')).not.toBeInTheDocument();
+    });
+
+    it('total speed shows sum of base speed and bonus (both default 30+0=30)', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      // Both Speed (ft) and Total Speed (ft) show 30 as static text
+      const thirties = screen.getAllByText('30');
+      expect(thirties.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('shows correct total speed when character has speed set', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: { ...BASE_CHARACTER.character_data, speed: 35, speed_bonus: 10 },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText('35')).toBeInTheDocument();
+      expect(screen.getByText('45')).toBeInTheDocument();
+    });
   });
 
   describe('player viewing another player\'s visible character', () => {
@@ -386,6 +501,250 @@ describe('CharacterDetail', () => {
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // No Save buttons should appear since no dirty state and readOnly
       expect(screen.queryByText('Save')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('tab structure', () => {
+    it('always shows Stats, Features, and Weapons & Armor tab triggers', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Stats/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Features/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Weapons & Armor/i })).toBeInTheDocument();
+    });
+
+    it('does NOT show Spells tab for non-spellcasting Fighter with no race cantrips', async () => {
+      renderDetail(); // BASE_CHARACTER is Fighter
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByRole('tab', { name: /Spells/i })).not.toBeInTheDocument();
+    });
+
+    it('shows Spells tab trigger for Wizard (spellcasting class)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, char_class: 'Wizard', character_data: { skill_proficiencies: [] } },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
+    });
+
+    it('shows Spells tab for Tiefling Fighter (race-granted Thaumaturgy)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, race: 'Tiefling', character_data: { skill_proficiencies: [] } },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
+    });
+
+    it('shows Spells tab for High Elf Fighter with chosen cantrip', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Elf',
+          character_data: { skill_proficiencies: [], subrace: 'High Elf', high_elf_cantrip: 'Prestidigitation' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
+    });
+
+    it('shows Spells tab for Forest Gnome Fighter (race-granted Minor Illusion)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Gnome',
+          character_data: { skill_proficiencies: [], subrace: 'Forest Gnome' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
+    });
+
+    it('non-spellcasting Fighter has exactly 3 tabs; spellcasting Wizard has 4', async () => {
+      // Fighter: Stats + Features + Weapons & Armor = 3
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getAllByRole('tab')).toHaveLength(3);
+    });
+  });
+
+  describe('level is read-only', () => {
+    it('level is not rendered as an editable input in owner view', async () => {
+      // level=5; no ability score equals 5 (STR=16, DEX=12, CON=14, INT=10, WIS=12, CHA=8)
+      // so queryByDisplayValue('5') returns null only if level is a read-only div, not an input
+      renderDetail();
+      await waitFor(() => expect(screen.getByDisplayValue('Aldric')).toBeInTheDocument());
+      expect(screen.queryByDisplayValue('5')).not.toBeInTheDocument();
+    });
+
+    it('level value appears as static text in the character header', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText(/Level 5 Fighter/)).toBeInTheDocument());
+    });
+  });
+
+  describe('subclass locking', () => {
+    beforeEach(() => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm' } });
+      useAuth.mockReturnValue({ user: { id: 1, username: 'gm' } });
+    });
+
+    it('shows subclass as locked text when character_data.subclass is set (GM view)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER, // level 5 Fighter — hasSubclass(5) is true
+          gm_notes: null,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Champion' },
+        },
+      });
+      renderDetail();
+      // Tabs mock renders all panels unconditionally — Fighter Features is always in the DOM
+      await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+      // Locked: subclass name rendered as plain text
+      expect(screen.getByText('Champion')).toBeInTheDocument();
+      // Picker hidden: no SubclassPickerWithDetail info buttons
+      expect(screen.queryAllByTestId(/^subclass-info-/).length).toBe(0);
+    });
+
+    it('shows subclass picker when character has no subclass at unlock level (GM view)', async () => {
+      // BASE_CHARACTER is level 5 Fighter with no subclass set — picker must appear
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, gm_notes: null },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+      // Picker shown: info buttons visible for Fighter subclass options
+      expect(screen.getByTestId('subclass-info-Champion')).toBeInTheDocument();
+    });
+
+    it('shows subclass flavor text when subclass is locked', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          gm_notes: null,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Champion' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+      expect(screen.getByText(/archetypal Champion focuses on the development/)).toBeInTheDocument();
+    });
+
+    it('shows subclass features earned at current level when subclass is locked', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER, // level 5 Fighter
+          gm_notes: null,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Champion' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+      // Improved Critical unlocks at level 3, character is level 5 — must appear
+      expect(screen.getByText('Improved Critical')).toBeInTheDocument();
+      // Remarkable Athlete unlocks at level 7, character is level 5 — must NOT appear
+      expect(screen.queryByText('Remarkable Athlete')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Hit Dice Tracker', () => {
+    it('shows Hit Dice label in Stats tab', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText('Hit Dice')).toBeInTheDocument();
+    });
+
+    it('shows die type for Fighter (d10)', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      // Match only the HitDiceTracker <span> (text starts with d10, not embedded in "1d10")
+      const hdContainer = screen.getByText('Hit Dice').parentElement;
+      expect(within(hdContainer).getByText(/^d10/)).toBeInTheDocument();
+    });
+
+    it('shows remaining / total count when no dice have been used', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      // BASE_CHARACTER has no hit_dice_used → 0 used, level 5 → 5 / 5 remaining
+      const hdContainer = screen.getByText('Hit Dice').parentElement;
+      expect(within(hdContainer).getByText('5 / 5 remaining')).toBeInTheDocument();
+    });
+
+    it('shows correct remaining count when hit_dice_used is pre-populated', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: { ...BASE_CHARACTER.character_data, hit_dice_used: 3 },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      const hdContainer = screen.getByText('Hit Dice').parentElement;
+      expect(within(hdContainer).getByText('2 / 5 remaining')).toBeInTheDocument();
+    });
+
+    // Button interaction tests require GM view — class sheet is readOnly for non-GMs
+    // (readOnly = displayAsPlayer || !canEdit; displayAsPlayer is always true for non-GMs)
+    describe('GM interactive buttons', () => {
+      beforeEach(() => {
+        useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm' } });
+        useAuth.mockReturnValue({ user: { id: 1, username: 'gm' } });
+      });
+
+      it('minus button is disabled when no dice have been used', async () => {
+        renderDetail();
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+        const hdContainer = screen.getByText('Hit Dice').parentElement;
+        const minusBtn = within(hdContainer).getByRole('button', { name: '−' });
+        expect(minusBtn).toBeDisabled();
+      });
+
+      it('clicking + updates remaining count and enables Save', async () => {
+        renderDetail();
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+        const hdContainer = screen.getByText('Hit Dice').parentElement;
+        const plusBtn = within(hdContainer).getByRole('button', { name: '+' });
+        expect(plusBtn).not.toBeDisabled();
+        fireEvent.click(plusBtn);
+        await waitFor(() => expect(within(screen.getByText('Hit Dice').parentElement).getByText('4 / 5 remaining')).toBeInTheDocument());
+        expect(screen.getAllByText('Save').length).toBeGreaterThan(0);
+      });
+
+      it('clicking + then Save calls updateCharacter with hit_dice_used: 1', async () => {
+        characterService.updateCharacter.mockResolvedValue({
+          success: true,
+          data: { ...BASE_CHARACTER, character_data: { ...BASE_CHARACTER.character_data, hit_dice_used: 1 } },
+        });
+        renderDetail();
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+
+        const hdContainer = screen.getByText('Hit Dice').parentElement;
+        fireEvent.click(within(hdContainer).getByRole('button', { name: '+' }));
+        await waitFor(() => expect(screen.getAllByText('Save').length).toBeGreaterThan(0));
+
+        const saveBtns = screen.getAllByText('Save');
+        fireEvent.click(saveBtns[0]);
+
+        await waitFor(() => {
+          expect(characterService.updateCharacter).toHaveBeenCalledWith('1',
+            expect.objectContaining({
+              character_data: expect.objectContaining({ hit_dice_used: 1 }),
+            })
+          );
+        });
+      });
     });
   });
 });

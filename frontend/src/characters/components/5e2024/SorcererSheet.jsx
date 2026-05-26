@@ -5,7 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import OptionCardPicker from '../OptionCardPicker';
+import SubclassPickerWithDetail from '../SubclassPickerWithDetail';
+import SubclassDetails from '../SubclassDetails';
 import { SORCERER_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
+import HitDiceTracker from '../HitDiceTracker';
 import { CLASS_FEATURES_2024 } from '../classFeatures2024';
 
 const METAMAGIC_OPTIONS = [
@@ -33,15 +36,6 @@ function metamagicCount(level) {
   if (level >= 10) return 3;
   if (level >= 3)  return 2;
   return 0;
-}
-
-function FeatureRow({ name, earned }) {
-  return (
-    <div className={`px-3 py-2 flex justify-between items-center ${earned ? '' : 'opacity-40'}`}>
-      <span>{name}</span>
-      {earned && <Badge variant="outline" className="text-xs">Unlocked</Badge>}
-    </div>
-  );
 }
 
 function SkillPicker({ value, onChange, max, backgroundSkills = [] }) {
@@ -85,8 +79,10 @@ function SkillPicker({ value, onChange, max, backgroundSkills = [] }) {
   );
 }
 
-export default function SorcererSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
+export default function SorcererSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
+  const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
+  const showFeatures = section !== 'stats';
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
 
@@ -151,24 +147,22 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Hit Die</div>
-          <div className="font-bold text-lg">d6</div>
-        </div>
+      {showFeatures && (
+      <div className="grid grid-cols-1 gap-3">
         <div className="rounded-md border px-3 py-2 text-center">
           <div className="text-xs text-muted-foreground">Sorcery Points</div>
           <div className="font-bold text-lg">{sorceryPointsTotal > 0 ? sorceryPointsTotal : 'L2+'}</div>
         </div>
       </div>
+      )}
 
-      {!creation && (
+      {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
         <Field label="Max HP">
-          <Input type="number" value={data.max_hp ?? ''} onChange={e => set('max_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
         </Field>
         <Field label="Temp HP">
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -176,22 +170,34 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
       </div>
       )}
 
-      {!creation && (
-      <div className="grid grid-cols-3 gap-3">
+      {/* Hit Dice */}
+      {showCombat && (
+        <HitDiceTracker hitDie={6} level={level} used={data.hit_dice_used} onChange={v => set('hit_dice_used', v)} readOnly={readOnly} creation={creation} />
+      )}
+
+      {/* AC */}
+      {showCombat && (
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
+      )}
+
+      {showCombat && (
+      <div className="grid grid-cols-3 gap-3">
         <Field label="Speed (ft)">
-          <Input type="number" value={data.speed ?? 30} onChange={e => set('speed', parseInt(e.target.value) || 30)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.speed ?? 30}</div>
         </Field>
-        <Field label="Hit Dice Used">
-          <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        <Field label="Speed Bonus (ft)">
+          <Input type="number" value={data.speed_bonus ?? 0} onChange={e => set('speed_bonus', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        </Field>
+        <Field label="Total Speed (ft)">
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{(data.speed ?? 30) + (data.speed_bonus ?? 0)}</div>
         </Field>
       </div>
       )}
 
       {/* Innate Sorcery (L1) */}
-      {!creation && (
+      {showFeatures && !creation && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2">
           <div>
             <div className="text-sm font-medium">Innate Sorcery (Long Rest)</div>
@@ -209,7 +215,7 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
       )}
 
       {/* Sorcery Points tracker */}
-      {sorceryPointsTotal > 0 && (
+      {sorceryPointsTotal > 0 && showFeatures && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2">
           <div>
             <div className="text-sm font-medium">Sorcery Points (Long Rest)</div>
@@ -229,22 +235,28 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
       )}
 
       {/* Subclass (L3 in 2024) */}
-      {level >= 3 && (
+      {level >= 3 && showFeatures && (
         <Field label="Sorcerous Origin (Subclass)">
-          {readOnly ? (
-            <div className="text-sm py-2">{data.subclass || '—'}</div>
+          {(readOnly || !!data.subclass) ? (
+            data.subclass ? (
+              <SubclassDetails className="Sorcerer" edition="5.5e" subclassName={data.subclass} level={level} />
+            ) : (
+              <div className="text-sm py-2">—</div>
+            )
           ) : (
-            <OptionCardPicker
+            <SubclassPickerWithDetail
               options={SUBCLASSES}
               value={data.subclass ?? ''}
               onChange={v => set('subclass', v)}
+              className="Sorcerer"
+              edition="5.5e"
             />
           )}
         </Field>
       )}
 
       {/* Metamagic picker (L3+) */}
-      {mmMax > 0 && (
+      {mmMax > 0 && showFeatures && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Metamagic ({mmMax} options)</Label>
           <div className="flex flex-wrap gap-1.5">
@@ -272,7 +284,7 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
       )}
 
       {/* Spell Slots — static info during creation, tracker during play */}
-      {creation ? (
+      {creation && (
         <div className="rounded-md border px-3 py-2 space-y-1">
           <Label className="text-xs text-muted-foreground">Spellcasting at Level 1</Label>
           <div className="text-sm font-medium">2 leveled spells known</div>
@@ -280,7 +292,8 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
           <div className="text-sm font-medium">4 cantrips known</div>
           <div className="text-xs text-muted-foreground">All slots recover on a Long Rest · Spells and cantrips chosen in CharacterDetail</div>
         </div>
-      ) : (
+      )}
+      {!creation && section !== 'features' && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
@@ -307,14 +320,14 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
         </div>
       )}
 
-      {!creation && (
+      {!creation && section !== 'features' && (
         <>
           <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
           <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
         </>
       )}
 
-      {creation ? (
+      {showFeatures && (creation ? (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
           {(CLASS_FEATURES_2024.Sorcerer[1] ?? []).map(feat => (
@@ -325,25 +338,30 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
           ))}
         </div>
       ) : (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Class Features</Label>
-          <div className="rounded-md border divide-y text-sm">
-            <FeatureRow name="Spellcasting + Innate Sorcery" earned={level >= 1} />
-            <FeatureRow name="Sorcery Points (Font of Magic)" earned={level >= 2} />
-            <FeatureRow name="Metamagic + Sorcerous Origin (Subclass)" earned={level >= 3} />
-            <FeatureRow name="Sorcerous Restoration" earned={level >= 5} />
-            <FeatureRow name="Arcane Apotheosis" earned={level >= 20} />
-          </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Class Features</Label>
+          {Array.from({ length: level }, (_, i) => i + 1).flatMap(lvl =>
+            (CLASS_FEATURES_2024.Sorcerer[lvl] ?? []).map(feat => ({ ...feat, lvl }))
+          ).map(feat => (
+            <div key={`${feat.lvl}-${feat.name}`} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {feat.lvl}</span>
+                <div className="font-semibold text-sm">{feat.name}</div>
+              </div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
-      )}
+      ))}
 
-      {[4, 8, 12, 16, 19].some(l => l <= level) && (
+      {[4, 8, 12, 16, 19].some(l => l <= level) && showFeatures && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Ability Score Improvements / Feats</span>
           {' '}— at levels 4, 8, 12, 16, 19.
         </div>
       )}
 
+      {showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">
@@ -354,6 +372,7 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
           <SkillPicker value={data.skill_proficiencies ?? []} onChange={v => set('skill_proficiencies', v)} max={2} backgroundSkills={backgroundSkills} />
         )}
       </Field>
+      )}
     </div>
   );
 }

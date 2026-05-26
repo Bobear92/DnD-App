@@ -10,7 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
 import OptionCardPicker from './OptionCardPicker';
+import SubclassPickerWithDetail from './SubclassPickerWithDetail';
+import SubclassDetails from './SubclassDetails';
 import { DRUID_SUBCLASSES_5E } from './classChoicesData';
+import HitDiceTracker from './HitDiceTracker';
 
 const WIZARD_SLOTS = {
   1:  [2,0,0,0,0,0,0,0,0], 2:  [3,0,0,0,0,0,0,0,0],
@@ -36,15 +39,6 @@ function wildShapeMaxCR(level) {
 }
 
 const ASI_LEVELS = [4, 8, 12, 16, 19];
-
-function FeatureRow({ name, earned }) {
-  return (
-    <div className={`px-3 py-2 flex justify-between items-center ${earned ? '' : 'opacity-40'}`}>
-      <span>{name}</span>
-      {earned && <Badge variant="outline" className="text-xs">Unlocked</Badge>}
-    </div>
-  );
-}
 
 function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
   const toggle = (skill) => {
@@ -88,8 +82,10 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
   );
 }
 
-export default function DruidSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
+export default function DruidSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
+  const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
+  const showFeatures = section !== 'stats';
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
 
@@ -155,27 +151,23 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
   return (
     <div className="space-y-4">
       {/* Combat info */}
-      <div className={`grid gap-3 ${level >= 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      {showFeatures && level >= 2 && (
+      <div className="grid grid-cols-1 gap-3">
         <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Hit Die</div>
-          <div className="font-bold text-lg">d8</div>
+          <div className="text-xs text-muted-foreground">Wild Shape Max</div>
+          <div className="font-bold text-lg">{wildShapeMaxCR(level)}</div>
         </div>
-        {level >= 2 && (
-          <div className="rounded-md border px-3 py-2 text-center">
-            <div className="text-xs text-muted-foreground">Wild Shape Max</div>
-            <div className="font-bold text-lg">{wildShapeMaxCR(level)}</div>
-          </div>
-        )}
       </div>
+      )}
 
       {/* HP */}
-      {!creation && (
+      {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
         <Field label="Max HP">
-          <Input type="number" value={data.max_hp ?? ''} onChange={e => set('max_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
         </Field>
         <Field label="Temp HP">
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -183,23 +175,35 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
       </div>
       )}
 
-      {/* AC / Speed / Hit Dice */}
-      {!creation && (
-      <div className="grid grid-cols-3 gap-3">
+      {/* Hit Dice */}
+      {showCombat && (
+        <HitDiceTracker hitDie={8} level={level} used={data.hit_dice_used} onChange={v => set('hit_dice_used', v)} readOnly={readOnly} creation={creation} />
+      )}
+
+      {/* AC */}
+      {showCombat && (
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
+      )}
+
+      {/* Speed */}
+      {showCombat && (
+      <div className="grid grid-cols-3 gap-3">
         <Field label="Speed (ft)">
-          <Input type="number" value={data.speed ?? 30} onChange={e => set('speed', parseInt(e.target.value) || 30)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.speed ?? 30}</div>
         </Field>
-        <Field label="Hit Dice Used">
-          <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        <Field label="Speed Bonus (ft)">
+          <Input type="number" value={data.speed_bonus ?? 0} onChange={e => set('speed_bonus', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        </Field>
+        <Field label="Total Speed (ft)">
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{(data.speed ?? 30) + (data.speed_bonus ?? 0)}</div>
         </Field>
       </div>
       )}
 
       {/* Wild Shape tracker */}
-      {level >= 2 && (
+      {showFeatures && level >= 2 && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2">
           <div>
             <div className="text-sm font-medium">Wild Shape (Short Rest)</div>
@@ -217,28 +221,35 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
       )}
 
       {/* Druid Circle subclass (level 2) */}
-      {level >= 2 && (
+      {showFeatures && level >= 2 && (
         <Field label="Druid Circle (Subclass)">
-          {readOnly ? (
-            <div className="text-sm py-2">{data.subclass || '—'}</div>
+          {(readOnly || !!data.subclass) ? (
+            data.subclass ? (
+              <SubclassDetails className="Druid" edition="5e" subclassName={data.subclass} level={level} />
+            ) : (
+              <div className="text-sm py-2">—</div>
+            )
           ) : (
-            <OptionCardPicker
+            <SubclassPickerWithDetail
               options={DRUID_SUBCLASSES_5E}
               value={data.subclass ?? ''}
               onChange={v => set('subclass', v)}
+              className="Druid"
+              edition="5e"
             />
           )}
         </Field>
       )}
 
       {/* Spell Slots — static info during creation, tracker during play */}
-      {creation ? (
+      {creation && (
         <div className="rounded-md border px-3 py-2 space-y-1">
           <Label className="text-xs text-muted-foreground">Spell Slots at Level 1</Label>
           <div className="text-sm font-medium">2 × Level 1 spell slots</div>
           <div className="text-xs text-muted-foreground">All slots recover on a Long Rest</div>
         </div>
-      ) : (
+      )}
+      {!creation && section !== 'features' && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
@@ -265,7 +276,7 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
         </div>
       )}
 
-      {!creation && (
+      {!creation && section !== 'features' && (
         <>
           <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
           <SpellList dataKey="prepared_spells" label="Prepared Spells (WIS mod + level)" newValue={newSpell} setNew={setNewSpell} placeholder="Add prepared spell…" />
@@ -273,7 +284,8 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
       )}
 
       {/* Class features */}
-      {creation ? (
+      {showFeatures && (
+      creation ? (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
           {(CLASS_FEATURES_5E.Druid[1] ?? []).map(feat => (
@@ -284,21 +296,25 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
           ))}
         </div>
       ) : (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Class Features</Label>
-          <div className="rounded-md border divide-y text-sm">
-            <FeatureRow name="Druidic + Spellcasting" earned={level >= 1} />
-            <FeatureRow name="Wild Shape + Druid Circle (Subclass)" earned={level >= 2} />
-            <FeatureRow name="Wild Shape (CR 1/2, swim speed)" earned={level >= 4} />
-            <FeatureRow name="Wild Shape (CR 1, fly speed)" earned={level >= 8} />
-            <FeatureRow name="Timeless Body + Beast Spells" earned={level >= 18} />
-            <FeatureRow name="Archdruid" earned={level >= 20} />
-          </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Class Features</Label>
+          {Array.from({ length: level }, (_, i) => i + 1).flatMap(lvl =>
+            (CLASS_FEATURES_5E.Druid[lvl] ?? []).map(feat => ({ ...feat, lvl }))
+          ).map(feat => (
+            <div key={`${feat.lvl}-${feat.name}`} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {feat.lvl}</span>
+                <div className="font-semibold text-sm">{feat.name}</div>
+              </div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
+      )
       )}
 
       {/* ASI reminder */}
-      {ASI_LEVELS.some(l => l <= level) && (
+      {showFeatures && ASI_LEVELS.some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Ability Score Improvements / Feats</span>
           {' '}— at levels 4, 8, 12, 16, 19.
@@ -306,6 +322,7 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
       )}
 
       {/* Skill proficiencies */}
+      {showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">
@@ -322,6 +339,7 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
           />
         )}
       </Field>
+      )}
     </div>
   );
 }

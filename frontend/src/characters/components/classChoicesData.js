@@ -297,7 +297,21 @@ export const WIZARD_SUBCLASSES_2024 = [
   { value: 'War Magic',           description: 'Arcane Deflection vs. hits and saves; Tactical Wit for initiative; Power Surge for burst damage.' },
 ];
 
-// ── Pact Boons ───────────────────────────────────────────────────────────────
+// ── Subclass unlock levels ────────────────────────────────────────────────────
+// Level at which each class permanently chooses its subclass.
+// Classes with unlock level 1 have the subclass chosen during character creation.
+
+export const SUBCLASS_UNLOCK_LEVEL_5E = {
+  Barbarian: 3, Bard: 3, Cleric: 1, Druid: 2, Fighter: 3,
+  Monk: 3, Paladin: 3, Ranger: 3, Rogue: 3, Sorcerer: 1, Warlock: 1, Wizard: 2,
+};
+
+export const SUBCLASS_UNLOCK_LEVEL_2024 = {
+  Barbarian: 3, Bard: 3, Cleric: 3, Druid: 3, Fighter: 3,
+  Monk: 3, Paladin: 3, Ranger: 3, Rogue: 3, Sorcerer: 3, Warlock: 3, Wizard: 3,
+};
+
+// Pact Boons ───────────────────────────────────────────────────────────────
 
 export const PACT_BOONS_5E = [
   { value: 'Pact of the Chain', description: 'A superior familiar (imp, pseudodragon, quasit, or sprite) serves you — it can attack and has unique abilities.' },
@@ -311,3 +325,35 @@ export const PACT_BOONS_2024 = [
   { value: 'Pact of the Tome',      description: 'Book of Shadows with three extra cantrips from any class; gain ritual casting for those spells.' },
   { value: 'Pact of the Talisman',  description: 'Magical talisman lets the wearer add 1d4 to failed ability checks; you can summon it back at will.' },
 ];
+
+// ── Subclass options by class (for LevelUpWizard) ─────────────────────────────
+
+export const SUBCLASS_OPTIONS_5E = {
+  Barbarian: BARBARIAN_SUBCLASSES_5E,
+  Bard:      BARD_SUBCLASSES_5E,
+  Cleric:    CLERIC_SUBCLASSES_5E,
+  Druid:     DRUID_SUBCLASSES_5E,
+  Fighter:   FIGHTER_SUBCLASSES_5E,
+  Monk:      MONK_SUBCLASSES_5E,
+  Paladin:   PALADIN_SUBCLASSES_5E,
+  Ranger:    RANGER_SUBCLASSES_5E,
+  Rogue:     ROGUE_SUBCLASSES_5E,
+  Sorcerer:  SORCERER_SUBCLASSES_5E,
+  Warlock:   WARLOCK_SUBCLASSES_5E,
+  Wizard:    WIZARD_SUBCLASSES_5E,
+};
+
+export const SUBCLASS_OPTIONS_2024 = {
+  Barbarian: BARBARIAN_SUBCLASSES_2024,
+  Bard:      BARD_SUBCLASSES_2024,
+  Cleric:    CLERIC_SUBCLASSES_2024,
+  Druid:     DRUID_SUBCLASSES_2024,
+  Fighter:   FIGHTER_SUBCLASSES_2024,
+  Monk:      MONK_SUBCLASSES_2024,
+  Paladin:   PALADIN_SUBCLASSES_2024,
+  Ranger:    RANGER_SUBCLASSES_2024,
+  Rogue:     ROGUE_SUBCLASSES_2024,
+  Sorcerer:  SORCERER_SUBCLASSES_2024,
+  Warlock:   WARLOCK_SUBCLASSES_2024,
+  Wizard:    WIZARD_SUBCLASSES_2024,
+};

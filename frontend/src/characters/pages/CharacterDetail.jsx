@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Eye, EyeOff, Trash2, Save, RotateCcw, TrendingUp, Star, Plus } from 'lucide-react';
+import { ChevronLeft, Eye, EyeOff, Trash2, Save, RotateCcw, TrendingUp, Star, Plus, Wand2, Shield, Sword, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -79,7 +80,6 @@ const SKILL_MAP = [
   { skill: 'Survival', ability: 'wisdom' },
 ];
 
-// XP thresholds to reach each level (index = target level)
 const XP_THRESHOLDS = [0, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000,
   64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 
@@ -101,11 +101,24 @@ const CLASS_SHEETS_2024 = {
   Rogue: RogueSheet2024, Sorcerer: SorcererSheet2024, Warlock: WarlockSheet2024, Wizard: WizardSheet2024,
 };
 
+const SPELLCASTING_CLASSES = new Set(['Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Warlock', 'Wizard']);
+
 const ALIGNMENTS = [
   'Lawful Good', 'Neutral Good', 'Chaotic Good',
   'Lawful Neutral', 'True Neutral', 'Chaotic Neutral',
   'Lawful Evil', 'Neutral Evil', 'Chaotic Evil',
 ];
+
+function computeRaceGrantedCantrips(character) {
+  const cd = character?.character_data ?? {};
+  const cantrips = [];
+  if (cd.high_elf_cantrip) cantrips.push(cd.high_elf_cantrip);
+  const SUBRACE_CANTRIPS = { 'Forest Gnome': 'Minor Illusion', 'Drow': 'Dancing Lights' };
+  if (SUBRACE_CANTRIPS[cd.subrace]) cantrips.push(SUBRACE_CANTRIPS[cd.subrace]);
+  const RACE_CANTRIPS = { 'Tiefling': 'Thaumaturgy' };
+  if (RACE_CANTRIPS[character?.race]) cantrips.push(RACE_CANTRIPS[character.race]);
+  return cantrips;
+}
 
 function useSection(initial) {
   const [draft, setDraft] = useState(initial);
@@ -128,12 +141,10 @@ export default function CharacterDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [playerView, setPlayerView] = useState(false);
 
-  // Leveling
   const [xpInput, setXpInput] = useState('');
   const [addingXp, setAddingXp] = useState(false);
   const [levelUpWizardOpen, setLevelUpWizardOpen] = useState(false);
 
-  // Section drafts
   const identity = useSection(null);
   const classSection = useSection(null);
   const savingThrows = useSection(null);
@@ -143,7 +154,6 @@ export default function CharacterDetail() {
   const isOwner = character?.user_id === user?.id;
   const canEdit = isOwner || isGm;
   const displayAsPlayer = !isGm || playerView;
-  // Owner can always edit their own character; GM can edit only when not in player-view preview
   const showEditable = isOwner || (isGm && !playerView);
 
   useEffect(() => { load(); }, [characterId]);
@@ -155,14 +165,15 @@ export default function CharacterDetail() {
       const c = result.data;
       setCharacter(c);
       identity.commit({
-        name: c.name, race: c.race, level: c.level,
+        name: c.name, race: c.race,
         background: c.background ?? '', alignment: c.alignment ?? '',
         strength: c.strength, dexterity: c.dexterity, constitution: c.constitution,
         intelligence: c.intelligence, wisdom: c.wisdom, charisma: c.charisma,
         notes: c.notes ?? '',
+        // level kept in draft for proficiency calculations but never editable
+        level: c.level,
       });
       classSection.commit(c.character_data ?? {});
-      // Save throw proficiencies stored in character_data
       const defaultProfs = CLASS_SAVE_PROFS[c.char_class] ?? [];
       const storedProfs = {};
       ABILITY_LABELS.forEach(a => {
@@ -191,7 +202,6 @@ export default function CharacterDetail() {
     await saveSection({
       name: identity.draft.name,
       race: identity.draft.race,
-      level: identity.draft.level,
       background: identity.draft.background,
       alignment: identity.draft.alignment,
       strength: identity.draft.strength,
@@ -213,7 +223,6 @@ export default function CharacterDetail() {
   };
 
   const saveClassData = async () => {
-    // Merge save throw profs into character_data
     const merged = { ...classSection.draft, ...savingThrows.draft };
     await saveSection({ character_data: merged }, (updated) => {
       classSection.commit(updated.character_data ?? {});
@@ -303,6 +312,9 @@ export default function CharacterDetail() {
   const edition = campaign?.edition || '5e';
   const ClassSheet = (edition === '5.5e' ? CLASS_SHEETS_2024 : CLASS_SHEETS_5E)[character.char_class];
 
+  const raceGrantedCantrips = computeRaceGrantedCantrips(character);
+  const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || raceGrantedCantrips.length > 0;
+
   return (
     <MainLayout>
       <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -380,214 +392,305 @@ export default function CharacterDetail() {
           />
         )}
 
-        {/* Identity + Ability Scores */}
+        {/* Tabbed character sheet */}
         {identity.draft && (
-          <SectionCard
-            title="Identity & Ability Scores"
-            isDirty={identity.isDirty}
-            onSave={saveIdentity}
-            onReset={identity.reset}
-            canEdit={showEditable}
-          >
-            <div className="space-y-4">
-              {showEditable ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Name</Label>
-                    <Input value={identity.draft.name} onChange={e => identity.setDraft(d => ({ ...d, name: e.target.value }))} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Race / Species</Label>
-                    <Input value={identity.draft.race} onChange={e => identity.setDraft(d => ({ ...d, race: e.target.value }))} />
-                    {character?.character_data?.subrace && (
-                      <p className="text-xs text-muted-foreground mt-0.5">Subrace: <span className="font-medium text-foreground">{character.character_data.subrace}</span></p>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Level</Label>
-                    <Input type="number" min={1} max={20} value={identity.draft.level}
-                      onChange={e => identity.setDraft(d => ({ ...d, level: parseInt(e.target.value) || 1 }))}
-                      className="text-center" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Background</Label>
-                    <Input value={identity.draft.background} onChange={e => identity.setDraft(d => ({ ...d, background: e.target.value }))} />
-                  </div>
-                  {campaign?.use_alignment !== false && (
-                    <div className="col-span-2 space-y-1">
-                      <Label className="text-xs">Alignment</Label>
-                      <select
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        value={identity.draft.alignment}
-                        onChange={e => identity.setDraft(d => ({ ...d, alignment: e.target.value }))}
-                      >
-                        <option value="">Select alignment…</option>
-                        {ALIGNMENTS.map(a => <option key={a} value={a}>{a}</option>)}
-                      </select>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2 text-sm">
-                  <Badge variant="outline">{identity.draft.race || 'Unknown race'}</Badge>
-                  {character?.character_data?.subrace && (
-                    <Badge variant="outline">{character.character_data.subrace}</Badge>
-                  )}
-                  <Badge variant="outline">Level {identity.draft.level}</Badge>
-                  {identity.draft.background && <Badge variant="outline">{identity.draft.background}</Badge>}
-                  {campaign?.use_alignment !== false && identity.draft.alignment && <Badge variant="outline">{identity.draft.alignment}</Badge>}
-                </div>
+          <Tabs defaultValue="stats" className="space-y-4">
+            <TabsList className="grid w-full" style={{ gridTemplateColumns: hasSpells ? 'repeat(4,1fr)' : 'repeat(3,1fr)' }}>
+              <TabsTrigger value="stats" className="flex items-center gap-1.5">
+                <Shield className="h-3.5 w-3.5" /> Stats
+              </TabsTrigger>
+              <TabsTrigger value="features" className="flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5" /> Features
+              </TabsTrigger>
+              <TabsTrigger value="gear" className="flex items-center gap-1.5">
+                <Sword className="h-3.5 w-3.5" /> Weapons & Armor
+              </TabsTrigger>
+              {hasSpells && (
+                <TabsTrigger value="spells" className="flex items-center gap-1.5">
+                  <Wand2 className="h-3.5 w-3.5" /> Spells
+                </TabsTrigger>
               )}
+            </TabsList>
 
-              {/* Racial traits and languages (stored in character_data at creation) */}
-              {(character?.character_data?.race_traits?.length > 0 || character?.character_data?.race_languages?.length > 0) && (
-                <div className="space-y-2">
-                  {character.character_data.race_traits?.length > 0 && (
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Racial Traits</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {character.character_data.race_traits.map(t => (
-                          <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
-                        ))}
+            {/* ── Tab 1: Stats ── */}
+            <TabsContent value="stats" className="space-y-4">
+              <SectionCard
+                title="Identity & Ability Scores"
+                isDirty={identity.isDirty}
+                onSave={saveIdentity}
+                onReset={identity.reset}
+                canEdit={showEditable}
+              >
+                <div className="space-y-4">
+                  {showEditable ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Name</Label>
+                        <Input value={identity.draft.name} onChange={e => identity.setDraft(d => ({ ...d, name: e.target.value }))} />
                       </div>
-                    </div>
-                  )}
-                  {character.character_data.race_languages?.length > 0 && (
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Languages</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {character.character_data.race_languages.map(l => (
-                          <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
-                        ))}
+                      <div className="space-y-1">
+                        <Label className="text-xs">Race / Species</Label>
+                        <Input value={identity.draft.race} onChange={e => identity.setDraft(d => ({ ...d, race: e.target.value }))} />
+                        {character?.character_data?.subrace && (
+                          <p className="text-xs text-muted-foreground mt-0.5">Subrace: <span className="font-medium text-foreground">{character.character_data.subrace}</span></p>
+                        )}
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Ability scores */}
-              <div>
-                <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Ability Scores</div>
-                <div className="grid grid-cols-6 gap-2">
-                  {ABILITY_LABELS.map(({ key, abbrev }) => (
-                    <div key={key} className="flex flex-col items-center">
-                      <span className="text-[10px] font-medium text-muted-foreground uppercase">{abbrev}</span>
-                      {showEditable ? (
-                        <Input
-                          type="number" min={1} max={30}
-                          value={identity.draft[key]}
-                          onChange={e => identity.setDraft(d => ({ ...d, [key]: parseInt(e.target.value) || 10 }))}
-                          className="w-full text-center font-bold p-1 h-10"
-                        />
-                      ) : (
-                        <div className="rounded-md border w-full text-center py-2 font-bold">
-                          {identity.draft[key]}
+                      <div className="space-y-1">
+                        <Label className="text-xs">Level</Label>
+                        <div className="rounded-md border bg-muted/30 px-3 py-2 text-center text-sm font-medium">
+                          {identity.draft.level}
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Background</Label>
+                        <Input value={identity.draft.background} onChange={e => identity.setDraft(d => ({ ...d, background: e.target.value }))} />
+                      </div>
+                      {campaign?.use_alignment !== false && (
+                        <div className="col-span-2 space-y-1">
+                          <Label className="text-xs">Alignment</Label>
+                          <select
+                            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                            value={identity.draft.alignment}
+                            onChange={e => identity.setDraft(d => ({ ...d, alignment: e.target.value }))}
+                          >
+                            <option value="">Select alignment…</option>
+                            {ALIGNMENTS.map(a => <option key={a} value={a}>{a}</option>)}
+                          </select>
                         </div>
                       )}
-                      <span className="text-xs text-muted-foreground">{modStr(identity.draft[key])}</span>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 text-sm">
+                      <Badge variant="outline">{identity.draft.race || 'Unknown race'}</Badge>
+                      {character?.character_data?.subrace && (
+                        <Badge variant="outline">{character.character_data.subrace}</Badge>
+                      )}
+                      <Badge variant="outline">Level {identity.draft.level}</Badge>
+                      {identity.draft.background && <Badge variant="outline">{identity.draft.background}</Badge>}
+                      {campaign?.use_alignment !== false && identity.draft.alignment && <Badge variant="outline">{identity.draft.alignment}</Badge>}
+                    </div>
+                  )}
 
-              {/* Derived stats row */}
-              <div className="grid grid-cols-4 gap-2 text-center text-sm">
-                <div className="rounded-md border py-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">Prof. Bonus</div>
-                  <div className="font-bold">+{pb}</div>
-                </div>
-                <div className="rounded-md border py-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">Initiative</div>
-                  <div className="font-bold">{modStr(identity.draft.dexterity)}</div>
-                </div>
-                <div className="rounded-md border py-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">Passive Perc.</div>
-                  <div className="font-bold">{10 + mod(identity.draft.wisdom) + pb}</div>
-                </div>
-                <div className="rounded-md border py-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">Inspiration</div>
-                  <div className="font-bold">{classSection.draft?.inspiration ? '✓' : '—'}</div>
-                </div>
-              </div>
-
-              {/* Saving Throws */}
-              <div>
-                <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Saving Throws</div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {ABILITY_LABELS.map(({ key, abbrev, save }) => {
-                    const isProficient = savingThrows.draft?.[save] ?? false;
-                    const bonus = mod(identity.draft[key]) + (isProficient ? pb : 0);
+                  {/* Racial traits and languages */}
+                  {(() => {
+                    const cd = character?.character_data ?? {};
+                    const allLanguages = [...new Set([...(cd.race_languages ?? []), ...(cd.background_languages ?? [])])];
+                    const hasTraits = (cd.race_traits?.length ?? 0) > 0;
+                    if (!hasTraits && allLanguages.length === 0) return null;
                     return (
-                      <div key={key} className="flex items-center gap-2 rounded border px-2 py-1.5 text-sm">
-                        {showEditable ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              savingThrows.setDraft(d => ({ ...d, [save]: !d[save] }));
-                            }}
-                            className={cn(
-                              'h-3.5 w-3.5 rounded-sm border flex-shrink-0 transition-colors',
-                              isProficient ? 'bg-primary border-primary' : 'bg-background border-border'
-                            )}
-                          />
-                        ) : (
-                          <div className={cn('h-3.5 w-3.5 rounded-sm border flex-shrink-0', isProficient ? 'bg-primary border-primary' : 'bg-muted border-border')} />
+                      <div className="space-y-2">
+                        {hasTraits && (
+                          <div>
+                            <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Racial Traits</div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {cd.race_traits.map(t => (
+                                <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
+                              ))}
+                            </div>
+                          </div>
                         )}
-                        <span className="flex-1 text-xs">{abbrev}</span>
-                        <span className="font-medium text-xs">{bonus >= 0 ? `+${bonus}` : bonus}</span>
+                        {allLanguages.length > 0 && (
+                          <div>
+                            <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Languages</div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {allLanguages.map(l => (
+                                <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
-                  })}
+                  })()}
+
+                  {/* Ability scores */}
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Ability Scores</div>
+                    <div className="grid grid-cols-6 gap-2">
+                      {ABILITY_LABELS.map(({ key, abbrev }) => (
+                        <div key={key} className="flex flex-col items-center">
+                          <span className="text-[10px] font-medium text-muted-foreground uppercase">{abbrev}</span>
+                          {showEditable ? (
+                            <Input
+                              type="number" min={1} max={30}
+                              value={identity.draft[key]}
+                              onChange={e => identity.setDraft(d => ({ ...d, [key]: parseInt(e.target.value) || 10 }))}
+                              className="w-full text-center font-bold p-1 h-10"
+                            />
+                          ) : (
+                            <div className="rounded-md border w-full text-center py-2 font-bold">
+                              {identity.draft[key]}
+                            </div>
+                          )}
+                          <span className="text-xs text-muted-foreground">{modStr(identity.draft[key])}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Derived stats row */}
+                  <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                    <div className="rounded-md border py-2">
+                      <div className="text-[10px] text-muted-foreground uppercase">Prof. Bonus</div>
+                      <div className="font-bold">+{pb}</div>
+                    </div>
+                    <div className="rounded-md border py-2">
+                      <div className="text-[10px] text-muted-foreground uppercase">Initiative</div>
+                      <div className="font-bold">{modStr(identity.draft.dexterity)}</div>
+                    </div>
+                    <div className="rounded-md border py-2">
+                      <div className="text-[10px] text-muted-foreground uppercase">Passive Perc.</div>
+                      <div className="font-bold">{10 + mod(identity.draft.wisdom) + pb}</div>
+                    </div>
+                    <div className="rounded-md border py-2">
+                      <div className="text-[10px] text-muted-foreground uppercase">Inspiration</div>
+                      <div className="font-bold">{classSection.draft?.inspiration ? '✓' : '—'}</div>
+                    </div>
+                  </div>
+
+                  {/* Saving Throws */}
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Saving Throws</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {ABILITY_LABELS.map(({ key, abbrev, save }) => {
+                        const isProficient = savingThrows.draft?.[save] ?? false;
+                        const bonus = mod(identity.draft[key]) + (isProficient ? pb : 0);
+                        return (
+                          <div key={key} className="flex items-center gap-2 rounded border px-2 py-1.5 text-sm">
+                            {showEditable ? (
+                              <button
+                                type="button"
+                                onClick={() => savingThrows.setDraft(d => ({ ...d, [save]: !d[save] }))}
+                                className={cn(
+                                  'h-3.5 w-3.5 rounded-sm border flex-shrink-0 transition-colors',
+                                  isProficient ? 'bg-primary border-primary' : 'bg-background border-border'
+                                )}
+                              />
+                            ) : (
+                              <div className={cn('h-3.5 w-3.5 rounded-sm border flex-shrink-0', isProficient ? 'bg-primary border-primary' : 'bg-muted border-border')} />
+                            )}
+                            <span className="flex-1 text-xs">{abbrev}</span>
+                            <span className="font-medium text-xs">{bonus >= 0 ? `+${bonus}` : bonus}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Skills */}
+                  <SkillsDisplay
+                    identityDraft={identity.draft}
+                    classData={classSection.draft}
+                    pb={pb}
+                    readOnly={displayAsPlayer || !canEdit}
+                  />
+
+                  {/* Player notes */}
+                  {(showEditable || identity.draft.notes) ? (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Notes</Label>
+                      {showEditable ? (
+                        <Textarea
+                          value={identity.draft.notes}
+                          onChange={e => identity.setDraft(d => ({ ...d, notes: e.target.value }))}
+                          placeholder="Personal notes, backstory, equipment…"
+                          rows={3}
+                        />
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{identity.draft.notes}</p>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
+              </SectionCard>
+
+              {/* Combat stats (HP, Hit Dice, AC, Speed) */}
+              {ClassSheet && classSection.draft !== null && (
+                <SectionCard
+                  title="Hit Points & Movement"
+                  isDirty={classSection.isDirty}
+                  onSave={saveClassData}
+                  onReset={classSection.reset}
+                  canEdit={showEditable}
+                >
+                  <ClassSheet
+                    data={classSection.draft}
+                    onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
+                    readOnly={displayAsPlayer || !canEdit}
+                    level={identity.draft?.level ?? character.level}
+                    section="stats"
+                  />
+                </SectionCard>
+              )}
+            </TabsContent>
+
+            {/* ── Tab 2: Features ── */}
+            <TabsContent value="features" className="space-y-4">
+              {ClassSheet && classSection.draft !== null && (
+                <SectionCard
+                  title={`${character.char_class} Features`}
+                  isDirty={classSection.isDirty || savingThrows.isDirty}
+                  onSave={saveClassData}
+                  onReset={() => { classSection.reset(); savingThrows.reset(); }}
+                  canEdit={showEditable}
+                >
+                  <ClassSheet
+                    data={classSection.draft}
+                    onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
+                    readOnly={displayAsPlayer || !canEdit}
+                    level={identity.draft?.level ?? character.level}
+                    section="features"
+                  />
+                </SectionCard>
+              )}
+            </TabsContent>
+
+            {/* ── Tab 3: Weapons & Armor ── */}
+            <TabsContent value="gear">
+              <div className="rounded-lg border bg-card p-8 text-center space-y-2">
+                <Sword className="h-8 w-8 mx-auto text-muted-foreground/40" />
+                <p className="font-medium text-muted-foreground">Equipment &amp; Inventory</p>
+                <p className="text-sm text-muted-foreground">Coming soon — weapons, armor, and gear will live here.</p>
               </div>
+            </TabsContent>
 
-              {/* Skills */}
-              <SkillsDisplay
-                identityDraft={identity.draft}
-                classData={classSection.draft}
-                pb={pb}
-                readOnly={displayAsPlayer || !canEdit}
-              />
-
-              {/* Player notes */}
-              {(showEditable) || identity.draft.notes ? (
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Notes</Label>
-                  {showEditable ? (
-                    <Textarea
-                      value={identity.draft.notes}
-                      onChange={e => identity.setDraft(d => ({ ...d, notes: e.target.value }))}
-                      placeholder="Personal notes, backstory, equipment…"
-                      rows={3}
+            {/* ── Tab 4: Spells ── */}
+            {hasSpells && (
+              <TabsContent value="spells" className="space-y-4">
+                {ClassSheet && classSection.draft !== null && SPELLCASTING_CLASSES.has(character.char_class) && (
+                  <SectionCard
+                    title="Spellcasting"
+                    isDirty={classSection.isDirty}
+                    onSave={saveClassData}
+                    onReset={classSection.reset}
+                    canEdit={showEditable}
+                  >
+                    <ClassSheet
+                      data={classSection.draft}
+                      onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
+                      readOnly={displayAsPlayer || !canEdit}
+                      level={identity.draft?.level ?? character.level}
+                      section="spells"
                     />
-                  ) : (
-                    <p className="text-sm whitespace-pre-wrap">{identity.draft.notes}</p>
-                  )}
-                </div>
-              ) : null}
-            </div>
-          </SectionCard>
+                  </SectionCard>
+                )}
+                {raceGrantedCantrips.length > 0 && (
+                  <div className="rounded-lg border bg-card p-4 space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Race-Granted Cantrips</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {raceGrantedCantrips.map(c => (
+                        <Badge key={c} variant="secondary" className="text-sm">{c}</Badge>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Always known. No spell slot required.</p>
+                  </div>
+                )}
+              </TabsContent>
+            )}
+          </Tabs>
         )}
 
-        {/* Class features */}
-        {ClassSheet && classSection.draft !== null && (
-          <SectionCard
-            title={`${character.char_class} Features`}
-            isDirty={classSection.isDirty || savingThrows.isDirty}
-            onSave={saveClassData}
-            onReset={() => { classSection.reset(); savingThrows.reset(); }}
-            canEdit={showEditable}
-          >
-            <ClassSheet
-              data={classSection.draft}
-              onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
-              readOnly={displayAsPlayer || !canEdit}
-              level={identity.draft?.level ?? character.level}
-            />
-          </SectionCard>
-        )}
-
-        {/* GM Notes */}
+        {/* GM Notes — outside tabs, always at the bottom */}
         {isGm && !displayAsPlayer && (
           <SectionCard
             title="GM Notes"
@@ -716,11 +819,7 @@ function LevelingCard({ character, campaign, isGm, isOwner, displayAsPlayer, xpI
   );
 }
 
-// LevelUpWizard is defined in LevelUpWizard.jsx and imported dynamically — placeholder below
-// until the full wizard is built
-
 function LevelUpWizard({ character, campaign, onComplete, onClose }) {
-  // Loaded dynamically from LevelUpWizard component
   const [LevelUpWizardComponent, setComponent] = React.useState(null);
   React.useEffect(() => {
     import('../components/LevelUpWizard').then(m => setComponent(() => m.default)).catch(() => {});

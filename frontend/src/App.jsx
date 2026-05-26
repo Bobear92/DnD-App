@@ -19,6 +19,7 @@ import SessionList from './sessions/pages/SessionList';
 import SessionDetail from './sessions/pages/SessionDetail';
 import CampaignMembers from './campaigns/pages/CampaignMembers';
 import CampaignSettingsPage from './campaigns/pages/CampaignSettingsPage';
+import EncyclopediaPage from './encyclopedia/pages/EncyclopediaPage';
 import MainLayout from './shared/components/layout/MainLayout';
 
 function App() {
@@ -44,6 +45,7 @@ function App() {
             <Route path="/campaigns/:campaignId/sessions/:sessionId" element={<ProtectedRoute><SessionDetail /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/members" element={<ProtectedRoute><CampaignMembers /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/settings" element={<ProtectedRoute><CampaignSettingsPage /></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia" element={<ProtectedRoute><MainLayout><EncyclopediaPage /></MainLayout></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/campaigns" replace />} />
           </Routes>
           </ErrorBoundary>

@@ -5,7 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import OptionCardPicker from '../OptionCardPicker';
+import SubclassPickerWithDetail from '../SubclassPickerWithDetail';
+import SubclassDetails from '../SubclassDetails';
 import { FIGHTER_FIGHTING_STYLES_2024 as FIGHTING_STYLES, FIGHTER_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
+import HitDiceTracker from '../HitDiceTracker';
 import { CLASS_FEATURES_2024 } from '../classFeatures2024';
 
 function actionSurgeTotal(level) { return level >= 17 ? 2 : level >= 2 ? 1 : 0; }
@@ -20,15 +23,6 @@ function extraAttacks(level) {
   if (level >= 11) return 3;
   if (level >= 5)  return 2;
   return 1;
-}
-
-function FeatureRow({ name, earned }) {
-  return (
-    <div className={`px-3 py-2 flex justify-between items-center ${earned ? '' : 'opacity-40'}`}>
-      <span>{name}</span>
-      {earned && <Badge variant="outline" className="text-xs">Unlocked</Badge>}
-    </div>
-  );
 }
 
 function SkillPicker({ value, onChange, max, backgroundSkills = [] }) {
@@ -129,8 +123,11 @@ function ResourceTracker({ label, total, used, usedKey, set, readOnly }) {
   );
 }
 
-export default function FighterSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [] }) {
+export default function FighterSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
+  if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
+  const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
+  const showFeatures = section !== 'stats';
 
   const weaponMasteryMax = level >= 16 ? 6 : level >= 10 ? 5 : level >= 4 ? 4 : 3;
 
@@ -143,26 +140,22 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
 
   return (
     <div className="space-y-4">
-      <div className={`grid gap-3 ${level >= 5 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      {showFeatures && level >= 5 && (
+      <div className="grid gap-3 grid-cols-1">
         <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Hit Die</div>
-          <div className="font-bold text-lg">d10</div>
+          <div className="text-xs text-muted-foreground">Extra Attacks</div>
+          <div className="font-bold text-lg">{extraAttacks(level)}</div>
         </div>
-        {level >= 5 && (
-          <div className="rounded-md border px-3 py-2 text-center">
-            <div className="text-xs text-muted-foreground">Extra Attacks</div>
-            <div className="font-bold text-lg">{extraAttacks(level)}</div>
-          </div>
-        )}
       </div>
+      )}
 
-      {!creation && (
+      {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
         <Field label="Max HP">
-          <Input type="number" value={data.max_hp ?? ''} onChange={e => set('max_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
         </Field>
         <Field label="Temp HP">
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -170,21 +163,34 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
       </div>
       )}
 
-      {!creation && (
-      <div className="grid grid-cols-3 gap-3">
+      {/* Hit Dice */}
+      {showCombat && (
+        <HitDiceTracker hitDie={10} level={level} used={data.hit_dice_used} onChange={v => set('hit_dice_used', v)} readOnly={readOnly} creation={creation} />
+      )}
+
+      {/* AC */}
+      {showCombat && (
         <Field label="Armor Class">
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
+      )}
+
+      {showCombat && (
+      <div className="grid grid-cols-3 gap-3">
         <Field label="Speed (ft)">
-          <Input type="number" value={data.speed ?? 30} onChange={e => set('speed', parseInt(e.target.value) || 30)} readOnly={readOnly} className="text-center" />
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.speed ?? 30}</div>
         </Field>
-        <Field label="Hit Dice Used">
-          <Input type="number" value={data.hit_dice_used ?? 0} onChange={e => set('hit_dice_used', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        <Field label="Speed Bonus (ft)">
+          <Input type="number" value={data.speed_bonus ?? 0} onChange={e => set('speed_bonus', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+        </Field>
+        <Field label="Total Speed (ft)">
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{(data.speed ?? 30) + (data.speed_bonus ?? 0)}</div>
         </Field>
       </div>
       )}
 
       {/* Fighting Style */}
+      {showFeatures && (
       <Field label="Fighting Style">
         {readOnly ? (
           <div className="text-sm py-2">{data.fighting_style || '—'}</div>
@@ -196,8 +202,10 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           />
         )}
       </Field>
+      )}
 
       {/* Weapon Mastery */}
+      {showFeatures && (
       <Field label={`Weapon Mastery (${weaponMasteryMax} weapons, change on long rest)`}>
         <WeaponMasteryList
           value={data.weapon_masteries ?? []}
@@ -206,45 +214,52 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           max={weaponMasteryMax}
         />
       </Field>
+      )}
 
-      {!creation && (
+      {showFeatures && !creation && (
         <ResourceTracker label="Second Wind (Short Rest)" total={1}
           used={data.second_wind_used ? 1 : 0} usedKey="second_wind_used" set={set} readOnly={readOnly} />
       )}
 
-      {level >= 2 && (
+      {showFeatures && level >= 2 && (
         <ResourceTracker label="Action Surge (Short Rest)" total={actionSurgeTotal(level)}
           used={data.action_surge_used ?? 0} usedKey="action_surge_used" set={set} readOnly={readOnly} />
       )}
 
-      {level >= 2 && (
+      {showFeatures && level >= 2 && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Tactical Mind (L2)</span>
           {' '}— When you fail an ability check, expend one Action Surge use to add 1d10 to the check.
         </div>
       )}
 
-      {level >= 9 && (
+      {showFeatures && level >= 9 && (
         <ResourceTracker label="Indomitable (Long Rest)" total={indomitableTotal(level)}
           used={data.indomitable_used ?? 0} usedKey="indomitable_used" set={set} readOnly={readOnly} />
       )}
 
       {/* Subclass */}
-      {level >= 3 && (
+      {showFeatures && level >= 3 && (
         <Field label="Warrior Subclass">
-          {readOnly ? (
-            <div className="text-sm py-2">{data.subclass || '—'}</div>
+          {(readOnly || !!data.subclass) ? (
+            data.subclass ? (
+              <SubclassDetails className="Fighter" edition="5.5e" subclassName={data.subclass} level={level} />
+            ) : (
+              <div className="text-sm py-2">—</div>
+            )
           ) : (
-            <OptionCardPicker
+            <SubclassPickerWithDetail
               options={SUBCLASSES}
               value={data.subclass ?? ''}
               onChange={v => set('subclass', v)}
+              className="Fighter"
+              edition="5.5e"
             />
           )}
         </Field>
       )}
 
-      {creation ? (
+      {showFeatures && (creation ? (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
           {(CLASS_FEATURES_2024.Fighter[1] ?? []).map(feat => (
@@ -255,29 +270,30 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           ))}
         </div>
       ) : (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Class Features</Label>
-          <div className="rounded-md border divide-y text-sm">
-            <FeatureRow name="Fighting Style + Second Wind + Weapon Mastery" earned={level >= 1} />
-            <FeatureRow name="Action Surge + Tactical Mind" earned={level >= 2} />
-            <FeatureRow name="Warrior Subclass" earned={level >= 3} />
-            <FeatureRow name="Extra Attack" earned={level >= 5} />
-            <FeatureRow name="Tactical Shift (L5)" earned={level >= 5} />
-            <FeatureRow name="Indomitable" earned={level >= 9} />
-            <FeatureRow name="Two Extra Attacks" earned={level >= 11} />
-            <FeatureRow name="Studied Attacks (L13)" earned={level >= 13} />
-            <FeatureRow name="Three Extra Attacks" earned={level >= 20} />
-          </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Class Features</Label>
+          {Array.from({ length: level }, (_, i) => i + 1).flatMap(lvl =>
+            (CLASS_FEATURES_2024.Fighter[lvl] ?? []).map(feat => ({ ...feat, lvl }))
+          ).map(feat => (
+            <div key={`${feat.lvl}-${feat.name}`} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {feat.lvl}</span>
+                <div className="font-semibold text-sm">{feat.name}</div>
+              </div>
+              <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+            </div>
+          ))}
         </div>
-      )}
+      ))}
 
-      {[4, 6, 8, 12, 14, 16, 19].some(l => l <= level) && (
+      {showFeatures && [4, 6, 8, 12, 14, 16, 19].some(l => l <= level) && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Ability Score Improvements / Feats</span>
           {' '}— at levels 4, 6, 8, 12, 14, 16, 19.
         </div>
       )}
 
+      {showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">
@@ -288,6 +304,7 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
           <SkillPicker value={data.skill_proficiencies ?? []} onChange={v => set('skill_proficiencies', v)} max={2} backgroundSkills={backgroundSkills} />
         )}
       </Field>
+      )}
     </div>
   );
 }

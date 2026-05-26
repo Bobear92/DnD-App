@@ -4,6 +4,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import CharacterCreate from './CharacterCreate';
 import characterService from '../characterService';
 import referenceService from '../referenceService';
+import classService from '../classService';
 
 vi.mock('../characterService', () => ({
   default: { createCharacter: vi.fn() },
@@ -11,6 +12,10 @@ vi.mock('../characterService', () => ({
 
 vi.mock('../referenceService', () => ({
   default: { getRaces: vi.fn(), getBackgrounds: vi.fn() },
+}));
+
+vi.mock('../classService', () => ({
+  default: { getClassByName: vi.fn() },
 }));
 
 vi.mock('react-router-dom', async () => ({
@@ -51,7 +56,9 @@ function renderCreate() {
 
 async function selectClass(cls) {
   fireEvent.click(screen.getByText(cls));
-  await waitFor(() => expect(screen.getByText('Step 2 of 4 — Race, Background & Identity')).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByTestId('overview-next')).toBeInTheDocument());
+  fireEvent.click(screen.getByTestId('overview-next'));
+  await waitFor(() => expect(screen.getByText('Step 3 of 5 — Race, Background & Identity')).toBeInTheDocument());
 }
 
 async function advanceToFeatures(cls, name = 'Thorin') {
@@ -114,6 +121,7 @@ describe('CharacterCreate', () => {
     vi.clearAllMocks();
     referenceService.getRaces.mockResolvedValue([]);
     referenceService.getBackgrounds.mockResolvedValue([]);
+    classService.getClassByName.mockResolvedValue(null);
     Object.assign(mockCampaign, {
       use_alignment: true,
       ability_score_method: 'standard_spread',
@@ -139,14 +147,55 @@ describe('CharacterCreate', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/characters');
   });
 
-  // ── Step 2: Identity ─────────────────────────────────────────────────────
+  // ── Step 2: Class overview ───────────────────────────────────────────────
+
+  it('advances to class overview step when a class is selected', async () => {
+    renderCreate();
+    fireEvent.click(screen.getByText('Wizard'));
+    await waitFor(() => expect(screen.getByTestId('overview-next')).toBeInTheDocument());
+    expect(screen.getByText('Step 2 of 5 — Class Overview')).toBeInTheDocument();
+  });
+
+  it('class overview back button returns to class picker', async () => {
+    renderCreate();
+    fireEvent.click(screen.getByText('Fighter'));
+    await waitFor(() => expect(screen.getByTestId('overview-next')).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole('button', { name: 'Back' })[0]);
+    await waitFor(() => expect(screen.getByText('Choose Your Class')).toBeInTheDocument());
+  });
+
+  it('calls classService.getClassByName with class name and edition when class selected', async () => {
+    renderCreate();
+    fireEvent.click(screen.getByText('Barbarian'));
+    await waitFor(() => expect(classService.getClassByName).toHaveBeenCalledWith('Barbarian', '5e', 1));
+  });
+
+  it('shows class data from API in class overview when returned', async () => {
+    classService.getClassByName.mockResolvedValue({
+      name: 'Barbarian', edition: '5e', flavor_text: 'A fierce warrior of primitive background.',
+      hit_die: 12, primary_ability: 'Strength', spellcasting_ability: null,
+      saving_throws: ['Strength', 'Constitution'], armor_proficiencies: ['Light', 'Medium', 'Shields'],
+      weapon_proficiencies: ['Simple', 'Martial'], tool_proficiencies: [],
+      skill_count: 2, skills_available: ['Athletics', 'Perception'], features: [],
+    });
+    renderCreate();
+    fireEvent.click(screen.getByText('Barbarian'));
+    await waitFor(() => {
+      expect(screen.getByText('A fierce warrior of primitive background.')).toBeInTheDocument();
+      expect(screen.getByText('d12')).toBeInTheDocument();
+    });
+  });
+
+  // ── Step 3: Identity ─────────────────────────────────────────────────────
 
   it('advances to identity step when a class is selected', async () => {
     renderCreate();
     fireEvent.click(screen.getByText('Fighter'));
+    await waitFor(() => expect(screen.getByTestId('overview-next')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('overview-next'));
     await waitFor(() => {
       expect(screen.getByText('Create Fighter')).toBeInTheDocument();
-      expect(screen.getByText('Step 2 of 4 — Race, Background & Identity')).toBeInTheDocument();
+      expect(screen.getByText('Step 3 of 5 — Race, Background & Identity')).toBeInTheDocument();
     });
     expect(screen.getByPlaceholderText('Enter a name…')).toBeInTheDocument();
   });
@@ -270,11 +319,11 @@ describe('CharacterCreate', () => {
     expect(screen.queryByText('Alignment')).not.toBeInTheDocument();
   });
 
-  it('back button on identity step returns to class picker', async () => {
+  it('back button on identity step returns to class overview', async () => {
     renderCreate();
     await selectClass('Rogue');
     fireEvent.click(screen.getByTestId('identity-back'));
-    await waitFor(() => expect(screen.getByText('Choose Your Class')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('overview-next')).toBeInTheDocument());
   });
 
   it('fetches races and backgrounds from API when entering identity step', async () => {
@@ -300,7 +349,7 @@ describe('CharacterCreate', () => {
   it('advances to class features step after identity is complete', async () => {
     renderCreate();
     await advanceToFeatures('Fighter');
-    expect(screen.getByText('Step 3 of 4 — Class Features & Ability Scores')).toBeInTheDocument();
+    expect(screen.getByText('Step 4 of 5 — Class Features & Ability Scores')).toBeInTheDocument();
   });
 
   it('shows identity summary card on class features step', async () => {
@@ -313,7 +362,7 @@ describe('CharacterCreate', () => {
     renderCreate();
     await advanceToFeatures('Wizard');
     fireEvent.click(screen.getAllByRole('button', { name: 'Back' })[0]);
-    await waitFor(() => expect(screen.getByText('Step 2 of 4 — Race, Background & Identity')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Step 3 of 5 — Race, Background & Identity')).toBeInTheDocument());
   });
 
   it('details-next stays disabled until required skill proficiencies are selected', async () => {
@@ -709,6 +758,25 @@ describe('CharacterCreate', () => {
     expect(screen.getByText('Otherworldly Patron (Subclass)')).toBeInTheDocument();
     expect(screen.getByText('The Fiend')).toBeInTheDocument();
     expect(screen.getByText(/dark pact with a devil/i)).toBeInTheDocument();
+  });
+
+  it('shows info button on each subclass card in step 4 (Cleric)', async () => {
+    renderCreate();
+    await advanceToFeatures('Cleric');
+    // Each subclass card has an info button with data-testid subclass-info-{name}
+    expect(screen.getByTestId('subclass-info-Life Domain')).toBeInTheDocument();
+    expect(screen.getByTestId('subclass-info-Light Domain')).toBeInTheDocument();
+  });
+
+  it('clicking subclass info button opens SubclassOverview dialog with flavor text', async () => {
+    renderCreate();
+    await advanceToFeatures('Cleric');
+    fireEvent.click(screen.getByTestId('subclass-info-Life Domain'));
+    await waitFor(() => {
+      // SubclassOverview dialog renders flavor text and a feature name
+      expect(screen.getByText('About this Subclass')).toBeInTheDocument();
+      expect(screen.getByText('Disciple of Life')).toBeInTheDocument();
+    });
   });
 
   // ── Racial choices: Dragonborn, High Elf, Half-Elf, Human ───────────────
