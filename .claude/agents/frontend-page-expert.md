@@ -209,6 +209,26 @@ Always:
 4. Update `CLAUDE.md`: frontend file tree, implemented routes table, "Frontend Not Yet Built" list
 5. Run `npm test` from `frontend/` and confirm all tests pass before reporting done
 
+## Encyclopedia Module Patterns
+The encyclopedia lives at `frontend/src/encyclopedia/`:
+- `encyclopediaService.js` — service for all spell CRUD calls (getSpells, getSpell, createSpell, updateSpell, deleteSpell); uses the same axios + JWT interceptor pattern as other services
+- `EncyclopediaPage.jsx` — multi-tab host: Classes | Spells | Campaign Spells (GM only); tab bar at top; edition toggle only visible on Classes tab
+- `SpellsTab.jsx` — shows all spells (system + campaign-scoped), school/level/search filters, detail dialog on row click; GM sees Override and Edit Override buttons
+- `CampaignSpellsTab.jsx` — GM-only; shows only campaign-owned spells (`owner_type === 'campaign'`); New Homebrew + Edit + Delete buttons
+- `SpellEditPage.jsx` — dedicated edit/create page at `/campaigns/:campaignId/encyclopedia/spells/:spellId`; `isNew = spellId === 'new'`; always sets `owner_type: 'campaign', owner_id: parseInt(campaignId)` on create
+
+**Override pattern:** When a GM overrides a system spell, `createSpell` is called with `{ ...spell, owner_type: 'campaign', owner_id: campaignId }`. The backend merges: campaign entries shadow system entries of the same name when queried with `?campaign_id=X`.
+
+**Tab architecture pattern** (reuse for future Encyclopedia tabs):
+```jsx
+const TABS = [
+  { id: 'classes', label: 'Classes' },
+  { id: 'spells', label: 'Spells' },
+  { id: 'new-tab', label: 'New Tab', gmOnly: true },  // gmOnly hides from players
+];
+const visibleTabs = TABS.filter((t) => !t.gmOnly || isGm);
+```
+
 ## Test Requirements (summary — see test-writer agent for full detail)
 Every new page needs a `.test.jsx` covering:
 - Loading state renders correctly

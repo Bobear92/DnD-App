@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
+import SpellList from '../SpellList';
 import OptionCardPicker from '../OptionCardPicker';
 import SubclassPickerWithDetail from '../SubclassPickerWithDetail';
 import SubclassDetails from '../SubclassDetails';
@@ -81,10 +82,10 @@ function SkillPicker({ value, onChange, max, backgroundSkills = [] }) {
 
 export default function SorcererSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
+  const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
+  const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
-  const [newSpell, setNewSpell] = useState('');
-  const [newCantrip, setNewCantrip] = useState('');
 
   const slots = slotsForLevel(level);
   const spellSlots = data.spell_slots ?? {};
@@ -96,47 +97,6 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
     const total = slots[slotLevel - 1];
     onChange?.({ spell_slots: { ...spellSlots, [slotLevel]: { total, used: Math.max(0, Math.min(total, used)) } } });
   };
-
-  const SpellList = ({ dataKey, label, newValue, setNew, placeholder }) => (
-    <div className="space-y-2">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <div className="flex flex-wrap gap-1 min-h-8 rounded-md border p-2">
-        {(data[dataKey] ?? []).map(s => (
-          <Badge key={s} variant="secondary" className="gap-1">
-            {s}
-            {!readOnly && (
-              <button onClick={() => onChange?.({ [dataKey]: (data[dataKey] ?? []).filter(x => x !== s) })} className="hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </Badge>
-        ))}
-        {(data[dataKey] ?? []).length === 0 && <span className="text-xs text-muted-foreground">None added</span>}
-      </div>
-      {!readOnly && (
-        <div className="flex gap-2">
-          <Input placeholder={placeholder} value={newValue} onChange={e => setNew(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                const t = newValue.trim();
-                if (!t) return;
-                const list = data[dataKey] ?? [];
-                if (!list.includes(t)) onChange?.({ [dataKey]: [...list, t] });
-                setNew('');
-              }
-            }} className="flex-1 h-8 text-sm" />
-          <Button type="button" size="sm" variant="outline" onClick={() => {
-            const t = newValue.trim();
-            if (!t) return;
-            const list = data[dataKey] ?? [];
-            if (!list.includes(t)) onChange?.({ [dataKey]: [...list, t] });
-            setNew('');
-          }}><Plus className="h-3 w-3" /></Button>
-        </div>
-      )}
-    </div>
-  );
 
   const Field = ({ label, children }) => (
     <div className="space-y-1">
@@ -312,8 +272,8 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
 
       {!creation && (section === 'all' || section === 'spells') && (
         <>
-          <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
-          <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
+          <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
+          <SpellList spells={data.known_spells ?? []} onAdd={n => addSpell('known_spells', n)} onRemove={n => removeSpell('known_spells', n)} readOnly={readOnly} label="Spells Known" placeholder="Add spell…" />
         </>
       )}
 

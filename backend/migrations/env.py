@@ -13,6 +13,7 @@ from players.characters.models import Character
 from players.races.models import Race
 from players.backgrounds.models import Background
 from players.feats.models import Feat
+from players.classes.models import CharacterClass, ClassFeature
 # Import encyclopedia models
 from shared.encyclopedia.bestiary.models import Creature
 from shared.encyclopedia.spells.models import Spell

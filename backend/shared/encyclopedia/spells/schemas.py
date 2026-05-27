@@ -10,9 +10,12 @@ class SpellBase(BaseModel):
     school: str = Field(..., min_length=1, max_length=100)
     casting_time: str = Field(..., min_length=1, max_length=100)
     range: str = Field(..., min_length=1, max_length=100)
-    components: str = Field(..., min_length=1, max_length=200)
+    components: str = Field(..., min_length=1)
     duration: str = Field(..., min_length=1, max_length=100)
     description: str = Field(..., min_length=1)
+    higher_level: Optional[str] = None
+    ritual: bool = False
+    concentration: bool = False
     classes: str = Field(..., min_length=1, max_length=200)
 
 
@@ -27,9 +30,12 @@ class SpellUpdate(BaseModel):
     school: Optional[str] = Field(None, min_length=1, max_length=100)
     casting_time: Optional[str] = Field(None, min_length=1, max_length=100)
     range: Optional[str] = Field(None, min_length=1, max_length=100)
-    components: Optional[str] = Field(None, min_length=1, max_length=200)
+    components: Optional[str] = Field(None, min_length=1)
     duration: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = Field(None, min_length=1)
+    higher_level: Optional[str] = None
+    ritual: Optional[bool] = None
+    concentration: Optional[bool] = None
     classes: Optional[str] = Field(None, min_length=1, max_length=200)
 
 

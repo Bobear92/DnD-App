@@ -286,6 +286,71 @@ This guards against `<SelectItem value={null}>` or `<SelectItem value="">` crash
 
 ---
 
+## Encyclopedia / Spell-Specific Backend Tests
+When adding or modifying fields on `spells` or other encyclopedia content, add a `TestSpellFields` (or similar) class that verifies the new fields round-trip correctly:
+
+```python
+class TestSpellFields:
+    PREFIX = "/api/encyclopedia/spells"
+
+    def _create_spell(self, client, headers, **overrides):
+        payload = _sys({
+            "name": "Field Test Spell", "level": 1, "school": "Evocation",
+            "casting_time": "1 action", "range": "60 feet", "components": "V, S",
+            "duration": "Instantaneous", "description": "A test.", "classes": "Wizard",
+            **overrides,
+        })
+        return client.post(self.PREFIX, json=payload, headers=headers).json()
+
+    def test_new_field_defaults_to_expected_value(self, client):
+        admin_h, _ = make_admin(client)
+        data = self._create_spell(client, admin_h)
+        assert data["new_field"] is None  # or False, etc.
+
+    def test_new_field_round_trips(self, client):
+        admin_h, _ = make_admin(client)
+        data = self._create_spell(client, admin_h, new_field="value")
+        assert data["new_field"] == "value"
+
+    def test_field_present_in_list_response(self, client):
+        admin_h, _ = make_admin(client)
+        self._create_spell(client, admin_h, new_field="value")
+        items = client.get(self.PREFIX, headers=admin_h).json()
+        assert items[0]["new_field"] == "value"
+```
+
+## Encyclopedia Frontend Tests (SpellsTab, CampaignSpellsTab, SpellEditPage)
+Key patterns for encyclopedia component tests:
+
+```jsx
+// encyclopediaService is the mock target
+vi.mock('../encyclopediaService', () => ({
+  default: {
+    getSpells: vi.fn(),
+    getSpell: vi.fn(),
+    createSpell: vi.fn(),
+    updateSpell: vi.fn(),
+    deleteSpell: vi.fn(),
+  },
+}));
+
+// SpellsTab — props: isGm, campaignId
+// data-testids: spell-search, level-filter, school-filter-{School}, school-filter-All,
+//   spell-row-{id}, override-spell-btn, edit-override-btn
+// Spells have: id, name, level, school, ritual, concentration, classes,
+//              owner_type ('system'|'campaign'), owner_id
+
+// CampaignSpellsTab — prop: campaignId
+// Loads all spells via getSpells(campaignId), filters to owner_type === 'campaign' client-side
+// data-testids: campaign-spell-search, new-homebrew-btn, edit-spell-{id}, delete-spell-{id}
+
+// SpellEditPage — route params: campaignId, spellId; isNew = spellId === 'new'
+// data-testids: spell-name-input, spell-level-select, spell-school-select,
+//   ritual-checkbox, concentration-checkbox, save-spell-btn, delete-spell-page-btn
+// Save disabled when form is unchanged (edit mode) or when name is empty
+// createSpell must be called with { owner_type: 'campaign', owner_id: parseInt(campaignId) }
+```
+
 ## What NOT to Do
 - Do not mock the database in backend tests — all tests hit `dnd_app_test` via the real ORM
 - Do not use `getByText` when multiple elements can have the same text — use `getAllByText` or add `data-testid`

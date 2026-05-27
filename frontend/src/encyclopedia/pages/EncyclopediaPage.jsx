@@ -6,6 +6,8 @@ import { useCampaign } from '../../campaigns/CampaignContext';
 import classService from '../../characters/classService';
 import ClassOverview from '../../characters/components/ClassOverview';
 import { SUPPORTED_CLASSES_5E, CLASS_DESCRIPTIONS, CLASS_HIT_DICE } from '../../characters/components/index';
+import SpellsTab from './SpellsTab';
+import CampaignSpellsTab from './CampaignSpellsTab';
 
 const CLASS_ACCENT_BG = {
   Barbarian: 'bg-orange-500', Bard: 'bg-pink-500', Cleric: 'bg-yellow-500',
@@ -23,19 +25,27 @@ const CLASS_ACCENT_RING = {
 
 const CLASSES = SUPPORTED_CLASSES_5E;
 
+const TABS = [
+  { id: 'classes', label: 'Classes' },
+  { id: 'spells', label: 'Spells' },
+  { id: 'campaign-spells', label: 'Campaign Spells', gmOnly: true },
+];
+
 export default function EncyclopediaPage() {
   const { campaignId } = useParams();
   const { campaign } = useCampaign();
 
+  const isGm = campaign?.userRole === 'gm';
   const campaignEdition = campaign?.edition === '5.5e' ? '5.5e' : '5e';
 
+  const [activeTab, setActiveTab] = useState('classes');
   const [edition, setEdition] = useState(campaignEdition);
   const [selectedClass, setSelectedClass] = useState(null);
   const [classData, setClassData] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!selectedClass) return;
+    if (!selectedClass || activeTab !== 'classes') return;
     let cancelled = false;
     setLoading(true);
     setClassData(null);
@@ -46,12 +56,14 @@ export default function EncyclopediaPage() {
       }
     });
     return () => { cancelled = true; };
-  }, [selectedClass, edition, campaignId]);
+  }, [selectedClass, edition, campaignId, activeTab]);
 
   const handleEditionChange = (ed) => {
     setEdition(ed);
     setClassData(null);
   };
+
+  const visibleTabs = TABS.filter((t) => !t.gmOnly || isGm);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -62,79 +74,105 @@ export default function EncyclopediaPage() {
           <p className="text-sm text-muted-foreground">Reference material for rules, classes, and more</p>
         </div>
 
-        {/* Edition toggle */}
-        <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-          {['5e', '5.5e'].map((ed) => (
-            <button
-              key={ed}
-              onClick={() => handleEditionChange(ed)}
-              className={cn(
-                'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                edition === ed
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {ed === '5.5e' ? '2024' : '5e'}
-            </button>
-          ))}
-        </div>
+        {/* Edition toggle — only relevant for Classes tab */}
+        {activeTab === 'classes' && (
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+            {['5e', '5.5e'].map((ed) => (
+              <button
+                key={ed}
+                onClick={() => handleEditionChange(ed)}
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  edition === ed
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {ed === '5.5e' ? '2024' : '5e'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tab bar */}
       <div className="flex gap-0 border-b border-border px-6 shrink-0">
-        <button className="px-4 py-2.5 text-sm font-medium border-b-2 border-primary text-primary -mb-px">
-          Classes
-        </button>
+        {visibleTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === tab.id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Main content: class list + detail panel */}
-      <div className="flex flex-1 min-h-0">
-        {/* Class list sidebar */}
-        <div className="w-56 shrink-0 border-r border-border overflow-y-auto">
-          <div className="p-2 space-y-0.5">
-            {CLASSES.map((cls) => {
-              const isSelected = selectedClass === cls;
-              const accentBg = CLASS_ACCENT_BG[cls] || 'bg-primary';
-              const accentRing = CLASS_ACCENT_RING[cls] || 'ring-primary';
-              return (
-                <button
-                  key={cls}
-                  onClick={() => setSelectedClass(cls)}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors',
-                    isSelected
-                      ? cn('bg-muted ring-2', accentRing)
-                      : 'hover:bg-muted/60'
-                  )}
-                >
-                  <div className={cn('w-2 h-2 rounded-full shrink-0', accentBg)} />
-                  <div className="min-w-0">
-                    <p className={cn('text-sm font-semibold leading-tight', isSelected ? 'text-foreground' : 'text-foreground')}>
-                      {cls}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{CLASS_HIT_DICE[cls]}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {/* Tab content */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {/* Classes tab */}
+        {activeTab === 'classes' && (
+          <div className="flex h-full">
+            {/* Class list sidebar */}
+            <div className="w-56 shrink-0 border-r border-border overflow-y-auto">
+              <div className="p-2 space-y-0.5">
+                {CLASSES.map((cls) => {
+                  const isSelected = selectedClass === cls;
+                  const accentBg = CLASS_ACCENT_BG[cls] || 'bg-primary';
+                  const accentRing = CLASS_ACCENT_RING[cls] || 'ring-primary';
+                  return (
+                    <button
+                      key={cls}
+                      onClick={() => setSelectedClass(cls)}
+                      className={cn(
+                        'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors',
+                        isSelected
+                          ? cn('bg-muted ring-2', accentRing)
+                          : 'hover:bg-muted/60'
+                      )}
+                    >
+                      <div className={cn('w-2 h-2 rounded-full shrink-0', accentBg)} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold leading-tight">{cls}</p>
+                        <p className="text-xs text-muted-foreground">{CLASS_HIT_DICE[cls]}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        {/* Detail panel */}
-        <div className="flex-1 overflow-y-auto">
-          {!selectedClass ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-12 text-muted-foreground">
-              <BookOpen className="w-12 h-12 mb-4 opacity-30" />
-              <p className="text-lg font-medium">Select a class</p>
-              <p className="text-sm mt-1">Choose a class from the list to view its full overview, features, and subclasses.</p>
+            {/* Detail panel */}
+            <div className="flex-1 overflow-y-auto">
+              {!selectedClass ? (
+                <div className="flex flex-col items-center justify-center h-full text-center p-12 text-muted-foreground">
+                  <BookOpen className="w-12 h-12 mb-4 opacity-30" />
+                  <p className="text-lg font-medium">Select a class</p>
+                  <p className="text-sm mt-1">Choose a class from the list to view its full overview, features, and subclasses.</p>
+                </div>
+              ) : (
+                <div className="p-6">
+                  <ClassOverview classData={classData} loading={loading} />
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="p-6">
-              <ClassOverview classData={classData} loading={loading} />
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Spells tab */}
+        {activeTab === 'spells' && (
+          <SpellsTab isGm={isGm} campaignId={campaignId} />
+        )}
+
+        {/* Campaign Spells tab (GM only) */}
+        {activeTab === 'campaign-spells' && isGm && (
+          <CampaignSpellsTab campaignId={campaignId} />
+        )}
       </div>
     </div>
   );

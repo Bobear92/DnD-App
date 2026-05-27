@@ -441,8 +441,11 @@ loot_tables
 
 -- Encyclopedia (system-owned; campaign overrides use same tables with owner_type='campaign')
 spells
-  id, name, level, school, casting_time, range, components,
-  duration, description, classes, owner_type (ENUM), owner_id, created_at, updated_at
+  id, name, level, school, casting_time, range, components (Text),
+  duration, description, higher_level (Text, nullable),
+  ritual (boolean, default false), concentration (boolean, default false),
+  classes, owner_type (ENUM), owner_id, created_at, updated_at
+  Seeded: 319 5e spells via seed_spells.py (D&D 5e API)
 
 creatures
   id, name, size, type, alignment, challenge_rating, armor_class,
@@ -829,7 +832,8 @@ frontend/src/
 │   │   ├── LevelUpWizard.test.jsx # subclass step visibility (5e Wizard L1→2, Fighter L2→3, 2024 Fighter, non-unlock level, already has subclass); Next disabled until picked; onComplete includes subclass; confirm shows choice; no subclass key when no step (12 tests)
 │   │   ├── SubclassOverview.test.jsx # renders subclass name/badges, flavor text, features by level, unavailable fallback, Barbarian/Cleric/Warlock/Wizard/Fighter subclasses (12 tests)
 │   │   ├── SorcererSheet.test.jsx # section routing: Sorcery Points tracker in spells (L2+), not in features; section isolation for HP/features/spells (12 tests)
-│   │   └── WizardSheet.test.jsx # section prop routing: Arcane Recovery tracker in spells/not features; stats/features/spells/all isolation (20 tests)
+│   │   ├── WizardSheet.test.jsx # section prop routing: Arcane Recovery tracker in spells/not features; stats/features/spells/all isolation (20 tests)
+│   │   └── SpellList.test.jsx # empty state, isCantrips mode (no API, alpha sort, Cantrips heading), level grouping (section-per-level, alpha sort, Other Spells, ordering, API call with campaignId), detail dialog (open, full details, Cantrip badge, level badge, fallback), add (input visibility, + button, Enter, duplicate guard, clear), remove (onRemove call, readOnly hides), custom placeholder (26 tests)
 │   ├── classService.js          # API client: getClasses(edition, campaignId), getClassByName(name, edition, campaignId) → GET /api/classes ✅
 │   └── pages/
 │       ├── CharacterList.jsx    # List characters, visibility toggle (GM), player view toggle ✅
@@ -852,8 +856,15 @@ frontend/src/
 │       └── SessionDetail.jsx    # Markdown editor + image upload at cursor + metadata card + GM Notes + 4 LinkCards ✅
 ├── encyclopedia/
 │   └── pages/
-│       ├── EncyclopediaPage.jsx      # Two-panel class browser: class list (left) + ClassOverview (right); edition toggle (5e/2024); defaults to campaign edition; GM + player ✅
-│       └── EncyclopediaPage.test.jsx # header/Classes tab, empty state, all 12 classes, edition toggle defaults (5e/2024), classService call args, overview renders, empty state hides, edition switch re-fetches, player access, loading state (12 tests)
+│       ├── EncyclopediaPage.jsx      # 3-tab layout: Classes (two-panel browser, edition toggle) | Spells (search+school+level filters, GM override) | Campaign Spells (GM only); GM + player ✅
+│       ├── encyclopediaService.js   # Axios spell API client: getSpells(campaignId), getSpell(id), createSpell, updateSpell, deleteSpell
+│       ├── EncyclopediaPage.test.jsx # header/Classes tab, empty state, all 12 classes, edition toggle defaults (5e/2024), classService call args, overview renders, empty state hides, edition switch re-fetches, player access, loading state; Spells tab renders, clicking tab shows SpellsTab, edition toggle hidden on Spells tab, Campaign Spells tab GM-only, clicking Campaign Spells shows tab (18 tests)
+│       ├── SpellsTab.test.jsx # loading state, renders all spells, spell count, search filter, school filter, level filter, All Schools button, ritual indicator, campaign override label, empty state, detail dialog open, At Higher Levels shown/hidden, Override button GM/player gating, Edit Override for campaign spell, createSpell+navigate on Override click (18 tests)
+│       ├── SpellsTab.jsx      # System spell browser: search/school/level filters, spell rows with ritual/concentration/school badges, campaign override "(Campaign)" label, spell detail dialog with all fields + At Higher Levels + GM Override/Edit buttons
+│       ├── CampaignSpellsTab.test.jsx # loading, getSpells with campaignId, renders campaign spells, excludes system spells, Campaign badge, empty state, New Homebrew btn, New navigates, edit navigates, delete dialog, cancel no-op, confirm delete+reload, search filter, ritual label (14 tests)
+│       ├── CampaignSpellsTab.jsx # GM-only list of campaign-scoped spells (overrides + homebrew); search; New Homebrew Spell → SpellEditPage; edit/delete per row; delete confirmation dialog
+│       ├── SpellEditPage.test.jsx # new: title, no getSpell, empty form, Create Spell btn, no delete btn, createSpell+navigate, name-required error, API error handling; edit: loading, title, form populate, Save Changes btn, delete btn, updateSpell called, save disabled when clean, deleteSpell+navigate, confirm cancel, getSpell error; nav: back button, checkboxes render, checkbox toggle (22 tests)
+│       └── SpellEditPage.jsx  # Full-page create/edit form for campaign spells; fields: name, level, school, ritual/concentration, casting time, range, components, duration, description, higher_level, classes; Save/Delete; back to encyclopedia; route: /campaigns/:campaignId/encyclopedia/spells/:spellId (new or id)
 ├── dashboard/
 │   ├── Dashboard.jsx            # Current date display (loads calendar API) + GM date-set form ✅
 │   └── Dashboard.test.jsx       # loading, 404 no-calendar, date formatting, GM/player gating, save date (9 tests) ✅
@@ -898,7 +909,8 @@ frontend/src/
 | `/campaigns/:campaignId/characters/:characterId` | CharacterDetail | ✅ Functional |
 | `/campaigns/:campaignId/members` | CampaignMembers | ✅ Functional (GM: member list + invite + remove; visible to all members) |
 | `/campaigns/:campaignId/settings` | CampaignSettingsPage | ✅ Functional (GM: General tab — edition, alignment, ability score method, leveling; Members tab — invite/remove) |
-| `/campaigns/:campaignId/encyclopedia` | EncyclopediaPage | ✅ Functional (Classes tab: two-panel class browser with edition toggle; GM + player) |
+| `/campaigns/:campaignId/encyclopedia` | EncyclopediaPage | ✅ Functional (Classes tab: edition toggle + class browser; Spells tab: search/school/level filters + GM override; Campaign Spells tab: GM only) |
+| `/campaigns/:campaignId/encyclopedia/spells/:spellId` | SpellEditPage | ✅ Functional (GM create/edit campaign spell; `new` creates homebrew) |
 
 ### Locations UI — Key Behaviours
 - **Maps tab:** thumbnail strip (left) + scrollable map viewer (right) with zoom (+/−/scroll wheel) and dark background
@@ -1104,7 +1116,7 @@ frontend/src/
   - Wizard Memorize Spell at L1 (1×/LR); Scholar at L2; Arcane Tradition subclass at L3 (not L2)
   - Fighter Tactical Mind at L2; larger Weapon Mastery pool (up to 6 weapons at L16)
   - Rogue Steady Aim at L3 (bonus action → advantage)
-- **Spell tracking:** slot count grid (+/− buttons per slot level) + named spell lists (prepared spells, cantrips, spellbook for Wizard) stored as string arrays in `character_data`
+- **Spell tracking:** slot count grid (+/− buttons per slot level) + named spell lists (prepared spells, cantrips, spellbook for Wizard) stored as string arrays in `character_data`; spell lists rendered by the shared `SpellList` component (`characters/components/SpellList.jsx`) which groups spells by level (cantrips first, then 1st–9th, then "Other Spells" for spells not found in the catalog), sorts alphabetically within each section, only shows a section when the character has at least one spell at that level, and shows a clickable spell name that opens a Dialog with full spell details (school, casting time, range, components, duration, description, classes) fetched from `GET /api/encyclopedia/spells?campaign_id=X`; `isCantrips=true` prop bypasses API lookup and always renders as "Cantrips" section
 - **Class-specific resources:** `rages_used` (Barbarian), `ki_used` (Monk/Monk2024 Focus Points), `bardic_inspiration_used` (Bard), `channel_divinity_used` (Cleric), `wild_shape_used` (Druid), `sorcery_points_used` (Sorcerer), `pact_slots_used` (Warlock)
 
 ### Frontend Not Yet Built
@@ -1112,7 +1124,8 @@ frontend/src/
 - Equipment / Inventory (deferred — own separate feature)
 - Feat selection UI (deferred — own separate feature; feat section placeholder visible in class sheets)
 - Loot table UI
-- Encyclopedia browsing UI — Classes tab exists; Spells, Monsters, Items tabs not yet built
+- Encyclopedia browsing UI — Classes tab and Spells tab exist; Monsters, Items tabs not yet built
+- Campaign spell override/homebrew management — built (SpellsTab override button, CampaignSpellsTab, SpellEditPage); admin panels for base compendium not yet built
 - Admin panels (manage base compendium: races, backgrounds, feats, spells, items, creatures)
 - GM panels (campaign overrides + homebrew content management)
 - Token refresh / expiration handling
@@ -1162,7 +1175,7 @@ backend/tests/
                                     #   TestCalendarCRUD(6), TestSeasons(2), TestMonths(3), TestMonthOptionalName(4),
                                     #   TestWeekdays(7), TestEras(8), TestTimelineEvents(13, incl. gm_notes), TestEventListFieldRoundTrip(8), TestEventLinks(6), TestLocationFilter(5)
 ├── test_characters.py              # character CRUD + visibility, TestGmNotes (gm_can_set/get, stripped_from_owner, player_cannot_set), TestGmDelete (gm_can_delete, other_player_cannot), TestCampaignEdition (defaults_to_5e, create/update/list), TestCharacterListFieldRoundTrip incl. character_data (34 tests)
-├── test_encyclopedia.py            # bestiary + spells + 6 item types (parametrized)
+├── test_encyclopedia.py            # bestiary + spells + 6 item types (parametrized); TestSpellFields: ritual/concentration/higher_level defaults, round-trips, survive update, appear in list (128 tests total)
 ├── test_locations.py               # locations, maps, pins, location NPCs, hierarchy, pin→parent persistence (61 tests)
 ├── test_loot_tables.py             # loot tables (system/campaign ownership)
 ├── test_npcs.py                    # NPC CRUD, visibility, gm_notes stripping, image, relationships, player-relationships, last_known_location (36 tests)

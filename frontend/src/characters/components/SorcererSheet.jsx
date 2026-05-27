@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
+import SpellList from './SpellList';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
 import OptionCardPicker from './OptionCardPicker';
 import SubclassPickerWithDetail from './SubclassPickerWithDetail';
@@ -93,8 +94,8 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
-  const [newSpell, setNewSpell] = useState('');
-  const [newCantrip, setNewCantrip] = useState('');
+  const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
+  const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
 
   const slots = slotsForLevel(level);
   const spellSlots = data.spell_slots ?? {};
@@ -116,47 +117,6 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
       onChange?.({ metamagic: [...current, option] });
     }
   };
-
-  const SpellList = ({ dataKey, label, newValue, setNew, placeholder }) => (
-    <div className="space-y-2">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <div className="flex flex-wrap gap-1 min-h-8 rounded-md border p-2">
-        {(data[dataKey] ?? []).map(spell => (
-          <Badge key={spell} variant="secondary" className="gap-1">
-            {spell}
-            {!readOnly && (
-              <button onClick={() => onChange?.({ [dataKey]: (data[dataKey] ?? []).filter(s => s !== spell) })} className="hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </Badge>
-        ))}
-        {(data[dataKey] ?? []).length === 0 && <span className="text-xs text-muted-foreground">None added</span>}
-      </div>
-      {!readOnly && (
-        <div className="flex gap-2">
-          <Input placeholder={placeholder} value={newValue} onChange={e => setNew(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                const trimmed = newValue.trim();
-                if (!trimmed) return;
-                const list = data[dataKey] ?? [];
-                if (!list.includes(trimmed)) onChange?.({ [dataKey]: [...list, trimmed] });
-                setNew('');
-              }
-            }} className="flex-1 h-8 text-sm" />
-          <Button type="button" size="sm" variant="outline" onClick={() => {
-            const trimmed = newValue.trim();
-            if (!trimmed) return;
-            const list = data[dataKey] ?? [];
-            if (!list.includes(trimmed)) onChange?.({ [dataKey]: [...list, trimmed] });
-            setNew('');
-          }}><Plus className="h-3 w-3" /></Button>
-        </div>
-      )}
-    </div>
-  );
 
   const Field = ({ label, children }) => (
     <div className="space-y-1">
@@ -310,8 +270,8 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
 
       {!creation && (section === 'all' || section === 'spells') && (
         <>
-          <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
-          <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
+          <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
+          <SpellList spells={data.known_spells ?? []} onAdd={n => addSpell('known_spells', n)} onRemove={n => removeSpell('known_spells', n)} readOnly={readOnly} label="Spells Known" placeholder="Add spell…" />
         </>
       )}
 

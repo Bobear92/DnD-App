@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Enum as SQLEnum
 from sqlalchemy.sql import func
 from shared.database import Base
 from shared.enums import OwnerType
@@ -15,10 +15,13 @@ class Spell(Base):
 
     casting_time = Column(String(100), nullable=False)
     range = Column(String(100), nullable=False)
-    components = Column(String(200), nullable=False)
+    components = Column(Text, nullable=False)
     duration = Column(String(100), nullable=False)
 
     description = Column(Text, nullable=False)
+    higher_level = Column(Text, nullable=True)
+    ritual = Column(Boolean, nullable=False, default=False)
+    concentration = Column(Boolean, nullable=False, default=False)
     classes = Column(String(200), nullable=False)
 
     owner_type = Column(SQLEnum(OwnerType), nullable=False, default=OwnerType.system)

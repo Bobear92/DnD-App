@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
+import SpellList from './SpellList';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
 import OptionCardPicker from './OptionCardPicker';
 import SubclassPickerWithDetail from './SubclassPickerWithDetail';
@@ -47,8 +48,8 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
-  const [newSpell, setNewSpell] = useState('');
-  const [newCantrip, setNewCantrip] = useState('');
+  const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
+  const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
 
   const slots = slotsForLevel(level);
   const spellSlots = data.spell_slots ?? {};
@@ -57,30 +58,6 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
     const total = slots[slotLevel - 1];
     const clamped = Math.max(0, Math.min(total, used));
     onChange?.({ spell_slots: { ...spellSlots, [slotLevel]: { total, used: clamped } } });
-  };
-
-  const addSpell = () => {
-    const trimmed = newSpell.trim();
-    if (!trimmed) return;
-    const list = data.prepared_spells ?? [];
-    if (!list.includes(trimmed)) onChange?.({ prepared_spells: [...list, trimmed] });
-    setNewSpell('');
-  };
-
-  const removeSpell = (spell) => {
-    onChange?.({ prepared_spells: (data.prepared_spells ?? []).filter(s => s !== spell) });
-  };
-
-  const addCantrip = () => {
-    const trimmed = newCantrip.trim();
-    if (!trimmed) return;
-    const list = data.cantrips ?? [];
-    if (!list.includes(trimmed)) onChange?.({ cantrips: [...list, trimmed] });
-    setNewCantrip('');
-  };
-
-  const removeCantrip = (c) => {
-    onChange?.({ cantrips: (data.cantrips ?? []).filter(s => s !== c) });
   };
 
   const hasCasting = level >= 2;
@@ -255,55 +232,11 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
       )}
 
       {hasCasting && (section === 'all' || section === 'spells') && (
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Prepared Spells</Label>
-          <div className="flex flex-wrap gap-1 min-h-8">
-            {(data.prepared_spells ?? []).map(spell => (
-              <Badge key={spell} variant="secondary" className="gap-1">
-                {spell}
-                {!readOnly && <button onClick={() => removeSpell(spell)} className="hover:text-destructive"><X className="h-3 w-3" /></button>}
-              </Badge>
-            ))}
-          </div>
-          {!readOnly && (
-            <div className="flex gap-2">
-              <Input
-                placeholder="Add spell…"
-                value={newSpell}
-                onChange={e => setNewSpell(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addSpell())}
-                className="flex-1 h-8 text-sm"
-              />
-              <Button type="button" size="sm" variant="outline" onClick={addSpell}><Plus className="h-3 w-3" /></Button>
-            </div>
-          )}
-        </div>
+        <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label="Prepared Spells" placeholder="Add spell…" />
       )}
 
       {!creation && (section === 'all' || section === 'spells') && (
-      <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground">Cantrips</Label>
-        <div className="flex flex-wrap gap-1 min-h-6">
-          {(data.cantrips ?? []).map(c => (
-            <Badge key={c} variant="outline" className="gap-1">
-              {c}
-              {!readOnly && <button onClick={() => removeCantrip(c)} className="hover:text-destructive"><X className="h-3 w-3" /></button>}
-            </Badge>
-          ))}
-        </div>
-        {!readOnly && (
-          <div className="flex gap-2">
-            <Input
-              placeholder="Add cantrip…"
-              value={newCantrip}
-              onChange={e => setNewCantrip(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCantrip())}
-              className="flex-1 h-8 text-sm"
-            />
-            <Button type="button" size="sm" variant="outline" onClick={addCantrip}><Plus className="h-3 w-3" /></Button>
-          </div>
-        )}
-      </div>
+        <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips" placeholder="Add cantrip…" isCantrips={true} />
       )}
 
       {creation && showFeatures && (

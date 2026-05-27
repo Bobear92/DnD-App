@@ -27,6 +27,18 @@ vi.mock('../../characters/components/ClassOverview', () => ({
   },
 }));
 
+vi.mock('./SpellsTab', () => ({
+  default: ({ isGm, campaignId }) => (
+    <div data-testid="spells-tab">SpellsTab isGm={String(isGm)} campaign={campaignId}</div>
+  ),
+}));
+
+vi.mock('./CampaignSpellsTab', () => ({
+  default: ({ campaignId }) => (
+    <div data-testid="campaign-spells-tab">CampaignSpellsTab campaign={campaignId}</div>
+  ),
+}));
+
 import classService from '../../characters/classService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 
@@ -150,5 +162,38 @@ describe('EncyclopediaPage', () => {
     fireEvent.click(screen.getByText('Fighter'));
     expect(await screen.findByText('Loading class...')).toBeInTheDocument();
     resolve(null);
+  });
+
+  it('renders a Spells tab button', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: 'Spells' })).toBeInTheDocument();
+  });
+
+  it('clicking Spells tab shows SpellsTab component', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+    await waitFor(() => expect(screen.getByTestId('spells-tab')).toBeInTheDocument());
+  });
+
+  it('hides edition toggle when Spells tab is active', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+    expect(screen.queryByRole('button', { name: '5e' })).not.toBeInTheDocument();
+  });
+
+  it('shows Campaign Spells tab for GM', () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'gm' });
+    expect(screen.getByRole('button', { name: 'Campaign Spells' })).toBeInTheDocument();
+  });
+
+  it('hides Campaign Spells tab for player', () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'player' });
+    expect(screen.queryByRole('button', { name: 'Campaign Spells' })).not.toBeInTheDocument();
+  });
+
+  it('clicking Campaign Spells tab shows CampaignSpellsTab', async () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'gm' });
+    fireEvent.click(screen.getByRole('button', { name: 'Campaign Spells' }));
+    await waitFor(() => expect(screen.getByTestId('campaign-spells-tab')).toBeInTheDocument());
   });
 });

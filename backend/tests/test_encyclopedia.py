@@ -222,3 +222,81 @@ class TestCampaignOverride:
         names = [e["name"] for e in resp.json()]
         assert base_payload["name"] in names
         assert "Campaign Only" not in names
+
+
+# ---------------------------------------------------------------------------
+# Spell-specific field tests (ritual, concentration, higher_level)
+# ---------------------------------------------------------------------------
+
+class TestSpellFields:
+    """Verifies the extended spell schema fields are stored and returned correctly."""
+
+    PREFIX = "/api/encyclopedia/spells"
+
+    def _create_spell(self, client, headers, **overrides):
+        payload = _sys({
+            "name": "Field Test Spell", "level": 1, "school": "Evocation",
+            "casting_time": "1 action", "range": "60 feet", "components": "V, S",
+            "duration": "Instantaneous", "description": "A test.", "classes": "Wizard",
+            **overrides,
+        })
+        resp = client.post(self.PREFIX, json=payload, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    def test_ritual_defaults_to_false(self, client):
+        admin_h, _ = make_admin(client)
+        data = self._create_spell(client, admin_h)
+        assert data["ritual"] is False
+
+    def test_concentration_defaults_to_false(self, client):
+        admin_h, _ = make_admin(client)
+        data = self._create_spell(client, admin_h)
+        assert data["concentration"] is False
+
+    def test_higher_level_defaults_to_null(self, client):
+        admin_h, _ = make_admin(client)
+        data = self._create_spell(client, admin_h)
+        assert data["higher_level"] is None
+
+    def test_ritual_true_round_trips(self, client):
+        admin_h, _ = make_admin(client)
+        data = self._create_spell(client, admin_h, ritual=True)
+        assert data["ritual"] is True
+
+    def test_concentration_true_round_trips(self, client):
+        admin_h, _ = make_admin(client)
+        data = self._create_spell(client, admin_h, concentration=True)
+        assert data["concentration"] is True
+
+    def test_higher_level_text_round_trips(self, client):
+        admin_h, _ = make_admin(client)
+        text = "Deals an extra 1d6 per slot level above 1st."
+        data = self._create_spell(client, admin_h, higher_level=text)
+        assert data["higher_level"] == text
+
+    def test_fields_survive_update(self, client):
+        admin_h, _ = make_admin(client)
+        spell_id = self._create_spell(client, admin_h)["id"]
+        resp = client.put(
+            f"{self.PREFIX}/{spell_id}",
+            json={"ritual": True, "concentration": True, "higher_level": "Updated text."},
+            headers=admin_h,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ritual"] is True
+        assert data["concentration"] is True
+        assert data["higher_level"] == "Updated text."
+
+    def test_fields_present_in_list_response(self, client):
+        admin_h, _ = make_admin(client)
+        self._create_spell(client, admin_h, ritual=True, higher_level="Extra damage.")
+        items = client.get(self.PREFIX, headers=admin_h).json()
+        assert len(items) == 1
+        spell = items[0]
+        assert "ritual" in spell
+        assert "concentration" in spell
+        assert "higher_level" in spell
+        assert spell["ritual"] is True
+        assert spell["higher_level"] == "Extra damage."

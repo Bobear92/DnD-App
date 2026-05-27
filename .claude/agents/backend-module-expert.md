@@ -204,12 +204,45 @@ Post this checklist first, then proceed.
 ## Preserved Intent Rule
 **Never re-introduce a feature or field the user has explicitly removed** — if something is absent from the current codebase, confirm with the user before adding it back.
 
+## Critical: migrations/env.py Imports
+**Every new model file must be imported in `migrations/env.py` immediately when created.** Alembic autogenerate only knows about models that are imported there. A missing import causes autogenerate to see the table as "removed" and add a DROP statement to the next migration, silently deleting data.
+
+```python
+# backend/migrations/env.py — add every new model here:
+from players.classes.models import CharacterClass, ClassFeature
+from shared.encyclopedia.spells.models import Spell
+from shared.encyclopedia.bestiary.models import Creature
+# ... all other models
+```
+
+## Critical: Migrations with Existing PG Enums
+If a new migration creates a table that uses an existing PostgreSQL enum type (e.g. `ownertype`), **do not use `op.create_table()`**. SQLAlchemy's ORM-level create will try to CREATE the enum type again and fail with "type already exists". Use raw SQL instead:
+
+```python
+# WRONG — will fail with "type ownertype already exists":
+op.create_table('my_table',
+    sa.Column('owner_type', sa.Enum(OwnerType), nullable=False),
+    ...
+)
+
+# CORRECT — raw SQL bypasses enum creation entirely:
+op.execute("""
+    CREATE TABLE my_table (
+        id SERIAL PRIMARY KEY,
+        owner_type ownertype NOT NULL,
+        ...
+    )
+""")
+```
+
 ## After Creating Files
 Always:
 1. Register the router in `backend/main.py`
-2. Run `alembic revision --autogenerate -m "add <table>"` then `alembic upgrade head`
-   - If the model uses a SQLAlchemy Enum, manually add `op.execute("CREATE TYPE ...")` before the column in the migration
-3. Write tests in `backend/tests/test_<module>.py` — tests ship with the feature, never deferred
-4. Update `CLAUDE.md`: schema table count, backend structure tree, API endpoints table, test file listing
-5. **Always remind the user to restart the backend server** after any backend change (new models, schema edits, new routes, migrations). The running uvicorn process caches the old code and will not pick up changes until restarted:
+2. Import the new models in `migrations/env.py` (see above — critical, do this before running autogenerate)
+3. Run `alembic revision --autogenerate -m "add <table>"` then `alembic upgrade head`
+   - If the migration creates a table with an existing PG enum, replace `op.create_table()` with raw `op.execute("""CREATE TABLE...""")`
+   - If adding a new SQLAlchemy Enum column, manually add `op.execute("CREATE TYPE ...")` before the column
+4. Write tests in `backend/tests/test_<module>.py` — tests ship with the feature, never deferred
+5. Update `CLAUDE.md`: schema table count, backend structure tree, API endpoints table, test file listing
+6. **Always remind the user to restart the backend server** after any backend change (new models, schema edits, new routes, migrations). The running uvicorn process caches the old code and will not pick up changes until restarted:
    > "**Restart the backend server** (`uvicorn main:app --reload` from `backend/`) so the running process picks up the new code."

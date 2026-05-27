@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
+import SpellList from '../SpellList';
 import OptionCardPicker from '../OptionCardPicker';
 import SubclassPickerWithDetail from '../SubclassPickerWithDetail';
 import SubclassDetails from '../SubclassDetails';
@@ -131,11 +132,10 @@ function SpellPickerCreation({ label, limit, options, selected, onChange, raceGr
 
 export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
+  const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
+  const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
-  const [newSpellbook, setNewSpellbook] = useState('');
-  const [newPrepared, setNewPrepared] = useState('');
-  const [newCantrip, setNewCantrip] = useState('');
 
   const slots = slotsForLevel(level);
   const spellSlots = data.spell_slots ?? {};
@@ -144,43 +144,6 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
     const total = slots[slotLevel - 1];
     onChange?.({ spell_slots: { ...spellSlots, [slotLevel]: { total, used: Math.max(0, Math.min(total, used)) } } });
   };
-
-  const addToList = (key, value, setter) => {
-    const t = value.trim();
-    if (!t) return;
-    const list = data[key] ?? [];
-    if (!list.includes(t)) onChange?.({ [key]: [...list, t] });
-    setter('');
-  };
-
-  const SpellList = ({ dataKey, label, newValue, setNew, placeholder }) => (
-    <div className="space-y-2">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <div className="flex flex-wrap gap-1 min-h-8 rounded-md border p-2">
-        {(data[dataKey] ?? []).map(s => (
-          <Badge key={s} variant="secondary" className="gap-1">
-            {s}
-            {!readOnly && (
-              <button onClick={() => onChange?.({ [dataKey]: (data[dataKey] ?? []).filter(x => x !== s) })} className="hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </Badge>
-        ))}
-        {(data[dataKey] ?? []).length === 0 && <span className="text-xs text-muted-foreground">None added</span>}
-      </div>
-      {!readOnly && (
-        <div className="flex gap-2">
-          <Input placeholder={placeholder} value={newValue} onChange={e => setNew(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addToList(dataKey, newValue, setNew))}
-            className="flex-1 h-8 text-sm" />
-          <Button type="button" size="sm" variant="outline" onClick={() => addToList(dataKey, newValue, setNew)}>
-            <Plus className="h-3 w-3" />
-          </Button>
-        </div>
-      )}
-    </div>
-  );
 
   const Field = ({ label, children }) => (
     <div className="space-y-1">
@@ -342,7 +305,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
         />
       )}
       {!creation && (section === 'all' || section === 'spells') && (
-        <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
+        <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
       )}
 
       {/* Spellbook — picker during creation, free-text list during play */}
@@ -357,8 +320,8 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
       )}
       {!creation && (section === 'all' || section === 'spells') && (
         <>
-          <SpellList dataKey="spellbook" label="Spellbook (all known spells)" newValue={newSpellbook} setNew={setNewSpellbook} placeholder="Add spell to spellbook…" />
-          <SpellList dataKey="prepared_spells" label="Prepared Spells (today)" newValue={newPrepared} setNew={setNewPrepared} placeholder="Add prepared spell…" />
+          <SpellList spells={data.spellbook ?? []} onAdd={n => addSpell('spellbook', n)} onRemove={n => removeSpell('spellbook', n)} readOnly={readOnly} label="Spellbook (all known spells)" placeholder="Add spell to spellbook…" />
+          <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label="Prepared Spells (today)" placeholder="Add prepared spell…" />
         </>
       )}
 
