@@ -82,7 +82,7 @@ function SkillPicker({ value, onChange, max, backgroundSkills = [] }) {
 export default function SorcererSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
 
@@ -147,15 +147,6 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
 
   return (
     <div className="space-y-4">
-      {showFeatures && (
-      <div className="grid grid-cols-1 gap-3">
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Sorcery Points</div>
-          <div className="font-bold text-lg">{sorceryPointsTotal > 0 ? sorceryPointsTotal : 'L2+'}</div>
-        </div>
-      </div>
-      )}
-
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Current HP">
@@ -210,26 +201,6 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
               onClick={() => set('innate_sorcery_used', !data.innate_sorcery_used)}>
               {data.innate_sorcery_used ? 'Used' : 'Available'}
             </button>
-          )}
-        </div>
-      )}
-
-      {/* Sorcery Points tracker */}
-      {sorceryPointsTotal > 0 && showFeatures && (
-        <div className="flex items-center justify-between rounded-md border px-3 py-2">
-          <div>
-            <div className="text-sm font-medium">Sorcery Points (Long Rest)</div>
-            <div className="text-xs text-muted-foreground">{sorceryPointsTotal - sorceryUsed} / {sorceryPointsTotal} remaining
-              {level >= 5 && ' · Sorcerous Restoration: regain 4 on Short Rest'}
-            </div>
-          </div>
-          {!readOnly && (
-            <div className="flex items-center gap-1">
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('sorcery_points_used', Math.max(0, sorceryUsed - 1))} disabled={sorceryUsed <= 0}>−</button>
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('sorcery_points_used', Math.min(sorceryPointsTotal, sorceryUsed + 1))} disabled={sorceryUsed >= sorceryPointsTotal}>+</button>
-            </div>
           )}
         </div>
       )}
@@ -293,7 +264,26 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
           <div className="text-xs text-muted-foreground">All slots recover on a Long Rest · Spells and cantrips chosen in CharacterDetail</div>
         </div>
       )}
-      {!creation && section !== 'features' && (
+      {!creation && sorceryPointsTotal > 0 && (section === 'all' || section === 'spells') && (
+        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+          <div>
+            <div className="text-sm font-medium">Sorcery Points (Long Rest)</div>
+            <div className="text-xs text-muted-foreground">{sorceryPointsTotal - sorceryUsed} / {sorceryPointsTotal} remaining
+              {level >= 5 && ' · Sorcerous Restoration: regain 4 on Short Rest'}
+            </div>
+          </div>
+          {!readOnly && (
+            <div className="flex items-center gap-1">
+              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+                onClick={() => set('sorcery_points_used', Math.max(0, sorceryUsed - 1))} disabled={sorceryUsed <= 0}>−</button>
+              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+                onClick={() => set('sorcery_points_used', Math.min(sorceryPointsTotal, sorceryUsed + 1))} disabled={sorceryUsed >= sorceryPointsTotal}>+</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!creation && (section === 'all' || section === 'spells') && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
@@ -320,7 +310,7 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
         </div>
       )}
 
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
         <>
           <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
           <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
@@ -361,7 +351,7 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
         </div>
       )}
 
-      {showFeatures && (
+      {creation && showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">

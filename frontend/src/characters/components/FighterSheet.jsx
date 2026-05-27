@@ -52,7 +52,7 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
   if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
 
   const Field = ({ label, children }) => (
     <div className="space-y-1">
@@ -252,8 +252,8 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
         </div>
       ))}
 
-      {/* Skill proficiencies */}
-      {showFeatures && (
+      {/* Skill proficiencies — during creation only */}
+      {creation && showFeatures && (
       <Field label="Skill Proficiencies">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">

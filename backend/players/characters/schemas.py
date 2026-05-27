@@ -1,6 +1,9 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+
+from gm.campaigns.campaign_tools.timeline.schemas import EraDate
+
 
 class CharacterCreate(BaseModel):
     name: str
@@ -19,11 +22,15 @@ class CharacterCreate(BaseModel):
 
     character_data: Dict[str, Any] = {}
     notes: Optional[str] = None
+    backstory: Optional[str] = None
+    personal_notes: Optional[str] = None
+    theme_music_url: Optional[str] = None
     experience_points: int = 0
     campaign_id: int
 
+
 class CharacterUpdate(BaseModel):
-    """Player update — all character fields except gm_notes."""
+    """Player update — all character fields the owner may change."""
     name: Optional[str] = None
     race: Optional[str] = None
     char_class: Optional[str] = None
@@ -40,6 +47,9 @@ class CharacterUpdate(BaseModel):
 
     character_data: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
+    backstory: Optional[str] = None
+    personal_notes: Optional[str] = None
+    theme_music_url: Optional[str] = None
     experience_points: Optional[int] = None
     level_up_pending: Optional[bool] = None
 
@@ -48,6 +58,7 @@ class CharacterGmUpdate(CharacterUpdate):
     """GM update — extends player update with gm_notes and GM-only fields."""
     gm_notes: Optional[str] = None
     is_visible_to_players: Optional[bool] = None
+
 
 class CharacterResponse(BaseModel):
     id: int
@@ -75,6 +86,10 @@ class CharacterResponse(BaseModel):
 
     notes: Optional[str]
     gm_notes: Optional[str]
+    backstory: Optional[str]
+    personal_notes: Optional[str]
+    image_path: Optional[str]
+    theme_music_url: Optional[str]
 
     created_at: datetime
     updated_at: Optional[datetime]
@@ -105,9 +120,65 @@ class CharacterListItem(BaseModel):
     charisma: int
 
     character_data: Dict[str, Any]
+    image_path: Optional[str] = None
 
     class Config:
         from_attributes = True
 
+
 class ToggleVisibilityRequest(BaseModel):
     is_visible: bool
+
+
+# ── Narrative: Timeline event create + response ───────────────────────────────
+
+class CharacterTimelineEventCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = None
+    era_id: Optional[int] = None
+    year: Optional[int] = None
+    month_order: Optional[int] = Field(None, ge=1)
+    day: Optional[int] = Field(None, ge=1)
+    is_visible_to_players: bool = False
+    link_description: Optional[str] = None
+
+
+class CharacterTimelineEventResponse(BaseModel):
+    id: int
+    character_id: int
+    event_id: int
+    event_title: str
+    era_dates: List[EraDate] = []
+    link_description: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Narrative: NPC create + response ─────────────────────────────────────────
+
+class CharacterNpcCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    race: Optional[str] = None
+    occupation: Optional[str] = None
+    alignment: Optional[str] = None
+    status: Optional[str] = "alive"
+    summary: Optional[str] = None
+    is_visible_to_players: bool = False
+    relationship_description: Optional[str] = None
+
+
+class CharacterNpcResponse(BaseModel):
+    id: int
+    character_id: int
+    npc_id: int
+    npc_name: str
+    npc_race: Optional[str]
+    npc_occupation: Optional[str]
+    npc_image_path: Optional[str]
+    relationship_description: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -114,7 +114,7 @@ function SpellPickerCreation({ label, limit, options, selected, onChange, raceGr
 export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
   const [newSpellbook, setNewSpellbook] = useState('');
   const [newPrepared, setNewPrepared] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
@@ -177,15 +177,6 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
 
   return (
     <div className="space-y-4">
-      {showFeatures && (
-      <div className="grid grid-cols-1 gap-3">
-        <div className="rounded-md border px-3 py-2 text-center">
-          <div className="text-xs text-muted-foreground">Arcane Recovery</div>
-          <div className="font-bold text-lg">{arcaneRecoveryLevels(level)} levels</div>
-        </div>
-      </div>
-      )}
-
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
@@ -233,27 +224,6 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
       </div>
       )}
 
-      {showFeatures && !creation && (
-        <div className="flex items-center justify-between rounded-md border px-3 py-2">
-          <div>
-            <div className="text-sm font-medium">Arcane Recovery (Short Rest)</div>
-            <div className="text-xs text-muted-foreground">Recover up to {arcaneRecoveryLevels(level)} total spell slot levels</div>
-          </div>
-          {!readOnly && (
-            <button
-              className={`text-xs px-3 py-1 rounded border transition-colors ${
-                data.arcane_recovery_used
-                  ? 'bg-muted text-muted-foreground'
-                  : 'bg-primary text-primary-foreground'
-              }`}
-              onClick={() => set('arcane_recovery_used', !data.arcane_recovery_used)}
-            >
-              {data.arcane_recovery_used ? 'Used' : 'Available'}
-            </button>
-          )}
-        </div>
-      )}
-
       {showFeatures && level >= 2 && (
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Arcane Tradition (Subclass)</Label>
@@ -282,7 +252,28 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           <div className="text-xs text-muted-foreground">All slots recover on a Long Rest</div>
         </div>
       )}
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
+        <div className="flex items-center justify-between rounded-md border px-3 py-2">
+          <div>
+            <div className="text-sm font-medium">Arcane Recovery (Short Rest)</div>
+            <div className="text-xs text-muted-foreground">Recover up to {arcaneRecoveryLevels(level)} total spell slot levels</div>
+          </div>
+          {!readOnly && (
+            <button
+              className={`text-xs px-3 py-1 rounded border transition-colors ${
+                data.arcane_recovery_used
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-primary text-primary-foreground'
+              }`}
+              onClick={() => set('arcane_recovery_used', !data.arcane_recovery_used)}
+            >
+              {data.arcane_recovery_used ? 'Used' : 'Available'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {!creation && (section === 'all' || section === 'spells') && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
@@ -321,7 +312,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           raceGrantedSpells={raceGrantedCantrips}
         />
       )}
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
         <SpellList
           dataKey="cantrips"
           label="Cantrips Known"
@@ -340,7 +331,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           onChange={v => set('spellbook', v)}
         />
       )}
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
         <>
           <SpellList
             dataKey="spellbook"
@@ -361,12 +352,8 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
 
       {showFeatures && (
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Skill Proficiencies (choose 2)</Label>
-        {readOnly ? (
-          <div className="flex flex-wrap gap-1">
-            {(data.skill_proficiencies ?? []).map(s => <Badge key={s} variant="secondary">{s}</Badge>)}
-          </div>
-        ) : (
+        <Label className="text-xs text-muted-foreground">Skill Proficiencies{creation ? ' (choose 2)' : ''}</Label>
+        {(creation && !readOnly) ? (
           <SkillPicker
             value={data.skill_proficiencies ?? []}
             onChange={v => set('skill_proficiencies', v)}
@@ -374,6 +361,10 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
             allowed={['Arcana', 'History', 'Insight', 'Investigation', 'Medicine', 'Religion']}
             backgroundSkills={backgroundSkills}
           />
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {(data.skill_proficiencies ?? []).map(s => <Badge key={s} variant="secondary">{s}</Badge>)}
+          </div>
         )}
       </div>
       )}

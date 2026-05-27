@@ -98,7 +98,7 @@ export default function RogueSheet({ data = {}, onChange, readOnly = false, leve
   if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
 
   const expertiseMax = level >= 6 ? 4 : 2;
 
@@ -246,7 +246,7 @@ export default function RogueSheet({ data = {}, onChange, readOnly = false, leve
         </div>
       )}
 
-      {showFeatures && (
+      {creation && showFeatures && (
       <Field label="Skill Proficiencies (choose 4)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">
@@ -280,7 +280,7 @@ export default function RogueSheet({ data = {}, onChange, readOnly = false, leve
         ) : (() => {
           const pool = [...new Set([...(data.skill_proficiencies ?? []), ...backgroundSkills])];
           return pool.length === 0
-            ? <p className="text-xs text-muted-foreground">Select skill proficiencies above first.</p>
+            ? <p className="text-xs text-muted-foreground">No proficient skills to apply expertise to.</p>
             : <SkillPicker value={data.expertise ?? []} onChange={v => set('expertise', v)} max={expertiseMax} allowed={pool} />;
         })()}
       </Field>

@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import CharacterDetail from './CharacterDetail';
 import characterService from '../characterService';
+import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
 
@@ -12,7 +13,24 @@ vi.mock('../characterService', () => ({
     updateCharacter: vi.fn(),
     deleteCharacter: vi.fn(),
     toggleVisibility: vi.fn(),
+    uploadImage: vi.fn(),
+    deleteImage: vi.fn(),
+    getTimelineEvents: vi.fn(),
+    createTimelineEvent: vi.fn(),
+    removeTimelineEvent: vi.fn(),
+    getCharacterNpcs: vi.fn(),
+    createCharacterNpc: vi.fn(),
+    removeCharacterNpc: vi.fn(),
   },
+  mapCharacterImageUrl: (path) => path ? `http://localhost:8000/${path}` : null,
+}));
+
+vi.mock('../../settings/settingsService', () => ({
+  default: { getCalendar: vi.fn() },
+}));
+
+vi.mock('react-markdown', () => ({
+  default: ({ children }) => <span data-testid="markdown">{children}</span>,
 }));
 
 vi.mock('react-router-dom', async () => ({
@@ -57,6 +75,10 @@ const BASE_CHARACTER = {
   is_visible_to_players: false,
   notes: 'My fighter notes',
   gm_notes: null,
+  backstory: null,
+  personal_notes: null,
+  image_path: null,
+  theme_music_url: null,
   created_at: '2024-01-01T00:00:00',
   updated_at: null,
 };
@@ -79,6 +101,9 @@ describe('CharacterDetail', () => {
     useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player' } });
     useAuth.mockReturnValue({ user: { id: 2, username: 'player' } });
     characterService.getCharacterById.mockResolvedValue({ success: true, data: BASE_CHARACTER });
+    characterService.getTimelineEvents.mockResolvedValue({ success: true, data: [] });
+    characterService.getCharacterNpcs.mockResolvedValue({ success: true, data: [] });
+    settingsService.getCalendar.mockResolvedValue(null);
   });
 
   it('shows loading state initially', () => {
@@ -101,8 +126,8 @@ describe('CharacterDetail', () => {
 
   it('shows ability score values', async () => {
     renderDetail();
-    // Wait for the STR input to be populated (it's in the identity section loaded async)
-    await waitFor(() => expect(screen.getByDisplayValue('16')).toBeInTheDocument());
+    // Ability scores are read-only divs (not inputs); STR=16 in BASE_CHARACTER
+    await waitFor(() => expect(screen.getAllByText('16').length).toBeGreaterThan(0));
   });
 
   it('shows proficiency bonus derived from level', async () => {
@@ -505,9 +530,10 @@ describe('CharacterDetail', () => {
   });
 
   describe('tab structure', () => {
-    it('always shows Stats, Features, and Weapons & Armor tab triggers', async () => {
+    it('always shows Narrative, Stats, Features, and Weapons & Armor tab triggers', async () => {
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Narrative/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Stats/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Features/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Weapons & Armor/i })).toBeInTheDocument();
@@ -567,11 +593,11 @@ describe('CharacterDetail', () => {
       expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
     });
 
-    it('non-spellcasting Fighter has exactly 3 tabs; spellcasting Wizard has 4', async () => {
-      // Fighter: Stats + Features + Weapons & Armor = 3
+    it('non-spellcasting Fighter has exactly 4 tabs; spellcasting Wizard has 5', async () => {
+      // Fighter: Narrative + Stats + Features + Weapons & Armor = 4
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
-      expect(screen.getAllByRole('tab')).toHaveLength(3);
+      expect(screen.getAllByRole('tab')).toHaveLength(4);
     });
   });
 
@@ -745,6 +771,196 @@ describe('CharacterDetail', () => {
           );
         });
       });
+    });
+  });
+
+  describe('Narrative tab — Personal Notes visibility', () => {
+    it('character owner sees Personal Notes section', async () => {
+      renderDetail(); // user id=2 matches BASE_CHARACTER.user_id=2
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText('Personal Notes')).toBeInTheDocument();
+    });
+
+    it('GM sees Personal Notes section for another player\'s character', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm' } });
+      useAuth.mockReturnValue({ user: { id: 1, username: 'gm' } }); // GM is not the owner (user_id=2)
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, gm_notes: null },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText('Personal Notes')).toBeInTheDocument();
+    });
+
+    it('non-owner player does NOT see Personal Notes section', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player' } });
+      useAuth.mockReturnValue({ user: { id: 3, username: 'other' } }); // not the owner
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, user_id: 2, is_visible_to_players: true },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByText('Personal Notes')).not.toBeInTheDocument();
+    });
+
+    it('shows Backstory and Public Notes section headings', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText('Backstory')).toBeInTheDocument();
+      expect(screen.getByText('Public Notes')).toBeInTheDocument();
+    });
+  });
+
+  describe('Related NPCs card', () => {
+    it('shows empty state when no NPCs are linked', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('No NPCs linked to this character yet.')).toBeInTheDocument());
+    });
+
+    it('shows add NPC toggle button for character owner', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('npcs-toggle')).toBeInTheDocument();
+    });
+
+    it('hides add NPC toggle for non-owner player', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player' } });
+      useAuth.mockReturnValue({ user: { id: 3, username: 'other' } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, user_id: 2, is_visible_to_players: true },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('npcs-toggle')).not.toBeInTheDocument();
+    });
+
+    it('shows linked NPC name and relationship when NPCs exist', async () => {
+      characterService.getCharacterNpcs.mockResolvedValue({
+        success: true,
+        data: [{ id: 10, npc_id: 5, npc_name: 'Elara', npc_race: 'Elf', npc_occupation: 'Wizard', npc_image_path: null, relationship_description: 'Childhood mentor' }],
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Elara')).toBeInTheDocument());
+      expect(screen.getByText('Childhood mentor')).toBeInTheDocument();
+    });
+
+    it('calls createCharacterNpc with correct args on form submit', async () => {
+      characterService.createCharacterNpc.mockResolvedValue({
+        success: true,
+        data: { id: 11, npc_id: 6, npc_name: 'Gordan', npc_race: 'Human', npc_occupation: 'Blacksmith', npc_image_path: null, relationship_description: '' },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('npcs-toggle')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('npcs-toggle'));
+      fireEvent.change(screen.getByPlaceholderText('NPC name'), { target: { value: 'Gordan' } });
+      fireEvent.click(screen.getByText('Create & Link NPC'));
+
+      await waitFor(() =>
+        expect(characterService.createCharacterNpc).toHaveBeenCalledWith(
+          '1',
+          expect.objectContaining({ name: 'Gordan' })
+        )
+      );
+    });
+
+    it('calls removeCharacterNpc and removes NPC from list', async () => {
+      characterService.getCharacterNpcs.mockResolvedValue({
+        success: true,
+        data: [{ id: 10, npc_id: 5, npc_name: 'Elara', npc_race: null, npc_occupation: null, npc_image_path: null, relationship_description: null }],
+      });
+      characterService.removeCharacterNpc.mockResolvedValue({ success: true });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Elara')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('unlink-npc-10'));
+      await waitFor(() =>
+        expect(characterService.removeCharacterNpc).toHaveBeenCalledWith('1', 10)
+      );
+      await waitFor(() => expect(screen.queryByText('Elara')).not.toBeInTheDocument());
+    });
+  });
+
+  describe('Timeline Events card', () => {
+    it('shows empty state when no events are linked', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('No timeline events linked to this character.')).toBeInTheDocument());
+    });
+
+    it('shows add event toggle button for character owner', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('timeline-events-toggle')).toBeInTheDocument();
+    });
+
+    it('hides add event toggle for non-owner player', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player' } });
+      useAuth.mockReturnValue({ user: { id: 3, username: 'other' } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, user_id: 2, is_visible_to_players: true },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('timeline-events-toggle')).not.toBeInTheDocument();
+    });
+
+    it('shows linked event title when events exist', async () => {
+      characterService.getTimelineEvents.mockResolvedValue({
+        success: true,
+        data: [{ id: 20, event_id: 3, event_title: 'Born in Millhaven', era_dates: [], link_description: null }],
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Born in Millhaven')).toBeInTheDocument());
+    });
+
+    it('shows "Unknown date" italic for events with no era_dates', async () => {
+      characterService.getTimelineEvents.mockResolvedValue({
+        success: true,
+        data: [{ id: 20, event_id: 3, event_title: 'Ancient event', era_dates: [], link_description: null }],
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Ancient event')).toBeInTheDocument());
+      expect(screen.getByText('Unknown date')).toBeInTheDocument();
+    });
+
+    it('calls createTimelineEvent with correct args on form submit', async () => {
+      characterService.createTimelineEvent.mockResolvedValue({
+        success: true,
+        data: { id: 21, event_id: 4, event_title: 'Joined the guild', era_dates: [], link_description: null },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('timeline-events-toggle')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('timeline-events-toggle'));
+      fireEvent.change(screen.getByPlaceholderText(/Born in the village/), { target: { value: 'Joined the guild' } });
+      fireEvent.click(screen.getByText('Create Event'));
+
+      await waitFor(() =>
+        expect(characterService.createTimelineEvent).toHaveBeenCalledWith(
+          '1',
+          expect.objectContaining({ title: 'Joined the guild' })
+        )
+      );
+    });
+
+    it('calls removeTimelineEvent and removes event from list', async () => {
+      characterService.getTimelineEvents.mockResolvedValue({
+        success: true,
+        data: [{ id: 20, event_id: 3, event_title: 'Born in Millhaven', era_dates: [], link_description: null }],
+      });
+      characterService.removeTimelineEvent.mockResolvedValue({ success: true });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Born in Millhaven')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId('unlink-event-20'));
+      await waitFor(() =>
+        expect(characterService.removeTimelineEvent).toHaveBeenCalledWith('1', 20)
+      );
+      await waitFor(() => expect(screen.queryByText('Born in Millhaven')).not.toBeInTheDocument());
     });
   });
 });

@@ -76,7 +76,7 @@ function SkillPicker({ value, onChange, max, backgroundSkills = [] }) {
 export default function ClericSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
 
@@ -253,7 +253,7 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
           <div className="text-xs text-muted-foreground">All slots recover on a Long Rest</div>
         </div>
       )}
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
@@ -280,7 +280,7 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
         </div>
       )}
 
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
         <>
           <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
           <SpellList dataKey="prepared_spells" label="Prepared Spells (today)" newValue={newSpell} setNew={setNewSpell} placeholder="Add prepared spell…" />
@@ -321,7 +321,7 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
         </div>
       )}
 
-      {showFeatures && (
+      {creation && showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">

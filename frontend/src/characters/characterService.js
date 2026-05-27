@@ -70,6 +70,94 @@ const characterService = {
       return { success: false, error: error.response?.data?.detail || 'Failed to toggle visibility' };
     }
   },
+
+  // ── Image ──────────────────────────────────────────────────────────────────
+
+  uploadImage: async (characterId, file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await axios.post(`${API_URL}/${characterId}/image`, formData, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to upload image' };
+    }
+  },
+
+  deleteImage: async (characterId) => {
+    try {
+      const response = await api.delete(`/${characterId}/image`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to delete image' };
+    }
+  },
+
+  // ── Timeline events ────────────────────────────────────────────────────────
+
+  getTimelineEvents: async (characterId) => {
+    try {
+      const response = await api.get(`/${characterId}/timeline-events`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to fetch timeline events' };
+    }
+  },
+
+  createTimelineEvent: async (characterId, eventData) => {
+    try {
+      const response = await api.post(`/${characterId}/timeline-events`, eventData);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to create timeline event' };
+    }
+  },
+
+  removeTimelineEvent: async (characterId, linkId) => {
+    try {
+      await api.delete(`/${characterId}/timeline-events/${linkId}`);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to remove timeline event' };
+    }
+  },
+
+  // ── NPCs ───────────────────────────────────────────────────────────────────
+
+  getCharacterNpcs: async (characterId) => {
+    try {
+      const response = await api.get(`/${characterId}/npcs`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to fetch NPCs' };
+    }
+  },
+
+  createCharacterNpc: async (characterId, npcData) => {
+    try {
+      const response = await api.post(`/${characterId}/npcs`, npcData);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to create NPC' };
+    }
+  },
+
+  removeCharacterNpc: async (characterId, linkId) => {
+    try {
+      await api.delete(`/${characterId}/npcs/${linkId}`);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to remove NPC' };
+    }
+  },
 };
 
 export default characterService;
+
+export const mapCharacterImageUrl = (path) =>
+  path ? `http://localhost:8000/${path}` : null;

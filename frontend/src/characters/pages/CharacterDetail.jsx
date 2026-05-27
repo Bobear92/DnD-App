@@ -1,6 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Eye, EyeOff, Trash2, Save, RotateCcw, TrendingUp, Star, Plus, Wand2, Shield, Sword, Zap } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import {
+  ChevronLeft, Eye, EyeOff, Trash2, Save, RotateCcw, TrendingUp, Star, Plus, Wand2, Shield,
+  Sword, Zap, BookOpen, Music, User, X, Upload, ExternalLink, Clock,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,8 +14,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import MainLayout from '../../shared/components/layout/MainLayout';
-import characterService from '../characterService';
+import characterService, { mapCharacterImageUrl } from '../characterService';
+import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
 import {
@@ -109,6 +117,8 @@ const ALIGNMENTS = [
   'Lawful Evil', 'Neutral Evil', 'Chaotic Evil',
 ];
 
+const NPC_STATUSES = ['alive', 'dead', 'missing', 'unknown'];
+
 function computeRaceGrantedCantrips(character) {
   const cd = character?.character_data ?? {};
   const cantrips = [];
@@ -145,32 +155,67 @@ export default function CharacterDetail() {
   const [addingXp, setAddingXp] = useState(false);
   const [levelUpWizardOpen, setLevelUpWizardOpen] = useState(false);
 
+  // Narrative state
+  const [backstoryPreview, setBackstoryPreview] = useState(false);
+  const [publicNotesPreview, setPublicNotesPreview] = useState(false);
+  const [personalNotesPreview, setPersonalNotesPreview] = useState(false);
+  const [portraitUploading, setPortraitUploading] = useState(false);
+  const portraitInputRef = useRef(null);
+
+  // Calendar for era/month selects in event form
+  const [calendar, setCalendar] = useState(null);
+
+  // Timeline events linked to character
+  const [timelineEvents, setTimelineEvents] = useState([]);
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [eventForm, setEventForm] = useState({ title: '', description: '', era_id: '__none__', year: '', month_order: '__none__', day: '', is_visible_to_players: false, link_description: '' });
+  const [savingEvent, setSavingEvent] = useState(false);
+
+  // NPCs linked to character
+  const [characterNpcs, setCharacterNpcs] = useState([]);
+  const [showNpcForm, setShowNpcForm] = useState(false);
+  const [npcForm, setNpcForm] = useState({ name: '', race: '', occupation: '', alignment: '', status: 'alive', summary: '', is_visible_to_players: false, relationship_description: '' });
+  const [savingNpc, setSavingNpc] = useState(false);
+
   const identity = useSection(null);
   const classSection = useSection(null);
   const savingThrows = useSection(null);
   const gmNotes = useSection('');
+  const backstory = useSection('');
+  const publicNotes = useSection('');
+  const personalNotes = useSection('');
+  const narrativeMeta = useSection({ theme_music_url: '' });
 
   const isGm = campaign?.userRole === 'gm';
   const isOwner = character?.user_id === user?.id;
   const canEdit = isOwner || isGm;
   const displayAsPlayer = !isGm || playerView;
   const showEditable = isOwner || (isGm && !playerView);
+  const showPersonalNotes = isOwner || (isGm && !playerView);
 
   useEffect(() => { load(); }, [characterId]);
 
+  useEffect(() => {
+    if (campaignId) {
+      settingsService.getCalendar(campaignId).catch(() => null).then(cal => setCalendar(cal ?? null));
+    }
+  }, [campaignId]);
+
   const load = async () => {
     setLoading(true);
-    const result = await characterService.getCharacterById(characterId);
-    if (result.success) {
-      const c = result.data;
+    const [charResult, eventsResult, npcsResult] = await Promise.all([
+      characterService.getCharacterById(characterId),
+      characterService.getTimelineEvents(characterId),
+      characterService.getCharacterNpcs(characterId),
+    ]);
+    if (charResult.success) {
+      const c = charResult.data;
       setCharacter(c);
       identity.commit({
         name: c.name, race: c.race,
         background: c.background ?? '', alignment: c.alignment ?? '',
         strength: c.strength, dexterity: c.dexterity, constitution: c.constitution,
         intelligence: c.intelligence, wisdom: c.wisdom, charisma: c.charisma,
-        notes: c.notes ?? '',
-        // level kept in draft for proficiency calculations but never editable
         level: c.level,
       });
       classSection.commit(c.character_data ?? {});
@@ -182,9 +227,15 @@ export default function CharacterDetail() {
       });
       savingThrows.commit(storedProfs);
       gmNotes.commit(c.gm_notes ?? '');
+      backstory.commit(c.backstory ?? '');
+      publicNotes.commit(c.notes ?? '');
+      personalNotes.commit(c.personal_notes ?? '');
+      narrativeMeta.commit({ theme_music_url: c.theme_music_url ?? '' });
     } else {
-      setError(result.error);
+      setError(charResult.error);
     }
+    if (eventsResult.success) setTimelineEvents(eventsResult.data);
+    if (npcsResult.success) setCharacterNpcs(npcsResult.data);
     setLoading(false);
   };
 
@@ -210,14 +261,12 @@ export default function CharacterDetail() {
       intelligence: identity.draft.intelligence,
       wisdom: identity.draft.wisdom,
       charisma: identity.draft.charisma,
-      notes: identity.draft.notes,
     }, (updated) => {
       identity.commit({
         name: updated.name, race: updated.race, level: updated.level,
         background: updated.background ?? '', alignment: updated.alignment ?? '',
         strength: updated.strength, dexterity: updated.dexterity, constitution: updated.constitution,
         intelligence: updated.intelligence, wisdom: updated.wisdom, charisma: updated.charisma,
-        notes: updated.notes ?? '',
       });
     });
   };
@@ -231,6 +280,25 @@ export default function CharacterDetail() {
 
   const saveGmNotes = async () => {
     await saveSection({ gm_notes: gmNotes.draft }, () => gmNotes.commit(gmNotes.draft));
+  };
+
+  const saveBackstory = async () => {
+    await saveSection({ backstory: backstory.draft }, (updated) => backstory.commit(updated.backstory ?? ''));
+  };
+
+  const savePublicNotes = async () => {
+    await saveSection({ notes: publicNotes.draft }, (updated) => publicNotes.commit(updated.notes ?? ''));
+  };
+
+  const savePersonalNotes = async () => {
+    await saveSection({ personal_notes: personalNotes.draft }, (updated) => personalNotes.commit(updated.personal_notes ?? ''));
+  };
+
+  const saveNarrativeMeta = async () => {
+    await saveSection(
+      { theme_music_url: narrativeMeta.draft.theme_music_url || null },
+      (updated) => narrativeMeta.commit({ theme_music_url: updated.theme_music_url ?? '' })
+    );
   };
 
   const handleToggleVisibility = async () => {
@@ -287,6 +355,75 @@ export default function CharacterDetail() {
     }
   };
 
+  const handlePortraitUpload = async (file) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setError('Image must be under 10 MB'); return; }
+    setPortraitUploading(true);
+    const result = await characterService.uploadImage(characterId, file);
+    setPortraitUploading(false);
+    if (result.success) setCharacter(result.data);
+    else setError(result.error);
+  };
+
+  const handlePortraitDelete = async () => {
+    const result = await characterService.deleteImage(characterId);
+    if (result.success) setCharacter(result.data);
+    else setError(result.error);
+  };
+
+  const handleAddEvent = async () => {
+    if (!eventForm.title.trim()) return;
+    setSavingEvent(true);
+    const payload = {
+      title: eventForm.title.trim(),
+      description: eventForm.description || null,
+      era_id: eventForm.era_id === '__none__' ? null : parseInt(eventForm.era_id),
+      year: eventForm.year ? parseInt(eventForm.year.replace(/,/g, '')) : null,
+      month_order: eventForm.month_order === '__none__' ? null : parseInt(eventForm.month_order),
+      day: eventForm.day ? parseInt(eventForm.day) : null,
+      is_visible_to_players: eventForm.is_visible_to_players,
+      link_description: eventForm.link_description || null,
+    };
+    const result = await characterService.createTimelineEvent(characterId, payload);
+    setSavingEvent(false);
+    if (result.success) {
+      setTimelineEvents(ev => [...ev, result.data]);
+      setEventForm({ title: '', description: '', era_id: '__none__', year: '', month_order: '__none__', day: '', is_visible_to_players: false, link_description: '' });
+      setShowEventForm(false);
+    } else {
+      setError(result.error);
+    }
+  };
+
+  const handleRemoveEvent = async (linkId) => {
+    const result = await characterService.removeTimelineEvent(characterId, linkId);
+    if (result.success) setTimelineEvents(ev => ev.filter(e => e.id !== linkId));
+    else setError(result.error);
+  };
+
+  const handleAddNpc = async () => {
+    if (!npcForm.name.trim()) return;
+    setSavingNpc(true);
+    const result = await characterService.createCharacterNpc(characterId, {
+      ...npcForm,
+      name: npcForm.name.trim(),
+    });
+    setSavingNpc(false);
+    if (result.success) {
+      setCharacterNpcs(n => [...n, result.data]);
+      setNpcForm({ name: '', race: '', occupation: '', alignment: '', status: 'alive', summary: '', is_visible_to_players: false, relationship_description: '' });
+      setShowNpcForm(false);
+    } else {
+      setError(result.error);
+    }
+  };
+
+  const handleRemoveNpc = async (linkId) => {
+    const result = await characterService.removeCharacterNpc(characterId, linkId);
+    if (result.success) setCharacterNpcs(n => n.filter(x => x.id !== linkId));
+    else setError(result.error);
+  };
+
   if (loading) {
     return (
       <MainLayout>
@@ -314,6 +451,10 @@ export default function CharacterDetail() {
 
   const raceGrantedCantrips = computeRaceGrantedCantrips(character);
   const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || raceGrantedCantrips.length > 0;
+  const tabCount = hasSpells ? 5 : 4;
+
+  const calendarEras = calendar?.eras ?? [];
+  const calendarMonths = calendar?.months ?? [];
 
   return (
     <MainLayout>
@@ -394,8 +535,11 @@ export default function CharacterDetail() {
 
         {/* Tabbed character sheet */}
         {identity.draft && (
-          <Tabs defaultValue="stats" className="space-y-4">
-            <TabsList className="grid w-full" style={{ gridTemplateColumns: hasSpells ? 'repeat(4,1fr)' : 'repeat(3,1fr)' }}>
+          <Tabs defaultValue="narrative" className="space-y-4">
+            <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${tabCount},1fr)` }}>
+              <TabsTrigger value="narrative" className="flex items-center gap-1.5">
+                <BookOpen className="h-3.5 w-3.5" /> Narrative
+              </TabsTrigger>
               <TabsTrigger value="stats" className="flex items-center gap-1.5">
                 <Shield className="h-3.5 w-3.5" /> Stats
               </TabsTrigger>
@@ -411,6 +555,460 @@ export default function CharacterDetail() {
                 </TabsTrigger>
               )}
             </TabsList>
+
+            {/* ── Tab 0: Narrative ── */}
+            <TabsContent value="narrative" className="space-y-4">
+
+              {/* Portrait */}
+              <div className="rounded-lg border bg-card p-4">
+                <h2 className="font-semibold text-sm mb-3">Character Portrait</h2>
+                <div className="flex gap-4 items-start">
+                  {/* Portrait image / upload zone */}
+                  <div
+                    className={cn(
+                      'relative w-32 h-40 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden bg-muted/30 flex-shrink-0',
+                      showEditable && 'cursor-pointer hover:bg-muted/50 transition-colors',
+                      portraitUploading && 'opacity-60'
+                    )}
+                    onClick={() => showEditable && portraitInputRef.current?.click()}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => { e.preventDefault(); showEditable && handlePortraitUpload(e.dataTransfer.files[0]); }}
+                  >
+                    {character.image_path ? (
+                      <>
+                        <img
+                          src={mapCharacterImageUrl(character.image_path)}
+                          alt={character.name}
+                          className="w-full h-full object-cover"
+                        />
+                        {showEditable && (
+                          <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Upload className="h-6 w-6 text-white" />
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground text-center p-2">
+                        {portraitUploading ? (
+                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        ) : (
+                          <>
+                            <User className="h-8 w-8 opacity-40" />
+                            {showEditable && <span className="text-xs">Click or drop to upload</span>}
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {portraitUploading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    {showEditable && (
+                      <>
+                        <input
+                          ref={portraitInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={e => handlePortraitUpload(e.target.files[0])}
+                        />
+                        {character.image_path && (
+                          <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7 text-destructive hover:text-destructive" onClick={handlePortraitDelete}>
+                            <X className="h-3 w-3" /> Remove portrait
+                          </Button>
+                        )}
+                        <p className="text-xs text-muted-foreground">JPEG, PNG, or WebP · max 10 MB</p>
+                      </>
+                    )}
+                    {!showEditable && !character.image_path && (
+                      <p className="text-sm text-muted-foreground">No portrait uploaded.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Theme Music */}
+              <SectionCard
+                title="Theme Music"
+                isDirty={narrativeMeta.isDirty}
+                onSave={saveNarrativeMeta}
+                onReset={narrativeMeta.reset}
+                canEdit={showEditable}
+              >
+                <div className="space-y-2">
+                  {showEditable ? (
+                    <div className="flex items-center gap-2">
+                      <Music className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <Input
+                        value={narrativeMeta.draft.theme_music_url}
+                        onChange={e => narrativeMeta.setDraft(d => ({ ...d, theme_music_url: e.target.value }))}
+                        placeholder="Paste a URL to a song or playlist…"
+                        className="flex-1"
+                      />
+                      {narrativeMeta.draft.theme_music_url && (
+                        <a href={narrativeMeta.draft.theme_music_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                          <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                        </a>
+                      )}
+                    </div>
+                  ) : narrativeMeta.draft.theme_music_url ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Music className="h-4 w-4 text-muted-foreground" />
+                      <a href={narrativeMeta.draft.theme_music_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">
+                        {narrativeMeta.draft.theme_music_url}
+                      </a>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No theme music set.</p>
+                  )}
+                </div>
+              </SectionCard>
+
+              {/* Backstory */}
+              <SectionCard
+                title="Backstory"
+                isDirty={backstory.isDirty}
+                onSave={saveBackstory}
+                onReset={backstory.reset}
+                canEdit={showEditable}
+                extraHeader={showEditable && (
+                  <button
+                    type="button"
+                    onClick={() => setBackstoryPreview(v => !v)}
+                    className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border"
+                  >
+                    {backstoryPreview ? 'Write' : 'Preview'}
+                  </button>
+                )}
+              >
+                {showEditable && !backstoryPreview ? (
+                  <Textarea
+                    value={backstory.draft}
+                    onChange={e => backstory.setDraft(e.target.value)}
+                    placeholder="Write your character's backstory here… Markdown is supported."
+                    rows={12}
+                    className="font-mono text-sm resize-y min-h-[200px]"
+                  />
+                ) : (backstory.draft || !showEditable) ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+                    {backstory.draft
+                      ? <ReactMarkdown>{backstory.draft}</ReactMarkdown>
+                      : <p className="text-muted-foreground">No backstory written yet.</p>}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No backstory written yet.</p>
+                )}
+              </SectionCard>
+
+              {/* Public Notes */}
+              <SectionCard
+                title="Public Notes"
+                isDirty={publicNotes.isDirty}
+                onSave={savePublicNotes}
+                onReset={publicNotes.reset}
+                canEdit={showEditable}
+                subtitle="Visible to all campaign members"
+                extraHeader={showEditable && (
+                  <button
+                    type="button"
+                    onClick={() => setPublicNotesPreview(v => !v)}
+                    className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border"
+                  >
+                    {publicNotesPreview ? 'Write' : 'Preview'}
+                  </button>
+                )}
+              >
+                {showEditable && !publicNotesPreview ? (
+                  <Textarea
+                    value={publicNotes.draft}
+                    onChange={e => publicNotes.setDraft(e.target.value)}
+                    placeholder="Notes visible to all players in the campaign…"
+                    rows={5}
+                    className="text-sm resize-y"
+                  />
+                ) : (publicNotes.draft || !showEditable) ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+                    {publicNotes.draft
+                      ? <ReactMarkdown>{publicNotes.draft}</ReactMarkdown>
+                      : <p className="text-muted-foreground">No public notes.</p>}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No public notes.</p>
+                )}
+              </SectionCard>
+
+              {/* Personal Notes — owner + GM only */}
+              {showPersonalNotes && (
+                <SectionCard
+                  title="Personal Notes"
+                  isDirty={personalNotes.isDirty}
+                  onSave={savePersonalNotes}
+                  onReset={personalNotes.reset}
+                  canEdit={isOwner}
+                  variant="personal"
+                  subtitle="Visible only to you and the GM"
+                  extraHeader={isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => setPersonalNotesPreview(v => !v)}
+                      className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border"
+                    >
+                      {personalNotesPreview ? 'Write' : 'Preview'}
+                    </button>
+                  )}
+                >
+                  {isOwner && !personalNotesPreview ? (
+                    <Textarea
+                      value={personalNotes.draft}
+                      onChange={e => personalNotes.setDraft(e.target.value)}
+                      placeholder="Private notes — only you and the GM can see these…"
+                      rows={5}
+                      className="text-sm resize-y"
+                    />
+                  ) : (personalNotes.draft || !isOwner) ? (
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+                      {personalNotes.draft
+                        ? <ReactMarkdown>{personalNotes.draft}</ReactMarkdown>
+                        : <p className="text-muted-foreground">No personal notes.</p>}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No personal notes.</p>
+                  )}
+                </SectionCard>
+              )}
+
+              {/* Related NPCs */}
+              <div className="rounded-lg border bg-card">
+                <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <div>
+                    <h2 className="font-semibold text-sm">Related NPCs</h2>
+                    {characterNpcs.length > 0 && (
+                      <span className="text-xs text-muted-foreground">{characterNpcs.length} linked</span>
+                    )}
+                  </div>
+                  {showEditable && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setShowNpcForm(v => !v)} data-testid="npcs-toggle">
+                      <Plus className="h-3 w-3" /> {showNpcForm ? 'Cancel' : 'Add NPC'}
+                    </Button>
+                  )}
+                </div>
+
+                {showNpcForm && showEditable && (
+                  <div className="p-4 border-b bg-muted/20 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Name *</Label>
+                        <Input value={npcForm.name} onChange={e => setNpcForm(f => ({ ...f, name: e.target.value }))} placeholder="NPC name" className="h-8 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Race</Label>
+                        <Input value={npcForm.race} onChange={e => setNpcForm(f => ({ ...f, race: e.target.value }))} placeholder="e.g. Human" className="h-8 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Occupation</Label>
+                        <Input value={npcForm.occupation} onChange={e => setNpcForm(f => ({ ...f, occupation: e.target.value }))} placeholder="e.g. Blacksmith" className="h-8 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Status</Label>
+                        <Select value={npcForm.status} onValueChange={v => setNpcForm(f => ({ ...f, status: v }))}>
+                          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {NPC_STATUSES.map(s => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Summary</Label>
+                      <Textarea value={npcForm.summary} onChange={e => setNpcForm(f => ({ ...f, summary: e.target.value }))} placeholder="Brief description…" rows={2} className="text-sm resize-none" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Relationship to character</Label>
+                      <Input value={npcForm.relationship_description} onChange={e => setNpcForm(f => ({ ...f, relationship_description: e.target.value }))} placeholder="e.g. Childhood mentor, estranged sibling…" className="h-8 text-sm" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" id="npc-visible" checked={npcForm.is_visible_to_players} onChange={e => setNpcForm(f => ({ ...f, is_visible_to_players: e.target.checked }))} className="rounded" />
+                      <Label htmlFor="npc-visible" className="text-xs cursor-pointer">Visible to players</Label>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowNpcForm(false)}>Cancel</Button>
+                      <Button size="sm" className="h-7 text-xs" onClick={handleAddNpc} disabled={savingNpc || !npcForm.name.trim()}>
+                        {savingNpc ? 'Saving…' : 'Create & Link NPC'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-4 space-y-2">
+                  {characterNpcs.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No NPCs linked to this character yet.</p>
+                  ) : (
+                    characterNpcs.map(link => (
+                      <div key={link.id} className="flex items-center gap-3 rounded-md border bg-muted/20 p-3">
+                        {link.npc_image_path ? (
+                          <img src={`http://localhost:8000/${link.npc_image_path}`} alt={link.npc_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                            <User className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <Link to={`/campaigns/${campaignId}/npcs/${link.npc_id}`} className="font-medium text-sm hover:underline">
+                            {link.npc_name}
+                          </Link>
+                          {(link.npc_race || link.npc_occupation) && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {[link.npc_race, link.npc_occupation].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
+                          {link.relationship_description && (
+                            <p className="text-xs text-muted-foreground italic mt-0.5">{link.relationship_description}</p>
+                          )}
+                        </div>
+                        {showEditable && (
+                          <button onClick={() => handleRemoveNpc(link.id)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive" data-testid={`unlink-npc-${link.id}`}>
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Timeline Events */}
+              <div className="rounded-lg border bg-card">
+                <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <div>
+                    <h2 className="font-semibold text-sm">Timeline Events</h2>
+                    {timelineEvents.length > 0 && (
+                      <span className="text-xs text-muted-foreground">{timelineEvents.length} linked</span>
+                    )}
+                  </div>
+                  {showEditable && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setShowEventForm(v => !v)} data-testid="timeline-events-toggle">
+                      <Plus className="h-3 w-3" /> {showEventForm ? 'Cancel' : 'Add Event'}
+                    </Button>
+                  )}
+                </div>
+
+                {showEventForm && showEditable && (
+                  <div className="p-4 border-b bg-muted/20 space-y-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Event Title *</Label>
+                      <Input value={eventForm.title} onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Born in the village of Millhaven" className="h-8 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Description</Label>
+                      <Textarea value={eventForm.description} onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional details about this event…" rows={2} className="text-sm resize-none" />
+                    </div>
+                    {calendarEras.length > 0 && (
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Era</Label>
+                          <Select value={eventForm.era_id} onValueChange={v => setEventForm(f => ({ ...f, era_id: v }))}>
+                            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Era…" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">No era</SelectItem>
+                              {calendarEras.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Year</Label>
+                          <Input value={eventForm.year} onChange={e => setEventForm(f => ({ ...f, year: e.target.value }))} placeholder="Year" className="h-8 text-sm" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Day</Label>
+                          <Input type="number" value={eventForm.day} onChange={e => setEventForm(f => ({ ...f, day: e.target.value }))} placeholder="Day" className="h-8 text-sm" min={1} />
+                        </div>
+                      </div>
+                    )}
+                    {calendarMonths.length > 0 && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">Month</Label>
+                        <Select value={eventForm.month_order} onValueChange={v => setEventForm(f => ({ ...f, month_order: v }))}>
+                          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Month…" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">No month</SelectItem>
+                            {calendarMonths.map(m => <SelectItem key={m.order_index} value={String(m.order_index)}>{m.name || `Month ${m.order_index}`}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Link note (optional)</Label>
+                      <Input value={eventForm.link_description} onChange={e => setEventForm(f => ({ ...f, link_description: e.target.value }))} placeholder="e.g. Character's birthdate" className="h-8 text-sm" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" id="event-visible" checked={eventForm.is_visible_to_players} onChange={e => setEventForm(f => ({ ...f, is_visible_to_players: e.target.checked }))} className="rounded" />
+                      <Label htmlFor="event-visible" className="text-xs cursor-pointer">Visible to players</Label>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowEventForm(false)}>Cancel</Button>
+                      <Button size="sm" className="h-7 text-xs" onClick={handleAddEvent} disabled={savingEvent || !eventForm.title.trim()}>
+                        {savingEvent ? 'Saving…' : 'Create Event'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-4 space-y-2">
+                  {timelineEvents.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No timeline events linked to this character.</p>
+                  ) : (
+                    timelineEvents.map(link => (
+                      <div key={link.id} className="flex items-start gap-3 rounded-md border bg-muted/20 p-3">
+                        <Clock className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{link.event_title}</div>
+                          {link.era_dates?.length > 0 ? (
+                            <div className="text-xs text-muted-foreground">
+                              {link.era_dates.map((ed, i) => (
+                                <span key={i}>{i > 0 && ' · '}{ed.year} {ed.abbreviation}</span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Unknown date</span>
+                          )}
+                          {link.link_description && (
+                            <p className="text-xs text-muted-foreground italic mt-0.5">{link.link_description}</p>
+                          )}
+                        </div>
+                        {showEditable && (
+                          <button onClick={() => handleRemoveEvent(link.id)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive flex-shrink-0" data-testid={`unlink-event-${link.id}`}>
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* GM Notes — inside narrative tab */}
+              {isGm && !displayAsPlayer && (
+                <SectionCard
+                  title="GM Notes"
+                  isDirty={gmNotes.isDirty}
+                  onSave={saveGmNotes}
+                  onReset={gmNotes.reset}
+                  canEdit={true}
+                  variant="amber"
+                >
+                  <Textarea
+                    value={gmNotes.draft}
+                    onChange={e => gmNotes.setDraft(e.target.value)}
+                    placeholder="Private GM notes — never visible to the player…"
+                    rows={4}
+                  />
+                </SectionCard>
+              )}
+            </TabsContent>
 
             {/* ── Tab 1: Stats ── */}
             <TabsContent value="stats" className="space-y-4">
@@ -510,18 +1108,9 @@ export default function CharacterDetail() {
                       {ABILITY_LABELS.map(({ key, abbrev }) => (
                         <div key={key} className="flex flex-col items-center">
                           <span className="text-[10px] font-medium text-muted-foreground uppercase">{abbrev}</span>
-                          {showEditable ? (
-                            <Input
-                              type="number" min={1} max={30}
-                              value={identity.draft[key]}
-                              onChange={e => identity.setDraft(d => ({ ...d, [key]: parseInt(e.target.value) || 10 }))}
-                              className="w-full text-center font-bold p-1 h-10"
-                            />
-                          ) : (
-                            <div className="rounded-md border w-full text-center py-2 font-bold">
-                              {identity.draft[key]}
-                            </div>
-                          )}
+                          <div className="rounded-md border w-full text-center py-2 font-bold">
+                            {identity.draft[key]}
+                          </div>
                           <span className="text-xs text-muted-foreground">{modStr(identity.draft[key])}</span>
                         </div>
                       ))}
@@ -584,23 +1173,6 @@ export default function CharacterDetail() {
                     pb={pb}
                     readOnly={displayAsPlayer || !canEdit}
                   />
-
-                  {/* Player notes */}
-                  {(showEditable || identity.draft.notes) ? (
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Notes</Label>
-                      {showEditable ? (
-                        <Textarea
-                          value={identity.draft.notes}
-                          onChange={e => identity.setDraft(d => ({ ...d, notes: e.target.value }))}
-                          placeholder="Personal notes, backstory, equipment…"
-                          rows={3}
-                        />
-                      ) : (
-                        <p className="text-sm whitespace-pre-wrap">{identity.draft.notes}</p>
-                      )}
-                    </div>
-                  ) : null}
                 </div>
               </SectionCard>
 
@@ -688,25 +1260,6 @@ export default function CharacterDetail() {
               </TabsContent>
             )}
           </Tabs>
-        )}
-
-        {/* GM Notes — outside tabs, always at the bottom */}
-        {isGm && !displayAsPlayer && (
-          <SectionCard
-            title="GM Notes"
-            isDirty={gmNotes.isDirty}
-            onSave={saveGmNotes}
-            onReset={gmNotes.reset}
-            canEdit={true}
-            variant="amber"
-          >
-            <Textarea
-              value={gmNotes.draft}
-              onChange={e => gmNotes.setDraft(e.target.value)}
-              placeholder="Private GM notes — never visible to the player…"
-              rows={4}
-            />
-          </SectionCard>
         )}
       </div>
 
@@ -830,27 +1383,39 @@ function LevelUpWizard({ character, campaign, onComplete, onClose }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SectionCard({ title, children, isDirty, onSave, onReset, canEdit, variant }) {
+function SectionCard({ title, subtitle, children, isDirty, onSave, onReset, canEdit, variant, extraHeader }) {
   return (
     <div className={cn(
       'rounded-lg border bg-card',
-      variant === 'amber' && 'border-amber-300 bg-amber-50/50 dark:bg-amber-950/20'
+      variant === 'amber' && 'border-amber-300 bg-amber-50/50 dark:bg-amber-950/20',
+      variant === 'personal' && 'border-blue-200 bg-blue-50/30 dark:bg-blue-950/10',
     )}>
       <div className="flex items-center justify-between px-4 py-3 border-b">
-        <h2 className={cn('font-semibold text-sm', variant === 'amber' && 'text-amber-800 dark:text-amber-300')}>
-          {title}
-          {variant === 'amber' && <span className="ml-2 text-xs font-normal opacity-70">Private</span>}
-        </h2>
-        {canEdit && isDirty && (
-          <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={onReset} className="h-7 text-xs">
-              <RotateCcw className="h-3 w-3 mr-1" /> Reset
-            </Button>
-            <Button size="sm" onClick={onSave} className="h-7 text-xs">
-              <Save className="h-3 w-3 mr-1" /> Save
-            </Button>
-          </div>
-        )}
+        <div>
+          <h2 className={cn(
+            'font-semibold text-sm',
+            variant === 'amber' && 'text-amber-800 dark:text-amber-300',
+            variant === 'personal' && 'text-blue-700 dark:text-blue-300',
+          )}>
+            {title}
+            {variant === 'amber' && <span className="ml-2 text-xs font-normal opacity-70">Private</span>}
+            {variant === 'personal' && <span className="ml-2 text-xs font-normal opacity-70">Personal</span>}
+          </h2>
+          {subtitle && <p className="text-[10px] text-muted-foreground">{subtitle}</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          {extraHeader}
+          {canEdit && isDirty && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={onReset} className="h-7 text-xs">
+                <RotateCcw className="h-3 w-3 mr-1" /> Reset
+              </Button>
+              <Button size="sm" onClick={onSave} className="h-7 text-xs">
+                <Save className="h-3 w-3 mr-1" /> Save
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
       <div className="p-4">{children}</div>
     </div>

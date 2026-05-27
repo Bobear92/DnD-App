@@ -96,7 +96,7 @@ campaigns.
 backend/
 ├── auth/                        # Login, register, JWT — routes/service/models/schemas
 ├── players/
-│   ├── characters/              # Character CRUD — routes/service/models/schemas
+│   ├── characters/              # Character CRUD — routes/service/models/schemas/storage
 │   ├── races/                   # D&D races (system + campaign-custom)
 │   ├── backgrounds/             # D&D backgrounds (system + campaign-custom)
 │   ├── feats/                   # D&D feats (system + campaign-custom)
@@ -112,6 +112,7 @@ backend/
 │   └── tools/
 │       └── loot_tables/         # Loot table generation (system + campaign)
 ├── uploads/
+│   ├── characters/              # Character portraits: uploads/characters/{character_id}/uuid.ext
 │   ├── maps/                    # Map images: uploads/maps/{campaign_id}/{location_id}/uuid.ext
 │   ├── npcs/                    # NPC portraits: uploads/npcs/{campaign_id}/{npc_id}/uuid.ext
 │   └── sessions/                # Session images: uploads/sessions/{campaign_id}/{session_id}/uuid.ext
@@ -171,6 +172,9 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 - **Players see:** own characters + characters where `is_visible_to_players = true`
 - **GM sees:** ALL characters in their campaign; can edit, delete, and write private `gm_notes`
 - **`gm_notes`** is always stripped from responses returned to players and character owners
+- **`personal_notes`** is visible only to the character owner and the GM; stripped from all other player responses; GM cannot overwrite the owner's personal notes (service pops the field if `is_gm and not is_owner`)
+- **`backstory`** and `notes` (public notes) are visible to all campaign members
+- **Portrait images** stored at `uploads/characters/{character_id}/uuid.ext`; served via StaticFiles
 
 ### Content
 - **Only admin can create/edit/delete system (`owner_type='system'`) content**
@@ -181,7 +185,7 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 
 ---
 
-## Current Database Schema (37 Tables)
+## Current Database Schema (39 Tables)
 
 ```sql
 -- Core
@@ -209,9 +213,23 @@ characters
   experience_points (integer, default 0),   ← XP total; used when leveling_type="experience"
   level_up_pending (boolean, default false), ← set true when XP threshold crossed or GM triggers milestone LU
   user_id (FK→users), campaign_id (FK→campaigns),
-  is_visible_to_players (boolean), notes,
-  gm_notes (Text, nullable),   ← GM only; always stripped from player/owner responses
+  is_visible_to_players (boolean), notes,          ← "public notes" shown to all campaign members
+  gm_notes (Text, nullable),                       ← GM only; always stripped from player/owner responses
+  backstory (Text, nullable),                      ← markdown prose; owner + all members (read)
+  personal_notes (Text, nullable),                 ← owner + GM only; stripped from other player responses
+  image_path (String(500), nullable),              ← portrait; served via /uploads/characters/
+  theme_music_url (String(500), nullable),         ← URL to song/playlist; player-visible
   created_at, updated_at
+
+character_timeline_events                ← junction: timeline event linked to a character
+  id, character_id (FK→characters CASCADE), event_id (FK→timeline_events CASCADE),
+  description, created_at
+  UNIQUE(character_id, event_id) name="uq_character_timeline_event"
+
+character_npcs                           ← junction: NPC linked to a character
+  id, character_id (FK→characters CASCADE), npc_id (FK→npcs CASCADE),
+  description, created_at
+  UNIQUE(character_id, npc_id) name="uq_character_npc"
 
 -- Player Reference Content (system + campaign ownership)
 races
@@ -533,9 +551,17 @@ Campaign PUT accepts all four new settings fields: `use_alignment`, `ability_sco
 | POST | /api/characters | Yes |
 | GET | /api/characters/campaign/{id} | Yes (member) |
 | GET | /api/characters/{id} | Yes (owner or GM) |
-| PUT | /api/characters/{id} | Yes (owner or GM); uses `CharacterGmUpdate` — only GM can set `gm_notes`/`is_visible_to_players` |
+| PUT | /api/characters/{id} | Yes (owner or GM); uses `CharacterGmUpdate` — only GM can set `gm_notes`/`is_visible_to_players`; GM cannot overwrite `personal_notes` |
 | DELETE | /api/characters/{id} | Yes (owner or GM) |
 | PATCH | /api/characters/{id}/visibility | Yes (GM of campaign) |
+| POST | /api/characters/{id}/image | Yes (owner or GM, multipart) |
+| DELETE | /api/characters/{id}/image | Yes (owner or GM) |
+| GET | /api/characters/{id}/timeline-events | Yes (owner or GM) |
+| POST | /api/characters/{id}/timeline-events | Yes (owner or GM); creates a new `timeline_events` row + `character_timeline_events` junction |
+| DELETE | /api/characters/{id}/timeline-events/{link_id} | Yes (owner or GM) |
+| GET | /api/characters/{id}/npcs | Yes (owner or GM) |
+| POST | /api/characters/{id}/npcs | Yes (owner or GM); creates a new `npcs` row + `character_npcs` junction |
+| DELETE | /api/characters/{id}/npcs/{link_id} | Yes (owner or GM) |
 
 ### Races / Backgrounds / Feats (same pattern each)
 | Method | Endpoint | Auth Required |
@@ -757,7 +783,7 @@ frontend/src/
 │                                #   addPlayer(campaignId, userId), removePlayer(campaignId, userId),
 │                                #   searchUsers(q) → GET /api/auth/users/search
 ├── characters/
-│   ├── characterService.js      # API client: CRUD, toggleVisibility(id, isVisible), deleteCharacter
+│   ├── characterService.js      # API client: CRUD, toggleVisibility, deleteCharacter, uploadImage, deleteImage, getTimelineEvents, createTimelineEvent, removeTimelineEvent, getCharacterNpcs, createCharacterNpc, removeCharacterNpc; exports mapCharacterImageUrl(path)
 │   ├── referenceService.js      # Fetches races + backgrounds from API for CharacterCreate identity step; falls back to hardcoded lists when API returns empty
 │   ├── components/
 │   │   ├── BarbarianSheet.jsx   # Barbarian (5e): rage tracker, unarmored defense, reckless attack, Primal Path ✅
@@ -769,9 +795,9 @@ frontend/src/
 │   │   ├── PaladinSheet.jsx     # Paladin (5e): half-caster starting L2, lay on hands, sacred oath ✅
 │   │   ├── RangerSheet.jsx      # Ranger (5e): half-caster starting L1, favored enemy/terrain, Archetype ✅
 │   │   ├── RogueSheet.jsx       # Rogue (5e): sneak attack, expertise picker (all 18 skills), roguish archetype; skill proficiency picker restricted to 11 Rogue skills (Acrobatics, Athletics, Deception, Insight, Intimidation, Investigation, Perception, Performance, Persuasion, Sleight of Hand, Stealth) ✅
-│   │   ├── SorcererSheet.jsx    # Sorcerer (5e): full caster, sorcery points, metamagic, Sorcerous Origin L1 ✅
+│   │   ├── SorcererSheet.jsx    # Sorcerer (5e): full caster, sorcery points tracker in Spells tab (L2+, converts to/from slots), metamagic, Sorcerous Origin L1 ✅
 │   │   ├── WarlockSheet.jsx     # Warlock (5e): pact magic (short-rest slots), invocations L2+, Patron L1 ✅
-│   │   ├── WizardSheet.jsx      # Wizard (5e): full caster, spellbook, arcane recovery, Tradition L2 ✅
+│   │   ├── WizardSheet.jsx      # Wizard (5e): full caster, spellbook, arcane recovery tracker in Spells tab (short-rest slot recovery), Tradition L2 ✅
 │   │   ├── HitDiceTracker.jsx   # Shared hit-dice widget used in all 24 class sheets: shows die type × total always; when !creation shows remaining/total count + +/− buttons; readOnly hides buttons; onChange(v) passes new hit_dice_used integer ✅
 │   │   ├── OptionCardPicker.jsx # Reusable card-based picker: each option shows name + 1-line description; replaces plain <select> for fighting styles, subclasses, pact boons; accepts optional `onDetailClick` prop that adds an Info button per card ✅
 │   │   ├── SubclassPickerWithDetail.jsx # Drop-in for subclass OptionCardPicker: bundles OptionCardPicker + Dialog + SubclassOverview; used in all 24 class sheets for the subclass selection section ✅
@@ -790,9 +816,9 @@ frontend/src/
 │   │       ├── PaladinSheet.jsx   # Paladin (2024): spell slots from L1, weapon mastery; creation gate shows only L1 features ✅
 │   │       ├── RangerSheet.jsx    # Ranger (2024): weapon mastery, deft explorer; creation gate shows only L1 features ✅
 │   │       ├── RogueSheet.jsx     # Rogue (2024): weapon mastery, steady aim L3; skill proficiency picker restricted to 11 Rogue skills via ROGUE_ALLOWED; expertise picker keeps ALL_SKILLS; creation gate shows only L1 features ✅
-│   │       ├── SorcererSheet.jsx  # Sorcerer (2024): innate sorcery L1, subclass L3, sorcerous restoration L5; creation gate shows only L1 features ✅
+│   │       ├── SorcererSheet.jsx  # Sorcerer (2024): innate sorcery L1, sorcery points tracker in Spells tab (L2+), subclass L3, sorcerous restoration L5; creation gate shows only L1 features ✅
 │   │       ├── WarlockSheet.jsx   # Warlock (2024): invocations L1, magical cunning L2, subclass L3, boon L5; creation gate shows only L1 features ✅
-│   │       ├── WizardSheet.jsx    # Wizard (2024): memorize spell L1, scholar L2, subclass L3; creation gate shows only L1 features ✅
+│   │       ├── WizardSheet.jsx    # Wizard (2024): memorize spell L1, arcane recovery tracker in Spells tab, scholar L2, subclass L3; creation gate shows only L1 features ✅
 │   │       └── index.js           # Exports all 12 2024 sheets + SUPPORTED_CLASSES_2024 + metadata
 │   │   ├── AbilityScoreAssignment.jsx # Three ability score methods: StandardSpreadAssignment, PointBuyAssignment, DiceRollAssignment ✅
 │   │   ├── classFeatures5e.js   # HIT_DICE_5E + CLASS_FEATURES_5E: all 12 classes × 20 levels, 2014 rules ✅
@@ -801,7 +827,9 @@ frontend/src/
 │   │   ├── ClassOverview.jsx    # Read-only class detail panel: colored header bar, quick stats grid, flavor text, PHB-style progression table (class-specific columns + grouped spell slot headers), flat feature sections by level, clickable subclass cards at subclass-choosing level (clicking opens a SubclassOverview Dialog) ✅
 │   │   ├── LevelUpWizard.jsx    # Dynamic-step modal: HP → (Subclass, if unlocking at this level) → Features → Confirm; subclass step only appears when leveling exactly to the class's unlock level and no subclass chosen yet; saves level, hp_max, and subclass into character_data ✅
 │   │   ├── LevelUpWizard.test.jsx # subclass step visibility (5e Wizard L1→2, Fighter L2→3, 2024 Fighter, non-unlock level, already has subclass); Next disabled until picked; onComplete includes subclass; confirm shows choice; no subclass key when no step (12 tests)
-│   │   └── SubclassOverview.test.jsx # renders subclass name/badges, flavor text, features by level, unavailable fallback, Barbarian/Cleric/Warlock/Wizard/Fighter subclasses (12 tests)
+│   │   ├── SubclassOverview.test.jsx # renders subclass name/badges, flavor text, features by level, unavailable fallback, Barbarian/Cleric/Warlock/Wizard/Fighter subclasses (12 tests)
+│   │   ├── SorcererSheet.test.jsx # section routing: Sorcery Points tracker in spells (L2+), not in features; section isolation for HP/features/spells (12 tests)
+│   │   └── WizardSheet.test.jsx # section prop routing: Arcane Recovery tracker in spells/not features; stats/features/spells/all isolation (20 tests)
 │   ├── classService.js          # API client: getClasses(edition, campaignId), getClassByName(name, edition, campaignId) → GET /api/classes ✅
 │   └── pages/
 │       ├── CharacterList.jsx    # List characters, visibility toggle (GM), player view toggle ✅
@@ -1003,7 +1031,8 @@ frontend/src/
 - **CharacterCreate — InstrumentPicker (Bard):** standard instruments shown as toggle buttons; custom instruments entered via "Other instrument…" input + Enter or `+` button; custom instruments are stored in the `value` array alongside standard ones; after adding, custom instruments appear as selected (primary-colored) toggle buttons rendered after the standard list (`customInstruments = value.filter(i => !MUSICAL_INSTRUMENTS.includes(i))`)
 - **CharacterDetail — subrace and racial data display:** editable view shows `Subrace: {name}` below the race input when `character_data.subrace` is set; read-only view shows subrace as a Badge alongside race; Racial Traits section (secondary badges) and Languages section (outline badges) appear between the identity fields and ability scores when `character_data.race_traits` / `race_languages` are non-empty; sections are hidden entirely when the arrays are empty
 - **CharacterDetail — edition switching:** `edition = campaign?.edition || '5e'`; selects `CLASS_SHEETS_5E` or `CLASS_SHEETS_2024` map to find the right sheet component for the character's class
-- **CharacterDetail — tab layout:** four-tab structure for spellcasters, three-tab for non-spellcasters (shadcn/ui Tabs):
+- **CharacterDetail — tab layout:** five-tab structure for spellcasters, four-tab for non-spellcasters (shadcn/ui Tabs); default tab is "narrative":
+  - **Tab 0 "Narrative"** — always shown first; contains: Portrait upload, Theme Music URL, Backstory (markdown), Public Notes (markdown), Personal Notes (blue-tinted, owner+GM only), Related NPCs card, Timeline Events card, GM Notes (amber, GM only — moved here from page bottom)
   - **Tab 1 "Stats"** — Identity & Ability Scores card + Hit Points & Movement card (class sheet with `section="stats"`)
   - **Tab 2 "Features"** — `{char_class} Features` card (class sheet with `section="features"`, includes subclass picker/lock, class features up to current level)
   - **Tab 3 "Weapons & Armor"** — placeholder card ("Coming soon"); always shown regardless of class
@@ -1011,11 +1040,21 @@ frontend/src/
   - `hasSpells = SPELLCASTING_CLASSES.has(char_class) || raceGrantedCantrips.length > 0`
   - `computeRaceGrantedCantrips(character)` — reads `character_data.high_elf_cantrip`, `SUBRACE_CANTRIPS[subrace]` (Forest Gnome → Minor Illusion, Drow → Dancing Lights), `RACE_CANTRIPS[race]` (Tiefling → Thaumaturgy)
   - **Note for tests:** CharacterDetail.test.jsx mocks `@/components/ui/tabs` to render all TabsContent unconditionally (same pattern as LocationDetail.test.jsx), so tab content is always in the DOM without clicking
-  - **GM Notes** stays outside the tabs at the bottom, always visible to GM
+- **CharacterDetail — Narrative tab details:**
+  - **Portrait upload:** click or drag-drop zone (10 MB limit, JPEG/PNG/WebP); served from `uploads/characters/{character_id}/`; remove button when image exists; only editable by `showEditable` (owner or GM non-playerView)
+  - **Theme Music:** URL input + clickable ExternalLink icon; saved via `narrativeMeta` useSection; owner + GM editable
+  - **Backstory:** large resize-y monospace textarea + Write/Preview toggle; markdown rendered with ReactMarkdown; `showEditable` gated; saved via separate `backstory` useSection calling `PUT /api/characters/{id}` with `{ backstory }`
+  - **Public Notes:** smaller textarea + Write/Preview; labeled "Visible to all campaign members"; `showEditable` gated; saved via `publicNotes` useSection calling `PUT` with `{ notes }`
+  - **Personal Notes:** blue-tinted SectionCard (`variant="personal"`); labeled "Visible only to you and the GM"; shown only when `showPersonalNotes = isOwner || (isGm && !playerView)`; only owner can edit (textarea hidden for GM-non-owner); saved via `personalNotes` useSection calling `PUT` with `{ personal_notes }`
+  - **Related NPCs card:** create-only form toggle (`data-testid="npcs-toggle"`, owner/GM only); form fields: name (required), race, occupation, status select, summary, relationship description, visible-to-players checkbox; submit calls `characterService.createCharacterNpc` → creates NPC + junction; list shows portrait thumbnail, name (Link to NPCDetail), race/occupation, relationship; remove button (`data-testid="unlink-npc-{id}"`); calendar loaded via `settingsService.getCalendar(campaignId)` for era/month selects
+  - **Timeline Events card:** create-only form toggle (`data-testid="timeline-events-toggle"`, owner/GM only); form fields: title (required), description, era select, year, month select, day, link note, visible-to-players checkbox; era/month selects only shown when calendar has eras/months; submit calls `characterService.createTimelineEvent` → creates event + junction; list shows Clock icon, event_title, era_dates or "Unknown date" italic, link_description; remove button (`data-testid="unlink-event-{id}"`)
+  - **GM Notes:** amber-tinted SectionCard (`variant="amber"`); gated `isGm && !displayAsPlayer`; **moved from page bottom into Narrative tab** — no longer separate from tabs
 - **CharacterDetail — key logic:**
   - `showEditable = isOwner || (isGm && !playerView)` — players always edit their own characters; GM edits freely unless in Player View preview mode
-  - `displayAsPlayer = !isGm || playerView` — controls which sections are hidden (GM Notes, Player View toggle itself)
+  - `displayAsPlayer = !isGm || playerView` — controls which sections are hidden (GM Notes, Personal Notes, Player View toggle itself)
+  - `showPersonalNotes = isOwner || (isGm && !playerView)` — Personal Notes visible only to owner and GM (not player-view)
   - `useSection(initial)` hook: `{ draft, setDraft, isDirty, reset, commit }` — per-section Save/Reset buttons appear only when dirty
+  - Calendar loaded on mount via `settingsService.getCalendar(campaignId)` in a separate `useEffect`; gracefully handles 404 (sets `calendar=null`, hides era/month fields in event form)
 - **Leveling card:** shown above Identity; adapts to `campaign.leveling_type` — milestone or experience
   - **Milestone:** GM sees "Level Up" button → sets `level_up_pending: true`; player sees amber "Level Up Available!" banner when `level_up_pending=true`
   - **Experience:** XP bar shows progress to next level (using `XP_THRESHOLDS`); GM gets "Add XP" input; when XP crosses next-level threshold, `level_up_pending` auto-sets to true alongside the XP update
@@ -1033,9 +1072,14 @@ frontend/src/
 - **Class Features card / Spellcasting card:** renders class-specific sheet component — each accepts `{ data, onChange, readOnly, level, creation, section }`.
   - `section: 'all' | 'stats' | 'features' | 'spells'` — controls what a sheet renders; defaults to `'all'` (used in CharacterCreate where section is never passed)
   - In CharacterDetail: Stats tab passes `section="stats"` (HP/movement only); Features tab passes `section="features"` (class features, subclass); Spells tab passes `section="spells"` (only spells)
+  - **Section isolation — enforced in all 24 sheets:**
+    - `showFeatures = section === 'all' || section === 'features'` — class features, subclass, ASI reminder
+    - `showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells')` — HP/AC/Speed
+    - Spell content (slots, cantrips, spellbook, prepared spells): `!creation && (section === 'all' || section === 'spells')` — never shown in 'stats' or 'features' tabs
+    - Skill proficiency picker: `creation && showFeatures` — only during CharacterCreate; CharacterDetail uses its own 18-skill panel instead
   - **Subclass locking:** all 24 class sheets (5e + 2024) show the subclass picker only when `!(readOnly || !!data.subclass)`. Once `data.subclass` is set, the picker is replaced by `SubclassDetails` which renders: the subclass name, flavor text, and all subclass features earned at or below the character's current level (level-gated, same as class features). Features not yet unlocked are not shown — players visit the Encyclopedia for the full subclass overview. Falls back to plain name when subclass data is unavailable. This prevents players from switching subclasses after the initial permanent choice. In GM view (`readOnly=false`), a character without a subclass shows the picker; one with a subclass shows the detail panel even for GM.
   - Non-spellcasting sheets (Barbarian, Fighter, Monk, Rogue — both editions): `if (section === 'spells') return null;` as the first line
-  - Spellcasting sheets: features wrapped in `{section !== 'spells' && (...)}`, spell slots/lists in `{!creation && section !== 'features' && (...)}`
+  - Spellcasting sheets: features wrapped in `showFeatures`, spell content in `!creation && (section === 'all' || section === 'spells')`
   - When `creation=true` (CharacterCreate only), the HP grid (current/max/temp HP), `HitDiceTracker`, Armor Class, and Speed row are hidden — these are irrelevant at creation since HP is auto-calculated and AC depends on armor/DEX
   - **Speed row (3 fields, non-creation only):** Speed (ft) — read-only static display of `data.speed ?? 30` (base racial speed, set from `selectedRaceObj.speed` at character creation); Speed Bonus (ft) — user-editable `data.speed_bonus ?? 0` for temporary bonuses (e.g. Longstrider); Total Speed (ft) — read-only computed `(data.speed ?? 30) + (data.speed_bonus ?? 0)`
   - **Hit Dice (non-creation only):** `HitDiceTracker` component — shows `d{hitDie} × level`, remaining/total count, and +/− buttons (buttons hidden when `readOnly`); `onChange(v)` stores `hit_dice_used` integer in `character_data`; Armor Class is a standalone field below it
@@ -1219,7 +1263,7 @@ frontend/src/
 │       ├── CharacterCreate.jsx
 │       ├── CharacterCreate.test.jsx  # class picker (12 classes), class overview step (advances on class select, back returns to class picker, classService.getClassByName called with edition, shows API data), advances to identity step, step indicator, race cards (9 PHB races), bg cards (13 PHB), race card expands detail, bg card expands detail + deselect, bg sets form value, custom race input, race search filter, Next disabled when name empty, Next enabled after name, alignment toggle (identity step), back nav (identity→class_overview, features→identity), API races replace hardcoded when returned, advances to features step, identity summary on step 4, error on failure, correct payload + navigate, Wizard/Fighter/Barbarian/Cleric/Warlock fields, no Level field, level:1 in payload, hp_max auto-calculated, HP/AC hidden, point buy starts at 8, bg skills flow to class sheet (legend + extra amber buttons), custom instrument button, OptionCardPicker: Fighter fighting style cards show descriptions, clicking selects value in payload, Cleric/Warlock subclass cards show descriptions, subclass info button visible + clicking opens SubclassOverview dialog with flavor text; subrace picker (shows for Dwarf/Elf, hidden for Human, Next blocked without selection, detail panel, clears on race change, ASIs applied to scores, CON bonus raises hp_max, stores subrace/race_traits/race_languages in character_data, racial-asi-preview in step 4); skill gate: details-next stays disabled until required class skill count chosen; step 5 overview advance (advanceToReview helper, Create Character on step 5); race choices (Dragonborn draconic ancestry picker + Next-blocking + payload, Half-Elf ASI+skill versatility picker + Next-blocking + payload, Human extra language picker + non-blocking + payload); background choices (Criminal/Noble/Soldier gaming set picker, Entertainer/Outlander instrument picker, Guild Artisan/Folk Hero artisan's tools picker, Acolyte/Sage language pickers + payload); Monk tool/instrument picker in step 4 (76 tests)
 │       ├── CharacterDetail.jsx
-│       └── CharacterDetail.test.jsx  # loading, error, name+class display, ability scores (waitFor), prof bonus, editable owner fields, GM Notes hidden (player), GM Notes shown (GM), Player View toggle, switching view hides GM Notes, updateCharacter with gm_notes, visibility toggle (GM), Fighter features, read-only non-owner; Leveling card — milestone (GM Level Up button, calls updateCharacter, owner sees pending banner), experience (XP label, GM Add XP input, add XP calls updateCharacter, threshold triggers level_up_pending); subrace and racial data (subrace badge read-only, subrace label editable, racial traits+languages from character_data, no traits section when absent); max HP read-only (value from hp_max key, not an input); speed fields (3 labels present, base speed not an input, total speed = sum, correct totals when speed+bonus set); tab structure (Stats/Features/Weapons+Armor triggers always present, Spells tab absent for Fighter, Spells tab shown for Wizard/Tiefling/High Elf/Forest Gnome, 3 vs 4 tab count); level is read-only (not in any input, shown in header); class features level-gating (L5 Fighter shows "Extra Attack (2 attacks)", does not show any Indomitable variant); subclass locking (GM view: set subclass shows locked text + flavor text + earned features + no info buttons; no subclass at unlock level shows picker); Hit Dice Tracker (Hit Dice label, die type d10, remaining/total count, pre-populated count; GM interactive: minus disabled at 0, + updates count + enables Save, + then Save calls updateCharacter with hit_dice_used); mocks @/components/ui/tabs to render all panels unconditionally (51 tests)
+│       └── CharacterDetail.test.jsx  # loading, error, name+class display, ability scores (waitFor), prof bonus, editable owner fields, GM Notes hidden (player), GM Notes shown (GM), Player View toggle, switching view hides GM Notes, updateCharacter with gm_notes, visibility toggle (GM), Fighter features, read-only non-owner; Leveling card — milestone (GM Level Up button, calls updateCharacter, owner sees pending banner), experience (XP label, GM Add XP input, add XP calls updateCharacter, threshold triggers level_up_pending); subrace and racial data (subrace badge read-only, subrace label editable, racial traits+languages from character_data, no traits section when absent); max HP read-only (value from hp_max key, not an input); speed fields (3 labels present, base speed not an input, total speed = sum, correct totals when speed+bonus set); tab structure (Narrative+Stats+Features+Weapons+Armor triggers always present, Spells tab absent for Fighter, Spells tab shown for Wizard/Tiefling/High Elf/Forest Gnome, 4 vs 5 tab count); level is read-only (not in any input, shown in header); class features level-gating (L5 Fighter shows "Extra Attack (2 attacks)", does not show any Indomitable variant); subclass locking (GM view: set subclass shows locked text + flavor text + earned features + no info buttons; no subclass at unlock level shows picker); Hit Dice Tracker (Hit Dice label, die type d10, remaining/total count, pre-populated count; GM interactive: minus disabled at 0, + updates count + enables Save, + then Save calls updateCharacter with hit_dice_used); Narrative tab — Personal Notes (owner sees, GM sees, non-owner player hidden), Backstory+Public Notes headings; Related NPCs card (empty state, toggle visible for owner, hidden for non-owner, shows NPC name, createCharacterNpc call, removeCharacterNpc call); Timeline Events card (empty state, toggle visible for owner, hidden for non-owner, shows event title, Unknown date, createTimelineEvent call, removeTimelineEvent call); mocks @/components/ui/tabs, react-markdown, settingsService (70 tests)
 ├── npcs/
 │   └── pages/
 │       ├── NPCDetail.jsx

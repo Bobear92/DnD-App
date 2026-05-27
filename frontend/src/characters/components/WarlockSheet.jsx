@@ -141,7 +141,7 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
 export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
   const [newInvocation, setNewInvocation] = useState('');
@@ -344,14 +344,14 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         <SpellPickerCreation label="Cantrips Known (choose 2)" limit={2} options={WARLOCK_CANTRIPS_5E}
           selected={data.cantrips ?? []} onChange={v => set('cantrips', v)} raceGrantedSpells={raceGrantedCantrips} />
       )}
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
         <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
       )}
       {creation && (
         <SpellPickerCreation label="Spells Known at Level 1 (choose 2)" limit={2} options={WARLOCK_SPELLS_L1_5E}
           selected={data.known_spells ?? []} onChange={v => set('known_spells', v)} />
       )}
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
         <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
       )}
 
@@ -412,7 +412,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {showFeatures && (
+      {creation && showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">

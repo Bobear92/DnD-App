@@ -77,7 +77,7 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
 export default function BardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
 
@@ -242,7 +242,7 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
           <div className="text-xs text-muted-foreground">All slots recover on a Long Rest · Spells and cantrips chosen in CharacterDetail</div>
         </div>
       )}
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
@@ -269,7 +269,7 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
         </div>
       )}
 
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
         <>
           <SpellList dataKey="cantrips" label="Cantrips Known" newValue={newCantrip} setNew={setNewCantrip} placeholder="Add cantrip…" />
           <SpellList dataKey="known_spells" label="Spells Known" newValue={newSpell} setNew={setNewSpell} placeholder="Add spell…" />
@@ -310,7 +310,7 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
         </div>
       )}
 
-      {showFeatures && (
+      {creation && showFeatures && (
       <Field label="Skill Proficiencies (choose 3)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">
@@ -343,7 +343,7 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
         ) : (() => {
           const pool = [...new Set([...(data.skill_proficiencies ?? []), ...backgroundSkills])];
           return pool.length === 0
-            ? <p className="text-xs text-muted-foreground">Select skill proficiencies above first.</p>
+            ? <p className="text-xs text-muted-foreground">No proficient skills to apply expertise to.</p>
             : <SkillPicker value={data.expertise ?? []} onChange={v => set('expertise', v)} max={expertiseMax} allowed={pool} />;
         })()}
       </Field>

@@ -105,7 +105,7 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
   if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
   const rages = rageCount(level);
   const rageDmg = rageDamage(level);
   const usedRages = data.rages_used ?? 0;
@@ -292,7 +292,7 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
         </div>
       )}
 
-      {showFeatures && (
+      {creation && showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">

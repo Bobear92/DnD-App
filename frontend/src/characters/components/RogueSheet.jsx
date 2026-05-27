@@ -35,7 +35,7 @@ export default function RogueSheet({ data = {}, onChange, readOnly = false, leve
   if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
 
   const Field = ({ label, children }) => (
     <div className="space-y-1">
@@ -152,8 +152,8 @@ export default function RogueSheet({ data = {}, onChange, readOnly = false, leve
         </div>
       ))}
 
-      {/* Skill proficiencies */}
-      {showFeatures && (
+      {/* Skill proficiencies — during creation only */}
+      {creation && showFeatures && (
       <Field label="Skill Proficiencies (choose 4)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">
@@ -261,7 +261,7 @@ function ExpertisePicker({ value, onChange, max, skills = [] }) {
     else if (value.length < max) onChange([...value, skill]);
   };
   if (skills.length === 0) {
-    return <p className="text-xs text-muted-foreground">Select skill proficiencies above first.</p>;
+    return <p className="text-xs text-muted-foreground">No proficient skills to apply expertise to.</p>;
   }
   return (
     <div className="flex flex-wrap gap-1.5">

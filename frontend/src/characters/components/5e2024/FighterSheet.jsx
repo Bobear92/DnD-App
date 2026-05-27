@@ -127,7 +127,7 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
   if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
 
   const weaponMasteryMax = level >= 16 ? 6 : level >= 10 ? 5 : level >= 4 ? 4 : 3;
 
@@ -293,7 +293,7 @@ export default function FighterSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {showFeatures && (
+      {creation && showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">

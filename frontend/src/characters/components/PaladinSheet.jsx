@@ -46,7 +46,7 @@ function slotsForLevel(level) {
 export default function PaladinSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
-  const showFeatures = section !== 'stats';
+  const showFeatures = section === 'all' || section === 'features';
   const [newSpell, setNewSpell] = useState('');
   const [newCantrip, setNewCantrip] = useState('');
 
@@ -229,7 +229,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
         </Field>
       )}
 
-      {hasCasting && section !== 'features' && (
+      {hasCasting && (section === 'all' || section === 'spells') && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
           <div className="grid grid-cols-5 gap-2">
@@ -254,7 +254,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {hasCasting && section !== 'features' && (
+      {hasCasting && (section === 'all' || section === 'spells') && (
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Prepared Spells</Label>
           <div className="flex flex-wrap gap-1 min-h-8">
@@ -280,7 +280,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
         </div>
       )}
 
-      {!creation && section !== 'features' && (
+      {!creation && (section === 'all' || section === 'spells') && (
       <div className="space-y-2">
         <Label className="text-xs text-muted-foreground">Cantrips</Label>
         <div className="flex flex-wrap gap-1 min-h-6">
@@ -306,7 +306,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
       </div>
       )}
 
-      {showFeatures && (
+      {creation && showFeatures && (
       <Field label="Skill Proficiencies (choose 2)">
         {readOnly ? (
           <div className="flex flex-wrap gap-1">
