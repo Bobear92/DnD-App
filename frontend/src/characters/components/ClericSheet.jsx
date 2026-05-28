@@ -83,12 +83,17 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
   );
 }
 
-export default function ClericSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
+const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
+
+export default function ClericSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all', abilityScores = {} }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
+
+  const wisMod = abMod(abilityScores.wisdom);
+  const prepareLimit = Math.max(1, level + wisMod);
 
   const slots = slotsForLevel(level);
   const spellSlots = data.spell_slots ?? {};
@@ -240,7 +245,7 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
       {!creation && (section === 'all' || section === 'spells') && (
         <>
           <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
-          <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label="Prepared Spells (WIS mod + level)" placeholder="Add prepared spell…" />
+          <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} placeholder="Add prepared spell…" />
         </>
       )}
 

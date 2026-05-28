@@ -160,13 +160,18 @@ function WeaponMasteryList({ value, onChange, readOnly, max }) {
   );
 }
 
-export default function RangerSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
+const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
+
+export default function RangerSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all', abilityScores = {} }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
   const enemies = Array.isArray(data.favored_enemy) ? data.favored_enemy : data.favored_enemy ? [data.favored_enemy] : [];
+
+  const wisMod = abMod(abilityScores.wisdom);
+  const prepareLimit = Math.max(1, level + wisMod);
 
   const slots = slotsForLevel(level);
   const spellSlots = data.spell_slots ?? {};
@@ -334,7 +339,7 @@ export default function RangerSheet({ data = {}, onChange, readOnly = false, lev
       )}
 
       {!creation && (section === 'all' || section === 'spells') && (
-        <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label="Prepared Spells (today)" placeholder="Add spell…" />
+        <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} placeholder="Add spell…" />
       )}
 
       {showFeatures && (creation ? (

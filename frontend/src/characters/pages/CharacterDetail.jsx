@@ -1191,6 +1191,7 @@ export default function CharacterDetail() {
                     readOnly={displayAsPlayer || !canEdit}
                     level={identity.draft?.level ?? character.level}
                     section="stats"
+                    abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
                   />
                 </SectionCard>
               )}
@@ -1212,6 +1213,7 @@ export default function CharacterDetail() {
                     readOnly={displayAsPlayer || !canEdit}
                     level={identity.draft?.level ?? character.level}
                     section="features"
+                    abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
                   />
                 </SectionCard>
               )}
@@ -1243,6 +1245,7 @@ export default function CharacterDetail() {
                       readOnly={displayAsPlayer || !canEdit}
                       level={identity.draft?.level ?? character.level}
                       section="spells"
+                      abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
                     />
                   </SectionCard>
                 )}

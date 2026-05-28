@@ -791,16 +791,16 @@ frontend/src/
 │   ├── components/
 │   │   ├── BarbarianSheet.jsx   # Barbarian (5e): rage tracker, unarmored defense, reckless attack, Primal Path ✅
 │   │   ├── BardSheet.jsx        # Bard (5e): full caster, bardic inspiration die (LR until L5), expertise, College ✅
-│   │   ├── ClericSheet.jsx      # Cleric (5e): full caster, channel divinity (LR), Divine Domain at L1 ✅
-│   │   ├── DruidSheet.jsx       # Druid (5e): full caster, wild shape tracker, Druid Circle at L2 ✅
+│   │   ├── ClericSheet.jsx      # Cleric (5e): full caster, channel divinity (LR), Divine Domain at L1; prepared spells counter (WIS mod + level) ✅
+│   │   ├── DruidSheet.jsx       # Druid (5e): full caster, wild shape tracker, Druid Circle at L2; prepared spells counter (WIS mod + level) ✅
 │   │   ├── FighterSheet.jsx     # Fighter (5e): HP/AC/speed, fighting style, resource trackers, subclass; skill picker restricted to 8 Fighter skills (Acrobatics, Animal Handling, Athletics, History, Insight, Intimidation, Perception, Survival) ✅
 │   │   ├── MonkSheet.jsx        # Monk (5e): ki point tracker, martial arts die, unarmored defense ✅
-│   │   ├── PaladinSheet.jsx     # Paladin (5e): half-caster starting L2, lay on hands, sacred oath ✅
+│   │   ├── PaladinSheet.jsx     # Paladin (5e): half-caster starting L2, lay on hands, sacred oath; prepared spells counter (½ level + CHA mod) ✅
 │   │   ├── RangerSheet.jsx      # Ranger (5e): half-caster starting L1, favored enemy/terrain, Archetype ✅
 │   │   ├── RogueSheet.jsx       # Rogue (5e): sneak attack, expertise picker (all 18 skills), roguish archetype; skill proficiency picker restricted to 11 Rogue skills (Acrobatics, Athletics, Deception, Insight, Intimidation, Investigation, Perception, Performance, Persuasion, Sleight of Hand, Stealth) ✅
 │   │   ├── SorcererSheet.jsx    # Sorcerer (5e): full caster, sorcery points tracker in Spells tab (L2+, converts to/from slots), metamagic, Sorcerous Origin L1 ✅
 │   │   ├── WarlockSheet.jsx     # Warlock (5e): pact magic (short-rest slots), invocations L2+, Patron L1 ✅
-│   │   ├── WizardSheet.jsx      # Wizard (5e): full caster, spellbook, arcane recovery tracker in Spells tab (short-rest slot recovery), Tradition L2 ✅
+│   │   ├── WizardSheet.jsx      # Wizard (5e): full caster, spellbook, arcane recovery tracker in Spells tab; prepared spells = spellbook-toggle UI with limit (level + INT mod) ✅
 │   │   ├── HitDiceTracker.jsx   # Shared hit-dice widget used in all 24 class sheets: shows die type × total always; when !creation shows remaining/total count + +/− buttons; readOnly hides buttons; onChange(v) passes new hit_dice_used integer ✅
 │   │   ├── OptionCardPicker.jsx # Reusable card-based picker: each option shows name + 1-line description; replaces plain <select> for fighting styles, subclasses, pact boons; accepts optional `onDetailClick` prop that adds an Info button per card ✅
 │   │   ├── SubclassPickerWithDetail.jsx # Drop-in for subclass OptionCardPicker: bundles OptionCardPicker + Dialog + SubclassOverview; used in all 24 class sheets for the subclass selection section ✅
@@ -812,16 +812,16 @@ frontend/src/
 │   │   └── 5e2024/
 │   │       ├── BarbarianSheet.jsx # Barbarian (2024): weapon mastery, primal knowledge, updated features; creation gate shows only L1 features ✅
 │   │       ├── BardSheet.jsx      # Bard (2024): bardic inspiration short-rest from L1; creation gate shows only L1 features ✅
-│   │       ├── ClericSheet.jsx    # Cleric (2024): divine order L1, subclass L3, channel divinity short-rest; creation gate shows only L1 features ✅
-│   │       ├── DruidSheet.jsx     # Druid (2024): primal order L1, subclass L3, wild resurgence L5; creation gate shows only L1 features ✅
+│   │       ├── ClericSheet.jsx    # Cleric (2024): divine order L1, subclass L3, channel divinity short-rest; prepared spells counter (WIS mod + level) ✅
+│   │       ├── DruidSheet.jsx     # Druid (2024): primal order L1, subclass L3, wild resurgence L5; prepared spells counter (WIS mod + level) ✅
 │   │       ├── FighterSheet.jsx   # Fighter (2024): weapon mastery, tactical mind; skill picker restricted to 8 Fighter skills (same as 5e); creation gate shows only L1 features ✅
 │   │       ├── MonkSheet.jsx      # Monk (2024): focus points (renamed from ki), weapon mastery; creation gate shows only L1 features ✅
-│   │       ├── PaladinSheet.jsx   # Paladin (2024): spell slots from L1, weapon mastery; creation gate shows only L1 features ✅
-│   │       ├── RangerSheet.jsx    # Ranger (2024): weapon mastery, deft explorer; creation gate shows only L1 features ✅
+│   │       ├── PaladinSheet.jsx   # Paladin (2024): spell slots from L1, weapon mastery; prepared spells counter (level + CHA mod) ✅
+│   │       ├── RangerSheet.jsx    # Ranger (2024): weapon mastery, deft explorer; prepared spells counter (level + WIS mod) ✅
 │   │       ├── RogueSheet.jsx     # Rogue (2024): weapon mastery, steady aim L3; skill proficiency picker restricted to 11 Rogue skills via ROGUE_ALLOWED; expertise picker keeps ALL_SKILLS; creation gate shows only L1 features ✅
 │   │       ├── SorcererSheet.jsx  # Sorcerer (2024): innate sorcery L1, sorcery points tracker in Spells tab (L2+), subclass L3, sorcerous restoration L5; creation gate shows only L1 features ✅
 │   │       ├── WarlockSheet.jsx   # Warlock (2024): invocations L1, magical cunning L2, subclass L3, boon L5; creation gate shows only L1 features ✅
-│   │       ├── WizardSheet.jsx    # Wizard (2024): memorize spell L1, arcane recovery tracker in Spells tab, scholar L2, subclass L3; creation gate shows only L1 features ✅
+│   │       ├── WizardSheet.jsx    # Wizard (2024): memorize spell L1, arcane recovery tracker in Spells tab, scholar L2, subclass L3; prepared spells = spellbook-toggle UI with limit (level + INT mod) ✅
 │   │       └── index.js           # Exports all 12 2024 sheets + SUPPORTED_CLASSES_2024 + metadata
 │   │   ├── AbilityScoreAssignment.jsx # Three ability score methods: StandardSpreadAssignment, PointBuyAssignment, DiceRollAssignment ✅
 │   │   ├── classFeatures5e.js   # HIT_DICE_5E + CLASS_FEATURES_5E: all 12 classes × 20 levels, 2014 rules ✅
@@ -832,7 +832,7 @@ frontend/src/
 │   │   ├── LevelUpWizard.test.jsx # subclass step visibility (5e Wizard L1→2, Fighter L2→3, 2024 Fighter, non-unlock level, already has subclass); Next disabled until picked; onComplete includes subclass; confirm shows choice; no subclass key when no step (12 tests)
 │   │   ├── SubclassOverview.test.jsx # renders subclass name/badges, flavor text, features by level, unavailable fallback, Barbarian/Cleric/Warlock/Wizard/Fighter subclasses (12 tests)
 │   │   ├── SorcererSheet.test.jsx # section routing: Sorcery Points tracker in spells (L2+), not in features; section isolation for HP/features/spells (12 tests)
-│   │   ├── WizardSheet.test.jsx # section prop routing: Arcane Recovery tracker in spells/not features; stats/features/spells/all isolation (20 tests)
+│   │   ├── WizardSheet.test.jsx # prepared spells: limit counter, spellbook chips, toggle prepare/unprepare, at-limit enforcement, empty spellbook message, non-spellbook overflow, default limit; section prop routing: Arcane Recovery tracker in spells/not features; stats/features/spells/all isolation (29 tests)
 │   │   └── SpellList.test.jsx # empty state, isCantrips mode (no API, alpha sort, Cantrips heading), level grouping (section-per-level, alpha sort, Other Spells, ordering, API call with campaignId), detail dialog (open, full details, Cantrip badge, level badge, fallback), add (input visibility, + button, Enter, duplicate guard, clear), remove (onRemove call, readOnly hides), custom placeholder (26 tests)
 │   ├── classService.js          # API client: getClasses(edition, campaignId), getClassByName(name, edition, campaignId) → GET /api/classes ✅
 │   └── pages/
@@ -1081,9 +1081,13 @@ frontend/src/
 - **Identity + Ability Scores card:** editable name, race, background, alignment (hidden when `campaign.use_alignment === false`); **level is read-only** — displayed as a static div, never an editable input; level only changes via the LevelUpWizard; 6 ability score inputs with live modifier display; Saving Throws section (proficiency checkboxes, stored in `character_data`)
 - **Derived stats row:** Proficiency Bonus (`Math.ceil(level/4) + 1`), Initiative (DEX mod), Passive Perception (10 + WIS mod + prof if proficient), Inspiration toggle
 - **Skills display:** all 18 skills with proficiency/expertise indicators and computed bonus; expertise = double proficiency
-- **Class Features card / Spellcasting card:** renders class-specific sheet component — each accepts `{ data, onChange, readOnly, level, creation, section }`.
+- **Class Features card / Spellcasting card:** renders class-specific sheet component — each accepts `{ data, onChange, readOnly, level, creation, section, abilityScores }`.
   - `section: 'all' | 'stats' | 'features' | 'spells'` — controls what a sheet renders; defaults to `'all'` (used in CharacterCreate where section is never passed)
-  - In CharacterDetail: Stats tab passes `section="stats"` (HP/movement only); Features tab passes `section="features"` (class features, subclass); Spells tab passes `section="spells"` (only spells)
+  - `abilityScores: { intelligence, wisdom, charisma }` — passed from CharacterDetail so prepare-caster sheets can compute prepare limits; defaults to `{}` (all scores treated as 10 when absent)
+  - In CharacterDetail: Stats/Features/Spells tabs all pass `abilityScores` from `identity.draft`
+  - **Prepare-caster limits** (only in non-creation Spells section): Wizard/Cleric/Druid = `level + mod`; Paladin 5e = `⌊level/2⌋ + CHA mod`; Paladin 2024/Ranger 2024 = `level + mod`; minimum 1
+  - **Wizard prepared spells UX:** spellbook entries shown as clickable toggle chips — click to prepare/unprepare; limit enforced (chips disabled when at limit); non-spellbook prepared spells shown in "Other Prepared Spells" SpellList
+  - **Cleric/Druid/Paladin/Ranger2024 prepared spells:** SpellList with dynamic label `"Prepared Spells — X/Y · Long Rest"`
   - **Section isolation — enforced in all 24 sheets:**
     - `showFeatures = section === 'all' || section === 'features'` — class features, subclass, ASI reminder
     - `showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells')` — HP/AC/Speed

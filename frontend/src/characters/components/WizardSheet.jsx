@@ -112,12 +112,23 @@ function SpellPickerCreation({ label, limit, options, selected, onChange, raceGr
   );
 }
 
-export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [], section = 'all' }) {
+const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
+
+export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [], section = 'all', abilityScores = {} }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
+
+  const intMod = abMod(abilityScores.intelligence);
+  const prepareLimit = Math.max(1, level + intMod);
+  const prepared = data.prepared_spells ?? [];
+  const spellbook = data.spellbook ?? [];
+  const togglePrepared = (spell) => {
+    if (prepared.includes(spell)) onChange?.({ prepared_spells: prepared.filter(s => s !== spell) });
+    else if (prepared.length < prepareLimit) onChange?.({ prepared_spells: [...prepared, spell] });
+  };
 
   const slots = slotsForLevel(level);
   const spellSlots = data.spell_slots ?? {};
@@ -281,8 +292,39 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
       )}
       {!creation && (section === 'all' || section === 'spells') && (
         <>
-          <SpellList spells={data.spellbook ?? []} onAdd={n => addSpell('spellbook', n)} onRemove={n => removeSpell('spellbook', n)} readOnly={readOnly} label="Spellbook (all known spells)" placeholder="Add spell to spellbook…" />
-          <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label="Prepared Spells (today)" placeholder="Add prepared spell…" />
+          <SpellList spells={spellbook} onAdd={n => addSpell('spellbook', n)} onRemove={n => removeSpell('spellbook', n)} readOnly={readOnly} label="Spellbook (all known spells)" placeholder="Add spell to spellbook…" />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-muted-foreground">Prepared Spells</Label>
+              <span className="text-xs text-muted-foreground">{prepared.length}/{prepareLimit} · Long Rest</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Click spells from your spellbook to prepare or unprepare them.</p>
+            <div className="flex flex-wrap gap-1.5" data-testid="prepared-spell-chips">
+              {spellbook.length > 0 ? spellbook.map(spell => {
+                const isPrepared = prepared.includes(spell);
+                const atLimit = !isPrepared && prepared.length >= prepareLimit;
+                return (
+                  <button key={spell} type="button"
+                    disabled={readOnly || atLimit}
+                    onClick={() => togglePrepared(spell)}
+                    className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                      isPrepared
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : atLimit
+                          ? 'opacity-40 cursor-not-allowed bg-background border-border text-muted-foreground'
+                          : 'bg-background hover:bg-muted border-border text-muted-foreground'
+                    }`}>
+                    {spell}
+                  </button>
+                );
+              }) : (
+                <span className="text-xs text-muted-foreground italic">Add spells to your spellbook above to prepare them.</span>
+              )}
+            </div>
+            {prepared.filter(s => !spellbook.includes(s)).length > 0 && (
+              <SpellList spells={prepared.filter(s => !spellbook.includes(s))} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label="Other Prepared Spells" placeholder="" />
+            )}
+          </div>
         </>
       )}
 

@@ -44,12 +44,17 @@ function slotsForLevel(level) {
   return entry ?? [0, 0, 0, 0, 0];
 }
 
-export default function PaladinSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all' }) {
+const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
+
+export default function PaladinSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all', abilityScores = {} }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
+
+  const chaMod = abMod(abilityScores.charisma);
+  const prepareLimit = Math.max(1, Math.floor(level / 2) + chaMod);
 
   const slots = slotsForLevel(level);
   const spellSlots = data.spell_slots ?? {};
@@ -232,7 +237,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
       )}
 
       {hasCasting && (section === 'all' || section === 'spells') && (
-        <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label="Prepared Spells" placeholder="Add spell…" />
+        <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} placeholder="Add spell…" />
       )}
 
       {!creation && (section === 'all' || section === 'spells') && (
