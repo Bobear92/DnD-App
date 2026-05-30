@@ -433,6 +433,21 @@ def remove_character_npc(db: Session, character_id: int, link_id: int, user_id: 
 
 _SPELLCASTING_CLASSES = {'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Wizard', 'Artificer'}
 
+# Racial / subracial rest resources — mirrors frontend racialRestResources.js.
+# Each tuple: (trait_name, character_data_key, recharge, min_level).
+# recharge 'short' recovers on a short OR long rest; 'long' on a long rest only.
+_RACIAL_REST_RESOURCES = [
+    ('Breath Weapon', 'breath_weapon_used', 'short', 1),
+    ('Relentless Endurance', 'relentless_endurance_used', 'long', 1),
+    ('Drow Magic', 'drow_faerie_fire_used', 'long', 3),
+    ('Drow Magic', 'drow_darkness_used', 'long', 5),
+    ('Infernal Legacy', 'infernal_hellish_rebuke_used', 'long', 3),
+    ('Infernal Legacy', 'infernal_darkness_used', 'long', 5),
+]
+
+# Divination Wizard subclasses (5e "School of Divination", 2024 "Diviner")
+_DIVINATION_SUBCLASSES = {'School of Divination', 'Diviner'}
+
 
 def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[dict, list]:
     """Return (character_data_patch, human_readable_changes)."""
@@ -462,8 +477,6 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
         if cls == 'Wizard':
             patch['arcane_recovery_used'] = False
             changes.append('Arcane Recovery refreshed')
-        if not changes:
-            changes.append('No short rest resources to recover')
 
     elif rest_type == 'long':
         hp_max = cd.get('hp_max')
@@ -541,6 +554,30 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             patch['flash_of_genius_used'] = 0
             patch['prepared_locked'] = False
             changes.append('Flash of Genius recovered, spell preparation unlocked')
+
+    # ── Racial / subracial rest resources (both rest types) ──
+    traits = set(cd.get('race_traits') or [])
+    racial_recovered = False
+    for trait, key, recharge, min_level in _RACIAL_REST_RESOURCES:
+        if trait not in traits or level < min_level:
+            continue
+        recharges_now = recharge == 'short' or rest_type == 'long'
+        if not recharges_now:
+            continue
+        if cd.get(key):
+            racial_recovered = True
+        patch[key] = 0
+    if racial_recovered:
+        changes.append('Racial features recovered')
+
+    # ── Subclass: Wizard Portent (Divination) — clears on a long rest ──
+    if rest_type == 'long' and cd.get('subclass') in _DIVINATION_SUBCLASSES:
+        if cd.get('portent_rolls'):
+            changes.append('Portent dice cleared — roll anew')
+        patch['portent_rolls'] = []
+
+    if rest_type == 'short' and not changes:
+        changes.append('No short rest resources to recover')
 
     return patch, changes
 

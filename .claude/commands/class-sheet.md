@@ -34,6 +34,12 @@ Some changes affect **shared subclass components** rather than the 24 individual
 
 If the change is to how subclass features/traits are displayed, edit these two shared files instead of (or in addition to) the 24 sheets. The effect still applies to all 24 sheets since they all render `SubclassDetails` for locked subclasses.
 
+**Subclass / racial rest-resource trackers** — interactive resources tied to a *subclass* or *race* (not a class) live in dedicated tracker components, NOT inline in the 24 sheets:
+- `PortentTracker.jsx` — Divination Wizard (`School of Divination`/`Diviner`); roll 2 d20s (3 at L14), expend per-die; stores `data.portent_rolls`; rendered in `WizardSheet`'s Features section under the subclass panel (5e + 2024), gated by `showFeatures`. Returns null for non-Divination subclasses.
+- `RacialResourceTracker.jsx` + `racialRestResources.js` — rest-rechargeable racial traits (Breath Weapon, Relentless Endurance, Drow Magic, Infernal Legacy); use-counter widget keyed off `character_data.race_traits`; rendered in the CharacterDetail Stats tab "Racial Features" card. Returns null when no resources apply.
+
+When adding a rest-gated subclass or racial feature: (1) add it to the relevant data table (`racialRestResources.js` for race, or the subclass-specific tracker), (2) **mirror it in the backend** `_compute_rest_patch` (`backend/players/characters/service.py`) so the GM rest buttons reset it, and (3) reflect it in `getRestSummary` (`CharacterList.jsx`). The backend `_RACIAL_REST_RESOURCES` and `_DIVINATION_SUBCLASSES` constants must stay in sync with the frontend tables.
+
 ## Step 4 — Edit all 24 sheets (when needed)
 
 Apply the change to each file. Preserve:

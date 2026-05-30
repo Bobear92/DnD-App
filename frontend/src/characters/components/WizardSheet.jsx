@@ -15,6 +15,7 @@ import SubclassPickerWithDetail from './SubclassPickerWithDetail';
 import SubclassDetails from './SubclassDetails';
 import { WIZARD_SUBCLASSES_5E } from './classChoicesData';
 import HitDiceTracker from './HitDiceTracker';
+import PortentTracker from './PortentTracker';
 import { maxCastableLevel } from './ClassSpellBrowser';
 import { cn } from '@/lib/utils';
 import { Lock, Unlock, ExternalLink } from 'lucide-react';
@@ -160,7 +161,23 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
     setSlotUsed(spellLevel, used + 1);
   };
 
-  const someSlotExpended = slots.some((total, i) => total > 0 && (spellSlots[i + 1]?.used ?? 0) > 0);
+  // Arcane Recovery can only restore expended slots of 5th level or lower.
+  const recoverableExpended = slots.some((total, i) => i < 5 && total > 0 && (spellSlots[i + 1]?.used ?? 0) > 0);
+
+  const handleArcaneRecovery = () => {
+    if (data.arcane_recovery_used) { set('arcane_recovery_used', false); return; }
+    let budget = arcaneRecoveryLevels(level);
+    const newSlots = { ...spellSlots };
+    // Recover the highest-value expended slots first (levels 1–5 only).
+    for (let sl = 5; sl >= 1 && budget > 0; sl--) {
+      const total = slots[sl - 1];
+      if (!total) continue;
+      let used = spellSlots[sl]?.used ?? 0;
+      while (used > 0 && budget >= sl) { used -= 1; budget -= sl; }
+      if (used !== (spellSlots[sl]?.used ?? 0)) newSlots[sl] = { total, used };
+    }
+    onChange?.({ spell_slots: newSlots, arcane_recovery_used: true });
+  };
 
 
   return (
@@ -233,6 +250,11 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
         </div>
       )}
 
+      {/* Portent — Divination subclass only (renders null otherwise) */}
+      {showFeatures && (
+        <PortentTracker subclass={data.subclass} level={level} data={data} onChange={onChange} readOnly={readOnly} />
+      )}
+
       {creation && (
         <div className="rounded-md border px-3 py-2 space-y-1">
           <Label className="text-xs text-muted-foreground">Spell Slots at Level 1</Label>
@@ -282,7 +304,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
                   <div className="text-xs text-muted-foreground">Recover up to {arcaneRecoveryLevels(level)} total spell slot levels</div>
                 </div>
                 {!readOnly && (() => {
-                  const canUse = !data.arcane_recovery_used && someSlotExpended;
+                  const canUse = !data.arcane_recovery_used && recoverableExpended;
                   const isUsed = !!data.arcane_recovery_used;
                   return (
                     <button
@@ -295,7 +317,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
                             : 'opacity-40 cursor-not-allowed bg-muted text-muted-foreground'
                       }`}
                       title={!isUsed && !canUse ? 'No expended spell slots to recover' : ''}
-                      onClick={() => set('arcane_recovery_used', !data.arcane_recovery_used)}
+                      onClick={handleArcaneRecovery}
                     >
                       {isUsed ? 'Used' : 'Use (Short Rest)'}
                     </button>

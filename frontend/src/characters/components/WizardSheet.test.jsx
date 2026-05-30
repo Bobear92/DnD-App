@@ -433,14 +433,41 @@ describe('WizardSheet Arcane Recovery button', () => {
     expect(onChange).toHaveBeenCalledWith({ arcane_recovery_used: false });
   });
 
-  it('clicking "Use (Short Rest)" sets arcane_recovery_used to true', () => {
+  it('clicking "Use (Short Rest)" recovers an expended slot and marks it used', () => {
     const onChange = vi.fn();
+    // Level 3 wizard has four 1st-level slots; one is expended.
     render(<WizardSheet
-      data={{ ...BASE_DATA, spell_slots: { 1: { total: 2, used: 1 } }, arcane_recovery_used: false }}
+      data={{ ...BASE_DATA, spell_slots: { 1: { total: 4, used: 1 } }, arcane_recovery_used: false }}
       level={3} section="spells" onChange={onChange}
     />);
     fireEvent.click(screen.getByRole('button', { name: 'Use (Short Rest)' }));
-    expect(onChange).toHaveBeenCalledWith({ arcane_recovery_used: true });
+    expect(onChange).toHaveBeenCalledWith({
+      spell_slots: { 1: { total: 4, used: 0 } },
+      arcane_recovery_used: true,
+    });
+  });
+
+  it('recovers the highest-value slots first, up to the level/2 budget', () => {
+    const onChange = vi.fn();
+    // Level 4 wizard: budget = ceil(4/2) = 2 slot-levels. A 2nd-level slot is expended.
+    render(<WizardSheet
+      data={{ ...BASE_DATA, spell_slots: { 1: { total: 4, used: 1 }, 2: { total: 3, used: 1 } }, arcane_recovery_used: false }}
+      level={4} section="spells" onChange={onChange}
+    />);
+    fireEvent.click(screen.getByRole('button', { name: 'Use (Short Rest)' }));
+    // Budget 2 → recover the 2nd-level slot (costs 2), leaving the 1st-level slot expended.
+    expect(onChange).toHaveBeenCalledWith({
+      spell_slots: { 1: { total: 4, used: 1 }, 2: { total: 3, used: 0 } },
+      arcane_recovery_used: true,
+    });
+  });
+
+  it('is disabled when only a 6th-level-or-higher slot is expended', () => {
+    render(<WizardSheet
+      data={{ ...BASE_DATA, spell_slots: { 6: { total: 1, used: 1 } }, arcane_recovery_used: false }}
+      level={11} section="spells" onChange={vi.fn()}
+    />);
+    expect(screen.getByRole('button', { name: 'Use (Short Rest)' })).toBeDisabled();
   });
 });
 
@@ -497,5 +524,53 @@ describe('WizardSheet Cast button on prepared spells', () => {
     await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
     fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
     expect(onChange).toHaveBeenCalledWith({ spell_slots: { 1: { total: 2, used: 1 } } });
+  });
+});
+
+describe('WizardSheet Portent (Divination subclass)', () => {
+  it('does not render Portent for a non-Divination subclass', () => {
+    render(<WizardSheet data={BASE_DATA} level={5} section="features" readOnly />);
+    expect(screen.queryByTestId('portent-tracker')).not.toBeInTheDocument();
+  });
+
+  it('renders Portent tracker in the Features section for a Divination Wizard', () => {
+    render(<WizardSheet
+      data={{ ...BASE_DATA, subclass: 'School of Divination' }}
+      level={5} section="features" onChange={vi.fn()}
+    />);
+    expect(screen.getByTestId('portent-tracker')).toBeInTheDocument();
+    expect(screen.getByTestId('portent-roll-btn')).toBeInTheDocument();
+  });
+
+  it('does not render Portent in the Spells section', () => {
+    render(<WizardSheet
+      data={{ ...BASE_DATA, subclass: 'School of Divination' }}
+      level={5} section="spells" onChange={vi.fn()}
+    />);
+    expect(screen.queryByTestId('portent-tracker')).not.toBeInTheDocument();
+  });
+
+  it('rolls 2 d20s and saves them via onChange', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5); // → 11
+    const onChange = vi.fn();
+    render(<WizardSheet
+      data={{ ...BASE_DATA, subclass: 'School of Divination' }}
+      level={5} section="features" onChange={onChange}
+    />);
+    fireEvent.click(screen.getByTestId('portent-roll-btn'));
+    expect(onChange).toHaveBeenCalledWith({
+      portent_rolls: [{ value: 11, used: false }, { value: 11, used: false }],
+    });
+    vi.restoreAllMocks();
+  });
+
+  it('expends a saved Portent die on click', () => {
+    const onChange = vi.fn();
+    render(<WizardSheet
+      data={{ ...BASE_DATA, subclass: 'School of Divination', portent_rolls: [{ value: 9, used: false }] }}
+      level={5} section="features" onChange={onChange}
+    />);
+    fireEvent.click(screen.getByTestId('portent-die-0'));
+    expect(onChange).toHaveBeenCalledWith({ portent_rolls: [{ value: 9, used: true }] });
   });
 });

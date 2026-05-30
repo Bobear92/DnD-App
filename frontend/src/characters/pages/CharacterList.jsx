@@ -14,6 +14,8 @@ import MainLayout from '../../shared/components/layout/MainLayout';
 import characterService from '../characterService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
+import { getRacialRestResources } from '../components/racialRestResources';
+import { isDivination } from '../components/PortentTracker';
 import { cn } from '@/lib/utils';
 
 const ABILITY_LABELS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
@@ -41,8 +43,10 @@ function classBadgeClass(charClass) {
 
 const SPELLCASTING_CLASSES = new Set(['Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Wizard', 'Artificer']);
 
-function getRestSummary(cls, edition, level, restType) {
+function getRestSummary(cls, edition, level, restType, characterData = {}) {
   const is2024 = edition === '5.5e';
+  const traits = characterData?.race_traits ?? [];
+  const racial = getRacialRestResources(traits, level);
 
   if (restType === 'short') {
     const items = [];
@@ -52,6 +56,8 @@ function getRestSummary(cls, edition, level, restType) {
     if (cls === 'Bard' && (is2024 || level >= 5)) items.push('Bardic Inspiration');
     if ((cls === 'Cleric' || cls === 'Paladin') && is2024) items.push('Channel Divinity');
     if (cls === 'Wizard') items.push('Arcane Recovery');
+    // Racial features that recharge on a short rest
+    racial.filter(r => r.recharge === 'short').forEach(r => items.push(r.label));
     return items.length > 0 ? items : ['No short rest resources'];
   }
 
@@ -69,6 +75,10 @@ function getRestSummary(cls, edition, level, restType) {
   else if (cls === 'Warlock') items.push(is2024 ? 'Pact magic slots, Magical Cunning' : 'Pact magic slots');
   else if (cls === 'Wizard') items.push(is2024 ? 'Arcane Recovery, Memorize Spell, spell preparation unlocked' : 'Arcane Recovery, spell preparation unlocked');
   else if (cls === 'Artificer') items.push('Flash of Genius, spell preparation unlocked');
+  // Racial features (long rest recovers both short- and long-recharge ones)
+  racial.forEach(r => items.push(r.label));
+  // Divination Wizard: Portent dice cleared (re-roll after the rest)
+  if (cls === 'Wizard' && isDivination(characterData?.subclass)) items.push('Portent dice cleared (re-roll)');
   return items;
 }
 
@@ -322,7 +332,7 @@ const CharacterList = () => {
                   <span className="text-xs text-muted-foreground">Lv {char.level}</span>
                 </div>
                 <ul className="space-y-0.5">
-                  {getRestSummary(char.char_class, campaign?.edition || '5e', char.level, restDialog).map(item => (
+                  {getRestSummary(char.char_class, campaign?.edition || '5e', char.level, restDialog, char.character_data).map(item => (
                     <li key={item} className="text-xs text-muted-foreground flex items-start gap-1.5">
                       <span className="mt-1 h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
                       {item}

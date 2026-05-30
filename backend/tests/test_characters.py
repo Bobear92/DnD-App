@@ -613,3 +613,108 @@ class TestApplyRest:
         assert "name" in result
         assert isinstance(result["changes"], list)
         assert any("Rages" in c for c in result["changes"])
+
+    # ── Racial rest resources ──────────────────────────────────────────────
+
+    def test_short_rest_resets_dragonborn_breath_weapon(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            cls="Sorcerer",
+            character_data={"race_traits": ["Breath Weapon"], "breath_weapon_used": 1},
+        )
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert updated["character_data"]["breath_weapon_used"] == 0
+
+    def test_relentless_endurance_resets_on_long_rest_only(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            cls="Barbarian",
+            character_data={"race_traits": ["Relentless Endurance"], "relentless_endurance_used": 1},
+        )
+
+        # Short rest does NOT recover a long-rest racial feature
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert updated["character_data"]["relentless_endurance_used"] == 1
+
+        # Long rest does
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert updated["character_data"]["relentless_endurance_used"] == 0
+
+    def test_drow_darkness_gated_by_level(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        # Level 3 Drow: faerie fire (min level 3) recovers, darkness (min level 5) does not
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            cls="Wizard", level=3,
+            character_data={
+                "race_traits": ["Drow Magic"],
+                "drow_faerie_fire_used": 1,
+                "drow_darkness_used": 1,
+            },
+        )
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
+        assert cd["drow_faerie_fire_used"] == 0
+        # Darkness is not yet available at level 3, so it is left untouched
+        assert cd["drow_darkness_used"] == 1
+
+    def test_long_rest_clears_portent_for_divination_wizard(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            cls="Wizard", level=5,
+            character_data={
+                "subclass": "School of Divination",
+                "portent_rolls": [{"value": 17, "used": False}, {"value": 4, "used": True}],
+            },
+        )
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
+        assert cd["portent_rolls"] == []
+        assert any("Portent" in c for c in resp.json()["applied_to"][0]["changes"])
+
+    def test_short_rest_does_not_clear_portent(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        rolls = [{"value": 17, "used": False}]
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            cls="Wizard", level=5,
+            character_data={"subclass": "School of Divination", "portent_rolls": rolls},
+        )
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
+        assert cd["portent_rolls"] == rolls

@@ -453,6 +453,45 @@ describe('CharacterDetail', () => {
       expect(screen.getByText('Abyssal')).toBeInTheDocument();
       expect(screen.getByText('Celestial')).toBeInTheDocument();
     });
+
+    it('labels languages by source — From Race and From Background', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          user_id: 2,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_languages: ['Common', 'Elvish'],
+            background_languages: ['Draconic', 'Elvish'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Languages')).toBeInTheDocument());
+      expect(screen.getByText('From Race')).toBeInTheDocument();
+      expect(screen.getByText('From Background')).toBeInTheDocument();
+      // Elvish is a race language, so it is deduped out of the background group → appears once
+      expect(screen.getAllByText('Elvish')).toHaveLength(1);
+    });
+
+    it('shows only the From Background group when race languages are absent', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          user_id: 2,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            background_languages: ['Abyssal'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Languages')).toBeInTheDocument());
+      expect(screen.getByText('From Background')).toBeInTheDocument();
+      expect(screen.queryByText('From Race')).not.toBeInTheDocument();
+    });
   });
 
   describe('max HP is read-only', () => {
@@ -468,6 +507,65 @@ describe('CharacterDetail', () => {
       await waitFor(() => expect(screen.getByDisplayValue('Aldric')).toBeInTheDocument());
       // 52 should not be an input value — it's rendered as a static div
       expect(screen.queryByDisplayValue('52')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Racial Features card (rest-rechargeable racial traits)', () => {
+    it('shows the Racial Features card for a Half-Orc with Relentless Endurance', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Half-Orc',
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_traits: ['Relentless Endurance', 'Menacing', 'Savage Attacks'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      const tracker = screen.getByTestId('racial-resource-tracker');
+      expect(tracker).toBeInTheDocument();
+      expect(within(tracker).getByText('Relentless Endurance')).toBeInTheDocument();
+    });
+
+    it('does not show the Racial Features card when no rest-gated traits exist', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_traits: ['Darkvision', 'Fey Ancestry'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('racial-resource-tracker')).not.toBeInTheDocument();
+    });
+
+    it('owner expending a racial use auto-saves immediately (no Save click needed)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Half-Orc',
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_traits: ['Relentless Endurance'],
+          },
+        },
+      });
+      characterService.updateCharacter.mockResolvedValue({ success: true, data: BASE_CHARACTER });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('racial-resource-tracker')).toBeInTheDocument());
+      // Clicking the use button persists immediately — live resources don't require a Save click.
+      fireEvent.click(screen.getByLabelText('Use Relentless Endurance'));
+      await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalled());
+      const payload = characterService.updateCharacter.mock.calls.at(-1)[1];
+      expect(payload.character_data.relentless_endurance_used).toBe(1);
     });
   });
 
@@ -1012,7 +1110,7 @@ describe('CharacterDetail', () => {
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText(/Emerald = from race/)).not.toBeInTheDocument();
       // Default legend still present
-      expect(screen.getByText(/Purple = expertise · Blue = proficient/)).toBeInTheDocument();
+      expect(screen.getByText(/Purple = expertise · Gold = proficient/)).toBeInTheDocument();
     });
 
     it('does not double-count Perception when both race_traits AND skill_proficiencies include it', async () => {

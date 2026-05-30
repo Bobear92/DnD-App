@@ -21,6 +21,8 @@ import MainLayout from '../../shared/components/layout/MainLayout';
 import characterService, { mapCharacterImageUrl } from '../characterService';
 import TraitBadgeList from '../components/TraitBadge';
 import { getRaceGrantedSkillsFromTraits } from '../components/raceProficienciesData';
+import RacialResourceTracker from '../components/RacialResourceTracker';
+import { getRacialRestResources } from '../components/racialRestResources';
 import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
@@ -280,6 +282,29 @@ export default function CharacterDetail() {
     await saveSection({ character_data: merged }, (updated) => {
       classSection.commit(updated.character_data ?? {});
     });
+  };
+
+  // Keep a ref of the latest class data so back-to-back resource clicks (e.g. casting
+  // several slots in a row) don't race on stale React state when auto-saving.
+  const classDraftRef = useRef(null);
+  useEffect(() => { classDraftRef.current = classSection.draft; }, [classSection.draft]);
+
+  // Live resource interactions — spell slots, casting, arcane recovery, racial uses —
+  // must persist immediately; players don't click a separate "Save" for these, and an
+  // unsaved cast looks like the rest "restored" the slot. Each of these interactions
+  // commits a discrete value (never per-keystroke), so an immediate PUT is safe.
+  const autoSaveClassPatch = async (patch) => {
+    const next = { ...(classDraftRef.current ?? {}), ...patch };
+    classDraftRef.current = next;
+    classSection.setDraft(next);
+    const merged = { ...next, ...(savingThrows.draft ?? {}) };
+    const result = await characterService.updateCharacter(characterId, { character_data: merged });
+    if (result.success) {
+      setCharacter(result.data);
+      classSection.commit(result.data.character_data ?? merged);
+    } else {
+      setError(result.error);
+    }
   };
 
   const saveGmNotes = async () => {
@@ -1076,9 +1101,11 @@ export default function CharacterDetail() {
                   {/* Racial traits and languages */}
                   {(() => {
                     const cd = character?.character_data ?? {};
-                    const allLanguages = [...new Set([...(cd.race_languages ?? []), ...(cd.background_languages ?? [])])];
+                    const raceLangs = [...new Set(cd.race_languages ?? [])];
+                    const raceSet = new Set(raceLangs);
+                    const bgLangs = [...new Set(cd.background_languages ?? [])].filter(l => !raceSet.has(l));
                     const hasTraits = (cd.race_traits?.length ?? 0) > 0;
-                    if (!hasTraits && allLanguages.length === 0) return null;
+                    if (!hasTraits && raceLangs.length === 0 && bgLangs.length === 0) return null;
                     return (
                       <div className="space-y-2">
                         {hasTraits && (
@@ -1087,13 +1114,30 @@ export default function CharacterDetail() {
                             <TraitBadgeList traits={cd.race_traits} />
                           </div>
                         )}
-                        {allLanguages.length > 0 && (
+                        {(raceLangs.length > 0 || bgLangs.length > 0) && (
                           <div>
                             <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Languages</div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {allLanguages.map(l => (
-                                <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
-                              ))}
+                            <div className="space-y-1.5">
+                              {raceLangs.length > 0 && (
+                                <div>
+                                  <div className="text-[10px] font-medium text-muted-foreground/70 mb-1 uppercase tracking-wide">From Race</div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {raceLangs.map(l => (
+                                      <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {bgLangs.length > 0 && (
+                                <div>
+                                  <div className="text-[10px] font-medium text-muted-foreground/70 mb-1 uppercase tracking-wide">From Background</div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {bgLangs.map(l => (
+                                      <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -1195,6 +1239,28 @@ export default function CharacterDetail() {
                   />
                 </SectionCard>
               )}
+
+              {/* Racial Features (rest-rechargeable racial traits) */}
+              {classSection.draft !== null && getRacialRestResources(
+                character?.character_data?.race_traits ?? [],
+                identity.draft?.level ?? character.level
+              ).length > 0 && (
+                <SectionCard
+                  title="Racial Features"
+                  isDirty={classSection.isDirty}
+                  onSave={saveClassData}
+                  onReset={classSection.reset}
+                  canEdit={showEditable}
+                >
+                  <RacialResourceTracker
+                    traits={character?.character_data?.race_traits ?? []}
+                    level={identity.draft?.level ?? character.level}
+                    data={classSection.draft}
+                    onChange={autoSaveClassPatch}
+                    readOnly={!showEditable}
+                  />
+                </SectionCard>
+              )}
             </TabsContent>
 
             {/* ── Tab 2: Features ── */}
@@ -1241,7 +1307,7 @@ export default function CharacterDetail() {
                   >
                     <ClassSheet
                       data={classSection.draft}
-                      onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
+                      onChange={autoSaveClassPatch}
                       readOnly={!showEditable}
                       level={identity.draft?.level ?? character.level}
                       section="spells"
@@ -1465,7 +1531,7 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
         })}
       </div>
       <p className="text-[10px] text-muted-foreground mt-1">
-        Purple = expertise · Blue = proficient{raceGranted.length > 0 ? ' · Emerald = from race' : ''}
+        Purple = expertise · Gold = proficient{raceGranted.length > 0 ? ' · Emerald = from race' : ''}
       </p>
     </div>
   );
