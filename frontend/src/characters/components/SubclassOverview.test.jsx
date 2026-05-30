@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import SubclassOverview from './SubclassOverview';
 
 describe('SubclassOverview', () => {
@@ -20,11 +20,46 @@ describe('SubclassOverview', () => {
     expect(screen.getByText('About this Subclass')).toBeInTheDocument();
   });
 
-  it('renders feature names and levels for Barbarian Path of the Berserker', () => {
+  it('renders feature names as clickable buttons', () => {
     render(<SubclassOverview className="Barbarian" subclassName="Path of the Berserker" edition="5e" />);
     expect(screen.getByText('Subclass Features')).toBeInTheDocument();
     expect(screen.getByText('Frenzy')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  it('hides feature description by default', () => {
+    render(<SubclassOverview className="Barbarian" subclassName="Path of the Berserker" edition="5e" />);
+    // Description text is not visible until the feature is expanded
+    expect(screen.queryByText(/go into a frenzy/i)).not.toBeInTheDocument();
+  });
+
+  it('shows feature description after clicking the feature name', () => {
+    render(<SubclassOverview className="Barbarian" subclassName="Path of the Berserker" edition="5e" />);
+    fireEvent.click(screen.getByTestId('feature-toggle-Frenzy'));
+    expect(screen.getByText(/go into a frenzy/i)).toBeInTheDocument();
+  });
+
+  it('collapses feature description when clicked a second time', () => {
+    render(<SubclassOverview className="Barbarian" subclassName="Path of the Berserker" edition="5e" />);
+    fireEvent.click(screen.getByTestId('feature-toggle-Frenzy'));
+    expect(screen.getByText(/go into a frenzy/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('feature-toggle-Frenzy'));
+    expect(screen.queryByText(/go into a frenzy/i)).not.toBeInTheDocument();
+  });
+
+  it('expanding one feature does not expand others', () => {
+    render(<SubclassOverview className="Barbarian" subclassName="Path of the Berserker" edition="5e" />);
+    fireEvent.click(screen.getByTestId('feature-toggle-Frenzy'));
+    // Mindless Rage description should still be hidden
+    expect(screen.queryByText(/charmed or frightened while raging/i)).not.toBeInTheDocument();
+  });
+
+  it('sets aria-expanded correctly on feature toggle button', () => {
+    render(<SubclassOverview className="Barbarian" subclassName="Path of the Berserker" edition="5e" />);
+    const btn = screen.getByTestId('feature-toggle-Frenzy');
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(btn);
+    expect(btn).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('renders Cleric Life Domain for 5e', () => {
@@ -72,8 +107,14 @@ describe('SubclassOverview', () => {
 
   it('groups features by level with level dividers', () => {
     render(<SubclassOverview className="Fighter" subclassName="Champion" edition="5e" />);
-    // Champion gains features at multiple levels; L3 circle appears
     expect(screen.getByText('Improved Critical')).toBeInTheDocument();
     expect(screen.getByText('Remarkable Athlete')).toBeInTheDocument();
+  });
+
+  it('shows Cleric Life Domain description when expanded', () => {
+    render(<SubclassOverview className="Cleric" subclassName="Life Domain" edition="5e" />);
+    expect(screen.queryByText(/regains additional HP equal to 2/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('feature-toggle-Disciple of Life'));
+    expect(screen.getByText(/regains additional HP equal to 2/i)).toBeInTheDocument();
   });
 });

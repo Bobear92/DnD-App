@@ -130,6 +130,24 @@ class ToggleVisibilityRequest(BaseModel):
     is_visible: bool
 
 
+# ── Rest ──────────────────────────────────────────────────────────────────────
+
+class RestRequest(BaseModel):
+    rest_type: str  # "short" or "long"
+    character_ids: List[int]
+
+
+class RestResultItem(BaseModel):
+    character_id: int
+    name: str
+    changes: List[str]
+
+
+class RestResponse(BaseModel):
+    rest_type: str
+    applied_to: List[RestResultItem]
+
+
 # ── Narrative: Timeline event create + response ───────────────────────────────
 
 class CharacterTimelineEventCreate(BaseModel):

@@ -15,6 +15,8 @@ import SubclassPickerWithDetail from './SubclassPickerWithDetail';
 import SubclassDetails from './SubclassDetails';
 import { PALADIN_FIGHTING_STYLES_5E, PALADIN_SUBCLASSES_5E } from './classChoicesData';
 import HitDiceTracker from './HitDiceTracker';
+import ClassSpellBrowser, { maxCastableLevel } from './ClassSpellBrowser';
+import { cn } from '@/lib/utils';
 
 // Paladin spell slot table (half-caster)
 const PALADIN_SLOTS = {
@@ -46,17 +48,20 @@ function slotsForLevel(level) {
 
 const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
 
-export default function PaladinSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], section = 'all', abilityScores = {} }) {
+export default function PaladinSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', abilityScores = {}, campaignId, isGm = false }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
 
+  const [spellSubTab, setSpellSubTab] = useState('prepared');
+
   const chaMod = abMod(abilityScores.charisma);
   const prepareLimit = Math.max(1, Math.floor(level / 2) + chaMod);
 
   const slots = slotsForLevel(level);
+  const maxSpellLevel = maxCastableLevel(slots);
   const spellSlots = data.spell_slots ?? {};
 
   const setSlotUsed = (slotLevel, used) => {
@@ -98,11 +103,11 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
 
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Current HP">
-          <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
-        </Field>
         <Field label="Max HP">
           <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
+        </Field>
+        <Field label="Current HP">
+          <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
         <Field label="Temp HP">
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -212,36 +217,65 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
       )}
 
       {hasCasting && (section === 'all' || section === 'spells') && (
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
-          <div className="grid grid-cols-5 gap-2">
-            {slots.map((total, i) => {
-              if (total === 0) return null;
-              const slotLevel = i + 1;
-              const used = spellSlots[slotLevel]?.used ?? 0;
-              return (
-                <div key={slotLevel} className="rounded-md border text-center p-2">
-                  <div className="text-xs text-muted-foreground">Lv {slotLevel}</div>
-                  <div className="font-bold">{total - used}/{total}</div>
-                  {!readOnly && (
-                    <div className="flex justify-center gap-0.5 mt-1">
-                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted" onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
-                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted" onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        <div className="space-y-4">
+          <div className="flex gap-1 border-b">
+            {[['prepared', 'Prepared'], ['prepare', 'Prepare Spells']].map(([tab, label]) => (
+              <button key={tab} type="button" onClick={() => setSpellSubTab(tab)}
+                className={cn('px-3 py-1.5 text-sm font-medium -mb-px border-b-2 transition-colors',
+                  spellSubTab === tab ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                )}>
+                {label}
+              </button>
+            ))}
           </div>
+
+          {spellSubTab === 'prepared' && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
+                <div className="grid grid-cols-5 gap-2">
+                  {slots.map((total, i) => {
+                    if (total === 0) return null;
+                    const slotLevel = i + 1;
+                    const used = spellSlots[slotLevel]?.used ?? 0;
+                    return (
+                      <div key={slotLevel} className="rounded-md border text-center p-2">
+                        <div className="text-xs text-muted-foreground">Lv {slotLevel}</div>
+                        <div className="font-bold">{total - used}/{total}</div>
+                        {!readOnly && (
+                          <div className="flex justify-center gap-0.5 mt-1">
+                            <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                              disabled={used <= 0} onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
+                            <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                              disabled={used >= total} onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {!creation && <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips" placeholder="Add cantrip…" isCantrips={true} />}
+              <SpellList spells={data.prepared_spells ?? []} readOnly={true} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} placeholder="" />
+            </div>
+          )}
+
+          {spellSubTab === 'prepare' && (
+            <ClassSpellBrowser
+              className="Paladin"
+              campaignId={campaignId}
+              preparedSpells={data.prepared_spells ?? []}
+              prepareLimit={prepareLimit}
+              onAdd={n => addSpell('prepared_spells', n)}
+              onRemove={n => removeSpell('prepared_spells', n)}
+              locked={data.prepared_locked ?? false}
+              isGm={isGm}
+              maxSpellLevel={maxSpellLevel}
+              onLock={() => set('prepared_locked', true)}
+              onUnlock={() => set('prepared_locked', false)}
+            />
+          )}
         </div>
-      )}
-
-      {hasCasting && (section === 'all' || section === 'spells') && (
-        <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} placeholder="Add spell…" />
-      )}
-
-      {!creation && (section === 'all' || section === 'spells') && (
-        <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips" placeholder="Add cantrip…" isCantrips={true} />
       )}
 
       {creation && showFeatures && (
@@ -257,6 +291,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
             max={2}
             allowed={['Athletics', 'Insight', 'Intimidation', 'Medicine', 'Persuasion', 'Religion']}
             backgroundSkills={backgroundSkills}
+            raceSkills={raceSkills}
           />
         )}
       </Field>
@@ -307,25 +342,29 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
   );
 }
 
-function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
+function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [], raceSkills = [] }) {
   const skills = allowed ?? [
     'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics', 'Deception',
     'History', 'Insight', 'Intimidation', 'Investigation', 'Medicine',
     'Nature', 'Perception', 'Performance', 'Persuasion', 'Religion',
     'Sleight of Hand', 'Stealth', 'Survival',
   ];
+  const isFromBg = (s) => backgroundSkills.includes(s);
+  const isFromRace = (s) => raceSkills.includes(s) && !isFromBg(s);
+  const isGranted = (s) => isFromBg(s) || raceSkills.includes(s);
   const toggle = (skill) => {
-    if (backgroundSkills.includes(skill)) return;
+    if (isGranted(skill)) return;
     if (value.includes(skill)) onChange(value.filter(s => s !== skill));
     else if (value.length < max) onChange([...value, skill]);
   };
   const extraBgSkills = backgroundSkills.filter(s => !skills.includes(s));
-  const hasBgOverlap = backgroundSkills.length > 0;
+  const extraRaceSkills = raceSkills.filter(s => !skills.includes(s) && !backgroundSkills.includes(s));
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap gap-1.5">
         {skills.map(skill => {
-          const isFromBg = backgroundSkills.includes(skill);
+          const fromBg = isFromBg(skill);
+          const fromRace = isFromRace(skill);
           const isSelected = value.includes(skill);
           return (
             <button
@@ -333,12 +372,14 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
               type="button"
               onClick={() => toggle(skill)}
               className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-                isFromBg
+                fromBg
                   ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed'
-                  : isSelected
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-background hover:bg-muted border-border text-muted-foreground'
-              } ${!isFromBg && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  : fromRace
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-400 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-600 cursor-not-allowed'
+                    : isSelected
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!fromBg && !fromRace && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}
             >
               {skill}
             </button>
@@ -350,10 +391,19 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
             {skill}
           </button>
         ))}
+        {extraRaceSkills.map(skill => (
+          <button key={skill} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-emerald-100 text-emerald-800 border-emerald-400 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-600 cursor-not-allowed">
+            {skill}
+          </button>
+        ))}
         <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
       </div>
-      {hasBgOverlap && (
+      {backgroundSkills.length > 0 && (
         <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background</p>
+      )}
+      {raceSkills.length > 0 && (
+        <p className="text-xs text-emerald-700 dark:text-emerald-400">Emerald = already granted by your race</p>
       )}
     </div>
   );

@@ -1,3 +1,4 @@
+import { ARTIFICER } from './artificer';
 import { BARBARIAN } from './barbarian';
 import { BARD } from './bard';
 import { CLERIC } from './cleric';
@@ -12,6 +13,7 @@ import { WARLOCK } from './warlock';
 import { WIZARD } from './wizard';
 
 export const SUBCLASS_DATA = {
+  Artificer: ARTIFICER,
   Barbarian: BARBARIAN,
   Bard: BARD,
   Cleric: CLERIC,

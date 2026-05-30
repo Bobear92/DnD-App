@@ -1,3 +1,4 @@
+export { default as ArtificerSheet } from './ArtificerSheet';
 export { default as BarbarianSheet } from './BarbarianSheet';
 export { default as BardSheet } from './BardSheet';
 export { default as ClericSheet } from './ClericSheet';
@@ -12,6 +13,7 @@ export { default as WarlockSheet } from './WarlockSheet';
 export { default as WizardSheet } from './WizardSheet';
 
 export const SUPPORTED_CLASSES_5E = [
+  'Artificer',
   'Barbarian', 'Bard', 'Cleric', 'Druid',
   'Fighter', 'Monk', 'Paladin', 'Ranger',
   'Rogue', 'Sorcerer', 'Warlock', 'Wizard',
@@ -19,6 +21,7 @@ export const SUPPORTED_CLASSES_5E = [
 
 export function getClassSheet(charClass) {
   const map = {
+    Artificer: () => import('./ArtificerSheet').then(m => m.default),
     Barbarian: () => import('./BarbarianSheet').then(m => m.default),
     Bard:      () => import('./BardSheet').then(m => m.default),
     Cleric:    () => import('./ClericSheet').then(m => m.default),
@@ -36,6 +39,7 @@ export function getClassSheet(charClass) {
 }
 
 export const CLASS_DESCRIPTIONS = {
+  Artificer: 'Ingenious inventors and magical tinkerers who infuse everyday objects with arcane power.',
   Barbarian: 'Fierce warriors driven by primal rage, channeling raw emotion into devastating power.',
   Bard:      'Versatile performers who weave magic through music, words, and wit.',
   Cleric:    'Divine servants of the gods, healing allies and smiting enemies with holy power.',
@@ -51,6 +55,7 @@ export const CLASS_DESCRIPTIONS = {
 };
 
 export const CLASS_HIT_DICE = {
+  Artificer: 'd8',
   Barbarian: 'd12',
   Bard:      'd8',
   Cleric:    'd8',

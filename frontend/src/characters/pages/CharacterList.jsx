@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Eye, EyeOff, Plus, Swords, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Moon, Plus, Sun, Swords, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -39,6 +39,39 @@ function classBadgeClass(charClass) {
   return CLASS_COLORS[charClass] || 'bg-muted text-muted-foreground';
 }
 
+const SPELLCASTING_CLASSES = new Set(['Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Wizard', 'Artificer']);
+
+function getRestSummary(cls, edition, level, restType) {
+  const is2024 = edition === '5.5e';
+
+  if (restType === 'short') {
+    const items = [];
+    if (cls === 'Warlock') items.push('Pact magic slots');
+    if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');
+    if (cls === 'Fighter') items.push('Action Surge & Second Wind');
+    if (cls === 'Bard' && (is2024 || level >= 5)) items.push('Bardic Inspiration');
+    if ((cls === 'Cleric' || cls === 'Paladin') && is2024) items.push('Channel Divinity');
+    if (cls === 'Wizard') items.push('Arcane Recovery');
+    return items.length > 0 ? items : ['No short rest resources'];
+  }
+
+  const items = ['HP fully restored', 'Hit dice partially recovered'];
+  if (SPELLCASTING_CLASSES.has(cls)) items.push('All spell slots');
+  if (cls === 'Barbarian') items.push('Rages');
+  else if (cls === 'Bard') items.push('Bardic Inspiration');
+  else if (cls === 'Cleric') items.push('Channel Divinity, spell preparation unlocked');
+  else if (cls === 'Druid') items.push('Wild Shape, spell preparation unlocked');
+  else if (cls === 'Fighter') items.push('Action Surge, Second Wind & Indomitable');
+  else if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');
+  else if (cls === 'Paladin') items.push('Lay on Hands, Divine Sense & Channel Divinity, spell preparation unlocked');
+  else if (cls === 'Ranger') items.push('Spell preparation unlocked');
+  else if (cls === 'Sorcerer') items.push(is2024 ? 'Sorcery points, Innate Sorcery' : 'Sorcery points');
+  else if (cls === 'Warlock') items.push(is2024 ? 'Pact magic slots, Magical Cunning' : 'Pact magic slots');
+  else if (cls === 'Wizard') items.push(is2024 ? 'Arcane Recovery, Memorize Spell, spell preparation unlocked' : 'Arcane Recovery, spell preparation unlocked');
+  else if (cls === 'Artificer') items.push('Flash of Genius, spell preparation unlocked');
+  return items;
+}
+
 const CharacterList = () => {
   const navigate = useNavigate();
   const { campaignId } = useParams();
@@ -49,6 +82,11 @@ const CharacterList = () => {
   const [error, setError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [playerView, setPlayerView] = useState(false);
+
+  // Rest state
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [restDialog, setRestDialog] = useState(null); // null | 'short' | 'long'
+  const [restLoading, setRestLoading] = useState(false);
 
   const isGm = campaign?.userRole === 'gm';
   const displayAsPlayer = !isGm || playerView;
@@ -83,9 +121,44 @@ const CharacterList = () => {
     }
   };
 
+  const handleToggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === visibleCharacters.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleCharacters.map(c => c.id)));
+    }
+  };
+
+  const handleApplyRest = async () => {
+    if (!restDialog || selectedIds.size === 0) return;
+    setRestLoading(true);
+    const result = await characterService.applyRest(campaignId, restDialog, Array.from(selectedIds));
+    setRestLoading(false);
+    if (result.success) {
+      setRestDialog(null);
+      setSelectedIds(new Set());
+      loadCharacters();
+    } else {
+      setError(result.error);
+      setRestDialog(null);
+    }
+  };
+
   const visibleCharacters = displayAsPlayer
     ? characters.filter(c => c.user_id === user?.id || c.is_visible_to_players)
     : characters;
+
+  const selectedChars = visibleCharacters.filter(c => selectedIds.has(c.id));
+  const allSelected = visibleCharacters.length > 0 && selectedIds.size === visibleCharacters.length;
 
   if (loading) {
     return (
@@ -127,6 +200,46 @@ const CharacterList = () => {
           </div>
         </div>
 
+        {/* Rest controls — GM only, not in player view */}
+        {isGm && !playerView && visibleCharacters.length > 0 && (
+          <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
+            <span className="text-sm font-medium text-muted-foreground">Rest:</span>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="short-rest-btn"
+              disabled={selectedIds.size === 0}
+              onClick={() => setRestDialog('short')}
+            >
+              <Sun className="h-4 w-4 mr-1.5" />
+              Short Rest
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="long-rest-btn"
+              disabled={selectedIds.size === 0}
+              onClick={() => setRestDialog('long')}
+            >
+              <Moon className="h-4 w-4 mr-1.5" />
+              Long Rest
+            </Button>
+            <div className="h-4 w-px bg-border mx-1" />
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              data-testid="select-all-btn"
+              onClick={handleSelectAll}
+            >
+              {allSelected ? 'Deselect All' : 'Select All'}
+            </button>
+            {selectedIds.size > 0 && (
+              <span className="text-xs text-muted-foreground ml-auto">
+                {selectedIds.size} selected
+              </span>
+            )}
+          </div>
+        )}
+
         {error && (
           <div className="rounded-md bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 text-sm">
             {error}
@@ -158,6 +271,9 @@ const CharacterList = () => {
                 isGm={isGm}
                 isOwner={char.user_id === user?.id}
                 displayAsPlayer={displayAsPlayer}
+                showCheckbox={isGm && !displayAsPlayer}
+                isSelected={selectedIds.has(char.id)}
+                onToggleSelect={() => handleToggleSelect(char.id)}
                 onView={() => navigate(`/campaigns/${campaignId}/characters/${char.id}`)}
                 onToggleVisibility={() => handleToggleVisibility(char)}
                 onDelete={() => setDeleteTarget(char)}
@@ -182,16 +298,80 @@ const CharacterList = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Rest confirmation dialog */}
+      <Dialog open={!!restDialog} onOpenChange={() => setRestDialog(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {restDialog === 'short' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              {restDialog === 'short' ? 'Short Rest' : 'Long Rest'}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Apply a {restDialog === 'short' ? 'short' : 'long'} rest to {selectedChars.length} selected character{selectedChars.length !== 1 ? 's' : ''}?
+          </p>
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {selectedChars.map(char => (
+              <div key={char.id} className="rounded-md border bg-muted/30 p-3">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="font-semibold text-sm">{char.name}</span>
+                  <span className={cn('text-xs px-1.5 py-0.5 rounded-full', classBadgeClass(char.char_class))}>
+                    {char.char_class}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Lv {char.level}</span>
+                </div>
+                <ul className="space-y-0.5">
+                  {getRestSummary(char.char_class, campaign?.edition || '5e', char.level, restDialog).map(item => (
+                    <li key={item} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                      <span className="mt-1 h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestDialog(null)} disabled={restLoading}>
+              Cancel
+            </Button>
+            <Button onClick={handleApplyRest} disabled={restLoading} data-testid="confirm-rest-btn">
+              {restLoading ? 'Applying…' : `Confirm ${restDialog === 'short' ? 'Short' : 'Long'} Rest`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 };
 
-function CharacterCard({ character, isGm, isOwner, displayAsPlayer, onView, onToggleVisibility, onDelete }) {
+function CharacterCard({ character, isGm, isOwner, displayAsPlayer, showCheckbox, isSelected, onToggleSelect, onView, onToggleVisibility, onDelete }) {
   return (
     <div
-      className="group relative rounded-lg border bg-card p-4 cursor-pointer hover:shadow-md transition-shadow space-y-3"
+      className={cn(
+        'group relative rounded-lg border bg-card p-4 cursor-pointer hover:shadow-md transition-shadow space-y-3',
+        isSelected && 'ring-2 ring-primary',
+      )}
       onClick={onView}
     >
+      {/* Selection checkbox */}
+      {showCheckbox && (
+        <div
+          className="absolute top-3 left-3 z-10"
+          onClick={e => { e.stopPropagation(); onToggleSelect(); }}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            data-testid={`char-checkbox-${character.id}`}
+            className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       {/* GM controls */}
       {isGm && !displayAsPlayer && (
         <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
@@ -215,7 +395,7 @@ function CharacterCard({ character, isGm, isOwner, displayAsPlayer, onView, onTo
       )}
 
       {/* Header */}
-      <div className="flex items-start gap-2 pr-14">
+      <div className={cn('flex items-start gap-2 pr-14', showCheckbox && 'pl-7')}>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold truncate">{character.name}</h3>
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
@@ -231,7 +411,7 @@ function CharacterCard({ character, isGm, isOwner, displayAsPlayer, onView, onTo
       </div>
 
       {/* Race + background */}
-      <div className="text-sm text-muted-foreground">
+      <div className={cn('text-sm text-muted-foreground', showCheckbox && 'pl-7')}>
         {character.race}{character.background ? ` · ${character.background}` : ''}
       </div>
 

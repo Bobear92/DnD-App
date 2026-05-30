@@ -15,6 +15,10 @@ import SubclassPickerWithDetail from './SubclassPickerWithDetail';
 import SubclassDetails from './SubclassDetails';
 import { WIZARD_SUBCLASSES_5E } from './classChoicesData';
 import HitDiceTracker from './HitDiceTracker';
+import { maxCastableLevel } from './ClassSpellBrowser';
+import { cn } from '@/lib/utils';
+import { Lock, Unlock, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const WIZARD_CANTRIPS_5E = [
   'Acid Splash', 'Blade Ward', 'Booming Blade', 'Chill Touch', 'Control Flames',
@@ -114,18 +118,23 @@ function SpellPickerCreation({ label, limit, options, selected, onChange, raceGr
 
 const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
 
-export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceGrantedCantrips = [], section = 'all', abilityScores = {} }) {
+export default function WizardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], raceGrantedCantrips = [], section = 'all', abilityScores = {}, campaignId, isGm = false }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
 
+  const [spellSubTab, setSpellSubTab] = useState('prepared');
+
   const intMod = abMod(abilityScores.intelligence);
   const prepareLimit = Math.max(1, level + intMod);
   const prepared = data.prepared_spells ?? [];
   const spellbook = data.spellbook ?? [];
+  const locked = data.prepared_locked ?? false;
+  const playerLocked = locked && !isGm;
   const togglePrepared = (spell) => {
+    if (playerLocked) return;
     if (prepared.includes(spell)) onChange?.({ prepared_spells: prepared.filter(s => s !== spell) });
     else if (prepared.length < prepareLimit) onChange?.({ prepared_spells: [...prepared, spell] });
   };
@@ -139,18 +148,32 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
     onChange?.({ spell_slots: { ...spellSlots, [slotLevel]: { total, used: clamped } } });
   };
 
+  // Slot availability for Cast buttons
+  const availableSlots = {};
+  slots.forEach((total, i) => {
+    const sl = i + 1;
+    if (total > 0) availableSlots[sl] = total - (spellSlots[sl]?.used ?? 0);
+  });
+
+  const handleCastSpell = (_name, spellLevel) => {
+    const used = spellSlots[spellLevel]?.used ?? 0;
+    setSlotUsed(spellLevel, used + 1);
+  };
+
+  const someSlotExpended = slots.some((total, i) => total > 0 && (spellSlots[i + 1]?.used ?? 0) > 0);
+
 
   return (
     <div className="space-y-4">
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Current HP</Label>
-          <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
-        </div>
-        <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Max HP</Label>
           <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Current HP</Label>
+          <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Temp HP</Label>
@@ -217,56 +240,6 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           <div className="text-xs text-muted-foreground">All slots recover on a Long Rest</div>
         </div>
       )}
-      {!creation && (section === 'all' || section === 'spells') && (
-        <div className="flex items-center justify-between rounded-md border px-3 py-2">
-          <div>
-            <div className="text-sm font-medium">Arcane Recovery (Short Rest)</div>
-            <div className="text-xs text-muted-foreground">Recover up to {arcaneRecoveryLevels(level)} total spell slot levels</div>
-          </div>
-          {!readOnly && (
-            <button
-              className={`text-xs px-3 py-1 rounded border transition-colors ${
-                data.arcane_recovery_used
-                  ? 'bg-muted text-muted-foreground'
-                  : 'bg-primary text-primary-foreground'
-              }`}
-              onClick={() => set('arcane_recovery_used', !data.arcane_recovery_used)}
-            >
-              {data.arcane_recovery_used ? 'Used' : 'Available'}
-            </button>
-          )}
-        </div>
-      )}
-
-      {!creation && (section === 'all' || section === 'spells') && (
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-            {slots.map((total, i) => {
-              if (total === 0) return null;
-              const slotLevel = i + 1;
-              const used = spellSlots[slotLevel]?.used ?? 0;
-              return (
-                <div key={slotLevel} className="rounded-md border text-center p-2">
-                  <div className="text-xs text-muted-foreground">Level {slotLevel}</div>
-                  <div className="font-bold text-sm">{total - used}/{total}</div>
-                  {!readOnly && (
-                    <div className="flex justify-center gap-0.5 mt-1">
-                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                        disabled={used <= 0}
-                        onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
-                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                        disabled={used >= total}
-                        onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {creation && (
         <SpellPickerCreation
           label="Cantrips Known (choose 3)"
@@ -277,10 +250,6 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           raceGrantedSpells={raceGrantedCantrips}
         />
       )}
-      {!creation && (section === 'all' || section === 'spells') && (
-        <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
-      )}
-
       {creation && (
         <SpellPickerCreation
           label="Starting Spellbook (choose 6 × 1st-level spells)"
@@ -290,42 +259,181 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
           onChange={v => set('spellbook', v)}
         />
       )}
+
       {!creation && (section === 'all' || section === 'spells') && (
-        <>
-          <SpellList spells={spellbook} onAdd={n => addSpell('spellbook', n)} onRemove={n => removeSpell('spellbook', n)} readOnly={readOnly} label="Spellbook (all known spells)" placeholder="Add spell to spellbook…" />
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Prepared Spells</Label>
-              <span className="text-xs text-muted-foreground">{prepared.length}/{prepareLimit} · Long Rest</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Click spells from your spellbook to prepare or unprepare them.</p>
-            <div className="flex flex-wrap gap-1.5" data-testid="prepared-spell-chips">
-              {spellbook.length > 0 ? spellbook.map(spell => {
-                const isPrepared = prepared.includes(spell);
-                const atLimit = !isPrepared && prepared.length >= prepareLimit;
-                return (
-                  <button key={spell} type="button"
-                    disabled={readOnly || atLimit}
-                    onClick={() => togglePrepared(spell)}
-                    className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-                      isPrepared
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : atLimit
-                          ? 'opacity-40 cursor-not-allowed bg-background border-border text-muted-foreground'
-                          : 'bg-background hover:bg-muted border-border text-muted-foreground'
-                    }`}>
-                    {spell}
-                  </button>
-                );
-              }) : (
-                <span className="text-xs text-muted-foreground italic">Add spells to your spellbook above to prepare them.</span>
-              )}
-            </div>
-            {prepared.filter(s => !spellbook.includes(s)).length > 0 && (
-              <SpellList spells={prepared.filter(s => !spellbook.includes(s))} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label="Other Prepared Spells" placeholder="" />
-            )}
+        <div className="space-y-4">
+          <div className="flex gap-1 border-b">
+            {[['prepared', 'Prepared'], ['prepare', 'Prepare Spells']].map(([tab, label]) => (
+              <button key={tab} type="button" onClick={() => setSpellSubTab(tab)}
+                className={cn('px-3 py-1.5 text-sm font-medium -mb-px border-b-2 transition-colors',
+                  spellSubTab === tab ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                )}>
+                {label}
+              </button>
+            ))}
           </div>
-        </>
+
+          {spellSubTab === 'prepared' && (
+            <div className="space-y-4">
+              {/* Arcane Recovery */}
+              <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div>
+                  <div className="text-sm font-medium">Arcane Recovery (Short Rest)</div>
+                  <div className="text-xs text-muted-foreground">Recover up to {arcaneRecoveryLevels(level)} total spell slot levels</div>
+                </div>
+                {!readOnly && (() => {
+                  const canUse = !data.arcane_recovery_used && someSlotExpended;
+                  const isUsed = !!data.arcane_recovery_used;
+                  return (
+                    <button
+                      disabled={!isUsed && !canUse}
+                      className={`text-xs px-3 py-1 rounded border transition-colors ${
+                        isUsed
+                          ? 'bg-muted text-muted-foreground'
+                          : canUse
+                            ? 'bg-primary text-primary-foreground'
+                            : 'opacity-40 cursor-not-allowed bg-muted text-muted-foreground'
+                      }`}
+                      title={!isUsed && !canUse ? 'No expended spell slots to recover' : ''}
+                      onClick={() => set('arcane_recovery_used', !data.arcane_recovery_used)}
+                    >
+                      {isUsed ? 'Used' : 'Use (Short Rest)'}
+                    </button>
+                  );
+                })()}
+              </div>
+              {/* Spell slots */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {slots.map((total, i) => {
+                    if (total === 0) return null;
+                    const slotLevel = i + 1;
+                    const used = spellSlots[slotLevel]?.used ?? 0;
+                    return (
+                      <div key={slotLevel} className="rounded-md border text-center p-2">
+                        <div className="text-xs text-muted-foreground">Level {slotLevel}</div>
+                        <div className="font-bold text-sm">{total - used}/{total}</div>
+                        {!readOnly && (
+                          <div className="flex justify-center gap-0.5 mt-1">
+                            <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                              disabled={used <= 0} onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
+                            {isGm && (
+                              <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                                disabled={used >= total} onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* Cantrips */}
+              <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
+              {/* Prepared spells — cast buttons when not readOnly */}
+              <SpellList
+                spells={prepared}
+                readOnly={true}
+                label={`Prepared Spells — ${prepared.length}/${prepareLimit} · Long Rest`}
+                placeholder=""
+                onCastSpell={!readOnly ? handleCastSpell : undefined}
+                availableSlots={!readOnly ? availableSlots : undefined}
+              />
+            </div>
+          )}
+
+          {spellSubTab === 'prepare' && (
+            <div className="space-y-4">
+              {/* Lock/unlock UI */}
+              {playerLocked ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/20 px-3 py-2.5 flex items-center gap-2">
+                  <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="text-sm text-amber-800 dark:text-amber-300">
+                    Spells prepared for today. Ask your GM for a long rest to re-prepare.
+                  </span>
+                </div>
+              ) : !isGm ? (
+                <div className="flex items-center justify-between rounded-md border px-3 py-2.5 bg-muted/30">
+                  <div>
+                    <div className="text-sm font-medium">Commit today's preparation?</div>
+                    <div className="text-xs text-muted-foreground">{prepared.length}/{prepareLimit} spells selected · Locks until long rest</div>
+                  </div>
+                  <Button size="sm" onClick={() => set('prepared_locked', true)} className="gap-1 shrink-0 ml-3">
+                    <Lock className="h-3 w-3" />
+                    Prepare for Today
+                  </Button>
+                </div>
+              ) : null}
+              {isGm && (
+                <div className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/20">
+                  <div className="text-sm flex items-center gap-1.5">
+                    {locked
+                      ? <><Lock className="h-3.5 w-3.5 text-amber-500" /><span>Player's preparation is locked</span></>
+                      : <span className="text-muted-foreground">Player can freely change prepared spells</span>
+                    }
+                  </div>
+                  {locked && (
+                    <Button size="sm" variant="outline" onClick={() => set('prepared_locked', false)} className="gap-1">
+                      <Unlock className="h-3 w-3" />
+                      Unlock (Long Rest)
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Prepared counter + instructions */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Prepared Spells</Label>
+                  <span className="text-xs text-muted-foreground">{prepared.length}/{prepareLimit} · Long Rest</span>
+                </div>
+                {!playerLocked && <p className="text-xs text-muted-foreground">Click spells from your spellbook to prepare or unprepare them.</p>}
+              </div>
+
+              {/* Spellbook toggle chips */}
+              <div className="flex flex-wrap gap-1.5" data-testid="prepared-spell-chips">
+                {spellbook.length > 0 ? spellbook.map(spell => {
+                  const isPrepared = prepared.includes(spell);
+                  const atLimit = !isPrepared && prepared.length >= prepareLimit;
+                  return (
+                    <button key={spell} type="button"
+                      disabled={readOnly || playerLocked || atLimit}
+                      onClick={() => togglePrepared(spell)}
+                      className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                        isPrepared
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : (playerLocked || atLimit)
+                            ? 'opacity-40 cursor-not-allowed bg-background border-border text-muted-foreground'
+                            : 'bg-background hover:bg-muted border-border text-muted-foreground'
+                      }`}>
+                      {spell}
+                    </button>
+                  );
+                }) : (
+                  <span className="text-xs text-muted-foreground italic">Add spells to your spellbook below to prepare them.</span>
+                )}
+              </div>
+
+              {/* Spellbook management (learning spells is never locked) */}
+              <SpellList spells={spellbook} onAdd={n => addSpell('spellbook', n)} onRemove={n => removeSpell('spellbook', n)} readOnly={readOnly} label="Spellbook (all known spells)" placeholder="Add spell to spellbook…" />
+
+              {/* Non-spellbook prepared spells */}
+              {prepared.filter(s => !spellbook.includes(s)).length > 0 && (
+                <SpellList spells={prepared.filter(s => !spellbook.includes(s))} onRemove={!playerLocked ? n => removeSpell('prepared_spells', n) : undefined} readOnly={readOnly || playerLocked} label="Other Prepared Spells" placeholder="" />
+              )}
+
+              {/* Encyclopedia link */}
+              <div className="pt-2 border-t">
+                <Link to={`/campaigns/${campaignId}/encyclopedia`}
+                  className="text-xs text-primary inline-flex items-center gap-1 hover:underline">
+                  <ExternalLink className="h-3 w-3" />
+                  Browse all spells in the Encyclopedia
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {showFeatures && (
@@ -338,6 +446,7 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
             max={2}
             allowed={['Arcana', 'History', 'Insight', 'Investigation', 'Medicine', 'Religion']}
             backgroundSkills={backgroundSkills}
+            raceSkills={raceSkills}
           />
         ) : (
           <div className="flex flex-wrap gap-1">
@@ -391,19 +500,23 @@ export default function WizardSheet({ data = {}, onChange, readOnly = false, lev
   );
 }
 
-function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
+function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [], raceSkills = [] }) {
+  const isFromBg = (s) => backgroundSkills.includes(s);
+  const isFromRace = (s) => raceSkills.includes(s) && !isFromBg(s);
+  const isGranted = (s) => isFromBg(s) || raceSkills.includes(s);
   const toggle = (skill) => {
-    if (backgroundSkills.includes(skill)) return;
+    if (isGranted(skill)) return;
     if (value.includes(skill)) onChange(value.filter(s => s !== skill));
     else if (value.length < max) onChange([...value, skill]);
   };
   const extraBgSkills = backgroundSkills.filter(s => !allowed.includes(s));
-  const hasBgOverlap = backgroundSkills.length > 0;
+  const extraRaceSkills = raceSkills.filter(s => !allowed.includes(s) && !backgroundSkills.includes(s));
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap gap-1.5">
         {allowed.map(skill => {
-          const isFromBg = backgroundSkills.includes(skill);
+          const fromBg = isFromBg(skill);
+          const fromRace = isFromRace(skill);
           const isSelected = value.includes(skill);
           return (
             <button
@@ -411,12 +524,14 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
               type="button"
               onClick={() => toggle(skill)}
               className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-                isFromBg
+                fromBg
                   ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600 cursor-not-allowed'
-                  : isSelected
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-background hover:bg-muted border-border text-muted-foreground'
-              } ${!isFromBg && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  : fromRace
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-400 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-600 cursor-not-allowed'
+                    : isSelected
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!fromBg && !fromRace && !isSelected && value.length >= max ? 'opacity-40 cursor-not-allowed' : ''}`}
             >
               {skill}
             </button>
@@ -428,10 +543,19 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [] }) {
             {skill}
           </button>
         ))}
+        {extraRaceSkills.map(skill => (
+          <button key={skill} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-emerald-100 text-emerald-800 border-emerald-400 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-600 cursor-not-allowed">
+            {skill}
+          </button>
+        ))}
         <span className="text-xs text-muted-foreground self-center ml-1">{value.length}/{max}</span>
       </div>
-      {hasBgOverlap && (
+      {backgroundSkills.length > 0 && (
         <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background</p>
+      )}
+      {raceSkills.length > 0 && (
+        <p className="text-xs text-emerald-700 dark:text-emerald-400">Emerald = already granted by your race</p>
       )}
     </div>
   );

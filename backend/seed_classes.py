@@ -195,12 +195,42 @@ FLAVOR_TEXTS = {
         "Regardless of tradition, all wizards share the same fundamental conviction: "
         "that the universe has rules, and that with sufficient intelligence and dedication, those rules can be mastered — and bent."
     ),
+    "Artificer": (
+        "Artificers are the mad scientists and arcane engineers of the D&D world — visionaries who believe that magic is not merely a gift of blood or faith, "
+        "but a technology that can be studied, replicated, and improved. "
+        "Where a wizard memorizes spells and a sorcerer channels raw power, an artificer tinkers. "
+        "They take ordinary objects and imbue them with extraordinary potential, turning a walking stick into a wand, "
+        "a pair of boots into engines of speed, or a simple crossbow into a weapon of devastating precision."
+        "\n\n"
+        "The artificer's workshop is their sanctuary — a cluttered, noisy place filled with half-finished constructs, "
+        "bubbling alchemical reagents, and the persistent smell of magical smoke. "
+        "Each item they create is both a practical tool and a proof of concept, a demonstration that arcane principles can be systematized, "
+        "mass-produced, and put to work solving real problems. "
+        "Artificers don't wait for inspiration — they schedule it."
+        "\n\n"
+        "At higher levels, artificers become walking armories. "
+        "Their infusions turn every piece of gear they carry into a magical artifact. "
+        "Their Steel Defenders guard their flanks. Their Eldritch Cannons bombard the enemy. "
+        "And through it all, the artificer remains the most practical person in the room — "
+        "the one who, when the dragon appears, already has a contingency plan and the tools to execute it."
+    ),
 }
 
 # ---------------------------------------------------------------------------
 # Proficiency data per class
 # ---------------------------------------------------------------------------
 PROFICIENCY_DATA = {
+    "Artificer": {
+        "hit_die": 8,
+        "primary_ability": "Intelligence",
+        "spellcasting_ability": "Intelligence",
+        "saving_throws": ["Constitution", "Intelligence"],
+        "armor_proficiencies": ["Light armor", "Medium armor", "Shields"],
+        "weapon_proficiencies": ["Simple weapons"],
+        "tool_proficiencies": ["Thieves' tools", "Tinker's tools", "Two artisan's tools of your choice"],
+        "skill_count": 2,
+        "skills_available": ["Arcana", "History", "Investigation", "Medicine", "Nature", "Perception", "Sleight of Hand"],
+    },
     "Barbarian": {
         "hit_die": 12,
         "primary_ability": "Strength",
@@ -349,6 +379,29 @@ PROFICIENCY_DATA = {
 # Each entry: (level, name, description)
 # ---------------------------------------------------------------------------
 FEATURES_5E = {
+    "Artificer": [
+        (1, "Magical Tinkering", "You can imbue a Tiny nonmagical object with a magical effect by touching it as an action. Choose one: emit bright light (5 ft) and dim light (5 ft beyond); emit a recorded message of up to 6 seconds when tapped; emit an odor or nonverbal sound; or display a static visual effect. You can have up to your Intelligence modifier active at once (minimum 1). The effect lasts until you remove it."),
+        (1, "Spellcasting", "Intelligence is your spellcasting ability for your artificer spells. You know two cantrips from the artificer spell list. You prepare a list of spells equal to your Intelligence modifier plus half your artificer level (rounded up), minimum 1. Artificer spells require tools as spellcasting focuses."),
+        (2, "Infuse Item", "You gain 4 artificer infusions. At the end of a long rest, you can touch nonmagical objects and imbue each with one infusion, up to the Infused Items limit for your level."),
+        (3, "Artificer Specialist", "Choose your specialty: Alchemist, Armorer, Artillerist, or Battle Smith. Your choice grants features at 3rd, 5th, 9th, and 15th level."),
+        (3, "The Right Tool for the Job", "With 1 hour of work and 10 gp of materials, you can create a set of artisan's tools in an unoccupied space within 5 feet of you. The tools vanish when you use this feature again."),
+        (4, "Ability Score Improvement", "You can increase one ability score by 2, or two ability scores by 1 each. You can't increase a score above 20. Alternatively, with your DM's approval, you can take a feat instead."),
+        (5, "Artificer Specialist Feature", "You gain a feature from your Artificer Specialist."),
+        (6, "Tool Expertise", "Your proficiency bonus is doubled for any ability check you make that uses your proficiency with a tool."),
+        (7, "Flash of Genius", "When you or another creature you can see within 30 feet makes an ability check or saving throw, you can use your reaction to add your Intelligence modifier to the roll. Usable INT modifier times per long rest (minimum 1)."),
+        (8, "Ability Score Improvement", "You can increase one ability score by 2, or two ability scores by 1 each. You can't increase a score above 20. Alternatively, with your DM's approval, you can take a feat instead."),
+        (9, "Artificer Specialist Feature", "You gain a feature from your Artificer Specialist."),
+        (10, "Magic Item Adept", "You can attune to up to 4 magic items at once. Common or uncommon magic items you craft take one quarter the normal time and cost half as much gold."),
+        (11, "Spell-Storing Item", "At the end of a long rest, store a 1st- or 2nd-level artificer spell in a weapon or spellcasting focus. A creature holding the item can cast the spell, using your spell attack bonus and save DC, up to twice your Intelligence modifier times (minimum 2)."),
+        (12, "Ability Score Improvement", "You can increase one ability score by 2, or two ability scores by 1 each. You can't increase a score above 20. Alternatively, with your DM's approval, you can take a feat instead."),
+        (13, "Artificer Specialist Feature", "You gain a feature from your Artificer Specialist."),
+        (14, "Magic Item Savant", "You can attune to up to 5 magic items at once. You ignore all class, race, spell, and level requirements on attuning to or using a magic item."),
+        (15, "Artificer Specialist Feature", "You gain a feature from your Artificer Specialist."),
+        (16, "Ability Score Improvement", "You can increase one ability score by 2, or two ability scores by 1 each. You can't increase a score above 20. Alternatively, with your DM's approval, you can take a feat instead."),
+        (18, "Magic Item Master", "You can attune to up to 6 magic items at once."),
+        (19, "Ability Score Improvement", "You can increase one ability score by 2, or two ability scores by 1 each. You can't increase a score above 20. Alternatively, with your DM's approval, you can take a feat instead."),
+        (20, "Soul of Artifice", "You gain a +1 bonus to all saving throws per magic item you are currently attuned to. If reduced to 0 HP but not killed outright, you can use your reaction to end one of your artificer infusions, dropping to 1 HP instead."),
+    ],
     "Barbarian": [
         (1, "Rage", "On your turn you can enter a rage as a bonus action. While raging you gain advantage on Strength checks and saving throws, a damage bonus to melee Strength attacks (+2 at levels 1–8, +3 at 9–15, +4 at 16+), and resistance to bludgeoning, piercing, and slashing damage. Rage lasts 1 minute, ends early if you are knocked unconscious or if your turn ends without you attacking a hostile creature or taking damage. You can rage 2 times per long rest (increases at higher levels)."),
         (1, "Unarmored Defense", "While not wearing armor, your AC equals 10 + your Dexterity modifier + your Constitution modifier. You can use a shield and still gain this benefit."),
@@ -925,9 +978,13 @@ FEATURES_2024 = {
 # Seed function
 # ---------------------------------------------------------------------------
 CLASSES = [
+    "Artificer",
     "Barbarian", "Bard", "Cleric", "Druid", "Fighter",
     "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard",
 ]
+
+# Classes that only exist in 5e (no 2024 PHB version)
+CLASSES_5E_ONLY = {"Artificer"}
 
 EDITIONS = [("5e", FEATURES_5E), ("5.5e", FEATURES_2024)]
 
@@ -942,6 +999,9 @@ def seed():
             flavor = FLAVOR_TEXTS[class_name]
 
             for edition, feature_map in EDITIONS:
+                if edition == "5.5e" and class_name in CLASSES_5E_ONLY:
+                    continue
+
                 existing = (
                     db.query(CharacterClass)
                     .filter_by(name=class_name, edition=edition, owner_type=OwnerType.system)

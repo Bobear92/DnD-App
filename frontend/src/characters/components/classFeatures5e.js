@@ -2,11 +2,75 @@
 // Each entry: { name, description }
 
 export const HIT_DICE_5E = {
+  Artificer: 8,
   Barbarian: 12, Bard: 8, Cleric: 8, Druid: 8, Fighter: 10,
   Monk: 8, Paladin: 10, Ranger: 10, Rogue: 8, Sorcerer: 6, Warlock: 8, Wizard: 6,
 };
 
 export const CLASS_FEATURES_5E = {
+
+  Artificer: {
+    1: [
+      { name: 'Magical Tinkering', description: 'You can imbue a Tiny nonmagical object with a magical effect by touching it as an action. Choose one: emit bright light (5 ft) and dim light (5 ft beyond); emit a recorded message of up to 6 seconds when tapped; emit an odor or nonverbal sound; or display a static visual effect. You can have up to your Intelligence modifier active at once (minimum 1). The effect lasts until you remove it.' },
+      { name: 'Spellcasting', description: 'Intelligence is your spellcasting ability for your artificer spells. You know two cantrips from the artificer spell list. You prepare a list of artificer spells by choosing from the artificer spell list. The number of spells you can prepare equals your Intelligence modifier plus half your artificer level (rounded up), minimum 1. Artificer spells require tools as spellcasting focuses; you can use any tool you are proficient with.' },
+    ],
+    2: [
+      { name: 'Infuse Item', description: 'You gain 4 artificer infusions of your choice from the Artificer Infusions list. When you finish a long rest, you can touch a number of nonmagical objects equal to the number of Infused Items for your level and imbue each with one infusion. An object can bear only one of your infusions at a time and a single object can\'t bear more than one infusion. Your infusion lasts until you die, you finish a long rest and choose to end it, or you exceed your maximum Infused Items for your level.' },
+    ],
+    3: [
+      { name: 'Artificer Specialist', description: 'Choose an Artificer Specialist: Alchemist, Armorer, Artillerist, or Battle Smith. Your specialist grants you features at 3rd, 5th, 9th, and 15th level.' },
+      { name: 'The Right Tool for the Job', description: 'With 1 hour of work and 10 gp of materials, you can create one set of artisan\'s tools in an unoccupied space within 5 feet of you. These tools vanish when you use this feature again.' },
+    ],
+    4: [
+      { name: 'Ability Score Improvement', description: 'You can increase one ability score by 2, or two ability scores by 1 each. You can\'t increase a score above 20. Alternatively, with your DM\'s approval, you can take a feat instead.' },
+    ],
+    5: [
+      { name: 'Artificer Specialist Feature', description: 'You gain a feature from your Artificer Specialist.' },
+    ],
+    6: [
+      { name: 'Tool Expertise', description: 'Your proficiency bonus is doubled for any ability check you make that uses your proficiency with a tool.' },
+    ],
+    7: [
+      { name: 'Flash of Genius', description: 'When you or another creature you can see within 30 feet of you makes an ability check or a saving throw, you can use your reaction to add your Intelligence modifier to the roll. You can use this feature a number of times equal to your Intelligence modifier (minimum 1). You regain all expended uses when you finish a long rest.' },
+    ],
+    8: [
+      { name: 'Ability Score Improvement', description: 'You can increase one ability score by 2, or two ability scores by 1 each. You can\'t increase a score above 20. Alternatively, with your DM\'s approval, you can take a feat instead.' },
+    ],
+    9: [
+      { name: 'Artificer Specialist Feature', description: 'You gain a feature from your Artificer Specialist.' },
+    ],
+    10: [
+      { name: 'Magic Item Adept', description: 'You achieve a profound understanding of how to use and make magic items. You can attune to up to 4 magic items at once. If you craft a magic item with a rarity of common or uncommon, it takes you a quarter of the normal time and costs you half as much of the normal gold.' },
+    ],
+    11: [
+      { name: 'Spell-Storing Item', description: 'At the end of a long rest, you can touch one simple or martial weapon or one item that you can use as a spellcasting focus and store a spell in it, choosing a 1st- or 2nd-level spell from the artificer spell list. A creature holding the item can use its action to produce the spell\'s effect, using your spell attack bonus and save DC. The spell is stored in the item until cast a number of times equal to twice your Intelligence modifier (minimum 2) or until you store a different spell in it.' },
+    ],
+    12: [
+      { name: 'Ability Score Improvement', description: 'You can increase one ability score by 2, or two ability scores by 1 each. You can\'t increase a score above 20. Alternatively, with your DM\'s approval, you can take a feat instead.' },
+    ],
+    13: [
+      { name: 'Artificer Specialist Feature', description: 'You gain a feature from your Artificer Specialist.' },
+    ],
+    14: [
+      { name: 'Magic Item Savant', description: 'Your skill with magic items deepens. You can attune to up to 5 magic items at once. You also ignore all class, race, spell, and level requirements on attuning to or using a magic item.' },
+    ],
+    15: [
+      { name: 'Artificer Specialist Feature', description: 'You gain a feature from your Artificer Specialist.' },
+    ],
+    16: [
+      { name: 'Ability Score Improvement', description: 'You can increase one ability score by 2, or two ability scores by 1 each. You can\'t increase a score above 20. Alternatively, with your DM\'s approval, you can take a feat instead.' },
+    ],
+    17: [],
+    18: [
+      { name: 'Magic Item Master', description: 'You can now attune to up to 6 magic items at once.' },
+    ],
+    19: [
+      { name: 'Ability Score Improvement', description: 'You can increase one ability score by 2, or two ability scores by 1 each. You can\'t increase a score above 20. Alternatively, with your DM\'s approval, you can take a feat instead.' },
+    ],
+    20: [
+      { name: 'Soul of Artifice', description: 'You have developed a mystical connection to your magic items, which you can draw on for protection: you gain a +1 bonus to all saving throws per magic item you are currently attuned to. In addition, if you\'re reduced to 0 hit points but not killed outright, you can use your reaction to end one of your artificer infusions, causing you to drop to 1 hit point instead of 0.' },
+    ],
+  },
 
   Barbarian: {
     1: [

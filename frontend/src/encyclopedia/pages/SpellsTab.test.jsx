@@ -110,6 +110,14 @@ describe('SpellsTab', () => {
     expect(screen.getByText('Fireball')).toBeInTheDocument();
   });
 
+  it('filters spells by class', async () => {
+    renderTab();
+    await waitFor(() => screen.getByTestId('class-filter'));
+    fireEvent.change(screen.getByTestId('class-filter'), { target: { value: 'Bard' } });
+    await waitFor(() => expect(screen.queryByText('Fireball')).not.toBeInTheDocument());
+    expect(screen.getByText('Detect Magic')).toBeInTheDocument();
+  });
+
   it('shows "All Schools" button', async () => {
     renderTab();
     await waitFor(() => expect(screen.getByTestId('school-filter-All')).toBeInTheDocument());

@@ -45,6 +45,13 @@ export const RANGER_FIGHTING_STYLES_2024 = styles(
 
 // ── Subclasses ───────────────────────────────────────────────────────────────
 
+export const ARTIFICER_SUBCLASSES_5E = [
+  { value: 'Alchemist',    description: 'Master of experimental elixirs — brew random potions for free each long rest and restore allies with reagents.' },
+  { value: 'Armorer',      description: 'Integrate your armor with arcane power — choose Guardian (sentinel tank) or Infiltrator (agile striker) models.' },
+  { value: 'Artillerist',  description: 'Summon an Eldritch Cannon to blast enemies or shield allies; use a weapon as your Arcane Firearm for bonus force damage.' },
+  { value: 'Battle Smith', description: 'Bond with a Steel Defender companion and wield weapons using Intelligence — fuse martial prowess with arcane crafting.' },
+];
+
 export const BARBARIAN_SUBCLASSES_5E = [
   { value: 'Path of the Berserker',         description: 'Bonus-action attacks while raging; immunity to charm and frighten at higher levels.' },
   { value: 'Path of the Totem Warrior',     description: 'Channel a totem animal spirit (bear, eagle, elk, or wolf) for passive combat and survival benefits.' },
@@ -302,6 +309,7 @@ export const WIZARD_SUBCLASSES_2024 = [
 // Classes with unlock level 1 have the subclass chosen during character creation.
 
 export const SUBCLASS_UNLOCK_LEVEL_5E = {
+  Artificer: 3,
   Barbarian: 3, Bard: 3, Cleric: 1, Druid: 2, Fighter: 3,
   Monk: 3, Paladin: 3, Ranger: 3, Rogue: 3, Sorcerer: 1, Warlock: 1, Wizard: 2,
 };
@@ -329,6 +337,7 @@ export const PACT_BOONS_2024 = [
 // ── Subclass options by class (for LevelUpWizard) ─────────────────────────────
 
 export const SUBCLASS_OPTIONS_5E = {
+  Artificer: ARTIFICER_SUBCLASSES_5E,
   Barbarian: BARBARIAN_SUBCLASSES_5E,
   Bard:      BARD_SUBCLASSES_5E,
   Cleric:    CLERIC_SUBCLASSES_5E,

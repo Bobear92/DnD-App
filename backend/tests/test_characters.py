@@ -429,3 +429,187 @@ class TestCampaignEdition:
         assert resp.status_code == 200
         campaigns = resp.json()
         assert all("edition" in c for c in campaigns)
+
+
+# ── Rest ──────────────────────────────────────────────────────────────────────
+
+class TestApplyRest:
+    def _setup(self, client):
+        h_gm, uid_gm = make_user(client, 1)
+        h_player, uid_player = make_user(client, 2)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid_player)
+        return h_gm, h_player, campaign_id
+
+    def _create_char(self, client, headers, campaign_id, *, cls="Fighter", level=5, character_data=None):
+        payload = {
+            "name": "TestChar",
+            "race": "Human",
+            "char_class": cls,
+            "level": level,
+            "campaign_id": campaign_id,
+        }
+        if character_data:
+            payload["character_data"] = character_data
+        resp = client.post("/api/characters", json=payload, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def test_gm_can_apply_short_rest(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(client, h_gm, campaign_id)
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["rest_type"] == "short"
+        assert len(body["applied_to"]) == 1
+        assert body["applied_to"][0]["character_id"] == char_id
+
+    def test_gm_can_apply_long_rest(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            character_data={"hp_max": 50, "current_hp": 10},
+        )
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        assert resp.status_code == 200
+
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert updated["character_data"]["current_hp"] == 50
+
+    def test_player_cannot_apply_rest(self, client):
+        h_gm, h_player, campaign_id = self._setup(client)
+        char_id = self._create_char(client, h_gm, campaign_id)
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_player,
+        )
+        assert resp.status_code == 403
+
+    def test_non_member_cannot_apply_rest(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        h_other, _ = make_user(client, 3)
+        char_id = self._create_char(client, h_gm, campaign_id)
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_other,
+        )
+        assert resp.status_code == 403
+
+    def test_only_campaign_characters_are_affected(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        h_gm2, _ = make_user(client, 3)
+        campaign_id2 = make_campaign(client, h_gm2)
+
+        # char in other campaign
+        other_char_id = self._create_char(client, h_gm2, campaign_id2, character_data={"hp_max": 40, "current_hp": 5})
+
+        # ask GM of campaign_id to apply long rest to the other campaign's character
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [other_char_id]},
+            headers=h_gm,
+        )
+        assert resp.status_code == 200
+        # character was filtered out — applied_to should be empty
+        assert resp.json()["applied_to"] == []
+
+        # HP should not have changed
+        updated = client.get(f"/api/characters/{other_char_id}", headers=h_gm2).json()
+        assert updated["character_data"]["current_hp"] == 5
+
+    def test_short_rest_resets_warlock_pact_slots(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            cls="Warlock",
+            character_data={"pact_slots_used": 2},
+        )
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert updated["character_data"]["pact_slots_used"] == 0
+
+    def test_long_rest_restores_hp_and_spell_slots(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            cls="Wizard",
+            character_data={
+                "hp_max": 30,
+                "current_hp": 1,
+                "spell_slots": {
+                    "1": {"total": 4, "used": 3},
+                    "2": {"total": 2, "used": 2},
+                },
+            },
+        )
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        cd = updated["character_data"]
+        assert cd["current_hp"] == 30
+        assert cd["spell_slots"]["1"]["used"] == 0
+        assert cd["spell_slots"]["2"]["used"] == 0
+        assert cd["spell_slots"]["1"]["total"] == 4
+        assert cd["spell_slots"]["2"]["total"] == 2
+
+    def test_long_rest_recovers_hit_dice(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            level=10,
+            character_data={"hit_dice_used": 8},
+        )
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        # Level 10 → recover ceil(10/2) = 5 hit dice; 8 used - 5 = 3 remaining
+        assert updated["character_data"]["hit_dice_used"] == 3
+
+    def test_response_includes_changes_list(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            cls="Barbarian",
+        )
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        assert resp.status_code == 200
+        result = resp.json()["applied_to"][0]
+        assert "name" in result
+        assert isinstance(result["changes"], list)
+        assert any("Rages" in c for c in result["changes"])

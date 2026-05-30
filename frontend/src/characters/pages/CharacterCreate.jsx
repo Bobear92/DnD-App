@@ -14,6 +14,7 @@ import classService from '../classService';
 import ClassOverview from '../components/ClassOverview';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import {
+  ArtificerSheet,
   BarbarianSheet, BardSheet, ClericSheet, DruidSheet,
   FighterSheet, MonkSheet, PaladinSheet, RangerSheet,
   RogueSheet, SorcererSheet, WarlockSheet, WizardSheet,
@@ -37,6 +38,8 @@ import {
 } from '../components/5e2024';
 import { HIT_DICE_2024 } from '../components/classFeatures2024';
 import { cn } from '@/lib/utils';
+import TraitBadgeList from '../components/TraitBadge';
+import { getRaceGrantedSkills, getRaceSkillSources } from '../components/raceProficienciesData';
 
 // ─── Ability score validation constants ──────────────────────────────────────
 
@@ -289,6 +292,7 @@ const BACKGROUNDS_5E = [
 ];
 
 const CLASS_PROFICIENCIES_5E = {
+  Artificer: { armor: 'Light armor, medium armor, shields', weapons: 'Simple weapons', tools: "Thieves' tools, tinker's tools, two artisan's tools of your choice", saving_throws: ['Constitution', 'Intelligence'] },
   Barbarian: { armor: 'Light armor, medium armor, shields', weapons: 'Simple weapons, martial weapons', tools: null, saving_throws: ['Strength', 'Constitution'] },
   Bard:      { armor: 'Light armor', weapons: 'Simple weapons, hand crossbows, longswords, rapiers, shortswords', tools: 'Three musical instruments of your choice', saving_throws: ['Dexterity', 'Charisma'] },
   Cleric:    { armor: 'Light armor, medium armor, shields', weapons: 'Simple weapons', tools: null, saving_throws: ['Wisdom', 'Charisma'] },
@@ -304,6 +308,7 @@ const CLASS_PROFICIENCIES_5E = {
 };
 
 const CLASS_SKILL_REQUIRED = {
+  Artificer: 2,
   Barbarian: 2, Bard: 3, Cleric: 2, Druid: 2, Fighter: 2,
   Monk: 2, Paladin: 2, Ranger: 3, Rogue: 4, Sorcerer: 2,
   Warlock: 2, Wizard: 2,
@@ -544,12 +549,8 @@ function RaceDetail({ race }) {
       {race.description && <p className="text-sm text-muted-foreground leading-relaxed">{race.description}</p>}
       {race.traits.length > 0 && (
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Racial Traits</div>
-          <div className="flex flex-wrap gap-1.5">
-            {race.traits.map(t => (
-              <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
-            ))}
-          </div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Racial Traits <span className="font-normal normal-case text-muted-foreground/70">(click a trait to learn more)</span></div>
+          <TraitBadgeList traits={race.traits} />
         </div>
       )}
       {race.languages?.length > 0 && (
@@ -598,12 +599,8 @@ function SubraceDetail({ subrace }) {
       {subrace.description && <p className="text-sm text-muted-foreground leading-relaxed">{subrace.description}</p>}
       {subrace.traits?.length > 0 && (
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Subrace Traits</div>
-          <div className="flex flex-wrap gap-1.5">
-            {subrace.traits.map(t => (
-              <Badge key={t} variant="outline" className="text-xs border-primary/30">{t}</Badge>
-            ))}
-          </div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Subrace Traits <span className="font-normal normal-case text-muted-foreground/70">(click a trait to learn more)</span></div>
+          <TraitBadgeList traits={subrace.traits} variant="outline" badgeClassName="border-primary/30" />
         </div>
       )}
     </div>
@@ -1042,6 +1039,7 @@ export default function CharacterCreate() {
     Fighter: FighterSheet2024, Monk: MonkSheet2024, Paladin: PaladinSheet2024, Ranger: RangerSheet2024,
     Rogue: RogueSheet2024, Sorcerer: SorcererSheet2024, Warlock: WarlockSheet2024, Wizard: WizardSheet2024,
   } : {
+    Artificer: ArtificerSheet,
     Barbarian: BarbarianSheet, Bard: BardSheet, Cleric: ClericSheet, Druid: DruidSheet,
     Fighter: FighterSheet, Monk: MonkSheet, Paladin: PaladinSheet, Ranger: RangerSheet,
     Rogue: RogueSheet, Sorcerer: SorcererSheet, Warlock: WarlockSheet, Wizard: WizardSheet,
@@ -1059,6 +1057,12 @@ export default function CharacterCreate() {
 
   // Background skills passed to class sheet in step 3
   const backgroundSkills = selectedBgObj?.skills ?? [];
+
+  // Skill proficiencies granted by racial traits (Keen Senses → Perception,
+  // Menacing → Intimidation). Passed to class sheet alongside backgroundSkills
+  // and merged into the final character_data.skill_proficiencies on submit.
+  const raceSkills = getRaceGrantedSkills(selectedRaceObj, selectedSubraceObj);
+  const raceSkillSources = getRaceSkillSources(selectedRaceObj, selectedSubraceObj);
 
   // Combined racial ASI (base race + subrace + Half-Elf chosen stats) — used in submit and previews
   const halfElfExtraAsi = (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_asi_stats.length > 0)
@@ -1166,6 +1170,7 @@ export default function CharacterCreate() {
         skill_proficiencies: [...new Set([
           ...(classData.skill_proficiencies ?? []),
           ...backgroundSkills,
+          ...raceSkills,
           ...(raceChoices.half_elf_skills ?? []),
         ])],
         subrace: selectedSubraceObj?.name ?? null,
@@ -1351,7 +1356,33 @@ export default function CharacterCreate() {
               </div>
 
               {/* Selected race detail */}
-              {selectedRaceObj && <RaceDetail race={selectedRaceObj} />}
+              {selectedRaceObj && (
+                <>
+                  <RaceDetail race={selectedRaceObj} />
+                  {/* Skill proficiencies granted by race traits (e.g. Keen Senses → Perception) */}
+                  {raceSkillSources.length > 0 && (
+                    <div
+                      data-testid="race-skill-grants"
+                      className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm dark:bg-emerald-900/30 dark:border-emerald-700"
+                    >
+                      <div className="font-medium text-emerald-900 dark:text-emerald-200 mb-1">
+                        Skill Proficiencies from Race
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {raceSkillSources.map(({ skill, trait }) => (
+                          <Badge
+                            key={`${skill}-${trait}`}
+                            variant="outline"
+                            className="border-emerald-400 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-600"
+                          >
+                            {skill} <span className="opacity-70 ml-1">(from {trait})</span>
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* Subrace picker — shown only when the selected race has subraces */}
               {selectedRaceObj?.subraces?.length > 0 && (
@@ -1602,6 +1633,7 @@ export default function CharacterCreate() {
                   creation={true}
                   scores={form}
                   backgroundSkills={backgroundSkills}
+                  raceSkills={raceSkills}
                   raceGrantedCantrips={raceGrantedCantrips}
                 />
               </section>
@@ -1735,10 +1767,8 @@ export default function CharacterCreate() {
                     const allTraits = [...(selectedRaceObj.traits ?? []), ...(selectedSubraceObj?.traits ?? [])];
                     return allTraits.length > 0 ? (
                       <div>
-                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Racial Traits</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {allTraits.map(t => <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>)}
-                        </div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Racial Traits <span className="font-normal normal-case text-muted-foreground/70">(click a trait to learn more)</span></div>
+                        <TraitBadgeList traits={allTraits} />
                       </div>
                     ) : null;
                   })()}
@@ -1782,6 +1812,21 @@ export default function CharacterCreate() {
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Skill Versatility</div>
                       <div className="flex flex-wrap gap-1.5">
                         {raceChoices.half_elf_skills.map(s => <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>)}
+                      </div>
+                    </div>
+                  )}
+                  {raceSkillSources.length > 0 && (
+                    <div data-testid="review-race-skill-grants">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Skill Proficiencies (from Race)</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {raceSkillSources.map(({ skill, trait }) => (
+                          <Badge
+                            key={`${skill}-${trait}`}
+                            className="text-xs bg-emerald-100 text-emerald-800 border border-emerald-400 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-600"
+                          >
+                            {skill} <span className="opacity-70 ml-1">· {trait}</span>
+                          </Badge>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1913,7 +1958,7 @@ export default function CharacterCreate() {
                   <ClassSheet
                     data={{
                       ...classData,
-                      skill_proficiencies: [...new Set([...(classData.skill_proficiencies ?? []), ...backgroundSkills])],
+                      skill_proficiencies: [...new Set([...(classData.skill_proficiencies ?? []), ...backgroundSkills, ...raceSkills])],
                     }}
                     onChange={() => {}}
                     readOnly={true}
@@ -1921,6 +1966,7 @@ export default function CharacterCreate() {
                     creation={true}
                     scores={finalScores}
                     backgroundSkills={backgroundSkills}
+                    raceSkills={raceSkills}
                     raceGrantedCantrips={raceGrantedCantrips}
                   />
                 </section>

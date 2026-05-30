@@ -19,10 +19,13 @@ import {
 } from '@/components/ui/select';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import characterService, { mapCharacterImageUrl } from '../characterService';
+import TraitBadgeList from '../components/TraitBadge';
+import { getRaceGrantedSkillsFromTraits } from '../components/raceProficienciesData';
 import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
 import {
+  ArtificerSheet,
   BarbarianSheet, BardSheet, ClericSheet, DruidSheet,
   FighterSheet, MonkSheet, PaladinSheet, RangerSheet,
   RogueSheet, SorcererSheet, WarlockSheet, WizardSheet,
@@ -98,6 +101,7 @@ function modStr(score) { const m = mod(score); return m >= 0 ? `+${m}` : `${m}`;
 function profBonus(level) { return Math.ceil(level / 4) + 1; }
 
 const CLASS_SHEETS_5E = {
+  Artificer: ArtificerSheet,
   Barbarian: BarbarianSheet, Bard: BardSheet, Cleric: ClericSheet, Druid: DruidSheet,
   Fighter: FighterSheet, Monk: MonkSheet, Paladin: PaladinSheet, Ranger: RangerSheet,
   Rogue: RogueSheet, Sorcerer: SorcererSheet, Warlock: WarlockSheet, Wizard: WizardSheet,
@@ -109,7 +113,7 @@ const CLASS_SHEETS_2024 = {
   Rogue: RogueSheet2024, Sorcerer: SorcererSheet2024, Warlock: WarlockSheet2024, Wizard: WizardSheet2024,
 };
 
-const SPELLCASTING_CLASSES = new Set(['Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Warlock', 'Wizard']);
+const SPELLCASTING_CLASSES = new Set(['Artificer', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Warlock', 'Wizard']);
 
 const ALIGNMENTS = [
   'Lawful Good', 'Neutral Good', 'Chaotic Good',
@@ -1079,12 +1083,8 @@ export default function CharacterDetail() {
                       <div className="space-y-2">
                         {hasTraits && (
                           <div>
-                            <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Racial Traits</div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {cd.race_traits.map(t => (
-                                <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
-                              ))}
-                            </div>
+                            <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Racial Traits <span className="font-normal normal-case text-muted-foreground/70">(click to learn more)</span></div>
+                            <TraitBadgeList traits={cd.race_traits} />
                           </div>
                         )}
                         {allLanguages.length > 0 && (
@@ -1188,7 +1188,7 @@ export default function CharacterDetail() {
                   <ClassSheet
                     data={classSection.draft}
                     onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
-                    readOnly={displayAsPlayer || !canEdit}
+                    readOnly={!showEditable}
                     level={identity.draft?.level ?? character.level}
                     section="stats"
                     abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
@@ -1210,7 +1210,7 @@ export default function CharacterDetail() {
                   <ClassSheet
                     data={classSection.draft}
                     onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
-                    readOnly={displayAsPlayer || !canEdit}
+                    readOnly={!showEditable}
                     level={identity.draft?.level ?? character.level}
                     section="features"
                     abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
@@ -1242,10 +1242,12 @@ export default function CharacterDetail() {
                     <ClassSheet
                       data={classSection.draft}
                       onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
-                      readOnly={displayAsPlayer || !canEdit}
+                      readOnly={!showEditable}
                       level={identity.draft?.level ?? character.level}
                       section="spells"
                       abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
+                      campaignId={campaignId}
+                      isGm={isGm}
                     />
                   </SectionCard>
                 )}
@@ -1426,8 +1428,13 @@ function SectionCard({ title, subtitle, children, isDirty, onSave, onReset, canE
 }
 
 function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
-  const skillProfs = classData?.skill_proficiencies ?? [];
+  const storedProfs = classData?.skill_proficiencies ?? [];
   const expertiseSkills = classData?.expertise_skills ?? [];
+  // Existing characters created before race-granted skills were saved into the
+  // skill_proficiencies array still need to show Perception/Intimidation etc.
+  // proficient — derive from character_data.race_traits at render time.
+  const raceGranted = getRaceGrantedSkillsFromTraits(classData?.race_traits ?? []);
+  const skillProfs = [...new Set([...storedProfs, ...raceGranted])];
 
   return (
     <div>
@@ -1437,12 +1444,17 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
           const base = mod(identityDraft[ability]);
           const isProf = skillProfs.includes(skill);
           const isExpert = expertiseSkills.includes(skill);
+          const isFromRace = raceGranted.includes(skill);
           const bonus = base + (isExpert ? pb * 2 : isProf ? pb : 0);
           return (
             <div key={skill} className="flex items-center gap-2 text-xs py-0.5">
               <div className={cn(
                 'h-3 w-3 rounded-sm border flex-shrink-0',
-                isExpert ? 'bg-purple-500 border-purple-500' : isProf ? 'bg-primary border-primary' : 'bg-muted border-border'
+                isExpert
+                  ? 'bg-purple-500 border-purple-500'
+                  : isProf
+                    ? (isFromRace ? 'bg-emerald-500 border-emerald-500' : 'bg-primary border-primary')
+                    : 'bg-muted border-border'
               )} />
               <span className="flex-1 truncate">{skill}</span>
               <span className="font-medium tabular-nums text-muted-foreground">
@@ -1452,7 +1464,9 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
           );
         })}
       </div>
-      <p className="text-[10px] text-muted-foreground mt-1">Purple = expertise · Blue = proficient</p>
+      <p className="text-[10px] text-muted-foreground mt-1">
+        Purple = expertise · Blue = proficient{raceGranted.length > 0 ? ' · Emerald = from race' : ''}
+      </p>
     </div>
   );
 }

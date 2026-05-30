@@ -7,6 +7,7 @@ from players.characters.schemas import (
     CharacterListItem, ToggleVisibilityRequest,
     CharacterTimelineEventCreate, CharacterTimelineEventResponse,
     CharacterNpcCreate, CharacterNpcResponse,
+    RestRequest, RestResponse,
 )
 from players.characters.service import (
     create_character, get_characters_for_user, get_character_by_id,
@@ -14,6 +15,7 @@ from players.characters.service import (
     upload_character_image, delete_character_image,
     get_character_timeline_events, create_character_timeline_event, remove_character_timeline_event,
     get_character_npcs, create_character_npc, remove_character_npc,
+    apply_rest,
 )
 from shared.database import get_db
 from shared.dependencies import get_current_user
@@ -31,6 +33,17 @@ def create_new_character(
     db: Session = Depends(get_db)
 ):
     return create_character(character_data, current_user.id, db)
+
+
+@router.post("/campaign/{campaign_id}/rest", response_model=RestResponse)
+def apply_rest_endpoint(
+    campaign_id: int,
+    rest_data: RestRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Apply a short or long rest to selected characters (GM only)."""
+    return apply_rest(db, campaign_id, rest_data, current_user.id, current_user.is_admin)
 
 
 @router.get("/campaign/{campaign_id}", response_model=List[CharacterListItem])

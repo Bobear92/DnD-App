@@ -37,13 +37,15 @@ async function fetchSpellCatalog(campaignId) {
  * Falls back gracefully when the API catalog is empty or unavailable.
  *
  * Props:
- *   spells       string[]    current spell names
- *   onAdd        (name)=>void  called when user adds a spell (omit to hide add input)
- *   onRemove     (name)=>void  called when user removes a spell (omit to hide remove buttons)
- *   readOnly     boolean
- *   label        string      section heading
- *   placeholder  string      add-input placeholder text
- *   isCantrips   boolean     if true, skip API level lookup (always shown as Cantrips section)
+ *   spells           string[]    current spell names
+ *   onAdd            (name)=>void  called when user adds a spell (omit to hide add input)
+ *   onRemove         (name)=>void  called when user removes a spell (omit to hide remove buttons)
+ *   readOnly         boolean
+ *   label            string      section heading
+ *   placeholder      string      add-input placeholder text
+ *   isCantrips       boolean     if true, skip API level lookup (always shown as Cantrips section)
+ *   onCastSpell      (name, level)=>void  if provided, shows a Cast button per non-cantrip spell
+ *   availableSlots   { [level]: number }  slots remaining per level; disables Cast when 0
  */
 export default function SpellList({
   spells = [],
@@ -53,6 +55,8 @@ export default function SpellList({
   label,
   placeholder = 'Add spell…',
   isCantrips = false,
+  onCastSpell,
+  availableSlots,
 }) {
   const ctx = useCampaign();
   const campaignId = ctx?.campaign?.id;
@@ -120,27 +124,50 @@ export default function SpellList({
               {heading}
             </div>
             <div className="rounded-md border divide-y">
-              {names.map(name => (
-                <div key={name} className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/30 group">
-                  <button
-                    type="button"
-                    onClick={() => openDetail(name)}
-                    className="text-sm text-left hover:text-primary hover:underline flex-1 min-w-0 truncate"
-                  >
-                    {name}
-                  </button>
-                  {!readOnly && (
+              {names.map(name => {
+                const castable = onCastSpell && lvl > 0;
+                const slotsLeft = castable ? (availableSlots?.[lvl] ?? 0) : 0;
+                const castDisabled = castable && slotsLeft <= 0;
+                return (
+                  <div key={name} className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/30 group">
                     <button
                       type="button"
-                      data-testid={`remove-spell-${name}`}
-                      onClick={() => onRemove?.(name)}
-                      className="text-muted-foreground hover:text-destructive ml-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      onClick={() => openDetail(name)}
+                      className="text-sm text-left hover:text-primary hover:underline flex-1 min-w-0 truncate"
                     >
-                      <X className="h-3 w-3" />
+                      {name}
                     </button>
-                  )}
-                </div>
-              ))}
+                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                      {castable && (
+                        <button
+                          type="button"
+                          data-testid={`cast-spell-${name}`}
+                          disabled={castDisabled}
+                          onClick={() => !castDisabled && onCastSpell(name, lvl)}
+                          title={castDisabled ? 'No spell slots remaining at this level' : `Cast using a level ${lvl} slot`}
+                          className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                            castDisabled
+                              ? 'opacity-40 cursor-not-allowed bg-muted text-muted-foreground border-border'
+                              : 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
+                          }`}
+                        >
+                          Cast
+                        </button>
+                      )}
+                      {!readOnly && onRemove && (
+                        <button
+                          type="button"
+                          data-testid={`remove-spell-${name}`}
+                          onClick={() => onRemove?.(name)}
+                          className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );

@@ -26,6 +26,10 @@ const SCHOOL_COLORS = {
   Transmutation:{ bg: 'bg-emerald-500', ring: 'ring-emerald-500', pill: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' },
 };
 
+const SPELL_CLASSES = [
+  'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Warlock', 'Wizard',
+];
+
 const LEVEL_LABELS = {
   0: 'Cantrip', 1: '1st', 2: '2nd', 3: '3rd',
   4: '4th', 5: '5th', 6: '6th', 7: '7th', 8: '8th', 9: '9th',
@@ -178,6 +182,7 @@ export default function SpellsTab({ isGm, campaignId }) {
   const [search, setSearch] = useState('');
   const [schoolFilter, setSchoolFilter] = useState('All');
   const [levelFilter, setLevelFilter] = useState('All');
+  const [classFilter, setClassFilter] = useState('All');
   const [selectedSpell, setSelectedSpell] = useState(null);
 
   const load = () => {
@@ -196,6 +201,10 @@ export default function SpellsTab({ isGm, campaignId }) {
     if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (schoolFilter !== 'All' && s.school !== schoolFilter) return false;
     if (levelFilter !== 'All' && String(s.level) !== levelFilter) return false;
+    if (classFilter !== 'All') {
+      const spellClasses = (s.classes || '').split(',').map((c) => c.trim());
+      if (!spellClasses.includes(classFilter)) return false;
+    }
     return true;
   });
 
@@ -224,6 +233,17 @@ export default function SpellsTab({ isGm, campaignId }) {
             <option value="0">Cantrip</option>
             {[1,2,3,4,5,6,7,8,9].map(l => (
               <option key={l} value={String(l)}>{LEVEL_LABELS[l]} Level</option>
+            ))}
+          </select>
+          <select
+            value={classFilter}
+            onChange={(e) => setClassFilter(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            data-testid="class-filter"
+          >
+            <option value="All">All Classes</option>
+            {SPELL_CLASSES.map((cls) => (
+              <option key={cls} value={cls}>{cls}</option>
             ))}
           </select>
         </div>

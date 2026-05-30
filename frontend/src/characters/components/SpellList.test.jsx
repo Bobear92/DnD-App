@@ -260,4 +260,63 @@ describe('SpellList', () => {
     render(<SpellList spells={[]} onAdd={vi.fn()} label="Spells" placeholder="Add prepared spell…" readOnly={false} />);
     expect(screen.getByPlaceholderText('Add prepared spell…')).toBeInTheDocument();
   });
+
+  // ── Cast spell button ───────────────────────────────────────────────────
+  it('shows Cast button on leveled spells when onCastSpell is provided', async () => {
+    mockFetchCatalog();
+    const onCastSpell = vi.fn();
+    render(<SpellList
+      spells={['Magic Missile']}
+      label="Prepared"
+      onCastSpell={onCastSpell}
+      availableSlots={{ 1: 2 }}
+    />);
+    await waitFor(() => expect(screen.getByTestId('cast-spell-Magic Missile')).toBeInTheDocument());
+  });
+
+  it('does not show Cast button when onCastSpell is not provided', async () => {
+    mockFetchCatalog();
+    render(<SpellList spells={['Magic Missile']} label="Prepared" />);
+    await waitFor(() => expect(screen.getByText('Magic Missile')).toBeInTheDocument());
+    expect(screen.queryByTestId('cast-spell-Magic Missile')).not.toBeInTheDocument();
+  });
+
+  it('disables Cast button when availableSlots for that level is 0', async () => {
+    mockFetchCatalog();
+    render(<SpellList
+      spells={['Magic Missile']}
+      label="Prepared"
+      onCastSpell={vi.fn()}
+      availableSlots={{ 1: 0 }}
+    />);
+    await waitFor(() => {
+      expect(screen.getByTestId('cast-spell-Magic Missile')).toBeDisabled();
+    });
+  });
+
+  it('calls onCastSpell with name and level when Cast button clicked', async () => {
+    mockFetchCatalog();
+    const onCastSpell = vi.fn();
+    render(<SpellList
+      spells={['Magic Missile']}
+      label="Prepared"
+      onCastSpell={onCastSpell}
+      availableSlots={{ 1: 2 }}
+    />);
+    await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
+    fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
+    expect(onCastSpell).toHaveBeenCalledWith('Magic Missile', 1);
+  });
+
+  it('does not show Cast button on cantrips (isCantrips mode)', () => {
+    const onCastSpell = vi.fn();
+    render(<SpellList
+      spells={['Fire Bolt']}
+      isCantrips
+      label="Cantrips"
+      onCastSpell={onCastSpell}
+      availableSlots={{ 0: 99 }}
+    />);
+    expect(screen.queryByTestId('cast-spell-Fire Bolt')).not.toBeInTheDocument();
+  });
 });

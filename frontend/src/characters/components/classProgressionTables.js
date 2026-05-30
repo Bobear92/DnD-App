@@ -272,10 +272,36 @@ const WARLOCK_2024 = {
   ],
 };
 
+// Artificer spell slots: half-caster starting at level 1 (same as 2024 Paladin)
+const HC_ART = HC_PAL_2024;
+
+// Artificer infusion counts: [infusions known, max infused items]
+const ART_INF = [
+  [0,0],[4,2],[4,2],[4,2],  // L1-4: no infusions at L1
+  [4,2],[6,3],[6,3],[6,3],  // L5-8: 6 known / 3 infused from L6
+  [6,3],[8,4],[8,4],[8,4],  // L9-12: 8 known / 4 infused from L10
+  [8,4],[10,5],[10,5],[10,5],// L13-16: 10 known / 5 infused from L14
+  [10,5],[12,6],[12,6],[12,6],// L17-20: 12 known / 6 infused from L18
+];
+
+// Cantrips known: 2 at L1–9, 3 at L10–20
+const ART_CTR = [2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3];
+
+const ARTIFICER_5E = {
+  columns: [
+    {key:'cantrips',         label:'Cantrips Known'},
+    {key:'infusions_known',  label:'Infusions Known'},
+    {key:'infused_items',    label:'Infused Items'},
+    ...COLS_5,
+  ],
+  data: ART_CTR.map((c,i) => [c, ART_INF[i][0] || 0, ART_INF[i][1] || 0, ...HC_ART[i]]),
+};
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 export const CLASS_PROGRESSION = {
   '5e': {
+    Artificer: ARTIFICER_5E,
     Barbarian: BARBARIAN_5E,
     Bard:      BARD_5E,
     Cleric:    CLERIC_5E,

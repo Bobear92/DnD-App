@@ -135,7 +135,7 @@ describe('CharacterCreate', () => {
   it('renders class picker on first step', () => {
     renderCreate();
     expect(screen.getByText('Choose Your Class')).toBeInTheDocument();
-    ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk',
+    ['Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk',
      'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard'].forEach(cls => {
       expect(screen.getByText(cls)).toBeInTheDocument();
     });
@@ -1060,6 +1060,127 @@ describe('CharacterCreate', () => {
           character_data: expect.objectContaining({ tool_choice: "Smith's tools" }),
         })
       );
+    });
+  });
+
+  // ── Race-granted skill proficiencies ─────────────────────────────────────
+  //
+  // Keen Senses (Elf base) grants Perception. Menacing (Half-Orc) grants
+  // Intimidation. These flow through the same path as background-granted
+  // skills but with emerald styling and a different legend.
+
+  it('shows "Perception (from Keen Senses)" badge in race detail when Elf is selected', async () => {
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Legolas' } });
+    fireEvent.click(screen.getByTestId('race-card-Elf'));
+    fireEvent.click(screen.getByTestId('subrace-card-Wood Elf'));
+    await waitFor(() => {
+      const grants = screen.getByTestId('race-skill-grants');
+      expect(grants).toBeInTheDocument();
+      expect(grants).toHaveTextContent('Perception');
+      expect(grants).toHaveTextContent('Keen Senses');
+    });
+  });
+
+  it('shows "Intimidation (from Menacing)" badge in race detail when Half-Orc is selected', async () => {
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Grommash' } });
+    fireEvent.click(screen.getByTestId('race-card-Half-Orc'));
+    await waitFor(() => {
+      const grants = screen.getByTestId('race-skill-grants');
+      expect(grants).toHaveTextContent('Intimidation');
+      expect(grants).toHaveTextContent('Menacing');
+    });
+  });
+
+  it('does NOT show race-skill-grants section when race has no skill-granting traits (Human)', async () => {
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Boris' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('race-skill-grants')).not.toBeInTheDocument();
+    });
+  });
+
+  it('Elf race skill (Perception) appears as emerald-tinted disabled button on Fighter sheet', async () => {
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Legolas' } });
+    fireEvent.click(screen.getByTestId('race-card-Elf'));
+    fireEvent.click(screen.getByTestId('subrace-card-Wood Elf'));
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => {
+      expect(screen.getByText('Emerald = already granted by your race')).toBeInTheDocument();
+    });
+  });
+
+  it('Half-Orc Intimidation appears as extra emerald button when Wizard class does not allow Intimidation', async () => {
+    // Wizard allowed: Arcana, History, Insight, Investigation, Medicine, Religion
+    // Half-Orc grants Intimidation → must appear as extra emerald button
+    renderCreate();
+    await selectClass('Wizard');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Half-Orc Wizard' } });
+    fireEvent.click(screen.getByTestId('race-card-Half-Orc'));
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => {
+      // Intimidation appears as a disabled button (extra race skill)
+      const buttons = screen.getAllByRole('button', { name: 'Intimidation' });
+      expect(buttons.length).toBeGreaterThan(0);
+      expect(screen.getByText('Emerald = already granted by your race')).toBeInTheDocument();
+    });
+  });
+
+  it('race-granted Perception is included in character_data.skill_proficiencies on submit', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 9 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Legolas' } });
+    fireEvent.click(screen.getByTestId('race-card-Elf'));
+    fireEvent.click(screen.getByTestId('subrace-card-Wood Elf'));
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await assignStandardSpread();
+    // Select 2 OTHER skills (not Perception, since that comes from race)
+    const athletics = screen.getAllByRole('button', { name: 'Athletics' }).find(b => !b.disabled);
+    fireEvent.click(athletics);
+    const history = screen.getAllByRole('button', { name: 'History' }).find(b => !b.disabled);
+    fireEvent.click(history);
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+    await waitFor(() => {
+      expect(characterService.createCharacter).toHaveBeenCalledWith(
+        expect.objectContaining({
+          character_data: expect.objectContaining({
+            skill_proficiencies: expect.arrayContaining(['Perception', 'Athletics', 'History']),
+          }),
+        })
+      );
+    });
+  });
+
+  it('step 5 review section shows "Skill Proficiencies (from Race)" for Half-Orc', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 10 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Grommash' } });
+    fireEvent.click(screen.getByTestId('race-card-Half-Orc'));
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await assignStandardSpread();
+    // Fighter requires 2 skills; we need to satisfy it
+    const athletics = screen.getAllByRole('button', { name: 'Athletics' }).find(b => !b.disabled);
+    fireEvent.click(athletics);
+    const history = screen.getAllByRole('button', { name: 'History' }).find(b => !b.disabled);
+    fireEvent.click(history);
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => {
+      const reviewGrants = screen.getByTestId('review-race-skill-grants');
+      expect(reviewGrants).toHaveTextContent('Intimidation');
+      expect(reviewGrants).toHaveTextContent('Menacing');
     });
   });
 });

@@ -8,6 +8,7 @@ import ClassOverview from '../../characters/components/ClassOverview';
 import { SUPPORTED_CLASSES_5E, CLASS_DESCRIPTIONS, CLASS_HIT_DICE } from '../../characters/components/index';
 import SpellsTab from './SpellsTab';
 import CampaignSpellsTab from './CampaignSpellsTab';
+import SkillsTab from './SkillsTab';
 
 const CLASS_ACCENT_BG = {
   Barbarian: 'bg-orange-500', Bard: 'bg-pink-500', Cleric: 'bg-yellow-500',
@@ -27,8 +28,8 @@ const CLASSES = SUPPORTED_CLASSES_5E;
 
 const TABS = [
   { id: 'classes', label: 'Classes' },
+  { id: 'skills', label: 'Skills' },
   { id: 'spells', label: 'Spells' },
-  { id: 'campaign-spells', label: 'Campaign Spells', gmOnly: true },
 ];
 
 export default function EncyclopediaPage() {
@@ -39,6 +40,7 @@ export default function EncyclopediaPage() {
   const campaignEdition = campaign?.edition === '5.5e' ? '5.5e' : '5e';
 
   const [activeTab, setActiveTab] = useState('classes');
+  const [spellsSubTab, setSpellsSubTab] = useState('system');
   const [edition, setEdition] = useState(campaignEdition);
   const [selectedClass, setSelectedClass] = useState(null);
   const [classData, setClassData] = useState(null);
@@ -164,14 +166,49 @@ export default function EncyclopediaPage() {
           </div>
         )}
 
-        {/* Spells tab */}
-        {activeTab === 'spells' && (
-          <SpellsTab isGm={isGm} campaignId={campaignId} />
+        {/* Skills tab */}
+        {activeTab === 'skills' && (
+          <SkillsTab />
         )}
 
-        {/* Campaign Spells tab (GM only) */}
-        {activeTab === 'campaign-spells' && isGm && (
-          <CampaignSpellsTab campaignId={campaignId} />
+        {/* Spells tab — with sub-tabs (System / Campaign for GMs) */}
+        {activeTab === 'spells' && (
+          <div className="flex flex-col h-full min-h-0">
+            {isGm && (
+              <div className="flex gap-1 border-b border-border px-4 py-2 shrink-0 bg-muted/30">
+                <button
+                  onClick={() => setSpellsSubTab('system')}
+                  className={cn(
+                    'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                    spellsSubTab === 'system'
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  System Spells
+                </button>
+                <button
+                  onClick={() => setSpellsSubTab('campaign')}
+                  className={cn(
+                    'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                    spellsSubTab === 'campaign'
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Campaign Spells
+                </button>
+              </div>
+            )}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              {(!isGm || spellsSubTab === 'system') && (
+                <SpellsTab isGm={isGm} campaignId={campaignId} />
+              )}
+              {isGm && spellsSubTab === 'campaign' && (
+                <CampaignSpellsTab campaignId={campaignId} />
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { BookOpen } from 'lucide-react';
+import React, { useState } from 'react';
+import { BookOpen, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { SUBCLASS_DATA } from './subclassData/index';
@@ -28,6 +28,9 @@ const CLASS_ACCENT_BORDER = {
 };
 
 export default function SubclassOverview({ className, subclassName, edition }) {
+  const [expanded, setExpanded] = useState({});
+  const toggle = (key) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+
   const edKey = edition === '5.5e' ? '5.5e' : '5e';
   const data = SUBCLASS_DATA[className]?.[edKey]?.[subclassName];
 
@@ -96,12 +99,30 @@ export default function SubclassOverview({ className, subclassName, edition }) {
                   <div className="flex-1 h-px bg-border" />
                 </div>
 
-                {featsAtLevel.map((f, i) => (
-                  <div key={i} className="pl-11 space-y-1.5">
-                    <h3 className={cn('text-base font-semibold', accentText)}>{f.name}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
-                  </div>
-                ))}
+                {featsAtLevel.map((f, i) => {
+                  const key = `${lvl}-${i}`;
+                  const isOpen = !!expanded[key];
+                  return (
+                    <div key={i} className="pl-11">
+                      <button
+                        type="button"
+                        onClick={() => toggle(key)}
+                        aria-expanded={isOpen}
+                        data-testid={`feature-toggle-${f.name}`}
+                        className="w-full text-left flex items-center gap-2 py-1 group"
+                      >
+                        <ChevronRight className={cn(
+                          'w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-150',
+                          isOpen && 'rotate-90',
+                        )} />
+                        <h3 className={cn('text-sm font-semibold group-hover:underline', accentText)}>{f.name}</h3>
+                      </button>
+                      {isOpen && (
+                        <p className="text-sm text-muted-foreground leading-relaxed pl-5 pb-2">{f.description}</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}

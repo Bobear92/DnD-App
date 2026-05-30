@@ -23,8 +23,18 @@ Post this checklist and wait for confirmation if the scope is ambiguous.
 - **Subclass unlock levels**: 5e — Cleric/Sorcerer/Warlock L1, Druid/Wizard L2, all others L3. 2024 — all classes L3.
 - **Section prop routing**: every sheet must handle `section: 'all' | 'stats' | 'features' | 'spells'`. Non-spellcasting sheets return null for `section === 'spells'`.
 - **Creation gating**: HP grid, HitDiceTracker, AC, Speed row are hidden when `creation=true`.
+- **Prepare-caster Spells tab**: Cleric/Druid/Paladin/Ranger (5e + 2024) + Wizard (5e + 2024) use a two-sub-tab layout inside the Spells tab. Use **button-based state switching** (`useState('prepared')`), NOT shadcn `<Tabs>` (avoids nested Radix context bug). "Prepared" sub-tab is the default (read-only reference). "Prepare Spells" sub-tab has the interactive selection UI + lock/unlock + encyclopedia link. Cleric/Druid/Paladin/Ranger use `ClassSpellBrowser`; Wizard uses spellbook chips. Lock state stored in `data.prepared_locked`. Sheets receive `campaignId` and `isGm` props.
+- **SkillPicker race + background props**: every sheet's inline `SkillPicker` (or `SkillProficiencyPicker` in Fighter 5e) accepts both `backgroundSkills = []` (amber, non-clickable) and `raceSkills = []` (emerald, non-clickable). Race skills come from `getRaceGrantedSkills(race, subrace)` in `raceProficienciesData.js` (Keen Senses → Perception for all Elves; Menacing → Intimidation for Half-Orc). Bg vs race priority: a skill in both is amber (bg wins). Skills not in the class's allowed list still render as extra disabled buttons in their respective color after the main list. Two legends appear independently when either array is non-empty. Race skills must also be threaded through to the main sheet's prop signature: `export default function XxxSheet({ ..., backgroundSkills = [], raceSkills = [], ... })`. Sheets that combine `skill_proficiencies` with `expertise` (Bard, Rogue) must dedup race + bg skills into the `pool` array used to filter expertise.
 
-## Step 3 — Edit all 24 sheets
+## Step 3 — Determine scope: shared components vs individual sheets
+
+Some changes affect **shared subclass components** rather than the 24 individual sheets:
+- `SubclassOverview.jsx` — the info dialog (used in ClassOverview + SubclassPickerWithDetail)
+- `SubclassDetails.jsx` — the locked-subclass inline panel (used in all 24 sheets via the `!(readOnly || !!data.subclass)` guard)
+
+If the change is to how subclass features/traits are displayed, edit these two shared files instead of (or in addition to) the 24 sheets. The effect still applies to all 24 sheets since they all render `SubclassDetails` for locked subclasses.
+
+## Step 4 — Edit all 24 sheets (when needed)
 
 Apply the change to each file. Preserve:
 - Class-specific resource trackers (`rages_used`, `ki_used`, `bardic_inspiration_used`, etc.)

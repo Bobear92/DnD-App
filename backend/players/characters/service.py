@@ -1,3 +1,4 @@
+import math
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile, status
 from typing import List
@@ -7,9 +8,10 @@ from players.characters.schemas import (
     CharacterCreate, CharacterUpdate, CharacterGmUpdate,
     CharacterTimelineEventCreate, CharacterTimelineEventResponse,
     CharacterNpcCreate, CharacterNpcResponse,
+    RestRequest, RestResponse, RestResultItem,
 )
 from players.characters.storage import save_character_image, delete_character_image_file
-from gm.campaigns.models import CampaignMember
+from gm.campaigns.models import Campaign, CampaignMember
 from gm.campaigns.campaign_tools.timeline.models import TimelineEvent
 from gm.campaigns.campaign_tools.timeline.service import _compute_era_dates, _resolve_absolute_year
 from gm.campaigns.campaign_tools.npcs.models import NPC, NPCStatus
@@ -425,3 +427,152 @@ def remove_character_npc(db: Session, character_id: int, link_id: int, user_id: 
 
     db.delete(link)
     db.commit()
+
+
+# ── Rest ──────────────────────────────────────────────────────────────────────
+
+_SPELLCASTING_CLASSES = {'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Wizard', 'Artificer'}
+
+
+def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[dict, list]:
+    """Return (character_data_patch, human_readable_changes)."""
+    cd = char.character_data or {}
+    cls = char.char_class
+    level = char.level
+    patch: dict = {}
+    changes: list = []
+
+    if rest_type == 'short':
+        if cls == 'Warlock':
+            patch['pact_slots_used'] = 0
+            changes.append('Pact magic slots recovered')
+        if cls == 'Monk':
+            patch['ki_used'] = 0
+            changes.append('Focus points recovered' if edition == '5.5e' else 'Ki points recovered')
+        if cls == 'Fighter':
+            patch['action_surge_used'] = 0
+            patch['second_wind_used'] = 0
+            changes.append('Action Surge & Second Wind recovered')
+        if cls == 'Bard' and (edition == '5.5e' or level >= 5):
+            patch['bardic_inspiration_used'] = 0
+            changes.append('Bardic Inspiration recovered')
+        if cls in ('Cleric', 'Paladin') and edition == '5.5e':
+            patch['channel_divinity_used'] = 0
+            changes.append('Channel Divinity recovered')
+        if cls == 'Wizard':
+            patch['arcane_recovery_used'] = False
+            changes.append('Arcane Recovery refreshed')
+        if not changes:
+            changes.append('No short rest resources to recover')
+
+    elif rest_type == 'long':
+        hp_max = cd.get('hp_max')
+        if hp_max is not None:
+            patch['current_hp'] = hp_max
+            changes.append(f'HP restored to {hp_max}')
+        patch['temp_hp'] = 0
+
+        hit_dice_used = cd.get('hit_dice_used', 0)
+        recovered_hd = math.ceil(level / 2)
+        patch['hit_dice_used'] = max(0, hit_dice_used - recovered_hd)
+        if hit_dice_used > 0:
+            changes.append(f'Hit dice recovered (up to {recovered_hd})')
+
+        if cls in _SPELLCASTING_CLASSES:
+            spell_slots = cd.get('spell_slots', {})
+            patch['spell_slots'] = {
+                str(sl): {'total': data.get('total', 0), 'used': 0}
+                for sl, data in spell_slots.items()
+                if isinstance(data, dict)
+            }
+            changes.append('Spell slots recovered')
+
+        if cls == 'Barbarian':
+            patch['rages_used'] = 0
+            changes.append('Rages recovered')
+        elif cls == 'Bard':
+            patch['bardic_inspiration_used'] = 0
+            changes.append('Bardic Inspiration recovered')
+        elif cls == 'Cleric':
+            patch['channel_divinity_used'] = 0
+            patch['prepared_locked'] = False
+            changes.append('Channel Divinity recovered, spell preparation unlocked')
+        elif cls == 'Druid':
+            patch['wild_shape_used'] = 0
+            patch['prepared_locked'] = False
+            changes.append('Wild Shape recovered, spell preparation unlocked')
+        elif cls == 'Fighter':
+            patch['second_wind_used'] = 0
+            patch['action_surge_used'] = 0
+            patch['indomitable_used'] = 0
+            changes.append('Action Surge, Second Wind & Indomitable recovered')
+        elif cls == 'Monk':
+            patch['ki_used'] = 0
+            changes.append('Focus points recovered' if edition == '5.5e' else 'Ki points recovered')
+        elif cls == 'Paladin':
+            patch['lay_on_hands_used'] = 0
+            patch['divine_sense_used'] = 0
+            patch['channel_divinity_used'] = 0
+            patch['prepared_locked'] = False
+            changes.append('Lay on Hands, Divine Sense & Channel Divinity recovered, spell preparation unlocked')
+        elif cls == 'Ranger':
+            patch['prepared_locked'] = False
+            changes.append('Spell preparation unlocked')
+        elif cls == 'Sorcerer':
+            patch['sorcery_points_used'] = 0
+            changes.append('Sorcery points recovered')
+            if edition == '5.5e':
+                patch['innate_sorcery_used'] = False
+                changes.append('Innate Sorcery refreshed')
+        elif cls == 'Warlock':
+            patch['pact_slots_used'] = 0
+            changes.append('Pact magic slots recovered')
+            if edition == '5.5e':
+                patch['magical_cunning_used'] = False
+                changes.append('Magical Cunning refreshed')
+        elif cls == 'Wizard':
+            patch['arcane_recovery_used'] = False
+            patch['prepared_locked'] = False
+            changes.append('Arcane Recovery refreshed, spell preparation unlocked')
+            if edition == '5.5e':
+                patch['memorize_spell_used'] = False
+                changes.append('Memorize Spell refreshed')
+        elif cls == 'Artificer':
+            patch['flash_of_genius_used'] = 0
+            patch['prepared_locked'] = False
+            changes.append('Flash of Genius recovered, spell preparation unlocked')
+
+    return patch, changes
+
+
+def apply_rest(
+    db: Session,
+    campaign_id: int,
+    rest_data: RestRequest,
+    user_id: int,
+    is_admin: bool,
+) -> RestResponse:
+    membership = _get_membership(db, campaign_id, user_id)
+    if not membership or (membership.role != 'gm' and not is_admin):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the GM can apply rests")
+
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    characters = db.query(Character).filter(
+        Character.id.in_(rest_data.character_ids),
+        Character.campaign_id == campaign_id,
+    ).all()
+
+    applied_to = []
+    for char in characters:
+        patch, changes = _compute_rest_patch(char, rest_data.rest_type, campaign.edition)
+        if patch:
+            char_data = dict(char.character_data or {})
+            char_data.update(patch)
+            char.character_data = char_data
+        applied_to.append(RestResultItem(character_id=char.id, name=char.name, changes=changes))
+
+    db.commit()
+    return RestResponse(rest_type=rest_data.rest_type, applied_to=applied_to)

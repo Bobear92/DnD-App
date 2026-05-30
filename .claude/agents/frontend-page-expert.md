@@ -197,6 +197,7 @@ When editing any class sheet in `characters/components/` or `characters/componen
 - Rogue skill proficiency: exactly 11 Rogue skills; Rogue Expertise picker uses all 18
 - Spell picker at creation: use `SpellPickerCreation` curated toggle list, NOT free-text `SpellList`
 - Player View = whole-page GM preview toggle; NOT per-item visibility flag
+- **SkillPicker props**: every class sheet's `SkillPicker` accepts `backgroundSkills = []` (amber, non-clickable) and `raceSkills = []` (emerald, non-clickable) — both must be supported. Skills are derived in `CharacterCreate` via `selectedBgObj.skills` and `getRaceGrantedSkills(race, subrace)` from `raceProficienciesData.js`. Sheets must thread `raceSkills` through their main export signature and pass it to the picker. Sheets that combine `skill_proficiencies` with `expertise` (Bard, Rogue) must include `...raceSkills` in the dedup `pool` used to filter expertise.
 
 ## Preserved Intent Rule
 **Never re-introduce a feature the user has explicitly removed** — if something is deliberately absent from the codebase, do not add it back without explicit confirmation from the user.
@@ -211,18 +212,26 @@ Always:
 
 ## Encyclopedia Module Patterns
 The encyclopedia lives at `frontend/src/encyclopedia/`:
+- `data/skillsData.js` — static reference data (e.g. the 18 5e skills). Pattern: pure JS module exporting a `SKILLS` array, by-name index, full-ability-name map, and a color helper. No API, no service, no edition/campaign variance. Use this pattern for any future static reference data (conditions, damage types, languages, etc.)
 - `encyclopediaService.js` — service for all spell CRUD calls (getSpells, getSpell, createSpell, updateSpell, deleteSpell); uses the same axios + JWT interceptor pattern as other services
-- `EncyclopediaPage.jsx` — multi-tab host: Classes | Spells | Campaign Spells (GM only); tab bar at top; edition toggle only visible on Classes tab
+- `EncyclopediaPage.jsx` — multi-tab host: Classes | Skills | Spells | Campaign Spells (GM only); tab bar at top; edition toggle only visible on Classes tab
+- `SkillsTab.jsx` — two-pane static browser (sidebar list with search + ability filter, detail panel with header bar/description/example checks); no API; first skill auto-selected on mount
 - `SpellsTab.jsx` — shows all spells (system + campaign-scoped), school/level/search filters, detail dialog on row click; GM sees Override and Edit Override buttons
 - `CampaignSpellsTab.jsx` — GM-only; shows only campaign-owned spells (`owner_type === 'campaign'`); New Homebrew + Edit + Delete buttons
 - `SpellEditPage.jsx` — dedicated edit/create page at `/campaigns/:campaignId/encyclopedia/spells/:spellId`; `isNew = spellId === 'new'`; always sets `owner_type: 'campaign', owner_id: parseInt(campaignId)` on create
 
 **Override pattern:** When a GM overrides a system spell, `createSpell` is called with `{ ...spell, owner_type: 'campaign', owner_id: campaignId }`. The backend merges: campaign entries shadow system entries of the same name when queried with `?campaign_id=X`.
 
+**Static-data tab pattern** (Skills, future Conditions/Languages/etc.):
+- Put the data in `encyclopedia/data/<topic>Data.js` as a plain JS module — no API client, no service.
+- The tab component is a pure client component: no `useEffect` fetch, no loading state, no campaignId prop required.
+- Tests don't need to mock any service; just render and click. Spot-check at least one skill's content + the data array's length/integrity.
+
 **Tab architecture pattern** (reuse for future Encyclopedia tabs):
 ```jsx
 const TABS = [
   { id: 'classes', label: 'Classes' },
+  { id: 'skills', label: 'Skills' },
   { id: 'spells', label: 'Spells' },
   { id: 'new-tab', label: 'New Tab', gmOnly: true },  // gmOnly hides from players
 ];

@@ -39,6 +39,10 @@ vi.mock('./CampaignSpellsTab', () => ({
   ),
 }));
 
+vi.mock('./SkillsTab', () => ({
+  default: () => <div data-testid="skills-tab">SkillsTab</div>,
+}));
+
 import classService from '../../characters/classService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 
@@ -86,9 +90,9 @@ describe('EncyclopediaPage', () => {
     expect(screen.getByText(/Choose a class from the list/)).toBeInTheDocument();
   });
 
-  it('renders all 12 classes in the list', () => {
+  it('renders all 13 classes in the list', () => {
     renderPage();
-    const classes = ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk',
+    const classes = ['Artificer', 'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk',
       'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard'];
     classes.forEach(cls => expect(screen.getByText(cls)).toBeInTheDocument());
   });
@@ -181,19 +185,67 @@ describe('EncyclopediaPage', () => {
     expect(screen.queryByRole('button', { name: '5e' })).not.toBeInTheDocument();
   });
 
-  it('shows Campaign Spells tab for GM', () => {
+  it('does NOT show Campaign Spells as a top-level tab', () => {
     renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'gm' });
+    // Campaign Spells is now a sub-tab inside Spells, not a top-level tab
+    const topTabs = screen.getAllByRole('button').filter((b) =>
+      ['Classes', 'Skills', 'Spells', 'Campaign Spells'].includes(b.textContent)
+    );
+    expect(topTabs.map((b) => b.textContent)).toEqual(['Classes', 'Skills', 'Spells']);
+  });
+
+  it('shows System / Campaign sub-tabs inside Spells for GM', async () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'gm' });
+    fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+    await waitFor(() => expect(screen.getByTestId('spells-tab')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'System Spells' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Campaign Spells' })).toBeInTheDocument();
   });
 
-  it('hides Campaign Spells tab for player', () => {
+  it('hides Spells sub-tabs for player and only shows SpellsTab', async () => {
     renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'player' });
+    fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+    await waitFor(() => expect(screen.getByTestId('spells-tab')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'System Spells' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Campaign Spells' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('campaign-spells-tab')).not.toBeInTheDocument();
   });
 
-  it('clicking Campaign Spells tab shows CampaignSpellsTab', async () => {
+  it('clicking Campaign Spells sub-tab swaps SpellsTab for CampaignSpellsTab', async () => {
     renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'gm' });
+    fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+    await waitFor(() => expect(screen.getByTestId('spells-tab')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Campaign Spells' }));
     await waitFor(() => expect(screen.getByTestId('campaign-spells-tab')).toBeInTheDocument());
+    expect(screen.queryByTestId('spells-tab')).not.toBeInTheDocument();
+  });
+
+  it('Spells sub-tab defaults to System Spells', async () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'gm' });
+    fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+    await waitFor(() => expect(screen.getByTestId('spells-tab')).toBeInTheDocument());
+    expect(screen.queryByTestId('campaign-spells-tab')).not.toBeInTheDocument();
+  });
+
+  it('renders a Skills tab button', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: 'Skills' })).toBeInTheDocument();
+  });
+
+  it('shows Skills tab to players (not GM-only)', () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'player' });
+    expect(screen.getByRole('button', { name: 'Skills' })).toBeInTheDocument();
+  });
+
+  it('clicking Skills tab shows SkillsTab component', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    await waitFor(() => expect(screen.getByTestId('skills-tab')).toBeInTheDocument());
+  });
+
+  it('hides edition toggle when Skills tab is active', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    expect(screen.queryByRole('button', { name: '5e' })).not.toBeInTheDocument();
   });
 });

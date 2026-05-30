@@ -155,6 +155,20 @@ const characterService = {
       return { success: false, error: error.response?.data?.detail || 'Failed to remove NPC' };
     }
   },
+
+  // ── Rest ───────────────────────────────────────────────────────────────────
+
+  applyRest: async (campaignId, restType, characterIds) => {
+    try {
+      const response = await api.post(`/campaign/${campaignId}/rest`, {
+        rest_type: restType,
+        character_ids: characterIds,
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to apply rest' };
+    }
+  },
 };
 
 export default characterService;

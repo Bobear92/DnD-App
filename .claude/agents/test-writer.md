@@ -319,7 +319,28 @@ class TestSpellFields:
         assert items[0]["new_field"] == "value"
 ```
 
-## Encyclopedia Frontend Tests (SpellsTab, CampaignSpellsTab, SpellEditPage)
+## Encyclopedia Frontend Tests (SkillsTab, SpellsTab, CampaignSpellsTab, SpellEditPage)
+
+### Static-data tab tests (SkillsTab pattern)
+Tabs backed by a pure JS data module (e.g. `encyclopedia/data/skillsData.js`) don't need any service mocks. Tests just render and click:
+
+```jsx
+import SkillsTab from './SkillsTab';
+import { SKILLS } from '../data/skillsData';
+
+// No vi.mock needed — no API client. data-testids follow:
+//   skill-search, ability-filter-{STR|DEX|CON|INT|WIS|CHA|All}, skill-row-{Name}, skill-detail
+//
+// Cover at minimum:
+//   1. all rows render (loop SKILLS)
+//   2. data integrity (array length, every item has required fields, abilities covered)
+//   3. detail panel content for the selected row
+//   4. search filter (incl. case-insensitive) + ability filter (toggle + reset via "All")
+//   5. empty state when filters match nothing
+//   6. combined filters
+```
+
+### Spell-CRUD tab tests (SpellsTab, CampaignSpellsTab, SpellEditPage)
 Key patterns for encyclopedia component tests:
 
 ```jsx

@@ -13,7 +13,12 @@ vi.mock('react-router-dom', async () => ({
   useNavigate: () => mockNavigate,
 }));
 vi.mock('../characterService', () => ({
-  default: { getCharactersByCampaign: vi.fn(), toggleVisibility: vi.fn(), deleteCharacter: vi.fn() },
+  default: {
+    getCharactersByCampaign: vi.fn(),
+    toggleVisibility: vi.fn(),
+    deleteCharacter: vi.fn(),
+    applyRest: vi.fn(),
+  },
 }));
 
 const mockNavigate = vi.fn();
@@ -23,19 +28,19 @@ import { useAuth } from '../../auth/AuthContext';
 import characterService from '../characterService';
 import CharacterList from './CharacterList';
 
-const GM_CAMPAIGN = { id: 5, name: 'Test Campaign', userRole: 'gm' };
-const PLAYER_CAMPAIGN = { id: 5, name: 'Test Campaign', userRole: 'player' };
+const GM_CAMPAIGN = { id: 5, name: 'Test Campaign', userRole: 'gm', edition: '5e' };
+const PLAYER_CAMPAIGN = { id: 5, name: 'Test Campaign', userRole: 'player', edition: '5e' };
 
 const CHARACTERS = [
   {
     id: 1, name: 'Arathorn', race: 'Human', char_class: 'Fighter', level: 5,
     strength: 16, dexterity: 12, constitution: 14, intelligence: 10, wisdom: 10, charisma: 8,
-    is_visible_to_players: true,
+    is_visible_to_players: true, user_id: 2,
   },
   {
     id: 2, name: 'Mia Silverleaf', race: 'Elf', char_class: 'Wizard', level: 3,
     strength: 8, dexterity: 16, constitution: 12, intelligence: 18, wisdom: 12, charisma: 14,
-    is_visible_to_players: false,
+    is_visible_to_players: false, user_id: 3,
   },
 ];
 
@@ -162,5 +167,148 @@ describe('CharacterList — player view', () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));
     expect(screen.queryByTitle(/Visible to players|Hidden from players/)).toBeNull();
+  });
+});
+
+// ── Rest feature ──────────────────────────────────────────────────────────────
+
+describe('CharacterList — rest buttons (GM view)', () => {
+  beforeEach(() => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: CHARACTERS });
+  });
+
+  it('shows Short Rest and Long Rest buttons for GM', async () => {
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    expect(screen.getByTestId('short-rest-btn')).toBeTruthy();
+    expect(screen.getByTestId('long-rest-btn')).toBeTruthy();
+  });
+
+  it('rest buttons are disabled when no characters are selected', async () => {
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    expect(screen.getByTestId('short-rest-btn')).toBeDisabled();
+    expect(screen.getByTestId('long-rest-btn')).toBeDisabled();
+  });
+
+  it('rest buttons are enabled after selecting a character', async () => {
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    expect(screen.getByTestId('short-rest-btn')).not.toBeDisabled();
+    expect(screen.getByTestId('long-rest-btn')).not.toBeDisabled();
+  });
+
+  it('shows checkboxes on each character card in GM view', async () => {
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    expect(screen.getByTestId('char-checkbox-1')).toBeTruthy();
+    expect(screen.getByTestId('char-checkbox-2')).toBeTruthy();
+  });
+
+  it('Select All selects all characters', async () => {
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('select-all-btn'));
+    expect(screen.getByTestId('char-checkbox-1')).toBeChecked();
+    expect(screen.getByTestId('char-checkbox-2')).toBeChecked();
+  });
+
+  it('Select All then Deselect All clears selection', async () => {
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('select-all-btn'));
+    fireEvent.click(screen.getByTestId('select-all-btn'));
+    expect(screen.getByTestId('char-checkbox-1')).not.toBeChecked();
+  });
+
+  it('clicking Short Rest opens the confirmation dialog', async () => {
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('short-rest-btn'));
+    await waitFor(() => expect(screen.getByText(/Apply a short rest/i)).toBeTruthy());
+    expect(screen.getByTestId('confirm-rest-btn')).toBeTruthy();
+  });
+
+  it('clicking Long Rest opens the confirmation dialog', async () => {
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => expect(screen.getByText(/Apply a long rest/i)).toBeTruthy());
+    expect(screen.getByTestId('confirm-rest-btn')).toBeTruthy();
+  });
+
+  it('confirmation dialog shows selected character names', async () => {
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('short-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a short rest/i));
+    expect(screen.getAllByText('Arathorn').length).toBeGreaterThan(0);
+  });
+
+  it('confirms short rest: calls applyRest and reloads', async () => {
+    characterService.applyRest.mockResolvedValue({ success: true, data: { rest_type: 'short', applied_to: [] } });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('short-rest-btn'));
+    await waitFor(() => screen.getByTestId('confirm-rest-btn'));
+    fireEvent.click(screen.getByTestId('confirm-rest-btn'));
+    await waitFor(() => expect(characterService.applyRest).toHaveBeenCalledWith('5', 'short', [1]));
+    await waitFor(() => expect(characterService.getCharactersByCampaign).toHaveBeenCalledTimes(2));
+  });
+
+  it('confirms long rest: calls applyRest with correct rest_type', async () => {
+    characterService.applyRest.mockResolvedValue({ success: true, data: { rest_type: 'long', applied_to: [] } });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('select-all-btn'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByTestId('confirm-rest-btn'));
+    fireEvent.click(screen.getByTestId('confirm-rest-btn'));
+    await waitFor(() => expect(characterService.applyRest).toHaveBeenCalledWith('5', 'long', [1, 2]));
+  });
+
+  it('cancelling the dialog does not call applyRest', async () => {
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('short-rest-btn'));
+    await waitFor(() => screen.getByText('Cancel'));
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(characterService.applyRest).not.toHaveBeenCalled();
+  });
+});
+
+describe('CharacterList — rest buttons hidden in player/non-GM view', () => {
+  it('does not show rest buttons for players', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: CHARACTERS });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    expect(screen.queryByTestId('short-rest-btn')).toBeNull();
+    expect(screen.queryByTestId('long-rest-btn')).toBeNull();
+  });
+
+  it('does not show rest buttons when GM switches to Player View', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: CHARACTERS });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    // Switch to Player View
+    fireEvent.click(screen.getByText('Player View'));
+    expect(screen.queryByTestId('short-rest-btn')).toBeNull();
+  });
+
+  it('does not show checkboxes for players', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: CHARACTERS });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    expect(screen.queryByTestId('char-checkbox-1')).toBeNull();
   });
 });
