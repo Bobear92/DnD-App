@@ -14,6 +14,17 @@
             "statusMessage": "Running npm test..."
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "cd c:/Users/rober/Documents/Projects/dnd-app && export L=$(wc -l < CLAUDE.md); if [ \"$L\" -gt 1500 ]; then node -e \"process.stdout.write(JSON.stringify({systemMessage:'CLAUDE.md is '+process.env.L+' lines (over the 1500 ceiling). It loads into context every turn. Before growing it, trim per-component UI prose already covered by tests (see Efficiency tripwires / context-bloat signal). This is advisory, not blocking.'}))\"; fi",
+            "timeout": 15,
+            "statusMessage": "Checking CLAUDE.md size..."
+          }
+        ]
       }
     ]
   }
