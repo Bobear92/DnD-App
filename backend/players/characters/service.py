@@ -11,6 +11,7 @@ from players.characters.schemas import (
     RestRequest, RestResponse, RestResultItem,
 )
 from players.characters.storage import save_character_image, delete_character_image_file
+from shared.music_storage import save_music_file, delete_music_file
 from gm.campaigns.models import Campaign, CampaignMember
 from gm.campaigns.campaign_tools.timeline.models import TimelineEvent
 from gm.campaigns.campaign_tools.timeline.service import _compute_era_dates, _resolve_absolute_year
@@ -226,6 +227,36 @@ def delete_character_image(db: Session, character_id: int, user_id: int, is_admi
     if character.image_path:
         delete_character_image_file(character.image_path)
         character.image_path = None
+        db.commit()
+        db.refresh(character)
+    return _strip_private_fields(character, is_gm, is_owner)
+
+
+# ── Character theme music ─────────────────────────────────────────────────────
+
+async def upload_character_music(db: Session, character_id: int, file: UploadFile, user_id: int, is_admin: bool) -> Character:
+    character, _, is_gm, is_owner = _resolve_character_and_access(db, character_id, user_id, is_admin)
+
+    if not (is_gm or is_owner):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the character owner or GM can upload music")
+
+    delete_music_file(character.theme_music_url)
+
+    character.theme_music_url = await save_music_file(file, f"characters/{character_id}")
+    db.commit()
+    db.refresh(character)
+    return _strip_private_fields(character, is_gm, is_owner)
+
+
+def delete_character_music(db: Session, character_id: int, user_id: int, is_admin: bool) -> Character:
+    character, _, is_gm, is_owner = _resolve_character_and_access(db, character_id, user_id, is_admin)
+
+    if not (is_gm or is_owner):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the character owner or GM can delete music")
+
+    if character.theme_music_url:
+        delete_music_file(character.theme_music_url)
+        character.theme_music_url = None
         db.commit()
         db.refresh(character)
     return _strip_private_fields(character, is_gm, is_owner)

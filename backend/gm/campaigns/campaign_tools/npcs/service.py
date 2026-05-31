@@ -10,6 +10,7 @@ from .schemas import (
     NPCPlayerRelationshipCreate, NPCPlayerRelationshipResponse,
 )
 from .storage import save_npc_image, delete_npc_image
+from shared.music_storage import save_music_file, delete_music_file
 from gm.campaigns.models import CampaignMember
 from auth.models import User
 
@@ -180,6 +181,33 @@ def delete_npc_image_endpoint(db: Session, npc_id: int, current_user_id: int) ->
     if npc.image_path:
         delete_npc_image(npc.image_path)
         npc.image_path = None
+        db.commit()
+        db.refresh(npc)
+
+    return npc
+
+
+# ── Theme music upload ───────────────────────────────────────────────────────
+
+async def upload_npc_music(db: Session, npc_id: int, file: UploadFile, current_user_id: int) -> NPC:
+    npc = _get_npc_or_404(db, npc_id)
+    _require_gm(db, npc.campaign_id, current_user_id)
+
+    delete_music_file(npc.theme_music_url)
+
+    npc.theme_music_url = await save_music_file(file, f"npcs/{npc.campaign_id}/{npc_id}")
+    db.commit()
+    db.refresh(npc)
+    return npc
+
+
+def delete_npc_music_endpoint(db: Session, npc_id: int, current_user_id: int) -> NPC:
+    npc = _get_npc_or_404(db, npc_id)
+    _require_gm(db, npc.campaign_id, current_user_id)
+
+    if npc.theme_music_url:
+        delete_music_file(npc.theme_music_url)
+        npc.theme_music_url = None
         db.commit()
         db.refresh(npc)
 

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { Plus, X } from 'lucide-react';
 import { useCampaign } from '@/campaigns/CampaignContext';
@@ -44,7 +44,8 @@ async function fetchSpellCatalog(campaignId) {
  *   label            string      section heading
  *   placeholder      string      add-input placeholder text
  *   isCantrips       boolean     if true, skip API level lookup (always shown as Cantrips section)
- *   onCastSpell      (name, level)=>void  if provided, shows a Cast button per non-cantrip spell
+ *   onCastSpell      (name, level)=>void  if provided, shows a Cast button per non-cantrip spell;
+ *                                          clicking Cast opens a confirm dialog before firing this callback
  *   availableSlots   { [level]: number }  slots remaining per level; disables Cast when 0
  */
 export default function SpellList({
@@ -63,12 +64,17 @@ export default function SpellList({
   const [catalog, setCatalog] = useState([]);
   const [detail, setDetail] = useState(null);
   const [newValue, setNewValue] = useState('');
+  // Pending cast awaiting confirmation: { name, level } or null
+  const [castConfirm, setCastConfirm] = useState(null);
 
+  // Fetch the catalog regardless of isCantrips: cantrip grouping doesn't need it
+  // (cantrips are forced to level 0), but the detail dialog does — without it,
+  // clicking any cantrip shows the "not in compendium" fallback.
   useEffect(() => {
-    if (!isCantrips && campaignId) {
+    if (campaignId) {
       fetchSpellCatalog(campaignId).then(setCatalog).catch(() => {});
     }
-  }, [campaignId, isCantrips]);
+  }, [campaignId]);
 
   const spellMap = {};
   catalog.forEach(s => { spellMap[s.name] = s; });
@@ -143,7 +149,7 @@ export default function SpellList({
                           type="button"
                           data-testid={`cast-spell-${name}`}
                           disabled={castDisabled}
-                          onClick={() => !castDisabled && onCastSpell(name, lvl)}
+                          onClick={() => !castDisabled && setCastConfirm({ name, level: lvl })}
                           title={castDisabled ? 'No spell slots remaining at this level' : `Cast using a level ${lvl} slot`}
                           className={`text-xs px-2 py-0.5 rounded border transition-colors ${
                             castDisabled
@@ -187,6 +193,37 @@ export default function SpellList({
           </Button>
         </div>
       )}
+
+      <Dialog open={!!castConfirm} onOpenChange={open => !open && setCastConfirm(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cast {castConfirm?.name}?</DialogTitle>
+            <DialogDescription>
+              This will use a level {castConfirm?.level} spell slot.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="cast-cancel-button"
+              onClick={() => setCastConfirm(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              data-testid="cast-confirm-button"
+              onClick={() => {
+                if (castConfirm) onCastSpell?.(castConfirm.name, castConfirm.level);
+                setCastConfirm(null);
+              }}
+            >
+              Cast
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!detail} onOpenChange={open => !open && setDetail(null)}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">

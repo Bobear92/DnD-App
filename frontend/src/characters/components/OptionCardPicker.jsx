@@ -7,6 +7,10 @@ import { cn } from '@/lib/utils';
  * Each option shows its name and a one-sentence description so players
  * understand what they're selecting before committing.
  *
+ * Clicking the already-selected card deselects it (onChange('')) so the user can
+ * clear their choice and compare the other options — important during character
+ * creation where a subclass pick is not yet permanent.
+ *
  * Props:
  *   options:       Array of { value: string, description: string }
  *   value:         currently selected value (string)
@@ -28,7 +32,7 @@ export default function OptionCardPicker({ options, value, onChange, onDetailCli
         >
           <button
             type="button"
-            onClick={() => onChange(opt.value)}
+            onClick={() => onChange(value === opt.value ? '' : opt.value)}
             className="w-full text-left px-3 py-2.5"
           >
             <div className="flex items-start justify-between gap-2">

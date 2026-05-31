@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import npcService, { mapNpcImageUrl } from '../npcService';
+import MusicPlayer from '../../shared/components/MusicPlayer';
 import locationService from '../../locations/locationService';
 import sessionService from '../../sessions/sessionService';
 import { Button } from '@/components/ui/button';
@@ -142,6 +143,8 @@ export default function NPCDetail() {
   const [uploadError, setUploadError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
+  const [musicUploading, setMusicUploading] = useState(false);
+  const musicInputRef = useRef(null);
 
   // NPC relationship dialog
   const [showAddRel, setShowAddRel] = useState(false);
@@ -265,6 +268,40 @@ export default function NPCDetail() {
       setUploadError(err.response?.data?.detail || 'Failed to remove image.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  // Theme music handlers
+  const handleMusicFile = async (file) => {
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) {
+      setUploadError('Audio must be under 50 MB.');
+      return;
+    }
+    setMusicUploading(true);
+    setUploadError('');
+    try {
+      const updated = await npcService.uploadMusic(npcId, file);
+      setNpc(updated);
+      setEditForm(toEditForm(updated));
+    } catch (err) {
+      setUploadError(err.response?.data?.detail || 'Music upload failed.');
+    } finally {
+      setMusicUploading(false);
+    }
+  };
+
+  const handleRemoveMusic = async () => {
+    setMusicUploading(true);
+    setUploadError('');
+    try {
+      const updated = await npcService.deleteMusic(npcId);
+      setNpc(updated);
+      setEditForm(toEditForm(updated));
+    } catch (err) {
+      setUploadError(err.response?.data?.detail || 'Failed to remove music.');
+    } finally {
+      setMusicUploading(false);
     }
   };
 
@@ -562,15 +599,6 @@ export default function NPCDetail() {
                 {npc.alignment && <ReadOnlyField label="Alignment" value={npc.alignment} />}
                 {npc.gender && <ReadOnlyField label="Gender" value={npc.gender} />}
                 {npc.age && <ReadOnlyField label="Age" value={npc.age} />}
-                {npc.theme_music_url && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-0.5">Theme Music</p>
-                    <a href={npc.theme_music_url} target="_blank" rel="noopener noreferrer"
-                      className="text-sm text-primary hover:underline flex items-center gap-1">
-                      <Music className="w-3.5 h-3.5" /> Listen
-                    </a>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="space-y-3">
@@ -866,11 +894,10 @@ export default function NPCDetail() {
                       })()}
                       {npc.theme_music_url && (
                         <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-0.5">Theme Music</p>
-                          <a href={npc.theme_music_url} target="_blank" rel="noopener noreferrer"
-                            className="text-sm text-primary hover:underline flex items-center gap-1">
-                            <Music className="w-3.5 h-3.5" /> Listen <ExternalLink className="w-3 h-3" />
-                          </a>
+                          <p className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                            <Music className="w-3.5 h-3.5" /> Theme Music
+                          </p>
+                          <MusicPlayer src={npc.theme_music_url} />
                         </div>
                       )}
                     </div>
@@ -901,13 +928,33 @@ export default function NPCDetail() {
                           placeholder="e.g. Spotted near the docks, heading east…"
                         />
                       </div>
-                      <div className="space-y-1">
-                        <Label>Theme Music URL</Label>
+                      <div className="space-y-2">
+                        <Label>Theme Music</Label>
                         <Input
                           value={editForm.theme_music_url || ''}
                           onChange={e => setField('theme_music_url', e.target.value)}
-                          placeholder="https://…"
+                          placeholder="Paste a Spotify, YouTube, or audio link…"
                         />
+                        <div className="flex items-center gap-2">
+                          <input
+                            ref={musicInputRef}
+                            type="file"
+                            accept="audio/*,video/mp4,.mp3,.ogg,.wav,.m4a,.aac,.flac,.mp4,.webm"
+                            className="hidden"
+                            onChange={e => { handleMusicFile(e.target.files?.[0]); e.target.value = ''; }}
+                          />
+                          <Button type="button" variant="outline" size="sm"
+                            onClick={() => musicInputRef.current?.click()} disabled={musicUploading}>
+                            <Upload className="w-4 h-4 mr-1" />
+                            {musicUploading ? 'Uploading…' : 'Upload audio'}
+                          </Button>
+                          {npc.theme_music_url && (
+                            <Button type="button" variant="ghost" size="sm" onClick={handleRemoveMusic}>
+                              <X className="w-4 h-4 mr-1" /> Remove
+                            </Button>
+                          )}
+                        </div>
+                        {npc.theme_music_url && <MusicPlayer src={npc.theme_music_url} />}
                       </div>
                       {renderSectionActions(LOCATION_KEYS)}
                     </>

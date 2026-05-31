@@ -11,6 +11,8 @@ import SubclassDetails from '../SubclassDetails';
 import { SORCERER_SUBCLASSES_2024 as SUBCLASSES } from '../classChoicesData';
 import HitDiceTracker from '../HitDiceTracker';
 import { CLASS_FEATURES_2024 } from '../classFeatures2024';
+import DraconicAncestorPicker from '../DraconicAncestorPicker';
+import { isDraconicSorcerer } from '../combatBonuses';
 
 const METAMAGIC_OPTIONS = [
   'Careful Spell', 'Distant Spell', 'Empowered Spell',
@@ -37,6 +39,63 @@ function metamagicCount(level) {
   if (level >= 10) return 3;
   if (level >= 3)  return 2;
   return 0;
+}
+
+const SORCERER_CANTRIPS_2024 = [
+  'Acid Splash', 'Blade Ward', 'Chill Touch', 'Dancing Lights', 'Elementalism',
+  'Fire Bolt', 'Friends', 'Light', 'Mage Hand', 'Mending', 'Message', 'Minor Illusion',
+  'Poison Spray', 'Prestidigitation', 'Ray of Frost', 'Shocking Grasp', 'Sorcerous Burst', 'True Strike',
+];
+
+const SORCERER_SPELLS_L1_2024 = [
+  'Burning Hands', 'Charm Person', 'Chromatic Orb', 'Color Spray',
+  'Comprehend Languages', 'Detect Magic', 'Disguise Self', 'Expeditious Retreat',
+  'False Life', 'Feather Fall', 'Fog Cloud', 'Grease', 'Jump', 'Mage Armor', 'Magic Missile',
+  'Ray of Sickness', 'Shield', 'Silent Image', 'Sleep', 'Thunderwave', 'Witch Bolt',
+];
+
+function SpellPickerCreation({ label, limit, options, selected, onChange, raceGrantedSpells = [] }) {
+  const toggle = (spell) => {
+    if (raceGrantedSpells.includes(spell)) return;
+    if (selected.includes(spell)) onChange(selected.filter(s => s !== spell));
+    else if (selected.length < limit) onChange([...selected, spell]);
+  };
+  const extraRaceSpells = raceGrantedSpells.filter(s => !options.includes(s));
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground">{label}</Label>
+        <span className="text-xs text-muted-foreground">{selected.length}/{limit} chosen</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(spell => {
+          const isRace = raceGrantedSpells.includes(spell);
+          const isSel  = selected.includes(spell);
+          return (
+            <button key={spell} type="button" onClick={() => toggle(spell)}
+              className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                isRace
+                  ? 'bg-violet-100 text-violet-800 border-violet-400 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-600 cursor-not-allowed'
+                  : isSel
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-muted border-border text-muted-foreground'
+              } ${!isRace && !isSel && selected.length >= limit ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              {spell}
+            </button>
+          );
+        })}
+        {extraRaceSpells.map(spell => (
+          <button key={spell} type="button" disabled
+            className="text-xs px-2 py-1 rounded-full border bg-violet-100 text-violet-800 border-violet-400 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-600 cursor-not-allowed">
+            {spell}
+          </button>
+        ))}
+      </div>
+      {raceGrantedSpells.length > 0 && (
+        <p className="text-xs text-violet-700 dark:text-violet-400">Violet = already granted by your race or subrace</p>
+      )}
+    </div>
+  );
 }
 
 function SkillPicker({ value, onChange, max, backgroundSkills = [], raceSkills = [] }) {
@@ -96,7 +155,7 @@ function SkillPicker({ value, onChange, max, backgroundSkills = [], raceSkills =
   );
 }
 
-export default function SorcererSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all' }) {
+export default function SorcererSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], raceGrantedCantrips = [], section = 'all', acExtra = null, maxHpNode = null }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
@@ -126,7 +185,7 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Max HP">
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{maxHpNode ?? (data.hp_max ?? '—')}</div>
         </Field>
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -148,6 +207,8 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       )}
+
+      {showCombat && acExtra}
 
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
@@ -184,7 +245,7 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
       {/* Subclass (L3 in 2024) */}
       {level >= 3 && showFeatures && (
         <Field label="Sorcerous Origin (Subclass)">
-          {(readOnly || !!data.subclass) ? (
+          {(readOnly || (!creation && !!data.subclass)) ? (
             data.subclass ? (
               <SubclassDetails className="Sorcerer" edition="5.5e" subclassName={data.subclass} level={level} />
             ) : (
@@ -200,6 +261,14 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
             />
           )}
         </Field>
+      )}
+
+      {showFeatures && isDraconicSorcerer('Sorcerer', data.subclass) && (
+        <DraconicAncestorPicker
+          value={data.draconic_bloodline ?? null}
+          onChange={v => set('draconic_bloodline', v)}
+          readOnly={readOnly || (!creation && !!data.draconic_bloodline)}
+        />
       )}
 
       {/* Metamagic picker (L3+) */}
@@ -232,12 +301,27 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
 
       {/* Spell Slots — static info during creation, tracker during play */}
       {creation && (
-        <div className="rounded-md border px-3 py-2 space-y-1">
-          <Label className="text-xs text-muted-foreground">Spellcasting at Level 1</Label>
-          <div className="text-sm font-medium">2 leveled spells known</div>
-          <div className="text-sm font-medium">2 × Level 1 spell slots</div>
-          <div className="text-sm font-medium">4 cantrips known</div>
-          <div className="text-xs text-muted-foreground">All slots recover on a Long Rest · Spells and cantrips chosen in CharacterDetail</div>
+        <div className="space-y-3">
+          <div className="rounded-md border px-3 py-2 space-y-1">
+            <Label className="text-xs text-muted-foreground">Spell Slots at Level 1</Label>
+            <div className="text-sm font-medium">2 × Level 1 spell slots</div>
+            <div className="text-xs text-muted-foreground">All slots recover on a Long Rest · Sorcerers learn a fixed set of spells — choose carefully</div>
+          </div>
+          <SpellPickerCreation
+            label="Cantrips Known (choose 4)"
+            limit={4}
+            options={SORCERER_CANTRIPS_2024}
+            selected={data.cantrips ?? []}
+            onChange={v => set('cantrips', v)}
+            raceGrantedSpells={raceGrantedCantrips}
+          />
+          <SpellPickerCreation
+            label="Spells Known at Level 1 (choose 2)"
+            limit={2}
+            options={SORCERER_SPELLS_L1_2024}
+            selected={data.known_spells ?? []}
+            onChange={v => set('known_spells', v)}
+          />
         </div>
       )}
       {!creation && sorceryPointsTotal > 0 && (section === 'all' || section === 'spells') && (

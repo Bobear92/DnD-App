@@ -111,6 +111,29 @@ def delete_image(
     service.delete_image(db, campaign_id, session_id, filename, current_user.id)
 
 
+# ── Music ─────────────────────────────────────────────────────────────────────
+
+@router.post("/{session_id}/music", response_model=SessionNoteResponse)
+async def upload_music(
+    campaign_id: int,
+    session_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await service.upload_music(db, campaign_id, session_id, file, current_user.id)
+
+
+@router.delete("/{session_id}/music", response_model=SessionNoteResponse)
+def delete_music(
+    campaign_id: int,
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.delete_music(db, campaign_id, session_id, current_user.id)
+
+
 # ── NPC links ─────────────────────────────────────────────────────────────────
 
 @router.get("/{session_id}/npcs", response_model=List[SessionNoteNPCResponse])

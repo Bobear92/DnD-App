@@ -50,11 +50,80 @@ describe('RacialResourceTracker', () => {
     expect(screen.getByText('0/1')).toBeInTheDocument();
   });
 
-  it('expends a use via the + button', () => {
+  it('expends a use via the Use button after confirming', () => {
     const onChange = vi.fn();
     render(<RacialResourceTracker traits={['Relentless Endurance']} level={5} data={{}} onChange={onChange} />);
     fireEvent.click(screen.getByLabelText('Use Relentless Endurance'));
+    // clicking Use does not expend immediately — it opens a confirmation dialog
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('racial-use-confirm-button'));
     expect(onChange).toHaveBeenCalledWith({ relentless_endurance_used: 1 });
+  });
+
+  it('does not expend when the confirmation is cancelled', () => {
+    const onChange = vi.fn();
+    render(<RacialResourceTracker traits={['Relentless Endurance']} level={5} data={{}} onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText('Use Relentless Endurance'));
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('confirmation tells the player Breath Weapon recharges on a short or long rest', () => {
+    render(<RacialResourceTracker traits={['Breath Weapon']} level={1} data={{}} onChange={() => {}} />);
+    fireEvent.click(screen.getByLabelText('Use Breath Weapon'));
+    expect(screen.getByText(/available again after a short or long rest/i)).toBeInTheDocument();
+  });
+
+  it('confirmation tells the player Relentless Endurance recharges on a long rest', () => {
+    render(<RacialResourceTracker traits={['Relentless Endurance']} level={5} data={{}} onChange={() => {}} />);
+    fireEvent.click(screen.getByLabelText('Use Relentless Endurance'));
+    expect(screen.getByText(/available again after a long rest/i)).toBeInTheDocument();
+  });
+
+  it('disables the Use button when no uses remain', () => {
+    render(<RacialResourceTracker traits={['Relentless Endurance']} level={5} data={{ relentless_endurance_used: 1 }} onChange={() => {}} />);
+    expect(screen.getByLabelText('Use Relentless Endurance')).toBeDisabled();
+  });
+
+  it('filters resources via includeKeys', () => {
+    render(
+      <RacialResourceTracker
+        traits={['Breath Weapon', 'Drow Magic']}
+        level={5}
+        data={{}}
+        onChange={() => {}}
+        includeKeys={['breath_weapon_used']}
+      />
+    );
+    expect(screen.getByText('Breath Weapon')).toBeInTheDocument();
+    expect(screen.queryByText('Faerie Fire')).not.toBeInTheDocument();
+  });
+
+  it('filters resources via excludeKeys', () => {
+    render(
+      <RacialResourceTracker
+        traits={['Breath Weapon', 'Drow Magic']}
+        level={5}
+        data={{}}
+        onChange={() => {}}
+        excludeKeys={['breath_weapon_used']}
+      />
+    );
+    expect(screen.queryByText('Breath Weapon')).not.toBeInTheDocument();
+    expect(screen.getByText('Faerie Fire')).toBeInTheDocument();
+  });
+
+  it('renders nothing when includeKeys filters out every resource', () => {
+    const { container } = render(
+      <RacialResourceTracker
+        traits={['Drow Magic']}
+        level={5}
+        data={{}}
+        onChange={() => {}}
+        includeKeys={['breath_weapon_used']}
+      />
+    );
+    expect(container.firstChild).toBeNull();
   });
 
   it('recovers a use via the − button', () => {

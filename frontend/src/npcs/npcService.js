@@ -60,6 +60,20 @@ const npcService = {
     return res.data;
   },
 
+  uploadMusic: async (npcId, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await api.post(`/npcs/${npcId}/music`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+
+  deleteMusic: async (npcId) => {
+    const res = await api.delete(`/npcs/${npcId}/music`);
+    return res.data;
+  },
+
   // NPC-to-NPC relationships
   getRelationships: async (npcId) => {
     const res = await api.get(`/npcs/${npcId}/relationships`);

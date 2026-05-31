@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
 import SorcererSheet from './SorcererSheet';
 
 // Guards that Sorcery Points tracker appears in the Spells tab, not the Features tab.
@@ -88,5 +88,61 @@ describe('SorcererSheet section routing', () => {
       sheet('all');
       expect(screen.getByText('Spell Slots (Long Rest)')).toBeInTheDocument();
     });
+  });
+});
+
+describe('SorcererSheet Draconic Bloodline — Dragon Ancestor picker', () => {
+  it('does not render the picker for non-draconic subclasses', () => {
+    render(<SorcererSheet data={{ subclass: 'Wild Magic' }} level={5} section="features" readOnly />);
+    expect(screen.queryByText('Draconic Ancestry (Dragon Ancestor)')).not.toBeInTheDocument();
+  });
+
+  it('renders the picker for Draconic Bloodline in features section', () => {
+    render(<SorcererSheet data={{ subclass: 'Draconic Bloodline' }} level={5} section="features" readOnly />);
+    expect(screen.getByText('Draconic Ancestry (Dragon Ancestor)')).toBeInTheDocument();
+  });
+
+  it('does not render the picker in the stats section', () => {
+    render(<SorcererSheet data={{ subclass: 'Draconic Bloodline' }} level={5} section="stats" readOnly />);
+    expect(screen.queryByText('Draconic Ancestry (Dragon Ancestor)')).not.toBeInTheDocument();
+  });
+
+  it('shows the chosen dragon as a badge when read-only', () => {
+    render(<SorcererSheet data={{ subclass: 'Draconic Bloodline', draconic_bloodline: { name: 'Red', damage: 'Fire' } }} level={5} section="features" readOnly />);
+    expect(screen.getByTestId('draconic-bloodline-badge')).toHaveTextContent('Red Dragon (Fire)');
+  });
+
+  it('shows empty-state text when no dragon chosen and read-only', () => {
+    render(<SorcererSheet data={{ subclass: 'Draconic Bloodline' }} level={5} section="features" readOnly />);
+    expect(screen.getByText('No dragon type chosen')).toBeInTheDocument();
+  });
+
+  it('calls onChange with {name, damage} when a dragon is picked', () => {
+    const onChange = vi.fn();
+    render(<SorcererSheet data={{ subclass: 'Draconic Bloodline' }} level={5} section="features" onChange={onChange} />);
+    fireEvent.click(screen.getByTestId('draconic-bloodline-Red'));
+    expect(onChange).toHaveBeenCalledWith({ draconic_bloodline: { name: 'Red', damage: 'Fire' } });
+  });
+
+  it('deselects (null) when clicking the already-chosen dragon during creation', () => {
+    // Deselect is only possible during creation; after creation the picker locks.
+    const onChange = vi.fn();
+    render(<SorcererSheet data={{ subclass: 'Draconic Bloodline', draconic_bloodline: { name: 'Red', damage: 'Fire' } }} level={1} section="features" creation onChange={onChange} />);
+    fireEvent.click(screen.getByTestId('draconic-bloodline-Red'));
+    expect(onChange).toHaveBeenCalledWith({ draconic_bloodline: null });
+  });
+
+  it('locks to a read-only badge after creation once a dragon is chosen (not editable on the fly)', () => {
+    // Outside creation, with a chosen dragon and an editable sheet (readOnly=false):
+    // the picker must lock — show the badge, hide the selectable buttons.
+    render(<SorcererSheet data={{ subclass: 'Draconic Bloodline', draconic_bloodline: { name: 'Red', damage: 'Fire' } }} level={5} section="features" creation={false} onChange={vi.fn()} />);
+    expect(screen.getByTestId('draconic-bloodline-badge')).toHaveTextContent('Red Dragon (Fire)');
+    expect(screen.queryByTestId('draconic-bloodline-Red')).not.toBeInTheDocument();
+  });
+
+  it('stays editable during creation even after a dragon is chosen', () => {
+    render(<SorcererSheet data={{ subclass: 'Draconic Bloodline', draconic_bloodline: { name: 'Red', damage: 'Fire' } }} level={1} section="features" creation onChange={vi.fn()} />);
+    expect(screen.getByTestId('draconic-bloodline-Red')).toBeInTheDocument();
+    expect(screen.queryByTestId('draconic-bloodline-badge')).not.toBeInTheDocument();
   });
 });

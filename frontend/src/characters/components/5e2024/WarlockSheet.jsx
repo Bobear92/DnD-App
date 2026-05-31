@@ -146,7 +146,7 @@ function SkillPicker({ value, onChange, max, backgroundSkills = [], raceSkills =
   );
 }
 
-export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], raceGrantedCantrips = [], section = 'all' }) {
+export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], raceGrantedCantrips = [], section = 'all', acExtra = null, maxHpNode = null }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
@@ -179,7 +179,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Max HP">
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{maxHpNode ?? (data.hp_max ?? '—')}</div>
         </Field>
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -201,6 +201,8 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       )}
+
+      {showCombat && acExtra}
 
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
@@ -297,7 +299,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
       {/* Subclass (L3 in 2024) */}
       {level >= 3 && showFeatures && (
         <Field label="Otherworldly Patron (Subclass)">
-          {(readOnly || !!data.subclass) ? (
+          {(readOnly || (!creation && !!data.subclass)) ? (
             data.subclass ? (
               <SubclassDetails className="Warlock" edition="5.5e" subclassName={data.subclass} level={level} />
             ) : (

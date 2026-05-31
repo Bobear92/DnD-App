@@ -563,6 +563,7 @@ describe('CharacterDetail', () => {
       await waitFor(() => expect(screen.getByTestId('racial-resource-tracker')).toBeInTheDocument());
       // Clicking the use button persists immediately — live resources don't require a Save click.
       fireEvent.click(screen.getByLabelText('Use Relentless Endurance'));
+      fireEvent.click(screen.getByTestId('racial-use-confirm-button'));
       await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalled());
       const payload = characterService.updateCharacter.mock.calls.at(-1)[1];
       expect(payload.character_data.relentless_endurance_used).toBe(1);
@@ -1105,12 +1106,64 @@ describe('CharacterDetail', () => {
     });
 
     it('does NOT show emerald legend when no race-granting traits are present (Human)', async () => {
-      // BASE_CHARACTER is Human with no race_traits — legend stays default
+      // BASE_CHARACTER is Human with no race_traits — no emerald segment
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText(/Emerald = from race/)).not.toBeInTheDocument();
-      // Default legend still present
-      expect(screen.getByText(/Purple = expertise · Gold = proficient/)).toBeInTheDocument();
+      // Proficient legend still present
+      expect(screen.getByText(/Gold = proficient/)).toBeInTheDocument();
+    });
+  });
+
+  // ── Conditional skill legend (expertise + background source) ───────────
+  describe('SkillsDisplay legend', () => {
+    it('hides "Purple = expertise" when the character has no expertise', async () => {
+      // BASE_CHARACTER is a Fighter with no expertise_skills
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByText(/Purple = expertise/)).not.toBeInTheDocument();
+      expect(screen.getByText(/Gold = proficient/)).toBeInTheDocument();
+    });
+
+    it('shows "Purple = expertise" when the character has expertise', async () => {
+      const rogueChar = {
+        ...BASE_CHARACTER,
+        char_class: 'Rogue',
+        background: 'Urchin',
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          skill_proficiencies: ['Stealth', 'Sleight of Hand'],
+          expertise_skills: ['Stealth'],
+        },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: rogueChar });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText(/Purple = expertise/)).toBeInTheDocument();
+    });
+
+    it('shows "Amber = from background" for background-granted proficiencies', async () => {
+      // BASE_CHARACTER is a Soldier (grants Athletics, Intimidation) proficient in Athletics
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText(/Amber = from background/)).toBeInTheDocument();
+    });
+
+    it('does NOT show "Amber = from background" when no proficient skill comes from the background', async () => {
+      // Sage grants Arcana + History; this character is proficient in neither
+      const sageChar = {
+        ...BASE_CHARACTER,
+        char_class: 'Sorcerer',
+        background: 'Sage',
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          skill_proficiencies: ['Athletics'],
+        },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: sageChar });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByText(/Amber = from background/)).not.toBeInTheDocument();
     });
 
     it('does not double-count Perception when both race_traits AND skill_proficiencies include it', async () => {
@@ -1131,6 +1184,56 @@ describe('CharacterDetail', () => {
       // No duplicate Perception entries — single skill row
       const perceptionRows = screen.getAllByText('Perception');
       expect(perceptionRows.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Draconic Bloodline Sorcerer — HP/AC bonuses + dragon type', () => {
+    const DRACONIC_SORCERER = {
+      ...BASE_CHARACTER,
+      char_class: 'Sorcerer',
+      character_data: {
+        ...BASE_CHARACTER.character_data,
+        subclass: 'Draconic Bloodline',
+        draconic_bloodline: { name: 'Red', damage: 'Fire' },
+      },
+    };
+
+    it('folds the Draconic Resilience bonus into the Max HP value itself', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: DRACONIC_SORCERER });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      // Max HP shows the effective total (52 + 5 = 57), not the base 52 with a separate row
+      expect(screen.getByText('57')).toBeInTheDocument();
+      expect(screen.getByText('+5 Draconic Resilience')).toBeInTheDocument();
+      // No separate "Bonus Hit Points" / "Effective Max HP" block any more
+      expect(screen.queryByText('Bonus Hit Points')).not.toBeInTheDocument();
+      expect(screen.queryByText('Effective Max HP')).not.toBeInTheDocument();
+    });
+
+    it('shows the Armor Class Options under the AC field with 13 + DEX', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: DRACONIC_SORCERER });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText('Armor Class Options')).toBeInTheDocument();
+      // Draconic Resilience formula shown; DEX 12 → +1 → 13 + 1 = 14
+      expect(screen.getByText(/13 \+ DEX/)).toBeInTheDocument();
+      expect(screen.getAllByText('14').length).toBeGreaterThan(0);
+    });
+
+    it('shows the chosen dragon type as a Draconic Ancestry line', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: DRACONIC_SORCERER });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getAllByText(/Red Dragon \(Fire\)/).length).toBeGreaterThan(0);
+    });
+
+    it('does NOT add any HP/AC bonus for a plain Fighter', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      // Plain Fighter: Max HP shows the base 52 with no source note, no AC options
+      expect(screen.getByText('52')).toBeInTheDocument();
+      expect(screen.queryByText(/Draconic Resilience/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Armor Class Options')).not.toBeInTheDocument();
     });
   });
 });

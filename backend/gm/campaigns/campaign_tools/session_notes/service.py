@@ -15,6 +15,7 @@ from .schemas import (
     SessionImageResponse,
 )
 from .storage import save_session_image, delete_session_image_file, delete_session_images_dir
+from shared.music_storage import save_music_file, delete_music_file
 from gm.campaigns.models import CampaignMember
 from gm.campaigns.campaign_tools.timeline.schemas import EraDate
 from gm.campaigns.campaign_tools.timeline.service import _compute_era_dates, _resolve_absolute_year
@@ -243,6 +244,33 @@ def delete_image(
     _get_session_or_404(db, campaign_id, session_id)
     if not delete_session_image_file(campaign_id, session_id, filename):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+
+# ── Music upload ──────────────────────────────────────────────────────────────
+
+async def upload_music(
+    db: Session, campaign_id: int, session_id: int, file: UploadFile, user_id: int
+) -> SessionNote:
+    _require_gm(db, campaign_id, user_id)
+    session = _get_session_or_404(db, campaign_id, session_id)
+    delete_music_file(session.music_url)
+    session.music_url = await save_music_file(file, f"sessions/{campaign_id}/{session_id}")
+    db.commit()
+    db.refresh(session)
+    return _session_to_response(db, session, is_player=False)
+
+
+def delete_music(
+    db: Session, campaign_id: int, session_id: int, user_id: int
+) -> SessionNote:
+    _require_gm(db, campaign_id, user_id)
+    session = _get_session_or_404(db, campaign_id, session_id)
+    if session.music_url:
+        delete_music_file(session.music_url)
+        session.music_url = None
+        db.commit()
+        db.refresh(session)
+    return _session_to_response(db, session, is_player=False)
 
 
 # ── NPC links ─────────────────────────────────────────────────────────────────

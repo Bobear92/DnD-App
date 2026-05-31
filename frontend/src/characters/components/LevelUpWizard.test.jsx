@@ -21,6 +21,16 @@ vi.mock('./SubclassPickerWithDetail', () => ({
   ),
 }));
 
+// SpellList reads CampaignContext + fetches the catalog — mock it to a single add button.
+vi.mock('./SpellList', () => ({
+  default: ({ label, spells = [], onAdd }) => (
+    <div data-testid={`spelllist-${label}`}>
+      <span data-testid={`spelllist-count-${label}`}>{spells.length}</span>
+      <button type="button" onClick={() => onAdd?.(`${label} Pick`)}>{`add:${label}`}</button>
+    </div>
+  ),
+}));
+
 // ─── shared test characters ───────────────────────────────────────────────────
 
 const WIZARD_L1 = {
@@ -40,6 +50,16 @@ const FIGHTER_L2 = {
   level: 2,
   constitution: 14,
   character_data: { hp_max: 26 },
+};
+
+// Sorcerer is a known caster — picks spells on level-up. L1→2 has no subclass step.
+const SORCERER_L1 = {
+  id: 3,
+  name: 'Raistlin',
+  char_class: 'Sorcerer',
+  level: 1,
+  constitution: 12,
+  character_data: { hp_max: 7, subclass: 'Draconic Bloodline', cantrips: ['Fire Bolt'], known_spells: ['Magic Missile'] },
 };
 
 const CAMPAIGN_5E = { id: 1, edition: '5e' };
@@ -245,6 +265,87 @@ describe('LevelUpWizard', () => {
         expect(onComplete).toHaveBeenCalledWith(
           2,
           expect.not.objectContaining({ subclass: expect.anything() })
+        );
+      });
+    });
+  });
+
+  describe('spell step — known casters', () => {
+    it('shows the New Spells step for a known caster (Sorcerer)', () => {
+      render(
+        <LevelUpWizard
+          character={SORCERER_L1}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('New Spells')).toBeInTheDocument();
+    });
+
+    it('does NOT show the New Spells step for a prepared caster (Wizard)', () => {
+      render(
+        <LevelUpWizard
+          character={WIZARD_L1}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.queryByText('New Spells')).not.toBeInTheDocument();
+    });
+
+    it('does NOT show the New Spells step for a non-caster (Fighter)', () => {
+      render(
+        <LevelUpWizard
+          character={{ ...FIGHTER_L2, level: 1 }}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.queryByText('New Spells')).not.toBeInTheDocument();
+    });
+
+    it('renders cantrip and spell pickers on the spell step', () => {
+      render(
+        <LevelUpWizard
+          character={SORCERER_L1}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      chooseTakeAverage();                                            // hp → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
+      expect(screen.getByText('add:Cantrips Known')).toBeInTheDocument();
+      expect(screen.getByText('add:Spells Known')).toBeInTheDocument();
+    });
+
+    it('includes chosen cantrips and spells in onComplete for a known caster', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(
+        <LevelUpWizard
+          character={SORCERER_L1}
+          campaign={CAMPAIGN_5E}
+          onComplete={onComplete}
+          onClose={vi.fn()}
+        />
+      );
+      chooseTakeAverage();                                            // hp → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
+      fireEvent.click(screen.getByText('add:Cantrips Known'));
+      fireEvent.click(screen.getByText('add:Spells Known'));
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // spells → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+
+      await waitFor(() => {
+        expect(onComplete).toHaveBeenCalledWith(
+          2,
+          expect.objectContaining({
+            cantrips: expect.arrayContaining(['Fire Bolt', 'Cantrips Known Pick']),
+            known_spells: expect.arrayContaining(['Magic Missile', 'Spells Known Pick']),
+          })
         );
       });
     });

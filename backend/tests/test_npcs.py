@@ -562,3 +562,50 @@ class TestNPCPlayerRelationships:
             headers=h_player,
         )
         assert resp.status_code == 403
+
+
+class TestNPCMusic:
+    def _tiny_mp3(self):
+        import io
+        return io.BytesIO(b"ID3\x03\x00\x00\x00fake-mp3-bytes")
+
+    def test_gm_can_upload_music(self, client):
+        h, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h)
+        npc_id = make_npc(client, h, campaign_id)
+
+        resp = client.post(
+            f"/api/gm/campaigns/npcs/{npc_id}/music",
+            files={"file": ("theme.mp3", self._tiny_mp3(), "audio/mpeg")},
+            headers=h,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["theme_music_url"].startswith("uploads/music/npcs/")
+
+    def test_player_cannot_upload_music(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_player, uid_player = make_user(client, 2)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid_player)
+        npc_id = make_npc(client, h_gm, campaign_id)
+
+        resp = client.post(
+            f"/api/gm/campaigns/npcs/{npc_id}/music",
+            files={"file": ("theme.mp3", self._tiny_mp3(), "audio/mpeg")},
+            headers=h_player,
+        )
+        assert resp.status_code == 403
+
+    def test_delete_music_clears_url(self, client):
+        h, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h)
+        npc_id = make_npc(client, h, campaign_id)
+        client.post(
+            f"/api/gm/campaigns/npcs/{npc_id}/music",
+            files={"file": ("theme.mp3", self._tiny_mp3(), "audio/mpeg")},
+            headers=h,
+        )
+
+        resp = client.delete(f"/api/gm/campaigns/npcs/{npc_id}/music", headers=h)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["theme_music_url"] is None

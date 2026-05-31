@@ -180,7 +180,7 @@ function WeaponMasteryList({ value, onChange, readOnly, max }) {
 
 const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
 
-export default function RangerSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', abilityScores = {}, campaignId, isGm = false }) {
+export default function RangerSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', abilityScores = {}, campaignId, isGm = false, acExtra = null, maxHpNode = null }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
@@ -222,7 +222,7 @@ export default function RangerSheet({ data = {}, onChange, readOnly = false, lev
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Max HP">
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{maxHpNode ?? (data.hp_max ?? '—')}</div>
         </Field>
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -244,6 +244,8 @@ export default function RangerSheet({ data = {}, onChange, readOnly = false, lev
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       )}
+
+      {showCombat && acExtra}
 
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
@@ -304,7 +306,7 @@ export default function RangerSheet({ data = {}, onChange, readOnly = false, lev
       {/* Subclass (L3) */}
       {level >= 3 && showFeatures && (
         <Field label="Ranger Archetype (Subclass)">
-          {(readOnly || !!data.subclass) ? (
+          {(readOnly || (!creation && !!data.subclass)) ? (
             data.subclass ? (
               <SubclassDetails className="Ranger" edition="5.5e" subclassName={data.subclass} level={level} />
             ) : (

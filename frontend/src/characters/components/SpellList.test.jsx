@@ -69,11 +69,23 @@ describe('SpellList', () => {
     expect(screen.getByText('Mage Hand')).toBeInTheDocument();
   });
 
-  it('does not call the API when isCantrips=true', () => {
+  it('still fetches the catalog when isCantrips=true (for the detail dialog)', () => {
     const fetchSpy = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
     vi.stubGlobal('fetch', fetchSpy);
     render(<SpellList spells={['Fire Bolt']} isCantrips label="Cantrips" />);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalled();
+  });
+
+  it('shows full cantrip details in the dialog when the cantrip is in the catalog', async () => {
+    mockFetchCatalog();
+    render(<SpellList spells={['Eldritch Blast']} isCantrips label="Cantrips" />);
+    await waitFor(() => expect(screen.getByText('Eldritch Blast')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Eldritch Blast'));
+    await waitFor(() => {
+      expect(screen.getByText('A beam of crackling energy.')).toBeInTheDocument();
+      expect(screen.getByText('120 feet')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/hasn't been added to the compendium/i)).not.toBeInTheDocument();
   });
 
   it('sorts cantrips alphabetically within the Cantrips section', () => {
@@ -294,7 +306,7 @@ describe('SpellList', () => {
     });
   });
 
-  it('calls onCastSpell with name and level when Cast button clicked', async () => {
+  it('does not call onCastSpell immediately when Cast button clicked — opens confirm dialog first', async () => {
     mockFetchCatalog();
     const onCastSpell = vi.fn();
     render(<SpellList
@@ -305,7 +317,51 @@ describe('SpellList', () => {
     />);
     await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
     fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
+    expect(onCastSpell).not.toHaveBeenCalled();
+    expect(screen.getByTestId('cast-confirm-button')).toBeInTheDocument();
+  });
+
+  it('confirm dialog states which spell-slot level will be used', async () => {
+    mockFetchCatalog();
+    render(<SpellList
+      spells={['Magic Missile']}
+      label="Prepared"
+      onCastSpell={vi.fn()}
+      availableSlots={{ 1: 2 }}
+    />);
+    await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
+    fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
+    expect(screen.getByText(/this will use a level 1 spell slot/i)).toBeInTheDocument();
+  });
+
+  it('calls onCastSpell with name and level only after confirming', async () => {
+    mockFetchCatalog();
+    const onCastSpell = vi.fn();
+    render(<SpellList
+      spells={['Magic Missile']}
+      label="Prepared"
+      onCastSpell={onCastSpell}
+      availableSlots={{ 1: 2 }}
+    />);
+    await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
+    fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
+    fireEvent.click(screen.getByTestId('cast-confirm-button'));
     expect(onCastSpell).toHaveBeenCalledWith('Magic Missile', 1);
+  });
+
+  it('does not call onCastSpell when the cast is cancelled', async () => {
+    mockFetchCatalog();
+    const onCastSpell = vi.fn();
+    render(<SpellList
+      spells={['Magic Missile']}
+      label="Prepared"
+      onCastSpell={onCastSpell}
+      availableSlots={{ 1: 2 }}
+    />);
+    await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
+    fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
+    fireEvent.click(screen.getByTestId('cast-cancel-button'));
+    expect(onCastSpell).not.toHaveBeenCalled();
   });
 
   it('does not show Cast button on cantrips (isCantrips mode)', () => {

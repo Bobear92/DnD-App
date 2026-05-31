@@ -12,8 +12,22 @@ import {
   SUBCLASS_OPTIONS_5E, SUBCLASS_OPTIONS_2024,
 } from './classChoicesData';
 import SubclassPickerWithDetail from './SubclassPickerWithDetail';
+import SpellList from './SpellList';
+import { CLASS_PROGRESSION } from './classProgressionTables';
 
 function conMod(score) { return Math.floor((score - 10) / 2); }
+
+// Known casters choose their spells at level-up (vs. prepared casters who swap each long rest).
+const KNOWN_CASTERS = new Set(['Bard', 'Sorcerer', 'Warlock']);
+
+// Read a named progression column value (e.g. 'cantrips', 'known') at a given level.
+function progressionValue(progression, key, lvl) {
+  if (!progression) return null;
+  const colIdx = progression.columns.findIndex(c => c.key === key);
+  if (colIdx < 0) return null;
+  const row = progression.data[Math.min(Math.max(lvl, 1), 20) - 1];
+  return row ? row[colIdx] : null;
+}
 
 export default function LevelUpWizard({ character, campaign, onComplete, onClose }) {
   const edition = campaign?.edition || '5e';
@@ -33,12 +47,26 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     && !character.character_data?.subclass;
   const subclassOptions = SUBCLASS_OPTS[character.char_class] ?? [];
 
-  const STEPS = needsSubclass
-    ? ['hp', 'subclass', 'features', 'confirm']
-    : ['hp', 'features', 'confirm'];
-  const STEP_LABELS = needsSubclass
-    ? ['Hit Points', 'Subclass', 'New Features', 'Confirm']
-    : ['Hit Points', 'New Features', 'Confirm'];
+  // Known casters pick spells/cantrips on level-up.
+  const progression = CLASS_PROGRESSION[is2024 ? '5.5e' : '5e']?.[character.char_class];
+  const isKnownCaster = KNOWN_CASTERS.has(character.char_class);
+  const cantripsTarget = isKnownCaster ? progressionValue(progression, 'cantrips', newLevel) : null;
+  const knownTarget = isKnownCaster ? progressionValue(progression, 'known', newLevel) : null;
+
+  const STEPS = [
+    'hp',
+    ...(needsSubclass ? ['subclass'] : []),
+    'features',
+    ...(isKnownCaster ? ['spells'] : []),
+    'confirm',
+  ];
+  const STEP_LABELS = [
+    'Hit Points',
+    ...(needsSubclass ? ['Subclass'] : []),
+    'New Features',
+    ...(isKnownCaster ? ['New Spells'] : []),
+    'Confirm',
+  ];
 
   const features = useMemo(() => {
     const classFeats = CLASS_FEATURES[character.char_class];
@@ -52,7 +80,12 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const [hpChoice, setHpChoice] = useState(null); // 'roll' | 'average'
   const [rolledValue, setRolledValue] = useState(null);
   const [subclassChoice, setSubclassChoice] = useState('');
+  const [cantrips, setCantrips] = useState(character.character_data?.cantrips ?? []);
+  const [knownSpells, setKnownSpells] = useState(character.character_data?.known_spells ?? []);
   const [saving, setSaving] = useState(false);
+
+  const addUnique = (list, name) => (list.includes(name) ? list : [...list, name]);
+  const removeName = (list, name) => list.filter(s => s !== name);
 
   const hpGain = hpChoice !== null
     ? (hpChoice === 'roll' ? rolledValue : average) + con
@@ -79,6 +112,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       ...(character.character_data ?? {}),
       ...(newHpMax != null ? { hp_max: newHpMax } : {}),
       ...(subclassChoice ? { subclass: subclassChoice } : {}),
+      ...(isKnownCaster ? { cantrips, known_spells: knownSpells } : {}),
     };
     await onComplete(newLevel, newCharacterData);
     setSaving(false);
@@ -251,6 +285,55 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
           </div>
         )}
 
+        {/* ── Step: Spells (known casters) ── */}
+        {STEPS[step] === 'spells' && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              As a <span className="font-medium text-foreground">{character.char_class}</span>, you choose your
+              spells when you level up. At level {newLevel} you should know{' '}
+              {cantripsTarget != null && (
+                <><span className="font-medium text-foreground">{cantripsTarget}</span> cantrips and </>
+              )}
+              <span className="font-medium text-foreground">{knownTarget ?? '—'}</span> spells.
+            </p>
+
+            {cantripsTarget != null && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Cantrips</span>
+                  <span className={cn('text-xs', cantrips.length > cantripsTarget ? 'text-amber-600' : 'text-muted-foreground')}>
+                    {cantrips.length}/{cantripsTarget}
+                  </span>
+                </div>
+                <SpellList
+                  spells={cantrips}
+                  onAdd={n => setCantrips(c => addUnique(c, n))}
+                  onRemove={n => setCantrips(c => removeName(c, n))}
+                  label="Cantrips Known"
+                  placeholder="Add cantrip…"
+                  isCantrips
+                />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Spells</span>
+                <span className={cn('text-xs', knownTarget != null && knownSpells.length > knownTarget ? 'text-amber-600' : 'text-muted-foreground')}>
+                  {knownSpells.length}{knownTarget != null ? `/${knownTarget}` : ''}
+                </span>
+              </div>
+              <SpellList
+                spells={knownSpells}
+                onAdd={n => setKnownSpells(s => addUnique(s, n))}
+                onRemove={n => setKnownSpells(s => removeName(s, n))}
+                label="Spells Known"
+                placeholder="Add spell…"
+              />
+            </div>
+          </div>
+        )}
+
         {/* ── Step: Confirm ── */}
         {STEPS[step] === 'confirm' && (
           <div className="space-y-4">
@@ -292,6 +375,14 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                   <span className="text-muted-foreground">New features</span>
                   <span className="font-medium">{features.length === 0 ? 'None' : features.map(f => f.name).join(', ')}</span>
                 </div>
+                {isKnownCaster && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Spells known</span>
+                    <span className="font-medium">
+                      {cantripsTarget != null ? `${cantrips.length} cantrips · ` : ''}{knownSpells.length} spells
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

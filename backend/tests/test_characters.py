@@ -718,3 +718,78 @@ class TestApplyRest:
         )
         cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
         assert cd["portent_rolls"] == rolls
+
+
+class TestCharacterMusic:
+    def _tiny_mp3(self):
+        import io
+        return io.BytesIO(b"ID3\x03\x00\x00\x00fake-mp3-bytes")
+
+    def test_owner_can_upload_music(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_player, uid_player = make_user(client, 2)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid_player)
+        char_id = make_character(client, h_player, campaign_id)
+
+        resp = client.post(
+            f"/api/characters/{char_id}/music",
+            files={"file": ("theme.mp3", self._tiny_mp3(), "audio/mpeg")},
+            headers=h_player,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["theme_music_url"].startswith("uploads/music/characters/")
+
+    def test_gm_can_upload_music(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        char_id = make_character(client, h_gm, campaign_id)
+
+        resp = client.post(
+            f"/api/characters/{char_id}/music",
+            files={"file": ("theme.mp3", self._tiny_mp3(), "audio/mpeg")},
+            headers=h_gm,
+        )
+        assert resp.status_code == 200, resp.text
+
+    def test_non_owner_player_cannot_upload_music(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_owner, uid_owner = make_user(client, 2)
+        h_other, uid_other = make_user(client, 3)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid_owner)
+        invite_player(client, h_gm, campaign_id, uid_other)
+        char_id = make_character(client, h_owner, campaign_id)
+
+        resp = client.post(
+            f"/api/characters/{char_id}/music",
+            files={"file": ("theme.mp3", self._tiny_mp3(), "audio/mpeg")},
+            headers=h_other,
+        )
+        assert resp.status_code == 403
+
+    def test_rejects_disallowed_extension(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        char_id = make_character(client, h_gm, campaign_id)
+
+        resp = client.post(
+            f"/api/characters/{char_id}/music",
+            files={"file": ("theme.exe", self._tiny_mp3(), "application/octet-stream")},
+            headers=h_gm,
+        )
+        assert resp.status_code == 400
+
+    def test_delete_music_clears_url(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        char_id = make_character(client, h_gm, campaign_id)
+        client.post(
+            f"/api/characters/{char_id}/music",
+            files={"file": ("theme.mp3", self._tiny_mp3(), "audio/mpeg")},
+            headers=h_gm,
+        )
+
+        resp = client.delete(f"/api/characters/{char_id}/music", headers=h_gm)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["theme_music_url"] is None

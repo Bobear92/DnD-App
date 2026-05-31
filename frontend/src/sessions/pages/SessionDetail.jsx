@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import RichTextEditor from '../components/RichTextEditor';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import sessionService, { mapSessionImageUrl } from '../sessionService';
+import MusicPlayer from '../../shared/components/MusicPlayer';
 import npcService from '../../npcs/npcService';
 import locationService from '../../locations/locationService';
 import settingsService from '../../settings/settingsService';
@@ -18,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   ArrowLeft, Eye, EyeOff, Save, RotateCcw, Loader2,
   Users, Drama, MapPin, Clock, Music, X, Plus,
-  Calendar, FileText,
+  Calendar, FileText, Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -912,6 +913,10 @@ export default function SessionDetail() {
   const [contentDirty, setContentDirty] = useState(false);
   const [savingContent, setSavingContent] = useState(false);
 
+  // Theme music upload
+  const [musicUploading, setMusicUploading] = useState(false);
+  const musicInputRef = useRef(null);
+
   // GM notes
   const [gmNotes, setGmNotes] = useState('');
   const [gmNotesDirty, setGmNotesDirty] = useState(false);
@@ -1050,6 +1055,31 @@ export default function SessionDetail() {
     return `${BACKEND}/${image_url}`;
   }
 
+  async function handleMusicUpload(file) {
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) { setError('Audio must be under 50 MB'); return; }
+    setMusicUploading(true);
+    try {
+      const updated = await sessionService.uploadMusic(campaignId, sessionId, file);
+      setSession(updated);
+      setEditMeta(toMetaForm(updated));
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Music upload failed');
+    } finally {
+      setMusicUploading(false);
+    }
+  }
+
+  async function handleMusicDelete() {
+    try {
+      const updated = await sessionService.deleteMusic(campaignId, sessionId);
+      setSession(updated);
+      setEditMeta(toMetaForm(updated));
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to remove music');
+    }
+  }
+
   async function handleVisibilityToggle() {
     const updated = await sessionService.updateVisibility(campaignId, sessionId, !session.is_visible_to_players);
     setSession(updated);
@@ -1185,13 +1215,6 @@ export default function SessionDetail() {
                           <Calendar className="w-3.5 h-3.5" /> {session.real_world_date}
                         </span>
                       )}
-                      {session.music_url && (
-                        <a href={session.music_url} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                          <Music className="w-3.5 h-3.5" />
-                          {session.music_description || 'Theme Music'}
-                        </a>
-                      )}
                     </div>
                   </div>
                 ) : (
@@ -1214,13 +1237,6 @@ export default function SessionDetail() {
                         ))}
                       </span>
                     )}
-                    {session.music_url && (
-                      <a href={session.music_url} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                        <Music className="w-3.5 h-3.5" />
-                        {session.music_description || 'Theme Music'}
-                      </a>
-                    )}
                   </div>
                 );
               })()}
@@ -1237,6 +1253,15 @@ export default function SessionDetail() {
             </Button>
           )}
         </div>
+
+        {session.music_url && (
+          <div className="mt-1">
+            <p className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+              <Music className="w-3.5 h-3.5" /> {session.music_description || 'Theme Music'}
+            </p>
+            <MusicPlayer src={session.music_url} />
+          </div>
+        )}
 
         {/* Metadata card (GM editable) */}
         {isGm && !playerView && editMeta && (
@@ -1270,10 +1295,29 @@ export default function SessionDetail() {
                   <Label className="text-xs">Music URL</Label>
                   <Input
                     className="h-8 text-sm"
-                    placeholder="https://…"
+                    placeholder="Spotify / YouTube / audio link…"
                     value={editMeta.music_url}
                     onChange={e => handleMetaChange('music_url', e.target.value)}
                   />
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <input
+                      ref={musicInputRef}
+                      type="file"
+                      accept="audio/*,video/mp4,.mp3,.ogg,.wav,.m4a,.aac,.flac,.mp4,.webm"
+                      className="hidden"
+                      onChange={e => { handleMusicUpload(e.target.files?.[0]); e.target.value = ''; }}
+                    />
+                    <Button type="button" variant="outline" size="sm" className="h-7"
+                      onClick={() => musicInputRef.current?.click()} disabled={musicUploading}>
+                      <Upload className="w-3.5 h-3.5 mr-1" />
+                      {musicUploading ? 'Uploading…' : 'Upload audio'}
+                    </Button>
+                    {session.music_url && (
+                      <Button type="button" variant="ghost" size="sm" className="h-7" onClick={handleMusicDelete}>
+                        <X className="w-3.5 h-3.5 mr-1" /> Remove
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <Label className="text-xs">Music Label</Label>

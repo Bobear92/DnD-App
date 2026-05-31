@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import {
   ChevronLeft, Eye, EyeOff, Trash2, Save, RotateCcw, TrendingUp, Star, Plus, Wand2, Shield,
-  Sword, Zap, BookOpen, Music, User, X, Upload, ExternalLink, Clock,
+  Sword, Zap, BookOpen, Music, User, X, Upload, Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,10 +18,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import MainLayout from '../../shared/components/layout/MainLayout';
+import MusicPlayer from '../../shared/components/MusicPlayer';
 import characterService, { mapCharacterImageUrl } from '../characterService';
 import TraitBadgeList from '../components/TraitBadge';
 import { getRaceGrantedSkillsFromTraits } from '../components/raceProficienciesData';
+import { getBackgroundSkills } from '../components/backgroundSkillsData';
 import RacialResourceTracker from '../components/RacialResourceTracker';
+import { MaxHpValue, AcOptionsLine } from '../components/CombatBonusInline';
+import { draconicLabel } from '../components/draconicData';
+import SpellList from '../components/SpellList';
 import { getRacialRestResources } from '../components/racialRestResources';
 import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
@@ -167,6 +172,8 @@ export default function CharacterDetail() {
   const [personalNotesPreview, setPersonalNotesPreview] = useState(false);
   const [portraitUploading, setPortraitUploading] = useState(false);
   const portraitInputRef = useRef(null);
+  const [musicUploading, setMusicUploading] = useState(false);
+  const musicInputRef = useRef(null);
 
   // Calendar for era/month selects in event form
   const [calendar, setCalendar] = useState(null);
@@ -398,6 +405,30 @@ export default function CharacterDetail() {
     const result = await characterService.deleteImage(characterId);
     if (result.success) setCharacter(result.data);
     else setError(result.error);
+  };
+
+  const handleMusicUpload = async (file) => {
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) { setError('Audio must be under 50 MB'); return; }
+    setMusicUploading(true);
+    const result = await characterService.uploadMusic(characterId, file);
+    setMusicUploading(false);
+    if (result.success) {
+      setCharacter(result.data);
+      narrativeMeta.commit({ theme_music_url: result.data.theme_music_url ?? '' });
+    } else {
+      setError(result.error);
+    }
+  };
+
+  const handleMusicDelete = async () => {
+    const result = await characterService.deleteMusic(characterId);
+    if (result.success) {
+      setCharacter(result.data);
+      narrativeMeta.commit({ theme_music_url: result.data.theme_music_url ?? '' });
+    } else {
+      setError(result.error);
+    }
   };
 
   const handleAddEvent = async () => {
@@ -667,32 +698,48 @@ export default function CharacterDetail() {
                 onReset={narrativeMeta.reset}
                 canEdit={showEditable}
               >
-                <div className="space-y-2">
-                  {showEditable ? (
-                    <div className="flex items-center gap-2">
-                      <Music className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <Input
-                        value={narrativeMeta.draft.theme_music_url}
-                        onChange={e => narrativeMeta.setDraft(d => ({ ...d, theme_music_url: e.target.value }))}
-                        placeholder="Paste a URL to a song or playlist…"
-                        className="flex-1"
-                      />
-                      {narrativeMeta.draft.theme_music_url && (
-                        <a href={narrativeMeta.draft.theme_music_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                          <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-                        </a>
-                      )}
-                    </div>
-                  ) : narrativeMeta.draft.theme_music_url ? (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Music className="h-4 w-4 text-muted-foreground" />
-                      <a href={narrativeMeta.draft.theme_music_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">
-                        {narrativeMeta.draft.theme_music_url}
-                      </a>
-                      <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                    </div>
+                <div className="space-y-3">
+                  {showEditable && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Music className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <Input
+                          value={narrativeMeta.draft.theme_music_url}
+                          onChange={e => narrativeMeta.setDraft(d => ({ ...d, theme_music_url: e.target.value }))}
+                          placeholder="Paste a Spotify, YouTube, or audio link…"
+                          className="flex-1"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          ref={musicInputRef}
+                          type="file"
+                          accept="audio/*,video/mp4,.mp3,.ogg,.wav,.m4a,.aac,.flac,.mp4,.webm"
+                          className="hidden"
+                          onChange={e => { handleMusicUpload(e.target.files?.[0]); e.target.value = ''; }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => musicInputRef.current?.click()}
+                          disabled={musicUploading}
+                        >
+                          <Upload className="h-4 w-4 mr-1" />
+                          {musicUploading ? 'Uploading…' : 'Upload audio'}
+                        </Button>
+                        {narrativeMeta.draft.theme_music_url && (
+                          <Button type="button" variant="ghost" size="sm" onClick={handleMusicDelete}>
+                            <X className="h-4 w-4 mr-1" /> Remove
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {narrativeMeta.draft.theme_music_url ? (
+                    <MusicPlayer src={narrativeMeta.draft.theme_music_url} />
                   ) : (
-                    <p className="text-sm text-muted-foreground">No theme music set.</p>
+                    !showEditable && <p className="text-sm text-muted-foreground">No theme music set.</p>
                   )}
                 </div>
               </SectionCard>
@@ -1061,6 +1108,9 @@ export default function CharacterDetail() {
                         {character?.character_data?.subrace && (
                           <p className="text-xs text-muted-foreground mt-0.5">Subrace: <span className="font-medium text-foreground">{character.character_data.subrace}</span></p>
                         )}
+                        {character?.character_data?.draconic_bloodline?.name && (
+                          <p className="text-xs text-muted-foreground mt-0.5">Draconic Ancestry: <span className="font-medium text-foreground">{draconicLabel(character.character_data.draconic_bloodline)}</span></p>
+                        )}
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Level</Label>
@@ -1091,6 +1141,9 @@ export default function CharacterDetail() {
                       <Badge variant="outline">{identity.draft.race || 'Unknown race'}</Badge>
                       {character?.character_data?.subrace && (
                         <Badge variant="outline">{character.character_data.subrace}</Badge>
+                      )}
+                      {character?.character_data?.draconic_bloodline?.name && (
+                        <Badge variant="outline">{draconicLabel(character.character_data.draconic_bloodline)}</Badge>
                       )}
                       <Badge variant="outline">Level {identity.draft.level}</Badge>
                       {identity.draft.background && <Badge variant="outline">{identity.draft.background}</Badge>}
@@ -1235,16 +1288,34 @@ export default function CharacterDetail() {
                     readOnly={!showEditable}
                     level={identity.draft?.level ?? character.level}
                     section="stats"
+                    scores={identity.draft ?? {}}
                     abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
+                    /* HP/AC bonuses (display-only) folded into the sheet — Max HP shows the effective total + source, AC options under the AC field */
+                    maxHpNode={
+                      <MaxHpValue
+                        charClass={character.char_class}
+                        subclass={classSection.draft?.subclass}
+                        raceTraits={character?.character_data?.race_traits ?? []}
+                        level={identity.draft?.level ?? character.level}
+                        baseMaxHp={classSection.draft?.hp_max}
+                      />
+                    }
+                    acExtra={
+                      <AcOptionsLine
+                        charClass={character.char_class}
+                        subclass={classSection.draft?.subclass}
+                        scores={identity.draft ?? {}}
+                      />
+                    }
                   />
                 </SectionCard>
               )}
 
-              {/* Racial Features (rest-rechargeable racial traits) */}
+              {/* Racial Features (rest-rechargeable racial traits — Breath Weapon lives in the Weapons & Armor tab) */}
               {classSection.draft !== null && getRacialRestResources(
                 character?.character_data?.race_traits ?? [],
                 identity.draft?.level ?? character.level
-              ).length > 0 && (
+              ).some(r => r.key !== 'breath_weapon_used') && (
                 <SectionCard
                   title="Racial Features"
                   isDirty={classSection.isDirty}
@@ -1258,6 +1329,7 @@ export default function CharacterDetail() {
                     data={classSection.draft}
                     onChange={autoSaveClassPatch}
                     readOnly={!showEditable}
+                    excludeKeys={['breath_weapon_used']}
                   />
                 </SectionCard>
               )}
@@ -1279,6 +1351,7 @@ export default function CharacterDetail() {
                     readOnly={!showEditable}
                     level={identity.draft?.level ?? character.level}
                     section="features"
+                    scores={identity.draft ?? {}}
                     abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
                   />
                 </SectionCard>
@@ -1286,7 +1359,29 @@ export default function CharacterDetail() {
             </TabsContent>
 
             {/* ── Tab 3: Weapons & Armor ── */}
-            <TabsContent value="gear">
+            <TabsContent value="gear" className="space-y-4">
+              {/* Breath Weapon (rest-rechargeable racial combat trait) */}
+              {classSection.draft !== null && getRacialRestResources(
+                character?.character_data?.race_traits ?? [],
+                identity.draft?.level ?? character.level
+              ).some(r => r.key === 'breath_weapon_used') && (
+                <SectionCard
+                  title="Racial Features"
+                  isDirty={classSection.isDirty}
+                  onSave={saveClassData}
+                  onReset={classSection.reset}
+                  canEdit={showEditable}
+                >
+                  <RacialResourceTracker
+                    traits={character?.character_data?.race_traits ?? []}
+                    level={identity.draft?.level ?? character.level}
+                    data={classSection.draft}
+                    onChange={autoSaveClassPatch}
+                    readOnly={!showEditable}
+                    includeKeys={['breath_weapon_used']}
+                  />
+                </SectionCard>
+              )}
               <div className="rounded-lg border bg-card p-8 text-center space-y-2">
                 <Sword className="h-8 w-8 mx-auto text-muted-foreground/40" />
                 <p className="font-medium text-muted-foreground">Equipment &amp; Inventory</p>
@@ -1320,11 +1415,12 @@ export default function CharacterDetail() {
                 {raceGrantedCantrips.length > 0 && (
                   <div className="rounded-lg border bg-card p-4 space-y-2">
                     <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Race-Granted Cantrips</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {raceGrantedCantrips.map(c => (
-                        <Badge key={c} variant="secondary" className="text-sm">{c}</Badge>
-                      ))}
-                    </div>
+                    <SpellList
+                      spells={raceGrantedCantrips}
+                      isCantrips
+                      readOnly
+                      label="Click a cantrip to see its details"
+                    />
                     <p className="text-xs text-muted-foreground">Always known. No spell slot required.</p>
                   </div>
                 )}
@@ -1501,6 +1597,16 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
   // proficient — derive from character_data.race_traits at render time.
   const raceGranted = getRaceGrantedSkillsFromTraits(classData?.race_traits ?? []);
   const skillProfs = [...new Set([...storedProfs, ...raceGranted])];
+  // Skills granted by the chosen background, limited to those the character is
+  // actually proficient in, so background-sourced profs can be shown distinctly.
+  const bgGranted = getBackgroundSkills(identityDraft.background).filter((s) => skillProfs.includes(s));
+
+  const hasExpertise = expertiseSkills.length > 0;
+  const legendParts = [];
+  if (hasExpertise) legendParts.push('Purple = expertise');
+  legendParts.push('Gold = proficient');
+  if (bgGranted.length > 0) legendParts.push('Amber = from background');
+  if (raceGranted.length > 0) legendParts.push('Emerald = from race');
 
   return (
     <div>
@@ -1510,6 +1616,7 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
           const base = mod(identityDraft[ability]);
           const isProf = skillProfs.includes(skill);
           const isExpert = expertiseSkills.includes(skill);
+          const isFromBg = bgGranted.includes(skill);
           const isFromRace = raceGranted.includes(skill);
           const bonus = base + (isExpert ? pb * 2 : isProf ? pb : 0);
           return (
@@ -1519,7 +1626,11 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
                 isExpert
                   ? 'bg-purple-500 border-purple-500'
                   : isProf
-                    ? (isFromRace ? 'bg-emerald-500 border-emerald-500' : 'bg-primary border-primary')
+                    ? (isFromBg
+                        ? 'bg-amber-500 border-amber-500'
+                        : isFromRace
+                          ? 'bg-emerald-500 border-emerald-500'
+                          : 'bg-primary border-primary')
                     : 'bg-muted border-border'
               )} />
               <span className="flex-1 truncate">{skill}</span>
@@ -1531,7 +1642,7 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
         })}
       </div>
       <p className="text-[10px] text-muted-foreground mt-1">
-        Purple = expertise · Gold = proficient{raceGranted.length > 0 ? ' · Emerald = from race' : ''}
+        {legendParts.join(' · ')}
       </p>
     </div>
   );

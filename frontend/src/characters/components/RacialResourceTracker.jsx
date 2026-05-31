@@ -5,10 +5,25 @@
  * Reads/writes `<key>_used` counters in character_data via onChange patches.
  * Renders nothing when the character has no applicable racial rest resources,
  * so it can be dropped into any sheet/card unconditionally.
+ *
+ * Clicking "Use" opens a confirmation dialog before expending a use, telling
+ * the player when the resource recharges (short/long rest). The "−" button
+ * recovers a use without confirmation. Both controls are hidden when readOnly.
+ *
+ * `includeKeys` / `excludeKeys` (optional) filter which resource keys render,
+ * so the same widget can split one resource (e.g. Breath Weapon) into a
+ * different tab from the rest.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '@/components/ui/dialog';
 import { getRacialRestResources } from './racialRestResources';
+
+const rechargeText = (recharge) =>
+  recharge === 'short' ? 'a short or long rest' : 'a long rest';
 
 export default function RacialResourceTracker({
   traits = [],
@@ -16,8 +31,15 @@ export default function RacialResourceTracker({
   data = {},
   onChange,
   readOnly = false,
+  includeKeys,
+  excludeKeys,
 }) {
-  const resources = getRacialRestResources(traits, level);
+  // Pending use awaiting confirmation: a resource object or null
+  const [useConfirm, setUseConfirm] = useState(null);
+
+  let resources = getRacialRestResources(traits, level);
+  if (includeKeys) resources = resources.filter((r) => includeKeys.includes(r.key));
+  if (excludeKeys) resources = resources.filter((r) => !excludeKeys.includes(r.key));
   if (resources.length === 0) return null;
 
   const set = (key, value) => onChange?.({ [key]: value });
@@ -49,7 +71,7 @@ export default function RacialResourceTracker({
                   {remaining}/{r.max}
                 </span>
                 {!readOnly && (
-                  <div className="flex gap-0.5">
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
                       className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
@@ -59,15 +81,17 @@ export default function RacialResourceTracker({
                     >
                       −
                     </button>
-                    <button
+                    <Button
                       type="button"
-                      className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                      disabled={used >= r.max}
-                      onClick={() => set(r.key, used + 1)}
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-xs"
+                      disabled={remaining <= 0}
+                      onClick={() => setUseConfirm(r)}
                       aria-label={`Use ${r.label}`}
                     >
-                      +
-                    </button>
+                      Use
+                    </Button>
                   </div>
                 )}
               </div>
@@ -75,6 +99,32 @@ export default function RacialResourceTracker({
           );
         })}
       </div>
+
+      <Dialog open={!!useConfirm} onOpenChange={(open) => !open && setUseConfirm(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Use {useConfirm?.label}?</DialogTitle>
+            <DialogDescription>
+              {useConfirm?.label} will be available again after {rechargeText(useConfirm?.recharge)}.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setUseConfirm(null)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              data-testid="racial-use-confirm-button"
+              onClick={() => {
+                if (useConfirm) set(useConfirm.key, (data[useConfirm.key] ?? 0) + 1);
+                setUseConfirm(null);
+              }}
+            >
+              Use
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

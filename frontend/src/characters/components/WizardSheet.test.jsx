@@ -433,7 +433,30 @@ describe('WizardSheet Arcane Recovery button', () => {
     expect(onChange).toHaveBeenCalledWith({ arcane_recovery_used: false });
   });
 
-  it('clicking "Use (Short Rest)" recovers an expended slot and marks it used', () => {
+  it('clicking "Use (Short Rest)" opens a confirm dialog instead of recovering immediately', () => {
+    const onChange = vi.fn();
+    render(<WizardSheet
+      data={{ ...BASE_DATA, spell_slots: { 1: { total: 4, used: 1 } }, arcane_recovery_used: false }}
+      level={3} section="spells" onChange={onChange}
+    />);
+    fireEvent.click(screen.getByRole('button', { name: 'Use (Short Rest)' }));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByText(/this can only be used once per short rest/i)).toBeInTheDocument();
+    expect(screen.getByTestId('arcane-recovery-confirm-button')).toBeInTheDocument();
+  });
+
+  it('cancelling the Arcane Recovery confirm dialog does not recover slots', () => {
+    const onChange = vi.fn();
+    render(<WizardSheet
+      data={{ ...BASE_DATA, spell_slots: { 1: { total: 4, used: 1 } }, arcane_recovery_used: false }}
+      level={3} section="spells" onChange={onChange}
+    />);
+    fireEvent.click(screen.getByRole('button', { name: 'Use (Short Rest)' }));
+    fireEvent.click(screen.getByTestId('arcane-recovery-cancel-button'));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('confirming Arcane Recovery recovers an expended slot and marks it used', () => {
     const onChange = vi.fn();
     // Level 3 wizard has four 1st-level slots; one is expended.
     render(<WizardSheet
@@ -441,6 +464,7 @@ describe('WizardSheet Arcane Recovery button', () => {
       level={3} section="spells" onChange={onChange}
     />);
     fireEvent.click(screen.getByRole('button', { name: 'Use (Short Rest)' }));
+    fireEvent.click(screen.getByTestId('arcane-recovery-confirm-button'));
     expect(onChange).toHaveBeenCalledWith({
       spell_slots: { 1: { total: 4, used: 0 } },
       arcane_recovery_used: true,
@@ -455,6 +479,7 @@ describe('WizardSheet Arcane Recovery button', () => {
       level={4} section="spells" onChange={onChange}
     />);
     fireEvent.click(screen.getByRole('button', { name: 'Use (Short Rest)' }));
+    fireEvent.click(screen.getByTestId('arcane-recovery-confirm-button'));
     // Budget 2 → recover the 2nd-level slot (costs 2), leaving the 1st-level slot expended.
     expect(onChange).toHaveBeenCalledWith({
       spell_slots: { 1: { total: 4, used: 1 }, 2: { total: 3, used: 0 } },
@@ -514,7 +539,7 @@ describe('WizardSheet Cast button on prepared spells', () => {
     });
   });
 
-  it('clicking Cast button decrements the corresponding spell slot', async () => {
+  it('clicking Cast then confirming decrements the corresponding spell slot', async () => {
     const onChange = vi.fn();
     // Level 1 Wizard has 2 level-1 slots (total from class table)
     render(<WizardSheet
@@ -523,6 +548,9 @@ describe('WizardSheet Cast button on prepared spells', () => {
     />);
     await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
     fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
+    // Cast now requires confirmation before consuming a slot
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('cast-confirm-button'));
     expect(onChange).toHaveBeenCalledWith({ spell_slots: { 1: { total: 2, used: 1 } } });
   });
 });

@@ -59,6 +59,22 @@ const sessionService = {
     await api.delete(`/${campaignId}/sessions/${sessionId}/images/${filename}`);
   },
 
+  // ── Music ─────────────────────────────────────────────────────────────────
+
+  uploadMusic: async (campaignId, sessionId, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await api.post(`/${campaignId}/sessions/${sessionId}/music`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data; // full session response with music_url set
+  },
+
+  deleteMusic: async (campaignId, sessionId) => {
+    const res = await api.delete(`/${campaignId}/sessions/${sessionId}/music`);
+    return res.data;
+  },
+
   // ── NPC links ─────────────────────────────────────────────────────────────
 
   listNpcLinks: async (campaignId, sessionId) => {

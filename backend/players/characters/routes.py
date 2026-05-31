@@ -13,6 +13,7 @@ from players.characters.service import (
     create_character, get_characters_for_user, get_character_by_id,
     update_character, delete_character, toggle_character_visibility,
     upload_character_image, delete_character_image,
+    upload_character_music, delete_character_music,
     get_character_timeline_events, create_character_timeline_event, remove_character_timeline_event,
     get_character_npcs, create_character_npc, remove_character_npc,
     apply_rest,
@@ -115,6 +116,27 @@ def remove_image(
     db: Session = Depends(get_db)
 ):
     return delete_character_image(db, character_id, current_user.id, current_user.is_admin)
+
+
+# ── Character theme music ─────────────────────────────────────────────────────
+
+@router.post("/{character_id}/music", response_model=CharacterResponse)
+async def upload_music(
+    character_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return await upload_character_music(db, character_id, file, current_user.id, current_user.is_admin)
+
+
+@router.delete("/{character_id}/music", response_model=CharacterResponse)
+def remove_music(
+    character_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return delete_character_music(db, character_id, current_user.id, current_user.is_admin)
 
 
 # ── Character timeline events ─────────────────────────────────────────────────

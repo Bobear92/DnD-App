@@ -77,6 +77,23 @@ def delete_npc_image(npc_id: int, db: Session = Depends(get_db),
     return service.delete_npc_image_endpoint(db, npc_id, current_user.id)
 
 
+# ── Theme music ──────────────────────────────────────────────────────────────
+
+@router.post("/{npc_id}/music", response_model=NPCResponse,
+             summary="Upload NPC theme music (GM only)")
+async def upload_npc_music(npc_id: int, file: UploadFile = File(...),
+                           db: Session = Depends(get_db),
+                           current_user: User = Depends(get_current_user)):
+    return await service.upload_npc_music(db, npc_id, file, current_user.id)
+
+
+@router.delete("/{npc_id}/music", response_model=NPCResponse,
+               summary="Delete NPC theme music (GM only)")
+def delete_npc_music(npc_id: int, db: Session = Depends(get_db),
+                     current_user: User = Depends(get_current_user)):
+    return service.delete_npc_music_endpoint(db, npc_id, current_user.id)
+
+
 # ── NPC Relationships ──────────────────────────────────────────────────────────
 
 @router.get("/{npc_id}/relationships", response_model=List[NPCRelationshipResponse],

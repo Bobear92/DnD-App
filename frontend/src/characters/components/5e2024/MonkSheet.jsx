@@ -119,7 +119,7 @@ function WeaponMasteryList({ value, onChange, readOnly, max }) {
   );
 }
 
-export default function MonkSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all' }) {
+export default function MonkSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', acExtra = null, maxHpNode = null }) {
   if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
@@ -154,7 +154,7 @@ export default function MonkSheet({ data = {}, onChange, readOnly = false, level
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
         <Field label="Max HP">
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.hp_max ?? '—'}</div>
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{maxHpNode ?? (data.hp_max ?? '—')}</div>
         </Field>
         <Field label="Current HP">
           <Input type="number" value={data.current_hp ?? ''} onChange={e => set('current_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
@@ -176,6 +176,8 @@ export default function MonkSheet({ data = {}, onChange, readOnly = false, level
           <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       )}
+
+      {showCombat && acExtra}
 
       {showCombat && (
       <div className="grid grid-cols-3 gap-3">
@@ -231,7 +233,7 @@ export default function MonkSheet({ data = {}, onChange, readOnly = false, level
       {/* Subclass (L3) */}
       {showFeatures && level >= 3 && (
         <Field label="Monastic Tradition (Subclass)">
-          {(readOnly || !!data.subclass) ? (
+          {(readOnly || (!creation && !!data.subclass)) ? (
             data.subclass ? (
               <SubclassDetails className="Monk" edition="5.5e" subclassName={data.subclass} level={level} />
             ) : (

@@ -8,7 +8,21 @@
       "Bash(npm run *)",
       "Bash(curl -s http://localhost:5173)",
       "Skill(keybindings-help)",
-      "Skill(keybindings-help:*)"
+      "Skill(keybindings-help:*)",
+      "Bash(xxd)",
+      "Bash(python3 -c ' *)",
+      "Bash(git stash *)",
+      "PowerShell(npm test 2>&1)",
+      "Bash(grep -n \"an actual attack\\\\|18 tests\\)\\\\|includeKeys\\\\|excludeKeys\\\\|recharges on a short or long rest\" ../CLAUDE.md > /tmp/verify.txt 2>&1; wc -l /tmp/verify.txt)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(python3 -)",
+      "Bash(grep -n \"draconic_bloodline = {name, damage}\" \"c:/Users/rober/Documents/Projects/dnd-app/CLAUDE.md\")",
+      "PowerShell(git -C \"c:\\\\Users\\\\rober\\\\Documents\\\\Projects\\\\dnd-app\" status --short)",
+      "Bash(git check-ignore *)",
+      "Bash(git add *)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }
