@@ -33,6 +33,37 @@ export const TRAIT_TOOL_GRANTS = {
   'Tinker': ["Tinker's tools"],
 };
 
+// Traits whose tool proficiency is a *player choice* (handled by a dedicated picker, e.g. the
+// Dwarf "Tool Proficiency" → dwarf_tool select) rather than a fixed automatic grant.
+const CHOICE_TOOL_TRAITS = new Set(['Tool Proficiency']);
+
+// Shared: collect grants from a race+subrace's traits against a trait→proficiencies table.
+function grantsFromTraits(race, subrace, table, skip = null) {
+  const traits = [...(race?.traits ?? []), ...(subrace?.traits ?? [])];
+  const out = new Set();
+  for (const t of traits) {
+    if (skip?.has(t)) continue;
+    (table[t] ?? []).forEach((x) => out.add(x));
+  }
+  return [...out].sort();
+}
+
+/** Fixed tool proficiencies granted by race/subrace traits (e.g. Rock Gnome "Tinker" → Tinker's
+ *  tools). Excludes player-choice tool traits (Dwarf "Tool Proficiency"), which are picked separately. */
+export function getRaceGrantedTools(race, subrace) {
+  return grantsFromTraits(race, subrace, TRAIT_TOOL_GRANTS, CHOICE_TOOL_TRAITS);
+}
+
+/** Weapon proficiencies granted by race/subrace traits (Elf/Drow Weapon Training, …). */
+export function getRaceGrantedWeapons(race, subrace) {
+  return grantsFromTraits(race, subrace, TRAIT_WEAPON_GRANTS);
+}
+
+/** Armor proficiencies granted by race/subrace traits (Mountain Dwarf "Dwarven Armor Training"). */
+export function getRaceGrantedArmor(race, subrace) {
+  return grantsFromTraits(race, subrace, TRAIT_ARMOR_GRANTS);
+}
+
 /**
  * Returns the deduplicated list of skill names a race + subrace grants via
  * traits like Keen Senses and Menacing.

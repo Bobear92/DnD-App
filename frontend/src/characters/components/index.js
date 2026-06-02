@@ -3,14 +3,14 @@ export { default as BarbarianSheet } from './BarbarianSheet';
 export { default as BardSheet } from './BardSheet';
 export { default as ClericSheet } from './ClericSheet';
 export { default as DruidSheet } from './DruidSheet';
-export { default as FighterSheet } from './FighterSheet';
+export { FighterSheet5e as FighterSheet } from './classSheet/configs';
 export { default as MonkSheet } from './MonkSheet';
 export { default as PaladinSheet } from './PaladinSheet';
 export { default as RangerSheet } from './RangerSheet';
 export { default as RogueSheet } from './RogueSheet';
 export { default as SorcererSheet } from './SorcererSheet';
 export { default as WarlockSheet } from './WarlockSheet';
-export { default as WizardSheet } from './WizardSheet';
+export { WizardSheet5e as WizardSheet } from './classSheet/configs';
 
 export const SUPPORTED_CLASSES_5E = [
   'Artificer',
@@ -26,14 +26,14 @@ export function getClassSheet(charClass) {
     Bard:      () => import('./BardSheet').then(m => m.default),
     Cleric:    () => import('./ClericSheet').then(m => m.default),
     Druid:     () => import('./DruidSheet').then(m => m.default),
-    Fighter:   () => import('./FighterSheet').then(m => m.default),
+    Fighter:   () => import('./classSheet/configs').then(m => m.FighterSheet5e),
     Monk:      () => import('./MonkSheet').then(m => m.default),
     Paladin:   () => import('./PaladinSheet').then(m => m.default),
     Ranger:    () => import('./RangerSheet').then(m => m.default),
     Rogue:     () => import('./RogueSheet').then(m => m.default),
     Sorcerer:  () => import('./SorcererSheet').then(m => m.default),
     Warlock:   () => import('./WarlockSheet').then(m => m.default),
-    Wizard:    () => import('./WizardSheet').then(m => m.default),
+    Wizard:    () => import('./classSheet/configs').then(m => m.WizardSheet5e),
   };
   return map[charClass] ?? null;
 }

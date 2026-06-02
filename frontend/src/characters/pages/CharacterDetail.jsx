@@ -161,6 +161,7 @@ export default function CharacterDetail() {
   const [error, setError] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [playerView, setPlayerView] = useState(false);
+  const [gmEdit, setGmEdit] = useState(false); // GM Edit toggle: unlocks permanent choices (Epic 1)
 
   const [xpInput, setXpInput] = useState('');
   const [addingXp, setAddingXp] = useState(false);
@@ -539,6 +540,17 @@ export default function CharacterDetail() {
               <Button variant="outline" size="sm" onClick={() => setPlayerView(v => !v)}>
                 {playerView ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
                 {playerView ? 'GM View' : 'Player View'}
+              </Button>
+            )}
+            {isGm && !playerView && (
+              <Button
+                variant={gmEdit ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setGmEdit(v => !v)}
+                data-testid="gm-edit-toggle"
+                title="Unlock permanent choices (subclass, fighting style) for editing"
+              >
+                {gmEdit ? 'GM Edit: On' : 'GM Edit: Off'}
               </Button>
             )}
             {isGm && !displayAsPlayer && (
@@ -1286,6 +1298,7 @@ export default function CharacterDetail() {
                     data={classSection.draft}
                     onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
                     readOnly={!showEditable}
+                    gmEdit={gmEdit}
                     level={identity.draft?.level ?? character.level}
                     section="stats"
                     scores={identity.draft ?? {}}
@@ -1349,6 +1362,7 @@ export default function CharacterDetail() {
                     data={classSection.draft}
                     onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
                     readOnly={!showEditable}
+                    gmEdit={gmEdit}
                     level={identity.draft?.level ?? character.level}
                     section="features"
                     scores={identity.draft ?? {}}
@@ -1404,6 +1418,7 @@ export default function CharacterDetail() {
                       data={classSection.draft}
                       onChange={autoSaveClassPatch}
                       readOnly={!showEditable}
+                      gmEdit={gmEdit}
                       level={identity.draft?.level ?? character.level}
                       section="spells"
                       abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}

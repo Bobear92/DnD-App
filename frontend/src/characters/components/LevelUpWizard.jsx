@@ -14,6 +14,7 @@ import {
 import SubclassPickerWithDetail from './SubclassPickerWithDetail';
 import SpellList from './SpellList';
 import { CLASS_PROGRESSION } from './classProgressionTables';
+import { getClassConfig } from './classSheet/configs';
 
 function conMod(score) { return Math.floor((score - 10) / 2); }
 
@@ -38,14 +39,20 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const SUBCLASS_UNLOCK = is2024 ? SUBCLASS_UNLOCK_LEVEL_2024 : SUBCLASS_UNLOCK_LEVEL_5E;
   const SUBCLASS_OPTS = is2024 ? SUBCLASS_OPTIONS_2024 : SUBCLASS_OPTIONS_5E;
 
+  // Data-driven classes (Fighter, Wizard) own these values in their config — prefer it so the
+  // wizard and the sheet share one source of truth. The remaining classes fall back to the maps.
+  const config = getClassConfig(character.char_class, edition);
+
   const newLevel = (character.level ?? 1) + 1;
-  const hitDie = HIT_DICE[character.char_class] ?? 8;
+  const hitDie = config?.hitDie ?? HIT_DICE[character.char_class] ?? 8;
   const con = conMod(character.constitution ?? 10);
   const average = Math.floor(hitDie / 2) + 1;
 
-  const needsSubclass = newLevel === SUBCLASS_UNLOCK[character.char_class]
+  const subclassUnlockLevel = config?.subclass?.unlockLevel ?? SUBCLASS_UNLOCK[character.char_class];
+  const needsSubclass = newLevel === subclassUnlockLevel
     && !character.character_data?.subclass;
-  const subclassOptions = SUBCLASS_OPTS[character.char_class] ?? [];
+  const subclassOptions = config?.subclass?.options ?? SUBCLASS_OPTS[character.char_class] ?? [];
+  const subclassEdition = config?.subclass?.subclassEdition ?? (is2024 ? '5.5e' : '5e');
 
   // Known casters pick spells/cantrips on level-up.
   const progression = CLASS_PROGRESSION[is2024 ? '5.5e' : '5e']?.[character.char_class];
@@ -69,10 +76,10 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   ];
 
   const features = useMemo(() => {
-    const classFeats = CLASS_FEATURES[character.char_class];
+    const classFeats = config?.features ?? CLASS_FEATURES[character.char_class];
     if (!classFeats) return [];
     return classFeats[newLevel] ?? [];
-  }, [character.char_class, newLevel, CLASS_FEATURES]);
+  }, [character.char_class, newLevel, CLASS_FEATURES, config]);
 
   const currentHpMax = character.character_data?.hp_max ?? null;
 
@@ -251,7 +258,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
               value={subclassChoice}
               onChange={setSubclassChoice}
               className={character.char_class}
-              edition={is2024 ? '5.5e' : '5e'}
+              edition={subclassEdition}
             />
           </div>
         )}

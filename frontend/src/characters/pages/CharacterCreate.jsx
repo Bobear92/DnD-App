@@ -39,7 +39,11 @@ import {
 import { HIT_DICE_2024 } from '../components/classFeatures2024';
 import { cn } from '@/lib/utils';
 import TraitBadgeList from '../components/TraitBadge';
-import { getRaceGrantedSkills, getRaceSkillSources } from '../components/raceProficienciesData';
+import { getRaceGrantedSkills, getRaceSkillSources, getRaceGrantedTools, getRaceGrantedWeapons, getRaceGrantedArmor } from '../components/raceProficienciesData';
+import { totalHpBonus } from '../components/combatBonuses';
+import SpellList from '../components/SpellList';
+import { getClassConfig } from '../components/classSheet/configs';
+import { SUBCLASS_UNLOCK_LEVEL_5E, SUBCLASS_UNLOCK_LEVEL_2024 } from '../components/classChoicesData';
 
 // ─── Ability score validation constants ──────────────────────────────────────
 
@@ -427,6 +431,9 @@ const ARTISANS_TOOLS_LIST = [
   "Weaver's tools", "Woodcarver's tools",
 ];
 
+// Dwarf "Tool Proficiency" racial trait: one artisan's tool of the player's choice.
+const DWARF_TOOL_OPTIONS = ["Smith's tools", "Brewer's supplies", "Mason's tools"];
+
 const BACKGROUND_CHOICES_MAP = {
   'Acolyte':       { languages: 2 },
   'Criminal':      { tool: 'gaming_set' },
@@ -669,12 +676,15 @@ function BgDetail({ bg }) {
   );
 }
 
-function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [] }) {
+function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [], backgroundGrants = null, backgroundSkills = [] }) {
   const isDragonborn = race?.name === 'Dragonborn';
   const isHighElf    = subrace?.name === 'High Elf';
   const isHalfElf    = race?.name === 'Half-Elf';
   const isHuman      = race?.name === 'Human';
-  if (!isDragonborn && !isHighElf && !isHalfElf && !isHuman) return null;
+  const isDwarf      = race?.name === 'Dwarf';
+  if (!isDragonborn && !isHighElf && !isHalfElf && !isHuman && !isDwarf) return null;
+
+  const bgChosenTool = backgroundGrants?.chosenTool || '';
 
   return (
     <div className="space-y-4 pt-3 border-t" data-testid="race-choices-section">
@@ -806,21 +816,28 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
             {ALL_SKILLS_18.map(skill => {
               const selected = choices.half_elf_skills?.includes(skill);
               const atLimit  = (choices.half_elf_skills?.length ?? 0) >= 2 && !selected;
+              const fromBg   = backgroundSkills.includes(skill);
+              // Background skills are flagged amber. Un-picked ones are disabled (don't waste a slot);
+              // an already-picked overlap stays clickable so it can be removed (the Next gate blocks it).
+              const blocked  = (fromBg && !selected) || atLimit;
               return (
                 <button
                   key={skill}
                   type="button"
                   data-testid={`half-elf-skill-${skill.replace(/\s+/g, '-')}`}
-                  disabled={atLimit}
+                  disabled={blocked}
                   onClick={() => {
+                    if (blocked) return;
                     const cur  = choices.half_elf_skills ?? [];
                     const next = selected ? cur.filter(s => s !== skill) : [...cur, skill];
                     onChange({ ...choices, half_elf_skills: next });
                   }}
                   className={cn(
                     'rounded px-2 py-1 text-xs font-medium border transition-all',
-                    selected ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border',
-                    atLimit ? 'opacity-40 cursor-not-allowed' : 'hover:border-primary',
+                    fromBg
+                      ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600'
+                      : selected ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border',
+                    blocked && !selected ? 'opacity-40 cursor-not-allowed' : !fromBg ? 'hover:border-primary' : '',
                   )}
                 >
                   {skill}
@@ -829,6 +846,26 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
             })}
           </div>
           <p className="text-xs text-muted-foreground">{choices.half_elf_skills?.length ?? 0}/2 chosen</p>
+          {backgroundSkills.length > 0 && (
+            <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background — pick something else.</p>
+          )}
+        </div>
+      )}
+
+      {/* Half-Elf: Extra Language (one of choice) */}
+      {isHalfElf && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Extra Language</Label>
+          <p className="text-xs text-muted-foreground">Half-elves speak one additional language of your choice.</p>
+          <select
+            data-testid="half-elf-language-select"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            value={choices.half_elf_language || '__none__'}
+            onChange={e => onChange({ ...choices, half_elf_language: e.target.value === '__none__' ? '' : e.target.value })}
+          >
+            <option value="__none__">Select a language… (optional)</option>
+            {STANDARD_LANGUAGES_LIST.filter(l => !knownLanguages.includes(l)).map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
         </div>
       )}
 
@@ -850,11 +887,46 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
           </select>
         </div>
       )}
+
+      {/* Dwarf: Tool Proficiency — one artisan's tool of choice */}
+      {isDwarf && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Tool Proficiency <span className="text-destructive">*</span>
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Dwarves gain proficiency with one type of artisan's tools: smith's tools, brewer's supplies, or mason's tools.
+          </p>
+          {backgroundGrants && (backgroundGrants.chosenTool || backgroundGrants.toolText || backgroundGrants.skills?.length > 0) && (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-0.5" data-testid="dwarf-tool-bg-grants">
+              <div className="font-medium text-foreground">
+                From your background{backgroundGrants.name ? ` (${backgroundGrants.name})` : ''} — don't pick these twice:
+              </div>
+              {backgroundGrants.chosenTool
+                ? <div>Tool: <span className="font-medium">{backgroundGrants.chosenTool}</span></div>
+                : backgroundGrants.toolText && <div>Tools: {backgroundGrants.toolText}</div>}
+              {backgroundGrants.skills?.length > 0 && <div>Skills: {backgroundGrants.skills.join(', ')}</div>}
+            </div>
+          )}
+          <select
+            data-testid="dwarf-tool-select"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            value={choices.dwarf_tool || '__none__'}
+            onChange={e => onChange({ ...choices, dwarf_tool: e.target.value === '__none__' ? '' : e.target.value })}
+          >
+            <option value="__none__">Select a tool…</option>
+            {DWARF_TOOL_OPTIONS.map(t => {
+              const dup = t === bgChosenTool;
+              return <option key={t} value={t} disabled={dup}>{t}{dup ? ' (already from background)' : ''}</option>;
+            })}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
 
-function BackgroundChoicesSection({ bg, choices, onChange, knownLanguages = [] }) {
+function BackgroundChoicesSection({ bg, choices, onChange, knownLanguages = [], excludeTools = [] }) {
   if (!bg) return null;
   const spec = BACKGROUND_CHOICES_MAP[bg.name];
   if (!spec) return null;
@@ -876,7 +948,7 @@ function BackgroundChoicesSection({ bg, choices, onChange, knownLanguages = [] }
 
       {spec.tool && (
         <div className="space-y-1.5">
-          <Label className="text-sm font-medium">{toolLabel[spec.tool]}</Label>
+          <Label className="text-sm font-medium">{toolLabel[spec.tool]} <span className="text-destructive">*</span></Label>
           <p className="text-xs text-muted-foreground">Choose which type you gain proficiency with.</p>
           <select
             data-testid="bg-tool-choice-select"
@@ -884,8 +956,11 @@ function BackgroundChoicesSection({ bg, choices, onChange, knownLanguages = [] }
             value={choices.tool_choice || '__none__'}
             onChange={e => onChange({ ...choices, tool_choice: e.target.value === '__none__' ? '' : e.target.value })}
           >
-            <option value="__none__">Select… (optional)</option>
-            {toolOptions[spec.tool].map(o => <option key={o} value={o}>{o}</option>)}
+            <option value="__none__">Select…</option>
+            {toolOptions[spec.tool].map(o => {
+              const dup = excludeTools.includes(o);
+              return <option key={o} value={o} disabled={dup}>{o}{dup ? ' (already from race)' : ''}</option>;
+            })}
           </select>
         </div>
       )}
@@ -895,7 +970,7 @@ function BackgroundChoicesSection({ bg, choices, onChange, knownLanguages = [] }
         const excluded   = [...knownLanguages, ...otherSlots];
         return (
           <div key={i} className="space-y-1.5">
-            <Label className="text-sm font-medium">Language{spec.languages > 1 ? ` ${i + 1}` : ''}</Label>
+            <Label className="text-sm font-medium">Language{spec.languages > 1 ? ` ${i + 1}` : ''} <span className="text-destructive">*</span></Label>
             <select
               data-testid={`bg-language-${i}-select`}
               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
@@ -907,7 +982,7 @@ function BackgroundChoicesSection({ bg, choices, onChange, knownLanguages = [] }
                 onChange({ ...choices, language_choices: next });
               }}
             >
-              <option value="__none__">Select a language… (optional)</option>
+              <option value="__none__">Select a language…</option>
               {STANDARD_LANGUAGES_LIST.filter(l => !excluded.includes(l)).map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
@@ -933,9 +1008,12 @@ function AbilityScoreSection({ method, allowRerollOnes, scores, onChange, diceRo
   return <StandardSpreadAssignment scores={scores} onChange={onChange} />;
 }
 
-function ProficienciesCard({ cls }) {
+function ProficienciesCard({ cls, chosenTools = [], raceWeapons = [], raceArmor = [] }) {
   const profs = CLASS_PROFICIENCIES_5E[cls];
   if (!profs) return null;
+  const tools = [...new Set(chosenTools.filter(Boolean))];
+  const weapons = [...new Set(raceWeapons.filter(Boolean))];
+  const armor = [...new Set(raceArmor.filter(Boolean))];
   return (
     <section className="rounded-lg border bg-card p-4 space-y-3">
       <h2 className="font-semibold">Proficiencies</h2>
@@ -943,14 +1021,29 @@ function ProficienciesCard({ cls }) {
         <div className="space-y-0.5">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Armor</div>
           <div>{profs.armor === 'None' ? <span className="text-muted-foreground italic">None</span> : profs.armor}</div>
+          {armor.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap mt-1" data-testid="race-armor-proficiencies">
+              {armor.map(a => <Badge key={a} variant="secondary">{a}</Badge>)}
+            </div>
+          )}
         </div>
         <div className="space-y-0.5">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Weapons</div>
           <div>{profs.weapons}</div>
+          {weapons.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap mt-1" data-testid="race-weapon-proficiencies">
+              {weapons.map(w => <Badge key={w} variant="secondary">{w}</Badge>)}
+            </div>
+          )}
         </div>
         <div className="space-y-0.5">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tools</div>
-          <div>{profs.tools ?? <span className="text-muted-foreground italic">None</span>}</div>
+          {profs.tools && <div>{profs.tools}</div>}
+          {tools.length > 0 ? (
+            <div className="flex gap-1.5 flex-wrap mt-1" data-testid="chosen-tool-proficiencies">
+              {tools.map(t => <Badge key={t} variant="secondary">{t}</Badge>)}
+            </div>
+          ) : (!profs.tools && <span className="text-muted-foreground italic">None</span>)}
         </div>
         <div className="space-y-0.5">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Saving Throws</div>
@@ -1003,7 +1096,7 @@ export default function CharacterCreate() {
 
   const [raceSearch, setRaceSearch] = useState('');
 
-  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], human_language: '' };
+  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], half_elf_language: '', human_language: '', dwarf_tool: '' };
   const EMPTY_BG_CHOICES   = { tool_choice: '', language_choices: [] };
   const [raceChoices, setRaceChoices] = useState(EMPTY_RACE_CHOICES);
   const [bgChoices,   setBgChoices]   = useState(EMPTY_BG_CHOICES);
@@ -1027,6 +1120,11 @@ export default function CharacterCreate() {
       setForm(f => ({ ...f, strength: 8, dexterity: 8, constitution: 8, intelligence: 8, wisdom: 8, charisma: 8 }));
     }
   }, [campaign?.ability_score_method]);
+
+  // Each wizard step should start at the top of the screen, not wherever the previous step scrolled to.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [step]);
 
   const edition = campaign?.edition || '5e';
   const is2024 = edition === '5.5e';
@@ -1063,12 +1161,47 @@ export default function CharacterCreate() {
   // and merged into the final character_data.skill_proficiencies on submit.
   const raceSkills = getRaceGrantedSkills(selectedRaceObj, selectedSubraceObj);
   const raceSkillSources = getRaceSkillSources(selectedRaceObj, selectedSubraceObj);
+  // All skills the race grants the character — trait-based (Keen Senses, …) PLUS the Half-Elf
+  // Skill Versatility picks. Passed to the class sheet so they show emerald + non-clickable, and
+  // used by the de-dup prune so a class skill can't shadow one already granted by the race.
+  const raceGrantedSkillsAll = [...new Set([...raceSkills, ...(raceChoices.half_elf_skills ?? [])])];
+
+  // Fixed proficiencies granted by race/subrace traits (e.g. Rock Gnome "Tinker" → Tinker's tools,
+  // Elf Weapon Training, Mountain Dwarf armor). Surfaced in the review Proficiencies card + saved.
+  const raceTools = getRaceGrantedTools(selectedRaceObj, selectedSubraceObj);
+  const raceWeapons = getRaceGrantedWeapons(selectedRaceObj, selectedSubraceObj);
+  const raceArmor = getRaceGrantedArmor(selectedRaceObj, selectedSubraceObj);
 
   // Combined racial ASI (base race + subrace + Half-Elf chosen stats) — used in submit and previews
   const halfElfExtraAsi = (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_asi_stats.length > 0)
     ? Object.fromEntries(raceChoices.half_elf_asi_stats.map(s => [s, 1]))
     : {};
   const combinedRaceAsi = mergeAsi(selectedRaceObj?.asiBonus, selectedSubraceObj?.asiBonus, halfElfExtraAsi);
+
+  // Race/subrace passive HP bonuses (e.g. Hill Dwarf "Dwarven Toughness", Draconic Resilience)
+  // folded into starting HP — mirrors the CharacterDetail Stats-tab MaxHpValue. Level is 1 at creation.
+  const allRaceTraits = [
+    ...(selectedRaceObj?.traits ?? []),
+    ...(selectedSubraceObj?.traits ?? []),
+  ];
+  const creationHpBonus = totalHpBonus({
+    charClass: selectedClass,
+    subclass: classData?.subclass,
+    raceTraits: allRaceTraits,
+    level: 1,
+  });
+
+  // Starting HP, computed once and reused by submit + the review page + the features-step preview.
+  const creationHitDie = (is2024 ? HIT_DICE_2024 : HIT_DICE_5E)[selectedClass] ?? 8;
+  const creationConMod = Math.floor(((form.constitution + (combinedRaceAsi.constitution ?? 0)) - 10) / 2);
+  const creationStartingHp = creationHitDie + Math.max(0, creationConMod) + creationHpBonus;
+  // HP breakdown shown under the value, e.g. "d10 + 1 + 1".
+  const creationHpFormula = `d${creationHitDie}`
+    + (creationConMod > 0 ? ` + ${creationConMod} CON` : '')
+    + (creationHpBonus > 0 ? ` + ${creationHpBonus} trait` : '');
+
+  // Base walking speed = race speed + any subrace bonus (e.g. Wood Elf "Fleet of Foot" +5 → 35).
+  const creationSpeed = (selectedRaceObj?.speed ?? 30) + (selectedSubraceObj?.speedBonus ?? 0);
 
   const raceGrantedCantrips = [
     ...(raceChoices.high_elf_cantrip ? [raceChoices.high_elf_cantrip] : []),
@@ -1077,6 +1210,26 @@ export default function CharacterCreate() {
     ...(selectedRaceObj?.name && RACE_GRANTED_CANTRIPS_MAP[selectedRaceObj.name]
       ? [RACE_GRANTED_CANTRIPS_MAP[selectedRaceObj.name]] : []),
   ];
+
+  // Targeted, non-destructive de-dup: when the race/subrace/background (or High Elf cantrip)
+  // changes, drop any skill or cantrip those sources now GRANT from the manual class picks, so a
+  // proficiency is never represented twice (a stuck manual pick + an emerald/violet grant). Other
+  // class choices (fighting style, spells, ability scores) are left untouched. Switching CLASS
+  // already resets classData entirely in handleClassSelect, so it needs no handling here.
+  useEffect(() => {
+    const grantedSkills = new Set([...raceGrantedSkillsAll, ...backgroundSkills]);
+    const grantedCantrips = new Set(raceGrantedCantrips);
+    setClassData(prev => {
+      const curSkills = prev.skill_proficiencies ?? [];
+      const curCantrips = prev.cantrips ?? [];
+      const nextSkills = curSkills.filter(s => !grantedSkills.has(s));
+      const nextCantrips = curCantrips.filter(c => !grantedCantrips.has(c));
+      if (nextSkills.length === curSkills.length && nextCantrips.length === curCantrips.length) return prev;
+      return { ...prev, skill_proficiencies: nextSkills, cantrips: nextCantrips };
+    });
+    // Keyed on the grant *sources* (stable primitives), not the derived arrays.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRaceObj?.name, selectedSubraceObj?.name, selectedBgObj?.name, raceChoices.high_elf_cantrip, (raceChoices.half_elf_skills ?? []).join('|')]);
 
   const handleClassSelect = async (cls) => {
     setSelectedClass(cls);
@@ -1129,9 +1282,6 @@ export default function CharacterCreate() {
     setSaving(true);
     setError('');
 
-    const numericHitDice = is2024 ? HIT_DICE_2024 : HIT_DICE_5E;
-    const hitDie = numericHitDice[selectedClass] ?? 8;
-
     // Apply racial ASIs (base race + subrace) to player-assigned scores
     const finalScores = {
       strength:     form.strength     + (combinedRaceAsi.strength     ?? 0),
@@ -1142,17 +1292,13 @@ export default function CharacterCreate() {
       charisma:     form.charisma     + (combinedRaceAsi.charisma     ?? 0),
     };
 
-    const conMod = Math.floor((finalScores.constitution - 10) / 2);
-    const hp_max = hitDie + Math.max(0, conMod);
+    const hp_max = creationStartingHp;
 
-    const allRaceTraits = [
-      ...(selectedRaceObj?.traits ?? []),
-      ...(selectedSubraceObj?.traits ?? []),
-    ];
     const allRaceLanguages = [
       ...(selectedRaceObj?.languages ?? []),
       ...(selectedSubraceObj?.languages ?? []),
       ...(raceChoices.high_elf_language ? [raceChoices.high_elf_language] : []),
+      ...(raceChoices.half_elf_language ? [raceChoices.half_elf_language] : []),
       ...(raceChoices.human_language ? [raceChoices.human_language] : []),
     ];
     const bgLanguages = (bgChoices.language_choices ?? []).filter(Boolean);
@@ -1166,7 +1312,7 @@ export default function CharacterCreate() {
       character_data: {
         ...classData,
         hp_max,
-        speed: selectedRaceObj?.speed ?? 30,
+        speed: creationSpeed,
         skill_proficiencies: [...new Set([
           ...(classData.skill_proficiencies ?? []),
           ...backgroundSkills,
@@ -1178,6 +1324,10 @@ export default function CharacterCreate() {
         race_languages: allRaceLanguages,
         draconic_ancestry: raceChoices.draconic_ancestry ?? null,
         high_elf_cantrip: raceChoices.high_elf_cantrip || null,
+        race_tool_proficiency: raceChoices.dwarf_tool || null,
+        ...(raceTools.length ? { race_tool_proficiencies: raceTools } : {}),
+        ...(raceWeapons.length ? { race_weapon_proficiencies: raceWeapons } : {}),
+        ...(raceArmor.length ? { race_armor_proficiencies: raceArmor } : {}),
         background_tool_choice: bgChoices.tool_choice || null,
         ...(bgLanguages.length > 0 ? { background_languages: bgLanguages } : {}),
       },
@@ -1219,13 +1369,28 @@ export default function CharacterCreate() {
     ? 'Step 4 of 5 — Class Features & Ability Scores'
     : 'Step 5 of 5 — Review & Create';
 
-  // Next is blocked when name is missing, subrace not chosen, or required race choices incomplete
+  // Next is blocked when name is missing, subrace not chosen, or required race/background choices incomplete
+  const bgSpec = selectedBgObj ? BACKGROUND_CHOICES_MAP[selectedBgObj.name] : null;
+  const bgLanguagesChosen = (bgChoices.language_choices ?? []).filter(Boolean).length;
+
+  // Skill overlap between background and race. Player-chosen Half-Elf versatility picks that
+  // duplicate a background skill BLOCK progression (the player can simply pick something else);
+  // automatic trait grants (Keen Senses, Menacing) that overlap a background skill only WARN
+  // (the player can't deselect a trait, so we let them continue but flag the wasted overlap).
+  const bgSkillSet = selectedBgObj?.skills ?? [];
+  const halfElfSkillDoubles = (raceChoices.half_elf_skills ?? []).filter(s => bgSkillSet.includes(s));
+  const traitSkillOverlap = raceSkills.filter(s => bgSkillSet.includes(s));
+
   const identityNextBlocked = !form.name.trim() ||
     (selectedRaceObj?.subraces?.length > 0 && !selectedSubraceObj) ||
     (selectedRaceObj?.name === 'Dragonborn' && !raceChoices.draconic_ancestry) ||
     (selectedSubraceObj?.name === 'High Elf' && !raceChoices.high_elf_cantrip) ||
     (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_asi_stats.length < 2) ||
-    (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_skills.length < 2);
+    (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_skills.length < 2) ||
+    (selectedRaceObj?.name === 'Dwarf' && !raceChoices.dwarf_tool) ||
+    (!!bgSpec?.tool && !bgChoices.tool_choice) ||
+    (!!bgSpec?.languages && bgLanguagesChosen < bgSpec.languages) ||
+    halfElfSkillDoubles.length > 0;
 
   // Ability scores are complete when all 6 values are fully assigned per the campaign method
   const abilityScoresReady = (() => {
@@ -1250,6 +1415,23 @@ export default function CharacterCreate() {
   const skillsChosen = (classData.skill_proficiencies ?? []).length;
   const skillsReady = skillsChosen >= skillsRequired;
   const skillsNeeded = skillsRequired - skillsChosen;
+
+  // Discrete class choices that must be made at level 1 before leaving the Features step — a
+  // character must never be created with a required pick (Fighting Style, an L1 subclass like the
+  // Cleric's Divine Domain / Sorcerer Origin / Warlock Patron, etc.) left unset. Driven by the
+  // class config (lockedChoices + subclass) for migrated classes, falling back to the subclass
+  // unlock-level map for the rest. (creation level is always 1.)
+  const classConfig = getClassConfig(selectedClass, edition);
+  const subclassUnlock = classConfig?.subclass?.unlockLevel
+    ?? (is2024 ? SUBCLASS_UNLOCK_LEVEL_2024 : SUBCLASS_UNLOCK_LEVEL_5E)[selectedClass];
+  const missingClassChoices = [];
+  if (subclassUnlock != null && subclassUnlock <= 1 && !classData.subclass) {
+    missingClassChoices.push(classConfig?.subclass?.label ?? 'Subclass');
+  }
+  (classConfig?.lockedChoices ?? []).forEach(lc => {
+    if ((lc.minLevel ?? 1) <= 1 && !classData[lc.key]) missingClassChoices.push(lc.label);
+  });
+  const classChoicesReady = missingClassChoices.length === 0;
 
   return (
     <MainLayout>
@@ -1419,6 +1601,13 @@ export default function CharacterCreate() {
                   ...(selectedRaceObj?.languages ?? []),
                   ...(selectedSubraceObj?.languages ?? []),
                 ]}
+                backgroundGrants={selectedBgObj ? {
+                  name: selectedBgObj.name,
+                  toolText: selectedBgObj.tools || '',
+                  chosenTool: bgChoices.tool_choice || '',
+                  skills: selectedBgObj.skills ?? [],
+                } : null}
+                backgroundSkills={selectedBgObj?.skills ?? []}
               />
 
 
@@ -1431,6 +1620,25 @@ export default function CharacterCreate() {
                 <p className="text-xs text-muted-foreground mt-0.5">Click a background to see full details — click again to deselect</p>
               </div>
 
+              {/* Selected background detail + its choices — shown above the grid so they're
+                  visible without scrolling past every card */}
+              {selectedBgObj && <BgDetail bg={selectedBgObj} />}
+              {selectedBgObj && (
+                <BackgroundChoicesSection
+                  bg={selectedBgObj}
+                  choices={bgChoices}
+                  onChange={setBgChoices}
+                  knownLanguages={[
+                    ...(selectedRaceObj?.languages ?? []),
+                    ...(selectedSubraceObj?.languages ?? []),
+                    ...(raceChoices.high_elf_language ? [raceChoices.high_elf_language] : []),
+                    ...(raceChoices.half_elf_language ? [raceChoices.half_elf_language] : []),
+                    ...(raceChoices.human_language ? [raceChoices.human_language] : []),
+                  ]}
+                  excludeTools={raceChoices.dwarf_tool ? [raceChoices.dwarf_tool] : []}
+                />
+              )}
+
               {/* Background card grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {displayedBackgrounds.map(bg => (
@@ -1442,24 +1650,6 @@ export default function CharacterCreate() {
                   />
                 ))}
               </div>
-
-              {/* Selected background detail */}
-              {selectedBgObj && <BgDetail bg={selectedBgObj} />}
-
-              {/* Background-specific choices (tool type, languages) */}
-              {selectedBgObj && (
-                <BackgroundChoicesSection
-                  bg={selectedBgObj}
-                  choices={bgChoices}
-                  onChange={setBgChoices}
-                  knownLanguages={[
-                    ...(selectedRaceObj?.languages ?? []),
-                    ...(selectedSubraceObj?.languages ?? []),
-                    ...(raceChoices.high_elf_language ? [raceChoices.high_elf_language] : []),
-                    ...(raceChoices.human_language ? [raceChoices.human_language] : []),
-                  ]}
-                />
-              )}
             </section>
 
             {/* Alignment */}
@@ -1475,6 +1665,20 @@ export default function CharacterCreate() {
                   {ALIGNMENTS.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </section>
+            )}
+
+            {/* Skill-overlap notices */}
+            {halfElfSkillDoubles.length > 0 && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2 text-sm" data-testid="skill-double-error">
+                {halfElfSkillDoubles.join(' and ')} {halfElfSkillDoubles.length > 1 ? 'are' : 'is'} granted by your background
+                — pick {halfElfSkillDoubles.length > 1 ? 'different Half-Elf skills' : 'a different Half-Elf skill'} so you don't double up.
+              </div>
+            )}
+            {halfElfSkillDoubles.length === 0 && traitSkillOverlap.length > 0 && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 px-3 py-2 text-sm" data-testid="skill-overlap-warning">
+                Heads up: your race already grants {traitSkillOverlap.join(' and ')} and so does your background.
+                You can continue, but you won't get a replacement skill for the overlap.
+              </div>
             )}
 
             {/* Navigation */}
@@ -1517,7 +1721,7 @@ export default function CharacterCreate() {
             </section>
 
             {/* Class proficiencies */}
-            <ProficienciesCard cls={selectedClass} />
+            <ProficienciesCard cls={selectedClass} chosenTools={[raceChoices.dwarf_tool, ...raceTools, bgChoices.tool_choice, classData.tool_choice]} raceWeapons={raceWeapons} raceArmor={raceArmor} />
 
             {/* Monk-specific: choose one artisan's tool or one musical instrument */}
             {selectedClass === 'Monk' && (
@@ -1610,20 +1814,10 @@ export default function CharacterCreate() {
               <section className="rounded-lg border bg-card p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="font-semibold">{selectedClass} Features</h2>
-                  {(() => {
-                    const numericHitDice = is2024 ? HIT_DICE_2024 : HIT_DICE_5E;
-                    const hitDieVal = numericHitDice[selectedClass] ?? 8;
-                    const finalCon = form.constitution + (combinedRaceAsi.constitution ?? 0);
-                    const conMod = Math.floor((finalCon - 10) / 2);
-                    const startingHp = hitDieVal + Math.max(0, conMod);
-                    const formula = conMod > 0 ? `d${hitDieVal} + ${conMod} CON` : `d${hitDieVal}`;
-                    return (
-                      <div className="text-sm text-muted-foreground">
-                        Starting HP: <span className="font-bold text-foreground">{startingHp}</span>
-                        <span className="ml-1 text-xs">({formula})</span>
-                      </div>
-                    );
-                  })()}
+                  <div className="text-sm text-muted-foreground">
+                    Starting HP: <span className="font-bold text-foreground">{creationStartingHp}</span>
+                    <span className="ml-1 text-xs">({creationHpFormula})</span>
+                  </div>
                 </div>
                 <ClassSheet
                   data={classData}
@@ -1633,7 +1827,7 @@ export default function CharacterCreate() {
                   creation={true}
                   scores={form}
                   backgroundSkills={backgroundSkills}
-                  raceSkills={raceSkills}
+                  raceSkills={raceGrantedSkillsAll}
                   raceGrantedCantrips={raceGrantedCantrips}
                 />
               </section>
@@ -1662,11 +1856,16 @@ export default function CharacterCreate() {
                   Select {skillsNeeded} more skill{skillsNeeded !== 1 ? 's' : ''} to continue.
                 </p>
               )}
+              {abilityScoresReady && skillsReady && !classChoicesReady && (
+                <p className="text-xs text-muted-foreground text-right" data-testid="class-choice-hint">
+                  Choose your {missingClassChoices.join(' and ')} to continue.
+                </p>
+              )}
               <div className="flex justify-between gap-3">
-                <Button type="button" variant="outline" onClick={() => setStep('identity')}>
+                <Button type="button" variant="outline" onClick={() => setStep('identity')} data-testid="details-back">
                   <ChevronLeft className="h-4 w-4 mr-1" /> Back
                 </Button>
-                <Button type="button" onClick={() => setStep('overview')} disabled={!abilityScoresReady || !skillsReady} data-testid="details-next">
+                <Button type="button" onClick={() => setStep('overview')} disabled={!abilityScoresReady || !skillsReady || !classChoicesReady} data-testid="details-next">
                   Next: Review <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
@@ -1675,8 +1874,6 @@ export default function CharacterCreate() {
         )}
         {/* ── Step 4: Overview / Review ────────────────────────────────────── */}
         {step === 'overview' && (() => {
-          const numericHitDice = is2024 ? HIT_DICE_2024 : HIT_DICE_5E;
-          const hitDie = numericHitDice[selectedClass] ?? 8;
           const finalScores = {
             strength:     form.strength     + (combinedRaceAsi.strength     ?? 0),
             dexterity:    form.dexterity    + (combinedRaceAsi.dexterity    ?? 0),
@@ -1685,10 +1882,8 @@ export default function CharacterCreate() {
             wisdom:       form.wisdom       + (combinedRaceAsi.wisdom       ?? 0),
             charisma:     form.charisma     + (combinedRaceAsi.charisma     ?? 0),
           };
-          const conMod = Math.floor((finalScores.constitution - 10) / 2);
           const dexMod = Math.floor((finalScores.dexterity - 10) / 2);
           const wisMod = Math.floor((finalScores.wisdom - 10) / 2);
-          const startingHp = hitDie + Math.max(0, conMod);
           const passivePerception = 10 + wisMod;
           const abilityKeys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 
@@ -1777,6 +1972,7 @@ export default function CharacterCreate() {
                       ...(selectedRaceObj.languages ?? []),
                       ...(selectedSubraceObj?.languages ?? []),
                       ...(raceChoices.high_elf_language ? [raceChoices.high_elf_language] : []),
+                      ...(raceChoices.half_elf_language ? [raceChoices.half_elf_language] : []),
                       ...(raceChoices.human_language ? [raceChoices.human_language] : []),
                     ];
                     return allLangs.length > 0 ? (
@@ -1797,14 +1993,17 @@ export default function CharacterCreate() {
                       </div>
                     </div>
                   )}
+                  {raceChoices.dwarf_tool && (
+                    <div data-testid="review-dwarf-tool">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Tool Proficiency (from Race)</div>
+                      <div className="text-sm"><span className="font-medium">{raceChoices.dwarf_tool}</span></div>
+                    </div>
+                  )}
                   {raceGrantedCantrips.length > 0 && (
-                    <div>
+                    <div data-testid="review-race-cantrips">
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Race-Granted Cantrips</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {raceGrantedCantrips.map(c => (
-                          <Badge key={c} className="text-xs bg-violet-100 text-violet-800 border border-violet-300 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-600">{c}</Badge>
-                        ))}
-                      </div>
+                      {/* Clickable — opens the spell detail dialog (same as CharacterDetail) */}
+                      <SpellList spells={raceGrantedCantrips} isCantrips readOnly label="Click a cantrip to see its details" placeholder="" />
                     </div>
                   )}
                   {raceChoices.half_elf_skills?.length > 0 && (
@@ -1919,10 +2118,8 @@ export default function CharacterCreate() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                   <div className="rounded-lg border bg-muted/30 p-3">
                     <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Starting HP</div>
-                    <div className="text-2xl font-bold">{startingHp}</div>
-                    <div className="text-xs text-muted-foreground">
-                      d{hitDie}{conMod > 0 ? ` + ${conMod}` : ''}
-                    </div>
+                    <div className="text-2xl font-bold">{creationStartingHp}</div>
+                    <div className="text-xs text-muted-foreground">{creationHpFormula}</div>
                   </div>
                   <div className="rounded-lg border bg-muted/30 p-3">
                     <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Prof. Bonus</div>
@@ -1936,11 +2133,15 @@ export default function CharacterCreate() {
                     <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Passive Perc.</div>
                     <div className="text-2xl font-bold">{passivePerception}</div>
                   </div>
+                  <div className="rounded-lg border bg-muted/30 p-3" data-testid="review-speed">
+                    <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Speed</div>
+                    <div className="text-2xl font-bold">{creationSpeed} ft</div>
+                  </div>
                 </div>
               </section>
 
               {/* Proficiencies */}
-              <ProficienciesCard cls={selectedClass} />
+              <ProficienciesCard cls={selectedClass} chosenTools={[raceChoices.dwarf_tool, ...raceTools, bgChoices.tool_choice, classData.tool_choice]} raceWeapons={raceWeapons} raceArmor={raceArmor} />
 
               {/* Class features (read-only review) */}
               {ClassSheet && (
@@ -1958,7 +2159,7 @@ export default function CharacterCreate() {
                   <ClassSheet
                     data={{
                       ...classData,
-                      skill_proficiencies: [...new Set([...(classData.skill_proficiencies ?? []), ...backgroundSkills, ...raceSkills])],
+                      skill_proficiencies: [...new Set([...(classData.skill_proficiencies ?? []), ...backgroundSkills, ...raceGrantedSkillsAll])],
                     }}
                     onChange={() => {}}
                     readOnly={true}
@@ -1966,7 +2167,7 @@ export default function CharacterCreate() {
                     creation={true}
                     scores={finalScores}
                     backgroundSkills={backgroundSkills}
-                    raceSkills={raceSkills}
+                    raceSkills={raceGrantedSkillsAll}
                     raceGrantedCantrips={raceGrantedCantrips}
                   />
                 </section>

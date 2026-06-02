@@ -2,14 +2,14 @@ export { default as BarbarianSheet } from './BarbarianSheet';
 export { default as BardSheet } from './BardSheet';
 export { default as ClericSheet } from './ClericSheet';
 export { default as DruidSheet } from './DruidSheet';
-export { default as FighterSheet } from './FighterSheet';
+export { FighterSheet2024 as FighterSheet } from '../classSheet/configs';
 export { default as MonkSheet } from './MonkSheet';
 export { default as PaladinSheet } from './PaladinSheet';
 export { default as RangerSheet } from './RangerSheet';
 export { default as RogueSheet } from './RogueSheet';
 export { default as SorcererSheet } from './SorcererSheet';
 export { default as WarlockSheet } from './WarlockSheet';
-export { default as WizardSheet } from './WizardSheet';
+export { WizardSheet2024 as WizardSheet } from '../classSheet/configs';
 
 export const SUPPORTED_CLASSES_2024 = [
   'Barbarian', 'Bard', 'Cleric', 'Druid',

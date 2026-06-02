@@ -1,6 +1,8 @@
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import WizardSheet from './WizardSheet';
+// Wizard is now the data-driven ClassSheet bound to the wizard config (Epic 0 spike).
+// These remain behavior tests — the bound wrapper has the same prop contract as the old sheet.
+import { WizardSheet5e as WizardSheet } from './classSheet/configs';
 
 vi.mock('react-router-dom', () => ({
   Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,

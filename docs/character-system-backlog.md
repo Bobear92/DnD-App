@@ -25,21 +25,35 @@ primitives:
 If Fighter + Wizard reproduce from `config + hooks`, the other 22 become data, and Epics 1–3
 collapse into single changes to the shared hooks instead of 24 edits each.
 
-**Skill decision — DEFERRED until after the spike (do not split `/class-sheet` yet):**
-- If the spike works → **retire `/class-sheet`**, replace with an "add/modify class config" skill.
-- If it fails (too much genuine per-class logic to be data) → fall back to splitting `/class-sheet`
-  into **martial** + **spellcasting** skills.
-- Splitting now would pre-commit to the 24-separate-sheets world the spike is trying to escape.
+**Skill decision — DECIDED (2026-06-01):** spike succeeded → **`/class-sheet` retired**, replaced by
+**`/class-config`** (`.claude/commands/class-config.md`): add/modify a class config, migrate a legacy
+hand-written sheet to a config, or add a brand-new class. The martial/spellcasting split is no longer
+needed — one `ClassSheet` + config covers both.
 
 **Work:**
-- [ ] Define the per-class config shape (hit die, slots table, resources, feature lists, which
-      choices lock, subclass unlock level, caster type, etc.).
-- [ ] Build shared primitives: `useLockedChoice`, `useSlotCaster`, `useRestResource`, GM Edit toggle.
-- [ ] Reproduce **Fighter** (5e + 2024) from config — full vertical: creation, level-up, locks, rest.
-- [ ] Reproduce **Wizard** (5e + 2024) from config — full vertical incl. spell-slot casting.
-- [ ] Validate against existing tests; expect to rewrite structure-coupled tests (e.g. the
-      `@/components/ui/tabs` mock) to assert behavior instead.
-- [ ] **Decide skill structure** based on the outcome (see above).
+- [x] Define the per-class config shape (hit die, slots table, resources, feature lists, which
+      choices lock, subclass unlock level, caster type, etc.). → `components/classSheet/configs/{fighter,wizard}.js`
+- [x] Build shared primitives: `useLockedChoice`, `useSlotCaster`, `useRestResource`, GM Edit toggle.
+      → `components/classSheet/hooks/*` + GM Edit toggle in `CharacterDetail.jsx`.
+- [x] Reproduce **Fighter** (5e + 2024) from config — full vertical: creation, level-up, locks, rest.
+- [x] Reproduce **Wizard** (5e + 2024) from config — full vertical incl. spell-slot casting.
+- [x] Validate against existing tests — `CharacterCreate.test.jsx` (82) + `CharacterDetail.test.jsx` (90)
+      pass UNCHANGED; `WizardSheet.test.jsx` (61) rewritten to render the bound `ClassSheet` (import
+      swap only — already behavior-based). Full suite: 851 green.
+- [x] **Decide skill structure** → `/class-sheet` retired; `/class-config` created. See "Spike outcome" below.
+
+### Spike outcome (2026-06-01) — SUCCESS
+One `ClassSheet.jsx` + per-class config + 3 hooks reproduced Fighter (martial) and Wizard (full caster)
+in both editions with **zero changes** to the two heavy page test suites. Fighter & Wizard (5e + 2024)
+are now wired live; the 4 old sheet files are deleted. The other 22 classes still use their own sheets.
+
+**Locking + GM Edit (Epic 1) and rest-as-use-button (Epic 3) are proven through the shared hooks:**
+fighting style + subclass lock via `useLockedChoice` (GM Edit toggle unlocks); Second Wind / Action
+Surge / Indomitable converted to use-button + confirm via `useRestResource` (backend
+`_compute_rest_patch` already resets all keys). Universal casting (Epic 2) runs through `useSlotCaster`.
+
+**Next:** migrate the remaining 22 classes to configs via **`/class-config`** (each becomes a config
+object, not a 24× edit), then Epics 1–3 are single changes to the shared hooks.
 
 ---
 
@@ -62,7 +76,7 @@ subclass selection).
 - [ ] Comprehensive audit of **all race + subrace features** for the same (e.g. Half-Elf ASI/skill
       picks, High Elf cantrip, Dragonborn ancestry, variant-human-style choices).
 - [ ] Apply the existing "lock outside creation" pattern (`readOnly || (!creation && !!data.X)`)
-      consistently. Likely a `/class-sheet` skill pass.
+      consistently. Now handled per-class via `/class-config` (lockedChoices + useLockedChoice).
 - [ ] Decide the small set (if any) of features that *can* legitimately change "at the table" /
       during a session and document them.
 
@@ -125,13 +139,11 @@ used for racial rest resources + Portent.)
 
 ## Decisions made
 1. **GM override:** via a **GM Edit toggle** on the sheet (default OFF). See Epic 1.
-2. **Rest-feature skill:** **fold into the existing `/class-sheet` skill** (lean recommendation).
-   Rationale: rest-rechargeable features are authored *inside* the sheets, and resting is always
-   GM-triggered through the existing centralized rest flow (CharacterList → backend
-   `_compute_rest_patch`) — not a separate surface. So the only "new" piece per feature is a
-   tracker widget in the sheet + one backend rest-patch entry + a test. That fits an expanded
-   class-sheet skill rather than warranting a standalone skill to maintain. (Revisit only if rest
-   ever needs to live outside the character sheet — user expects it won't.)
+2. **Rest-feature skill:** **folded into `/class-config`** (was `/class-sheet`). Rest-rechargeable
+   features are now config `restResources` entries (rendered by `RestResourceTracker` via
+   `useRestResource`) + one backend `_compute_rest_patch` entry + a test — all covered by the
+   `/class-config` workflow. No standalone skill. (Revisit only if rest ever needs to live outside
+   the character sheet — user expects it won't.)
 3. **Priority:** **Epic 0 (data-driven ClassSheet spike on Fighter + Wizard) is the priority.**
    Epics 1–3 fold into the shared hooks built during the spike, so do them through Epic 0's
    primitives rather than as standalone 24× passes.
