@@ -11,6 +11,7 @@ class CampaignCreate(BaseModel):
     ability_score_method: str = "standard_spread"
     allow_reroll_ones: bool = False
     leveling_type: str = "milestone"
+    currency_type: str = "standard"
 
 
 class CampaignUpdate(BaseModel):
@@ -21,6 +22,7 @@ class CampaignUpdate(BaseModel):
     ability_score_method: Optional[str] = None
     allow_reroll_ones: Optional[bool] = None
     leveling_type: Optional[str] = None
+    currency_type: Optional[str] = None
 
 
 class UserInfo(BaseModel):
@@ -52,6 +54,7 @@ class CampaignResponse(BaseModel):
     ability_score_method: str
     allow_reroll_ones: bool
     leveling_type: str
+    currency_type: str
     created_by: int
     created_at: datetime
     updated_at: Optional[datetime]
@@ -70,6 +73,7 @@ class CampaignListItem(BaseModel):
     ability_score_method: str
     allow_reroll_ones: bool
     leveling_type: str
+    currency_type: str
     created_by: int
     created_at: datetime
 

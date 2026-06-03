@@ -8,6 +8,7 @@ class Feat(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False, index=True)
+    edition = Column(String(10), nullable=False, default="5e", server_default="5e")
     description = Column(Text, nullable=False)
     
     # Prerequisites (optional)

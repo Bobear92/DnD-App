@@ -24,7 +24,9 @@ import TraitBadgeList from '../components/TraitBadge';
 import { getRaceGrantedSkillsFromTraits } from '../components/raceProficienciesData';
 import { getBackgroundSkills } from '../components/backgroundSkillsData';
 import RacialResourceTracker from '../components/RacialResourceTracker';
+import WalletCard from '../components/WalletCard';
 import { MaxHpValue, AcOptionsLine } from '../components/CombatBonusInline';
+import { totalHpBonus } from '../components/combatBonuses';
 import { draconicLabel } from '../components/draconicData';
 import SpellList from '../components/SpellList';
 import { getRacialRestResources } from '../components/racialRestResources';
@@ -1297,6 +1299,16 @@ export default function CharacterDetail() {
                   <ClassSheet
                     data={classSection.draft}
                     onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
+                    onHeal={autoSaveClassPatch}
+                    effectiveMaxHp={
+                      (classSection.draft?.hp_max ?? 0) +
+                      totalHpBonus({
+                        charClass: character.char_class,
+                        subclass: classSection.draft?.subclass,
+                        raceTraits: character?.character_data?.race_traits ?? [],
+                        level: identity.draft?.level ?? character.level,
+                      })
+                    }
                     readOnly={!showEditable}
                     gmEdit={gmEdit}
                     level={identity.draft?.level ?? character.level}
@@ -1393,6 +1405,23 @@ export default function CharacterDetail() {
                     onChange={autoSaveClassPatch}
                     readOnly={!showEditable}
                     includeKeys={['breath_weapon_used']}
+                  />
+                </SectionCard>
+              )}
+              {/* Wallet — coins held by the character (mode set by campaign currency_type) */}
+              {classSection.draft !== null && (
+                <SectionCard
+                  title="Wallet"
+                  isDirty={classSection.isDirty}
+                  onSave={saveClassData}
+                  onReset={classSection.reset}
+                  canEdit={showEditable}
+                >
+                  <WalletCard
+                    currency={classSection.draft.currency}
+                    mode={campaign?.currency_type}
+                    onChange={(c) => classSection.setDraft(d => ({ ...d, currency: c }))}
+                    readOnly={!showEditable}
                   />
                 </SectionCard>
               )}

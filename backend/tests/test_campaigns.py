@@ -140,6 +140,37 @@ class TestUpdateCampaign:
 
 
 # ---------------------------------------------------------------------------
+# Currency type setting
+# ---------------------------------------------------------------------------
+
+class TestCampaignCurrency:
+    def test_currency_type_defaults_to_standard(self, client):
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        detail = client.get(f"/api/gm/campaigns/{campaign_id}", headers=headers).json()
+        assert detail["currency_type"] == "standard"
+
+    def test_gm_can_set_currency_type(self, client):
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        resp = client.put(
+            f"/api/gm/campaigns/{campaign_id}",
+            json={"currency_type": "full"},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["currency_type"] == "full"
+
+    def test_currency_type_in_list(self, client):
+        """currency_type must be in the list response so the frontend context picks it up."""
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        client.put(f"/api/gm/campaigns/{campaign_id}", json={"currency_type": "full"}, headers=headers)
+        resp = client.get("/api/gm/campaigns", headers=headers).json()
+        assert resp[0]["currency_type"] == "full"
+
+
+# ---------------------------------------------------------------------------
 # Deleting campaigns
 # ---------------------------------------------------------------------------
 

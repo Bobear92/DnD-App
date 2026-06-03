@@ -9,6 +9,10 @@ import { SUPPORTED_CLASSES_5E, CLASS_DESCRIPTIONS, CLASS_HIT_DICE } from '../../
 import SpellsTab from './SpellsTab';
 import CampaignSpellsTab from './CampaignSpellsTab';
 import SkillsTab from './SkillsTab';
+import FeatsTab from './FeatsTab';
+import ItemsTab from './ItemsTab';
+import CampaignItemsTab from './CampaignItemsTab';
+import { ITEM_CATEGORIES } from '../data/itemCategories';
 
 const CLASS_ACCENT_BG = {
   Barbarian: 'bg-orange-500', Bard: 'bg-pink-500', Cleric: 'bg-yellow-500',
@@ -30,7 +34,12 @@ const TABS = [
   { id: 'classes', label: 'Classes' },
   { id: 'skills', label: 'Skills' },
   { id: 'spells', label: 'Spells' },
+  { id: 'items', label: 'Items' },
+  { id: 'feats', label: 'Feats' },
 ];
+
+// Tabs whose content is edition-aware (the edition toggle is shown for these).
+const EDITION_AWARE_TABS = ['classes', 'feats'];
 
 export default function EncyclopediaPage() {
   const { campaignId } = useParams();
@@ -41,6 +50,8 @@ export default function EncyclopediaPage() {
 
   const [activeTab, setActiveTab] = useState('classes');
   const [spellsSubTab, setSpellsSubTab] = useState('system');
+  const [itemsCategoryId, setItemsCategoryId] = useState(ITEM_CATEGORIES[0].id);
+  const [itemsSubTab, setItemsSubTab] = useState('system');
   const [edition, setEdition] = useState(campaignEdition);
   const [selectedClass, setSelectedClass] = useState(null);
   const [classData, setClassData] = useState(null);
@@ -76,8 +87,8 @@ export default function EncyclopediaPage() {
           <p className="text-sm text-muted-foreground">Reference material for rules, classes, and more</p>
         </div>
 
-        {/* Edition toggle — only relevant for Classes tab */}
-        {activeTab === 'classes' && (
+        {/* Edition toggle — relevant for edition-aware tabs (Classes, Feats) */}
+        {EDITION_AWARE_TABS.includes(activeTab) && (
           <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
             {['5e', '5.5e'].map((ed) => (
               <button
@@ -209,6 +220,74 @@ export default function EncyclopediaPage() {
               )}
             </div>
           </div>
+        )}
+
+        {/* Items tab — category sub-tabs + per-category System/Campaign (GM) sub-tab */}
+        {activeTab === 'items' && (() => {
+          const activeCategory = ITEM_CATEGORIES.find((c) => c.id === itemsCategoryId) ?? ITEM_CATEGORIES[0];
+          return (
+            <div className="flex flex-col h-full min-h-0">
+              {/* Category selector */}
+              <div className="flex flex-wrap gap-1 border-b border-border px-4 py-2 shrink-0">
+                {ITEM_CATEGORIES.map((c) => {
+                  const Icon = c.icon;
+                  const active = c.id === itemsCategoryId;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setItemsCategoryId(c.id)}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                        active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+                      )}
+                      data-testid={`item-category-${c.id}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* System / Campaign sub-tab (GM only) */}
+              {isGm && (
+                <div className="flex gap-1 border-b border-border px-4 py-2 shrink-0 bg-muted/30">
+                  <button
+                    onClick={() => setItemsSubTab('system')}
+                    className={cn(
+                      'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                      itemsSubTab === 'system' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    System {activeCategory.label}
+                  </button>
+                  <button
+                    onClick={() => setItemsSubTab('campaign')}
+                    className={cn(
+                      'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                      itemsSubTab === 'campaign' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    Campaign {activeCategory.label}
+                  </button>
+                </div>
+              )}
+
+              <div className="flex-1 min-h-0 overflow-hidden">
+                {(!isGm || itemsSubTab === 'system') && (
+                  <ItemsTab category={activeCategory} isGm={isGm} campaignId={campaignId} />
+                )}
+                {isGm && itemsSubTab === 'campaign' && (
+                  <CampaignItemsTab category={activeCategory} campaignId={campaignId} />
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Feats tab — edition-aware (driven by the edition toggle) */}
+        {activeTab === 'feats' && (
+          <FeatsTab campaignId={campaignId} edition={edition} />
         )}
       </div>
     </div>

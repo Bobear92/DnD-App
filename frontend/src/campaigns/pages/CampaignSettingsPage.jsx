@@ -28,6 +28,7 @@ function GeneralTab({ campaignId }) {
     ability_score_method: campaign?.ability_score_method ?? 'standard_spread',
     allow_reroll_ones: campaign?.allow_reroll_ones ?? false,
     leveling_type: campaign?.leveling_type ?? 'milestone',
+    currency_type: campaign?.currency_type ?? 'standard',
   });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -40,7 +41,8 @@ function GeneralTab({ campaignId }) {
     settings.use_alignment !== (campaign?.use_alignment ?? true) ||
     settings.ability_score_method !== (campaign?.ability_score_method ?? 'standard_spread') ||
     settings.allow_reroll_ones !== (campaign?.allow_reroll_ones ?? false) ||
-    settings.leveling_type !== (campaign?.leveling_type ?? 'milestone');
+    settings.leveling_type !== (campaign?.leveling_type ?? 'milestone') ||
+    settings.currency_type !== (campaign?.currency_type ?? 'standard');
 
   const handleSave = async () => {
     setSaving(true);
@@ -65,6 +67,7 @@ function GeneralTab({ campaignId }) {
       ability_score_method: campaign?.ability_score_method ?? 'standard_spread',
       allow_reroll_ones: campaign?.allow_reroll_ones ?? false,
       leveling_type: campaign?.leveling_type ?? 'milestone',
+      currency_type: campaign?.currency_type ?? 'standard',
     });
     setError('');
   };
@@ -83,6 +86,9 @@ function GeneralTab({ campaignId }) {
         </SettingRow>
         <SettingRow label="Leveling">
           <span className="text-sm">{campaign?.leveling_type === 'experience' ? 'Experience Points' : 'Milestone'}</span>
+        </SettingRow>
+        <SettingRow label="Currency">
+          <span className="text-sm">{campaign?.currency_type === 'full' ? 'CP, SP, EP, GP, PP' : 'CP, SP, GP, PP'}</span>
         </SettingRow>
       </div>
     );
@@ -206,6 +212,27 @@ function GeneralTab({ campaignId }) {
             <SelectContent>
               <SelectItem value="milestone">Milestone</SelectItem>
               <SelectItem value="experience">Experience Points</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingRow>
+      </Section>
+
+      {/* Currency */}
+      <Section title="Currency">
+        <SettingRow
+          label="Coin Types"
+          description="Which coins characters' wallets track. Standard omits the rarely-used Electrum piece."
+        >
+          <Select
+            value={settings.currency_type}
+            onValueChange={v => setSettings(s => ({ ...s, currency_type: v }))}
+          >
+            <SelectTrigger className="w-52" data-testid="currency-type-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard">Copper, Silver, Gold, Platinum</SelectItem>
+              <SelectItem value="full">All five (adds Electrum)</SelectItem>
             </SelectContent>
           </Select>
         </SettingRow>

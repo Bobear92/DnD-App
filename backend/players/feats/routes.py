@@ -12,6 +12,7 @@ router = APIRouter(prefix="/feats", tags=["Feats"])
 @router.get("", response_model=List[schemas.FeatListItem])
 def get_feats(
     campaign_id: int = None,
+    edition: str = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -19,8 +20,9 @@ def get_feats(
     Get all feats.
     - System feats are always available
     - Campaign feats included if campaign_id provided
+    - Filtered by edition ("5e" / "5.5e") when provided
     """
-    feats = service.get_all_feats(db, current_user.id, campaign_id)
+    feats = service.get_all_feats(db, current_user.id, campaign_id, edition)
     return feats
 
 @router.get("/{feat_id}", response_model=schemas.FeatResponse)

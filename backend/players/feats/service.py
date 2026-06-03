@@ -3,14 +3,18 @@ from sqlalchemy import or_, and_
 from . import models, schemas
 from shared.exceptions import NotFoundException, ForbiddenException
 
-def get_all_feats(db: Session, user_id: int, campaign_id: int = None):
+def get_all_feats(db: Session, user_id: int, campaign_id: int = None, edition: str = None):
     """
     Get all feats available to the user.
     - System feats (owner_type = 'system')
     - Campaign feats if campaign_id provided
+    - Filtered by edition when provided
     """
     query = db.query(models.Feat)
-    
+
+    if edition:
+        query = query.filter(models.Feat.edition == edition)
+
     if campaign_id:
         # System feats OR feats from this campaign
         query = query.filter(
@@ -48,6 +52,7 @@ def create_feat(db: Session, feat_data: schemas.FeatCreate, user_id: int, is_adm
     # Create system feat
     feat = models.Feat(
         name=feat_data.name,
+        edition=feat_data.edition,
         description=feat_data.description,
         prerequisites=feat_data.prerequisites,
         benefits=feat_data.benefits,

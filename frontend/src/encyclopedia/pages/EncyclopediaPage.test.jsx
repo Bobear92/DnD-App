@@ -43,6 +43,24 @@ vi.mock('./SkillsTab', () => ({
   default: () => <div data-testid="skills-tab">SkillsTab</div>,
 }));
 
+vi.mock('./FeatsTab', () => ({
+  default: ({ campaignId, edition }) => (
+    <div data-testid="feats-tab">FeatsTab campaign={campaignId} edition={edition}</div>
+  ),
+}));
+
+vi.mock('./ItemsTab', () => ({
+  default: ({ category, isGm, campaignId }) => (
+    <div data-testid="items-tab">ItemsTab cat={category.id} isGm={String(isGm)} campaign={campaignId}</div>
+  ),
+}));
+
+vi.mock('./CampaignItemsTab', () => ({
+  default: ({ category, campaignId }) => (
+    <div data-testid="campaign-items-tab">CampaignItemsTab cat={category.id} campaign={campaignId}</div>
+  ),
+}));
+
 import classService from '../../characters/classService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 
@@ -247,5 +265,105 @@ describe('EncyclopediaPage', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
     expect(screen.queryByRole('button', { name: '5e' })).not.toBeInTheDocument();
+  });
+
+  it('renders a Feats tab button', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: 'Feats' })).toBeInTheDocument();
+  });
+
+  it('shows Feats tab to players (not GM-only)', () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'player' });
+    expect(screen.getByRole('button', { name: 'Feats' })).toBeInTheDocument();
+  });
+
+  it('clicking Feats tab shows FeatsTab component with campaignId and edition', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Feats' }));
+    await waitFor(() => expect(screen.getByTestId('feats-tab')).toBeInTheDocument());
+    expect(screen.getByTestId('feats-tab')).toHaveTextContent('campaign=1');
+    expect(screen.getByTestId('feats-tab')).toHaveTextContent('edition=5e');
+  });
+
+  it('keeps the edition toggle visible on the Feats tab (edition-aware)', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Feats' }));
+    expect(screen.getByRole('button', { name: '5e' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2024' })).toBeInTheDocument();
+  });
+
+  it('passes 2024 edition to FeatsTab when toggled', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Feats' }));
+    fireEvent.click(screen.getByRole('button', { name: '2024' }));
+    await waitFor(() => expect(screen.getByTestId('feats-tab')).toHaveTextContent('edition=5.5e'));
+  });
+
+  // ── Items tab ────────────────────────────────────────────────────────────────
+
+  it('renders an Items tab button', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: 'Items' })).toBeInTheDocument();
+  });
+
+  it('shows Items tab to players (not GM-only)', () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'player' });
+    expect(screen.getByRole('button', { name: 'Items' })).toBeInTheDocument();
+  });
+
+  it('clicking Items shows ItemsTab defaulting to the weapons category', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Items' }));
+    await waitFor(() => expect(screen.getByTestId('items-tab')).toBeInTheDocument());
+    expect(screen.getByTestId('items-tab')).toHaveTextContent('cat=weapons');
+    expect(screen.getByTestId('items-tab')).toHaveTextContent('campaign=1');
+  });
+
+  it('hides the edition toggle on the Items tab', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Items' }));
+    expect(screen.queryByRole('button', { name: '5e' })).not.toBeInTheDocument();
+  });
+
+  it('renders all six category sub-tabs', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Items' }));
+    await waitFor(() => screen.getByTestId('items-tab'));
+    ['weapons', 'armor', 'adventuring-gear', 'potions', 'magic-items', 'food-drink'].forEach((id) =>
+      expect(screen.getByTestId(`item-category-${id}`)).toBeInTheDocument()
+    );
+  });
+
+  it('switching category updates the rendered ItemsTab', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Items' }));
+    await waitFor(() => screen.getByTestId('items-tab'));
+    fireEvent.click(screen.getByTestId('item-category-armor'));
+    await waitFor(() => expect(screen.getByTestId('items-tab')).toHaveTextContent('cat=armor'));
+  });
+
+  it('shows System / Campaign sub-tabs inside Items for GM', async () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'gm' });
+    fireEvent.click(screen.getByRole('button', { name: 'Items' }));
+    await waitFor(() => screen.getByTestId('items-tab'));
+    expect(screen.getByRole('button', { name: 'System Weapons' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Campaign Weapons' })).toBeInTheDocument();
+  });
+
+  it('hides Items sub-tabs for players and only shows ItemsTab', async () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'player' });
+    fireEvent.click(screen.getByRole('button', { name: 'Items' }));
+    await waitFor(() => screen.getByTestId('items-tab'));
+    expect(screen.queryByRole('button', { name: 'System Weapons' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('campaign-items-tab')).not.toBeInTheDocument();
+  });
+
+  it('clicking Campaign sub-tab swaps ItemsTab for CampaignItemsTab', async () => {
+    renderPage({ id: 1, name: 'Test', edition: '5e', userRole: 'gm' });
+    fireEvent.click(screen.getByRole('button', { name: 'Items' }));
+    await waitFor(() => screen.getByTestId('items-tab'));
+    fireEvent.click(screen.getByRole('button', { name: 'Campaign Weapons' }));
+    await waitFor(() => expect(screen.getByTestId('campaign-items-tab')).toBeInTheDocument());
+    expect(screen.queryByTestId('items-tab')).not.toBeInTheDocument();
   });
 });

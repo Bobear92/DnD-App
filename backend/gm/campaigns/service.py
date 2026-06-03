@@ -68,6 +68,8 @@ def update_campaign(campaign_id: int, campaign_data: CampaignUpdate, db: Session
         campaign.allow_reroll_ones = campaign_data.allow_reroll_ones
     if campaign_data.leveling_type is not None:
         campaign.leveling_type = campaign_data.leveling_type
+    if campaign_data.currency_type is not None:
+        campaign.currency_type = campaign_data.currency_type
 
     db.commit()
     db.refresh(campaign)

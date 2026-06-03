@@ -5,6 +5,7 @@ from datetime import datetime
 # Feat creation (admin only for system feats)
 class FeatCreate(BaseModel):
     name: str
+    edition: str = "5e"
     description: str
     prerequisites: Dict[str, Any] = {}
     benefits: Dict[str, Any]
@@ -17,6 +18,7 @@ class FeatCreate(BaseModel):
 # Feat update
 class FeatUpdate(BaseModel):
     name: Optional[str] = None
+    edition: Optional[str] = None
     description: Optional[str] = None
     prerequisites: Optional[Dict[str, Any]] = None
     benefits: Optional[Dict[str, Any]] = None
@@ -27,6 +29,7 @@ class FeatUpdate(BaseModel):
 class FeatResponse(BaseModel):
     id: int
     name: str
+    edition: str
     description: str
     prerequisites: Dict[str, Any]
     benefits: Dict[str, Any]
@@ -46,7 +49,10 @@ class FeatResponse(BaseModel):
 class FeatListItem(BaseModel):
     id: int
     name: str
+    edition: str
     description: str
+    prerequisites: Dict[str, Any]
+    source: Optional[str]
     repeatable: bool
     owner_type: str
     

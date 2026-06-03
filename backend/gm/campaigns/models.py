@@ -14,6 +14,7 @@ class Campaign(Base):
     ability_score_method = Column(String(20), default="standard_spread", nullable=False)
     allow_reroll_ones = Column(Boolean, default=False, nullable=False)
     leveling_type = Column(String(20), default="milestone", nullable=False)
+    currency_type = Column(String(20), default="standard", nullable=False)  # "standard" (cp/sp/gp/pp) | "full" (+ ep)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

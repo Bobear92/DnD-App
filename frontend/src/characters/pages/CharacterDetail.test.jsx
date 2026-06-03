@@ -163,6 +163,40 @@ describe('CharacterDetail', () => {
     expect(screen.getByText('Second Wind (Short Rest)')).toBeInTheDocument();
   });
 
+  describe('Wallet', () => {
+    it('shows the Wallet with standard coins (no electrum) by default', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('wallet-card')).toBeInTheDocument());
+      ['pp', 'gp', 'sp', 'cp'].forEach((k) =>
+        expect(screen.getByTestId(`wallet-coin-${k}`)).toBeInTheDocument()
+      );
+      expect(screen.queryByTestId('wallet-coin-ep')).not.toBeInTheDocument();
+    });
+
+    it('shows electrum when the campaign currency mode is full', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player', currency_type: 'full' } });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('wallet-coin-ep')).toBeInTheDocument());
+    });
+
+    it('displays the character\'s stored coins for the owner', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, character_data: { ...BASE_CHARACTER.character_data, currency: { gp: 25, sp: 4 } } },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('wallet-coin-gp')).toHaveValue(25));
+      expect(screen.getByTestId('wallet-coin-sp')).toHaveValue(4);
+    });
+
+    it('renders the wallet read-only for a non-owner player', async () => {
+      useAuth.mockReturnValue({ user: { id: 99, username: 'other' } });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('wallet-card')).toBeInTheDocument());
+      expect(screen.getByTestId('wallet-coin-gp').tagName).not.toBe('INPUT');
+    });
+  });
+
   it('shows class features earned at or below current level and hides future features', async () => {
     // BASE_CHARACTER is a level 5 Fighter
     renderDetail();
@@ -820,55 +854,56 @@ describe('CharacterDetail', () => {
       expect(within(hdContainer).getByText('2 / 5 remaining')).toBeInTheDocument();
     });
 
-    // Button interaction tests require GM view — class sheet is readOnly for non-GMs
-    // (readOnly = displayAsPlayer || !canEdit; displayAsPlayer is always true for non-GMs)
-    describe('GM interactive buttons', () => {
+    // The config-driven Fighter sheet shows a "Use" (spend-to-heal) button in the Stats
+    // tab instead of +/-. These require GM view (class sheet is readOnly for non-GMs).
+    describe('GM Hit Dice heal flow', () => {
       beforeEach(() => {
         useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm' } });
         useAuth.mockReturnValue({ user: { id: 1, username: 'gm' } });
       });
 
-      it('minus button is disabled when no dice have been used', async () => {
+      it('shows a Use button (not +/-) in the Stats tab', async () => {
         renderDetail();
         await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
         const hdContainer = screen.getByText('Hit Dice').parentElement;
-        const minusBtn = within(hdContainer).getByRole('button', { name: '−' });
-        expect(minusBtn).toBeDisabled();
+        expect(within(hdContainer).getByTestId('hit-dice-use-btn')).toBeInTheDocument();
+        expect(within(hdContainer).queryByRole('button', { name: '+' })).not.toBeInTheDocument();
       });
 
-      it('clicking + updates remaining count and enables Save', async () => {
+      it('clicking Use opens the heal dialog with a quantity selector', async () => {
         renderDetail();
         await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
-        const hdContainer = screen.getByText('Hit Dice').parentElement;
-        const plusBtn = within(hdContainer).getByRole('button', { name: '+' });
-        expect(plusBtn).not.toBeDisabled();
-        fireEvent.click(plusBtn);
-        await waitFor(() => expect(within(screen.getByText('Hit Dice').parentElement).getByText('4 / 5 remaining')).toBeInTheDocument());
-        expect(screen.getAllByText('Save').length).toBeGreaterThan(0);
+        fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
+        await waitFor(() => expect(screen.getByText('Spend Hit Dice to Heal')).toBeInTheDocument());
+        expect(screen.getByTestId('hit-dice-qty')).toHaveTextContent('1');
       });
 
-      it('clicking + then Save calls updateCharacter with hit_dice_used: 1', async () => {
+      it('rolling spends a die, heals roll + CON, and auto-saves hit_dice_used + current_hp', async () => {
+        const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0); // d10 → 1
         characterService.updateCharacter.mockResolvedValue({
           success: true,
-          data: { ...BASE_CHARACTER, character_data: { ...BASE_CHARACTER.character_data, hit_dice_used: 1 } },
+          data: { ...BASE_CHARACTER, character_data: { ...BASE_CHARACTER.character_data, hit_dice_used: 1, current_hp: 48 } },
         });
         renderDetail();
         await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
 
-        const hdContainer = screen.getByText('Hit Dice').parentElement;
-        fireEvent.click(within(hdContainer).getByRole('button', { name: '+' }));
-        await waitFor(() => expect(screen.getAllByText('Save').length).toBeGreaterThan(0));
+        fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
+        await waitFor(() => expect(screen.getByTestId('hit-dice-roll-btn')).toBeInTheDocument());
+        fireEvent.click(screen.getByTestId('hit-dice-roll-btn'));
 
-        const saveBtns = screen.getAllByText('Save');
-        fireEvent.click(saveBtns[0]);
+        // Result: rolled 1 + CON 2 = 3 HP; 45 → 48
+        await waitFor(() => expect(screen.getByTestId('hit-dice-result')).toBeInTheDocument());
+        expect(screen.getByText('+3 HP regained')).toBeInTheDocument();
+        expect(screen.getByText('HP: 45 → 48')).toBeInTheDocument();
 
         await waitFor(() => {
           expect(characterService.updateCharacter).toHaveBeenCalledWith('1',
             expect.objectContaining({
-              character_data: expect.objectContaining({ hit_dice_used: 1 }),
+              character_data: expect.objectContaining({ hit_dice_used: 1, current_hp: 48 }),
             })
           );
         });
+        randSpy.mockRestore();
       });
     });
   });

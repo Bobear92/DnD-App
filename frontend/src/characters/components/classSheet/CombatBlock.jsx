@@ -17,7 +17,7 @@ function Field({ label, children }) {
   );
 }
 
-export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, level = 1, creation = false, maxHpNode = null, acExtra = null }) {
+export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, level = 1, creation = false, maxHpNode = null, acExtra = null, conMod = 0, effectiveMaxHp, onHeal }) {
   return (
     <>
       <div className="grid grid-cols-3 gap-3">
@@ -32,7 +32,18 @@ export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, 
         </Field>
       </div>
 
-      <HitDiceTracker hitDie={hitDie} level={level} used={data.hit_dice_used} onChange={v => set('hit_dice_used', v)} readOnly={readOnly} creation={creation} />
+      <HitDiceTracker
+        hitDie={hitDie}
+        level={level}
+        used={data.hit_dice_used}
+        onChange={v => set('hit_dice_used', v)}
+        readOnly={readOnly}
+        creation={creation}
+        conMod={conMod}
+        currentHp={data.current_hp}
+        maxHp={effectiveMaxHp ?? data.hp_max}
+        onHeal={onHeal}
+      />
 
       <Field label="Armor Class">
         <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />

@@ -121,11 +121,14 @@ export default function ClassSheet({
   gmEdit = false,
   acExtra = null,
   maxHpNode = null,
+  effectiveMaxHp,
+  onHeal,
 }) {
   // Martial classes render nothing in the spells section.
   if (section === 'spells' && !config.caster) return null;
 
   const set = (key, value) => onChange?.({ [key]: value });
+  const conMod = Math.floor(((scores.constitution ?? 10) - 10) / 2);
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
 
@@ -154,6 +157,9 @@ export default function ClassSheet({
           creation={creation}
           maxHpNode={maxHpNode}
           acExtra={acExtra}
+          conMod={conMod}
+          effectiveMaxHp={effectiveMaxHp}
+          onHeal={onHeal}
         />
       )}
 

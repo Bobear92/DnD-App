@@ -10,8 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import characterService from '../characterService';
 import referenceService from '../referenceService';
+import featService from '../../encyclopedia/featService';
 import classService from '../classService';
 import ClassOverview from '../components/ClassOverview';
+import FeatPicker from '../components/FeatPicker';
+import { checkFeatPrerequisite } from '../components/featPrerequisites';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import {
   ArtificerSheet,
@@ -44,6 +47,7 @@ import { totalHpBonus } from '../components/combatBonuses';
 import SpellList from '../components/SpellList';
 import { getClassConfig } from '../components/classSheet/configs';
 import { SUBCLASS_UNLOCK_LEVEL_5E, SUBCLASS_UNLOCK_LEVEL_2024 } from '../components/classChoicesData';
+import { startingGoldForBackground, EMPTY_WALLET } from '../components/currencyData';
 
 // ─── Ability score validation constants ──────────────────────────────────────
 
@@ -447,6 +451,27 @@ const BACKGROUND_CHOICES_MAP = {
   'Soldier':       { tool: 'gaming_set' },
 };
 
+// The keyword that identifies the "choose one" placeholder inside a background's
+// tools string for each choice type — that segment is resolved separately via
+// bgChoices.tool_choice, so it must be dropped from the fixed-tools list.
+const TOOL_CHOICE_KEYWORD = {
+  gaming_set: 'gaming set',
+  musical_instrument: 'musical instrument',
+  artisans_tools: "artisan's tools",
+};
+
+// Concrete tool proficiencies a background grants outright (e.g. Hermit's
+// "Herbalism kit"), excluding any "choose one" placeholder captured by tool_choice.
+function backgroundFixedTools(bg) {
+  if (!bg?.tools) return [];
+  const keyword = TOOL_CHOICE_KEYWORD[BACKGROUND_CHOICES_MAP[bg.name]?.tool];
+  return bg.tools
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .filter(seg => !(keyword && seg.toLowerCase().includes(keyword)));
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function normalizeApiRace(r) {
@@ -676,7 +701,7 @@ function BgDetail({ bg }) {
   );
 }
 
-function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [], backgroundGrants = null, backgroundSkills = [] }) {
+function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [], backgroundGrants = null, backgroundSkills = [], feats = [] }) {
   const isDragonborn = race?.name === 'Dragonborn';
   const isHighElf    = subrace?.name === 'High Elf';
   const isHalfElf    = race?.name === 'Half-Elf';
@@ -869,7 +894,152 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
         </div>
       )}
 
-      {/* Human: Extra Language */}
+      {/* Human: Standard vs Variant */}
+      {isHuman && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Human Type</Label>
+          <p className="text-xs text-muted-foreground">
+            Choose the standard human (+1 to all ability scores) or the variant human (+1 to two scores, one skill, and one feat).
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { variant: false, title: 'Standard Human', sub: '+1 to all ability scores' },
+              { variant: true, title: 'Variant Human', sub: '+1 to two scores · 1 skill · 1 feat' },
+            ].map(opt => {
+              const selected = !!choices.human_variant === opt.variant;
+              return (
+                <button
+                  key={opt.title}
+                  type="button"
+                  data-testid={`human-type-${opt.variant ? 'variant' : 'standard'}`}
+                  onClick={() => onChange({
+                    ...choices,
+                    human_variant: opt.variant,
+                    // Clear variant-only picks when switching back to standard
+                    ...(opt.variant ? {} : { human_variant_asi: [], human_variant_skill: '', human_feat: null }),
+                  })}
+                  className={cn(
+                    'rounded-lg border-2 p-2.5 text-left transition-all',
+                    selected ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-primary/50',
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-semibold text-sm">{opt.title}</span>
+                    {selected && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{opt.sub}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Variant Human: +1 to 2 different ability scores (required) */}
+      {isHuman && choices.human_variant && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Ability Score Increases <span className="text-destructive">*</span>
+          </Label>
+          <p className="text-xs text-muted-foreground">Choose 2 different ability scores to each gain +1.</p>
+          <div className="grid grid-cols-3 gap-2">
+            {SCORE_KEYS.map(stat => {
+              const selected = choices.human_variant_asi?.includes(stat);
+              const atLimit  = (choices.human_variant_asi?.length ?? 0) >= 2 && !selected;
+              return (
+                <button
+                  key={stat}
+                  type="button"
+                  data-testid={`human-variant-asi-${stat}`}
+                  disabled={atLimit}
+                  onClick={() => {
+                    const cur  = choices.human_variant_asi ?? [];
+                    const next = selected ? cur.filter(s => s !== stat) : [...cur, stat];
+                    onChange({ ...choices, human_variant_asi: next });
+                  }}
+                  className={cn(
+                    'rounded-lg border-2 p-2 text-sm font-medium transition-all text-center',
+                    selected ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card',
+                    atLimit ? 'opacity-40 cursor-not-allowed' : 'hover:border-primary/50',
+                  )}
+                >
+                  {STAT_ABBREV[stat]}
+                  {selected && <Check className="h-3 w-3 inline ml-1" />}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">{choices.human_variant_asi?.length ?? 0}/2 chosen</p>
+        </div>
+      )}
+
+      {/* Variant Human: one skill proficiency (required) */}
+      {isHuman && choices.human_variant && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Skill Proficiency <span className="text-destructive">*</span>
+          </Label>
+          <p className="text-xs text-muted-foreground">Choose 1 skill proficiency from any skills.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {ALL_SKILLS_18.map(skill => {
+              const selected = choices.human_variant_skill === skill;
+              const fromBg   = backgroundSkills.includes(skill);
+              // Background skills are flagged amber and disabled so the single pick isn't wasted.
+              const blocked  = fromBg && !selected;
+              return (
+                <button
+                  key={skill}
+                  type="button"
+                  data-testid={`human-variant-skill-${skill.replace(/\s+/g, '-')}`}
+                  disabled={blocked}
+                  onClick={() => {
+                    if (blocked) return;
+                    onChange({ ...choices, human_variant_skill: selected ? '' : skill });
+                  }}
+                  className={cn(
+                    'rounded px-2 py-1 text-xs font-medium border transition-all',
+                    fromBg
+                      ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-600'
+                      : selected ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border',
+                    blocked ? 'opacity-40 cursor-not-allowed' : !fromBg ? 'hover:border-primary' : '',
+                  )}
+                >
+                  {skill}
+                </button>
+              );
+            })}
+          </div>
+          {backgroundSkills.length > 0 && (
+            <p className="text-xs text-amber-700 dark:text-amber-400">Amber = already granted by your background — pick something else.</p>
+          )}
+        </div>
+      )}
+
+      {/* Variant Human: one feat (required) */}
+      {isHuman && choices.human_variant && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Feat <span className="text-destructive">*</span>
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Variant humans gain one feat of their choice. Browse all feats in the Encyclopedia → Feats tab.
+          </p>
+          {feats.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic" data-testid="human-feat-empty">
+              No feats available for this edition yet.
+            </p>
+          ) : (
+            <FeatPicker
+              feats={feats}
+              value={choices.human_feat}
+              onChange={feat => onChange({ ...choices, human_feat: feat })}
+              testIdPrefix="human-feat"
+            />
+          )}
+        </div>
+      )}
+
+      {/* Human: Extra Language (both standard and variant) */}
       {isHuman && (
         <div className="space-y-2">
           <Label className="text-sm font-medium">Extra Language</Label>
@@ -1090,30 +1260,34 @@ export default function CharacterCreate() {
   // Identity step state
   const [apiRaces, setApiRaces] = useState([]);
   const [apiBackgrounds, setApiBackgrounds] = useState([]);
+  const [apiFeats, setApiFeats] = useState([]);
   const [selectedRaceObj, setSelectedRaceObj] = useState(null);
   const [selectedSubraceObj, setSelectedSubraceObj] = useState(null);
   const [selectedBgObj, setSelectedBgObj] = useState(null);
 
   const [raceSearch, setRaceSearch] = useState('');
 
-  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], half_elf_language: '', human_language: '', dwarf_tool: '' };
+  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], half_elf_language: '', human_language: '', dwarf_tool: '', human_variant: false, human_variant_asi: [], human_variant_skill: '', human_feat: null };
   const EMPTY_BG_CHOICES   = { tool_choice: '', language_choices: [] };
   const [raceChoices, setRaceChoices] = useState(EMPTY_RACE_CHOICES);
   const [bgChoices,   setBgChoices]   = useState(EMPTY_BG_CHOICES);
 
-  // Fetch races + backgrounds when entering identity step
+  // Fetch races + backgrounds + feats when entering identity step
   useEffect(() => {
     if (step !== 'identity') return;
+    const ed = campaign?.edition === '5.5e' ? '5.5e' : '5e';
     const load = async () => {
-      const [races, bgs] = await Promise.all([
+      const [races, bgs, feats] = await Promise.all([
         referenceService.getRaces(campaignId),
         referenceService.getBackgrounds(campaignId),
+        featService.getFeats(campaignId, ed),
       ]);
       if (races.length) setApiRaces(races.map(normalizeApiRace));
       if (bgs.length) setApiBackgrounds(bgs.map(normalizeApiBg));
+      setApiFeats(feats);
     };
     load();
-  }, [step, campaignId]);
+  }, [step, campaignId, campaign?.edition]);
 
   useEffect(() => {
     if ((campaign?.ability_score_method ?? 'standard_spread') === 'point_buy') {
@@ -1164,7 +1338,11 @@ export default function CharacterCreate() {
   // All skills the race grants the character — trait-based (Keen Senses, …) PLUS the Half-Elf
   // Skill Versatility picks. Passed to the class sheet so they show emerald + non-clickable, and
   // used by the de-dup prune so a class skill can't shadow one already granted by the race.
-  const raceGrantedSkillsAll = [...new Set([...raceSkills, ...(raceChoices.half_elf_skills ?? [])])];
+  const raceGrantedSkillsAll = [...new Set([
+    ...raceSkills,
+    ...(raceChoices.half_elf_skills ?? []),
+    ...(raceChoices.human_variant_skill ? [raceChoices.human_variant_skill] : []),
+  ])];
 
   // Fixed proficiencies granted by race/subrace traits (e.g. Rock Gnome "Tinker" → Tinker's tools,
   // Elf Weapon Training, Mountain Dwarf armor). Surfaced in the review Proficiencies card + saved.
@@ -1176,14 +1354,23 @@ export default function CharacterCreate() {
   const halfElfExtraAsi = (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_asi_stats.length > 0)
     ? Object.fromEntries(raceChoices.half_elf_asi_stats.map(s => [s, 1]))
     : {};
-  const combinedRaceAsi = mergeAsi(selectedRaceObj?.asiBonus, selectedSubraceObj?.asiBonus, halfElfExtraAsi);
+  // Variant Human: +1 to two chosen scores REPLACES the standard Human "+1 to all" asiBonus.
+  const isVariantHuman = selectedRaceObj?.name === 'Human' && raceChoices.human_variant;
+  const humanVariantAsi = isVariantHuman
+    ? Object.fromEntries((raceChoices.human_variant_asi ?? []).map(s => [s, 1]))
+    : {};
+  const baseRaceAsi = isVariantHuman ? null : selectedRaceObj?.asiBonus;
+  const combinedRaceAsi = mergeAsi(baseRaceAsi, selectedSubraceObj?.asiBonus, halfElfExtraAsi, humanVariantAsi);
 
   // Race/subrace passive HP bonuses (e.g. Hill Dwarf "Dwarven Toughness", Draconic Resilience)
   // folded into starting HP — mirrors the CharacterDetail Stats-tab MaxHpValue. Level is 1 at creation.
+  // The Human race definition always carries the "Variant: +1 to Two…" marker trait; only keep it
+  // when Variant Human was actually chosen, so Standard Human never shows (or stores) it and Variant
+  // never shows the "+1 to All Stats" badge.
   const allRaceTraits = [
     ...(selectedRaceObj?.traits ?? []),
     ...(selectedSubraceObj?.traits ?? []),
-  ];
+  ].filter(t => isVariantHuman || !String(t).startsWith('Variant:'));
   const creationHpBonus = totalHpBonus({
     charClass: selectedClass,
     subclass: classData?.subclass,
@@ -1202,6 +1389,9 @@ export default function CharacterCreate() {
 
   // Base walking speed = race speed + any subrace bonus (e.g. Wood Elf "Fleet of Foot" +5 → 35).
   const creationSpeed = (selectedRaceObj?.speed ?? 30) + (selectedSubraceObj?.speedBonus ?? 0);
+
+  // Starting wealth comes from the chosen background (5e: a pouch of gp in its equipment).
+  const startingGold = startingGoldForBackground(selectedBgObj?.name);
 
   const raceGrantedCantrips = [
     ...(raceChoices.high_elf_cantrip ? [raceChoices.high_elf_cantrip] : []),
@@ -1229,7 +1419,7 @@ export default function CharacterCreate() {
     });
     // Keyed on the grant *sources* (stable primitives), not the derived arrays.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRaceObj?.name, selectedSubraceObj?.name, selectedBgObj?.name, raceChoices.high_elf_cantrip, (raceChoices.half_elf_skills ?? []).join('|')]);
+  }, [selectedRaceObj?.name, selectedSubraceObj?.name, selectedBgObj?.name, raceChoices.high_elf_cantrip, (raceChoices.half_elf_skills ?? []).join('|'), raceChoices.human_variant_skill]);
 
   const handleClassSelect = async (cls) => {
     setSelectedClass(cls);
@@ -1318,7 +1508,9 @@ export default function CharacterCreate() {
           ...backgroundSkills,
           ...raceSkills,
           ...(raceChoices.half_elf_skills ?? []),
+          ...(isVariantHuman && raceChoices.human_variant_skill ? [raceChoices.human_variant_skill] : []),
         ])],
+        currency: { ...EMPTY_WALLET, gp: startingGold },
         subrace: selectedSubraceObj?.name ?? null,
         race_traits: allRaceTraits,
         race_languages: allRaceLanguages,
@@ -1330,6 +1522,10 @@ export default function CharacterCreate() {
         ...(raceArmor.length ? { race_armor_proficiencies: raceArmor } : {}),
         background_tool_choice: bgChoices.tool_choice || null,
         ...(bgLanguages.length > 0 ? { background_languages: bgLanguages } : {}),
+        ...(isVariantHuman ? {
+          human_variant: true,
+          feats: raceChoices.human_feat ? [raceChoices.human_feat] : [],
+        } : {}),
       },
     });
 
@@ -1381,16 +1577,53 @@ export default function CharacterCreate() {
   const halfElfSkillDoubles = (raceChoices.half_elf_skills ?? []).filter(s => bgSkillSet.includes(s));
   const traitSkillOverlap = raceSkills.filter(s => bgSkillSet.includes(s));
 
+  // ── Feat prerequisite gating (Variant Human picks a feat at creation) ──────
+  // The chosen feat may carry a prerequisite (ability score, spellcasting, armor
+  // proficiency, level). We evaluate it twice: an "identity" context (class/level/
+  // armor/spell — known as soon as the class is picked) gates Identity → Features,
+  // and a "features" context (adds the assigned ability scores) gates Features →
+  // Review. Unparseable prerequisites are ignored (fail-open).
+  const selectedFeatObj = (isVariantHuman && raceChoices.human_feat)
+    ? (apiFeats.find(f => f.id === raceChoices.human_feat.id) ?? null)
+    : null;
+
+  // Can this class cast a spell at level 1? Casters have a spellcasting_ability;
+  // the 5e Paladin is the lone exception (no spells until level 2).
+  const KNOWN_CASTERS = new Set(['Artificer', 'Bard', 'Cleric', 'Druid', 'Ranger', 'Sorcerer', 'Warlock', 'Wizard']);
+  const featSpellcaster = classOverviewData
+    ? (!!classOverviewData.spellcasting_ability && !(selectedClass === 'Paladin' && edition === '5e'))
+    : (KNOWN_CASTERS.has(selectedClass) || (selectedClass === 'Paladin' && is2024));
+
+  // Armor proficiency categories from the class table + any race-granted armor.
+  const featArmorProfs = (() => {
+    const cats = new Set();
+    const classArmor = (CLASS_PROFICIENCIES_5E[selectedClass]?.armor || '').toLowerCase();
+    if (classArmor.includes('all armor')) ['light', 'medium', 'heavy'].forEach(c => cats.add(c));
+    ['light', 'medium', 'heavy'].forEach(c => { if (classArmor.includes(c)) cats.add(c); });
+    raceArmor.forEach(a => ['light', 'medium', 'heavy'].forEach(c => { if (String(a).toLowerCase().includes(c)) cats.add(c); }));
+    return [...cats];
+  })();
+
+  const featPrereqIdentity = selectedFeatObj
+    ? checkFeatPrerequisite(selectedFeatObj, {
+        level: 1, className: selectedClass,
+        scores: null, abilityScoresKnown: false,
+        spellcaster: featSpellcaster, armorProficiencies: featArmorProfs,
+      })
+    : { met: true, unmet: [] };
+
   const identityNextBlocked = !form.name.trim() ||
     (selectedRaceObj?.subraces?.length > 0 && !selectedSubraceObj) ||
     (selectedRaceObj?.name === 'Dragonborn' && !raceChoices.draconic_ancestry) ||
     (selectedSubraceObj?.name === 'High Elf' && !raceChoices.high_elf_cantrip) ||
     (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_asi_stats.length < 2) ||
     (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_skills.length < 2) ||
+    (isVariantHuman && (raceChoices.human_variant_asi.length < 2 || !raceChoices.human_variant_skill || !raceChoices.human_feat)) ||
     (selectedRaceObj?.name === 'Dwarf' && !raceChoices.dwarf_tool) ||
     (!!bgSpec?.tool && !bgChoices.tool_choice) ||
     (!!bgSpec?.languages && bgLanguagesChosen < bgSpec.languages) ||
-    halfElfSkillDoubles.length > 0;
+    halfElfSkillDoubles.length > 0 ||
+    !featPrereqIdentity.met;
 
   // Ability scores are complete when all 6 values are fully assigned per the campaign method
   const abilityScoresReady = (() => {
@@ -1432,6 +1665,26 @@ export default function CharacterCreate() {
     if ((lc.minLevel ?? 1) <= 1 && !classData[lc.key]) missingClassChoices.push(lc.label);
   });
   const classChoicesReady = missingClassChoices.length === 0;
+
+  // Features-step feat-prerequisite check: now that ability scores are assigned,
+  // re-evaluate the chosen feat's prerequisites including the final scores. This
+  // gates Features → Review (ability-score prerequisites can only be checked here).
+  const featFinalScores = {
+    strength:     form.strength     + (combinedRaceAsi.strength     ?? 0),
+    dexterity:    form.dexterity    + (combinedRaceAsi.dexterity    ?? 0),
+    constitution: form.constitution + (combinedRaceAsi.constitution ?? 0),
+    intelligence: form.intelligence + (combinedRaceAsi.intelligence ?? 0),
+    wisdom:       form.wisdom       + (combinedRaceAsi.wisdom       ?? 0),
+    charisma:     form.charisma     + (combinedRaceAsi.charisma     ?? 0),
+  };
+  const featPrereqFeatures = selectedFeatObj
+    ? checkFeatPrerequisite(selectedFeatObj, {
+        level: 1, className: selectedClass,
+        scores: featFinalScores, abilityScoresKnown: abilityScoresReady,
+        spellcaster: featSpellcaster, armorProficiencies: featArmorProfs,
+      })
+    : { met: true, unmet: [] };
+  const featPrereqReady = featPrereqFeatures.met;
 
   return (
     <MainLayout>
@@ -1608,6 +1861,7 @@ export default function CharacterCreate() {
                   skills: selectedBgObj.skills ?? [],
                 } : null}
                 backgroundSkills={selectedBgObj?.skills ?? []}
+                feats={apiFeats}
               />
 
 
@@ -1681,6 +1935,16 @@ export default function CharacterCreate() {
               </div>
             )}
 
+            {/* Feat prerequisite note (class/level/armor/spell — known at this step) */}
+            {!featPrereqIdentity.met && (
+              <div
+                className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                data-testid="feat-prereq-identity-note"
+              >
+                <span className="font-medium">{selectedFeatObj?.name}</span> {featPrereqIdentity.unmet.map(u => u.reason).join('; ')}. Choose a different feat or change your class.
+              </div>
+            )}
+
             {/* Navigation */}
             <div className="flex justify-between gap-3">
               <Button type="button" variant="outline" onClick={handleBack} data-testid="identity-back">
@@ -1721,7 +1985,7 @@ export default function CharacterCreate() {
             </section>
 
             {/* Class proficiencies */}
-            <ProficienciesCard cls={selectedClass} chosenTools={[raceChoices.dwarf_tool, ...raceTools, bgChoices.tool_choice, classData.tool_choice]} raceWeapons={raceWeapons} raceArmor={raceArmor} />
+            <ProficienciesCard cls={selectedClass} chosenTools={[raceChoices.dwarf_tool, ...raceTools, ...backgroundFixedTools(selectedBgObj), bgChoices.tool_choice, classData.tool_choice]} raceWeapons={raceWeapons} raceArmor={raceArmor} />
 
             {/* Monk-specific: choose one artisan's tool or one musical instrument */}
             {selectedClass === 'Monk' && (
@@ -1861,11 +2125,19 @@ export default function CharacterCreate() {
                   Choose your {missingClassChoices.join(' and ')} to continue.
                 </p>
               )}
+              {abilityScoresReady && skillsReady && classChoicesReady && !featPrereqReady && (
+                <div
+                  className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                  data-testid="feat-prereq-features-note"
+                >
+                  <span className="font-medium">{selectedFeatObj?.name}</span> {featPrereqFeatures.unmet.map(u => u.reason).join('; ')}. Adjust your ability scores or pick a different feat on the Identity step.
+                </div>
+              )}
               <div className="flex justify-between gap-3">
                 <Button type="button" variant="outline" onClick={() => setStep('identity')} data-testid="details-back">
                   <ChevronLeft className="h-4 w-4 mr-1" /> Back
                 </Button>
-                <Button type="button" onClick={() => setStep('overview')} disabled={!abilityScoresReady || !skillsReady || !classChoicesReady} data-testid="details-next">
+                <Button type="button" onClick={() => setStep('overview')} disabled={!abilityScoresReady || !skillsReady || !classChoicesReady || !featPrereqReady} data-testid="details-next">
                   Next: Review <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
@@ -1949,7 +2221,7 @@ export default function CharacterCreate() {
                     <span className="font-medium">{selectedRaceObj.name}</span>
                     {selectedSubraceObj && <span className="text-muted-foreground">· {selectedSubraceObj.name}</span>}
                     <span className="text-xs text-muted-foreground">{selectedRaceObj.size} · {selectedRaceObj.speed}{selectedSubraceObj?.speedBonus ? ` (+${selectedSubraceObj.speedBonus})` : ''} ft</span>
-                    {selectedRaceObj.asi && <Badge variant="secondary" className="text-xs">{selectedRaceObj.asi}</Badge>}
+                    {selectedRaceObj.asi && !isVariantHuman && <Badge variant="secondary" className="text-xs">{selectedRaceObj.asi}</Badge>}
                     {selectedSubraceObj?.asi && <Badge variant="secondary" className="text-xs">{selectedSubraceObj.asi}</Badge>}
                   </div>
                   {selectedRaceObj.description && (
@@ -1959,7 +2231,7 @@ export default function CharacterCreate() {
                     <p className="text-sm text-muted-foreground leading-relaxed border-l-2 border-primary/30 pl-3 italic">{selectedSubraceObj.description}</p>
                   )}
                   {(() => {
-                    const allTraits = [...(selectedRaceObj.traits ?? []), ...(selectedSubraceObj?.traits ?? [])];
+                    const allTraits = allRaceTraits;
                     return allTraits.length > 0 ? (
                       <div>
                         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Racial Traits <span className="font-normal normal-case text-muted-foreground/70">(click a trait to learn more)</span></div>
@@ -2012,6 +2284,29 @@ export default function CharacterCreate() {
                       <div className="flex flex-wrap gap-1.5">
                         {raceChoices.half_elf_skills.map(s => <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>)}
                       </div>
+                    </div>
+                  )}
+                  {isVariantHuman && (raceChoices.human_feat || raceChoices.human_variant_skill) && (
+                    <div data-testid="review-variant-human">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Variant Human</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {raceChoices.human_feat && (
+                          <Badge variant="secondary" className="text-xs">Feat: {raceChoices.human_feat.name}</Badge>
+                        )}
+                        {raceChoices.human_variant_skill && (
+                          <Badge variant="secondary" className="text-xs">Skill: {raceChoices.human_variant_skill}</Badge>
+                        )}
+                      </div>
+                      {selectedFeatObj?.description && (
+                        <div className="mt-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed" data-testid="review-variant-human-feat-desc">
+                          {selectedFeatObj.prerequisites?.text && (
+                            <div className="mb-1 font-medium text-amber-700 dark:text-amber-400">
+                              Prerequisite: {selectedFeatObj.prerequisites.text}
+                            </div>
+                          )}
+                          {selectedFeatObj.description}
+                        </div>
+                      )}
                     </div>
                   )}
                   {raceSkillSources.length > 0 && (
@@ -2137,11 +2432,16 @@ export default function CharacterCreate() {
                     <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Speed</div>
                     <div className="text-2xl font-bold">{creationSpeed} ft</div>
                   </div>
+                  <div className="rounded-lg border bg-muted/30 p-3" data-testid="review-starting-gold">
+                    <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Starting Gold</div>
+                    <div className="text-2xl font-bold">{startingGold} gp</div>
+                    <div className="text-xs text-muted-foreground">from background</div>
+                  </div>
                 </div>
               </section>
 
               {/* Proficiencies */}
-              <ProficienciesCard cls={selectedClass} chosenTools={[raceChoices.dwarf_tool, ...raceTools, bgChoices.tool_choice, classData.tool_choice]} raceWeapons={raceWeapons} raceArmor={raceArmor} />
+              <ProficienciesCard cls={selectedClass} chosenTools={[raceChoices.dwarf_tool, ...raceTools, ...backgroundFixedTools(selectedBgObj), bgChoices.tool_choice, classData.tool_choice]} raceWeapons={raceWeapons} raceArmor={raceArmor} />
 
               {/* Class features (read-only review) */}
               {ClassSheet && (

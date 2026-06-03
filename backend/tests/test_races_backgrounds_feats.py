@@ -125,3 +125,62 @@ class TestReadAccess:
 
         resp = client.get(prefix, headers=admin_h)
         assert all(e["owner_type"] == "system" for e in resp.json())
+
+
+# ---------------------------------------------------------------------------
+# Feats — edition column + ?edition filter (feats-only behaviour)
+# ---------------------------------------------------------------------------
+
+class TestFeatEdition:
+    def _create(self, client, admin_h, name, edition):
+        payload = {**FEAT_PAYLOAD, "name": name, "edition": edition}
+        resp = client.post("/feats", json=payload, headers=admin_h)
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    def test_edition_defaults_to_5e(self, client):
+        admin_h, _ = make_admin(client)
+        # FEAT_PAYLOAD has no edition key → server default
+        resp = client.post("/feats", json=FEAT_PAYLOAD, headers=admin_h)
+        assert resp.status_code == 201
+        assert resp.json()["edition"] == "5e"
+
+    def test_create_with_edition_round_trips_in_detail(self, client):
+        admin_h, _ = make_admin(client)
+        feat = self._create(client, admin_h, "Edition Feat", "5.5e")
+        resp = client.get(f"/feats/{feat['id']}", headers=admin_h)
+        assert resp.json()["edition"] == "5.5e"
+
+    def test_edition_in_list_response(self, client):
+        admin_h, _ = make_admin(client)
+        self._create(client, admin_h, "Listed Feat", "5.5e")
+        resp = client.get("/feats", headers=admin_h)
+        assert resp.json()[0]["edition"] == "5.5e"
+
+    def test_edition_filter_returns_only_matching(self, client):
+        admin_h, _ = make_admin(client)
+        h, _ = make_user(client, 1)
+        self._create(client, admin_h, "Old Feat", "5e")
+        self._create(client, admin_h, "New Feat", "5.5e")
+
+        resp = client.get("/feats?edition=5.5e", headers=h)
+        names = [f["name"] for f in resp.json()]
+        assert names == ["New Feat"]
+
+        resp = client.get("/feats?edition=5e", headers=h)
+        names = [f["name"] for f in resp.json()]
+        assert names == ["Old Feat"]
+
+    def test_no_edition_filter_returns_all_editions(self, client):
+        admin_h, _ = make_admin(client)
+        self._create(client, admin_h, "Old Feat", "5e")
+        self._create(client, admin_h, "New Feat", "5.5e")
+        resp = client.get("/feats", headers=admin_h)
+        assert len(resp.json()) == 2
+
+    def test_update_edition(self, client):
+        admin_h, _ = make_admin(client)
+        feat = self._create(client, admin_h, "Mutable Feat", "5e")
+        resp = client.put(f"/feats/{feat['id']}", json={"edition": "5.5e"}, headers=admin_h)
+        assert resp.status_code == 200
+        assert resp.json()["edition"] == "5.5e"
