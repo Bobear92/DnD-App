@@ -197,6 +197,30 @@ describe('CharacterDetail', () => {
     });
   });
 
+  describe('Inventory (Items tab)', () => {
+    it('renders the inventory AC summary and category sub-tabs', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('inventory-ac')).toBeInTheDocument());
+      expect(screen.getByTestId('inv-category-weapons')).toBeInTheDocument();
+      expect(screen.getByTestId('inv-category-magic-items')).toBeInTheDocument();
+    });
+
+    it('renders a stored inventory item', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            inventory: [{ uid: 'x1', category: 'weapons', name: 'Greatsword', damage: '2d6', weapon_category: 'Martial', quantity: 1, equipped: false }],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Greatsword')).toBeInTheDocument());
+    });
+  });
+
   it('shows class features earned at or below current level and hides future features', async () => {
     // BASE_CHARACTER is a level 5 Fighter
     renderDetail();
@@ -663,13 +687,13 @@ describe('CharacterDetail', () => {
   });
 
   describe('tab structure', () => {
-    it('always shows Narrative, Stats, Features, and Weapons & Armor tab triggers', async () => {
+    it('always shows Narrative, Stats, Features, and Items tab triggers', async () => {
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByRole('tab', { name: /Narrative/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Stats/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Features/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /Weapons & Armor/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Items/i })).toBeInTheDocument();
     });
 
     it('does NOT show Spells tab for non-spellcasting Fighter with no race cantrips', async () => {
@@ -727,7 +751,7 @@ describe('CharacterDetail', () => {
     });
 
     it('non-spellcasting Fighter has exactly 4 tabs; spellcasting Wizard has 5', async () => {
-      // Fighter: Narrative + Stats + Features + Weapons & Armor = 4
+      // Fighter: Narrative + Stats + Features + Items = 4
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getAllByRole('tab')).toHaveLength(4);
@@ -1250,8 +1274,8 @@ describe('CharacterDetail', () => {
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText('Armor Class Options')).toBeInTheDocument();
-      // Draconic Resilience formula shown; DEX 12 → +1 → 13 + 1 = 14
-      expect(screen.getByText(/13 \+ DEX/)).toBeInTheDocument();
+      // Draconic Resilience formula shown (Stats AcOptionsLine + Items-tab AC summary both render it)
+      expect(screen.getAllByText(/13 \+ DEX/).length).toBeGreaterThan(0);
       expect(screen.getAllByText('14').length).toBeGreaterThan(0);
     });
 

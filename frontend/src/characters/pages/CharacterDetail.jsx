@@ -25,6 +25,7 @@ import { getRaceGrantedSkillsFromTraits } from '../components/raceProficienciesD
 import { getBackgroundSkills } from '../components/backgroundSkillsData';
 import RacialResourceTracker from '../components/RacialResourceTracker';
 import WalletCard from '../components/WalletCard';
+import InventoryTab from '../components/InventoryTab';
 import { MaxHpValue, AcOptionsLine } from '../components/CombatBonusInline';
 import { totalHpBonus } from '../components/combatBonuses';
 import { draconicLabel } from '../components/draconicData';
@@ -620,8 +621,8 @@ export default function CharacterDetail() {
               <TabsTrigger value="features" className="flex items-center gap-1.5">
                 <Zap className="h-3.5 w-3.5" /> Features
               </TabsTrigger>
-              <TabsTrigger value="gear" className="flex items-center gap-1.5">
-                <Sword className="h-3.5 w-3.5" /> Weapons & Armor
+              <TabsTrigger value="items" className="flex items-center gap-1.5">
+                <Sword className="h-3.5 w-3.5" /> Items
               </TabsTrigger>
               {hasSpells && (
                 <TabsTrigger value="spells" className="flex items-center gap-1.5">
@@ -1336,11 +1337,11 @@ export default function CharacterDetail() {
                 </SectionCard>
               )}
 
-              {/* Racial Features (rest-rechargeable racial traits — Breath Weapon lives in the Weapons & Armor tab) */}
+              {/* Racial Features — all rest-rechargeable racial traits (incl. Dragonborn Breath Weapon) */}
               {classSection.draft !== null && getRacialRestResources(
                 character?.character_data?.race_traits ?? [],
                 identity.draft?.level ?? character.level
-              ).some(r => r.key !== 'breath_weapon_used') && (
+              ).length > 0 && (
                 <SectionCard
                   title="Racial Features"
                   isDirty={classSection.isDirty}
@@ -1354,7 +1355,6 @@ export default function CharacterDetail() {
                     data={classSection.draft}
                     onChange={autoSaveClassPatch}
                     readOnly={!showEditable}
-                    excludeKeys={['breath_weapon_used']}
                   />
                 </SectionCard>
               )}
@@ -1384,30 +1384,8 @@ export default function CharacterDetail() {
               )}
             </TabsContent>
 
-            {/* ── Tab 3: Weapons & Armor ── */}
-            <TabsContent value="gear" className="space-y-4">
-              {/* Breath Weapon (rest-rechargeable racial combat trait) */}
-              {classSection.draft !== null && getRacialRestResources(
-                character?.character_data?.race_traits ?? [],
-                identity.draft?.level ?? character.level
-              ).some(r => r.key === 'breath_weapon_used') && (
-                <SectionCard
-                  title="Racial Features"
-                  isDirty={classSection.isDirty}
-                  onSave={saveClassData}
-                  onReset={classSection.reset}
-                  canEdit={showEditable}
-                >
-                  <RacialResourceTracker
-                    traits={character?.character_data?.race_traits ?? []}
-                    level={identity.draft?.level ?? character.level}
-                    data={classSection.draft}
-                    onChange={autoSaveClassPatch}
-                    readOnly={!showEditable}
-                    includeKeys={['breath_weapon_used']}
-                  />
-                </SectionCard>
-              )}
+            {/* ── Tab 3: Items ── */}
+            <TabsContent value="items" className="space-y-4">
               {/* Wallet — coins held by the character (mode set by campaign currency_type) */}
               {classSection.draft !== null && (
                 <SectionCard
@@ -1425,11 +1403,21 @@ export default function CharacterDetail() {
                   />
                 </SectionCard>
               )}
-              <div className="rounded-lg border bg-card p-8 text-center space-y-2">
-                <Sword className="h-8 w-8 mx-auto text-muted-foreground/40" />
-                <p className="font-medium text-muted-foreground">Equipment &amp; Inventory</p>
-                <p className="text-sm text-muted-foreground">Coming soon — weapons, armor, and gear will live here.</p>
-              </div>
+              {/* Inventory — categories, equip/attune, computed AC + attacks */}
+              {classSection.draft !== null && (
+                <InventoryTab
+                  inventory={classSection.draft.inventory ?? []}
+                  scores={identity.draft ?? {}}
+                  level={identity.draft?.level ?? character.level}
+                  charClass={character.char_class}
+                  subclass={classSection.draft.subclass}
+                  race={identity.draft?.race ?? character.race}
+                  subrace={character?.character_data?.subrace}
+                  campaignId={campaignId}
+                  readOnly={!showEditable}
+                  onChange={autoSaveClassPatch}
+                />
+              )}
             </TabsContent>
 
             {/* ── Tab 4: Spells ── */}
