@@ -103,12 +103,14 @@ export const ITEM_CATEGORIES = [
     singular: 'Gear',
     icon: Backpack,
     accent: 'bg-amber-600',
-    subtitle: (it) => it.category,
-    badges: (it) => [it.cost, it.quantity].filter(Boolean),
+    // `item_category`/`item_quantity` are set on inventory entries (see inventoryData.buildEntry);
+    // encyclopedia items use `category`/`quantity` directly — fall back so both render.
+    subtitle: (it) => it.item_category ?? it.category,
+    badges: (it) => [it.cost, it.item_quantity ?? it.quantity].filter(Boolean),
     filters: [{ key: 'category', allLabel: 'All Categories' }],
     stats: [
-      { label: 'Category', get: (it) => it.category },
-      { label: 'Quantity', get: (it) => it.quantity },
+      { label: 'Category', get: (it) => it.item_category ?? it.category },
+      { label: 'Quantity', get: (it) => it.item_quantity ?? it.quantity },
       { label: 'Cost', get: (it) => it.cost },
       { label: 'Weight', get: (it) => it.weight },
     ],
@@ -191,7 +193,7 @@ export const ITEM_CATEGORIES = [
     singular: 'Food / Drink',
     icon: UtensilsCrossed,
     accent: 'bg-orange-500',
-    subtitle: (it) => [it.item_type, it.category].filter(Boolean).join(' · '),
+    subtitle: (it) => [it.item_type, it.item_category ?? it.category].filter(Boolean).join(' · '),
     badges: (it) => [it.cost].filter(Boolean),
     filters: [
       { key: 'item_type', allLabel: 'All Types' },
@@ -199,8 +201,8 @@ export const ITEM_CATEGORIES = [
     ],
     stats: [
       { label: 'Type', get: (it) => it.item_type },
-      { label: 'Category', get: (it) => it.category },
-      { label: 'Quantity', get: (it) => it.quantity },
+      { label: 'Category', get: (it) => it.item_category ?? it.category },
+      { label: 'Quantity', get: (it) => it.item_quantity ?? it.quantity },
       { label: 'Effect', get: (it) => it.effect },
       { label: 'Cost', get: (it) => it.cost },
       { label: 'Weight', get: (it) => it.weight },

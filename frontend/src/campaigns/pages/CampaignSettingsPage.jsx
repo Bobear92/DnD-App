@@ -29,6 +29,7 @@ function GeneralTab({ campaignId }) {
     allow_reroll_ones: campaign?.allow_reroll_ones ?? false,
     leveling_type: campaign?.leveling_type ?? 'milestone',
     currency_type: campaign?.currency_type ?? 'standard',
+    starting_equipment: campaign?.starting_equipment ?? 'equipment',
   });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -42,7 +43,8 @@ function GeneralTab({ campaignId }) {
     settings.ability_score_method !== (campaign?.ability_score_method ?? 'standard_spread') ||
     settings.allow_reroll_ones !== (campaign?.allow_reroll_ones ?? false) ||
     settings.leveling_type !== (campaign?.leveling_type ?? 'milestone') ||
-    settings.currency_type !== (campaign?.currency_type ?? 'standard');
+    settings.currency_type !== (campaign?.currency_type ?? 'standard') ||
+    settings.starting_equipment !== (campaign?.starting_equipment ?? 'equipment');
 
   const handleSave = async () => {
     setSaving(true);
@@ -68,6 +70,7 @@ function GeneralTab({ campaignId }) {
       allow_reroll_ones: campaign?.allow_reroll_ones ?? false,
       leveling_type: campaign?.leveling_type ?? 'milestone',
       currency_type: campaign?.currency_type ?? 'standard',
+      starting_equipment: campaign?.starting_equipment ?? 'equipment',
     });
     setError('');
   };
@@ -89,6 +92,13 @@ function GeneralTab({ campaignId }) {
         </SettingRow>
         <SettingRow label="Currency">
           <span className="text-sm">{campaign?.currency_type === 'full' ? 'CP, SP, EP, GP, PP' : 'CP, SP, GP, PP'}</span>
+        </SettingRow>
+        <SettingRow label="Starting Equipment">
+          <span className="text-sm">{
+            campaign?.starting_equipment === 'none' ? 'None'
+            : campaign?.starting_equipment === 'equipment_or_gold' ? 'Equipment or starting gold'
+            : 'Class & background equipment'
+          }</span>
         </SettingRow>
       </div>
     );
@@ -233,6 +243,28 @@ function GeneralTab({ campaignId }) {
             <SelectContent>
               <SelectItem value="standard">Copper, Silver, Gold, Platinum</SelectItem>
               <SelectItem value="full">All five (adds Electrum)</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingRow>
+      </Section>
+
+      {/* Starting Equipment */}
+      <Section title="Starting Equipment">
+        <SettingRow
+          label="New Characters Begin With"
+          description="What characters receive at creation. 'Equipment + gold option' lets players take their class's starting gold instead of class equipment. 'Nothing' starts them empty (no equipment or gold)."
+        >
+          <Select
+            value={settings.starting_equipment}
+            onValueChange={v => setSettings(s => ({ ...s, starting_equipment: v }))}
+          >
+            <SelectTrigger className="w-60" data-testid="starting-equipment-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="equipment">Class &amp; background equipment</SelectItem>
+              <SelectItem value="equipment_or_gold">Equipment, or take starting gold</SelectItem>
+              <SelectItem value="none">Nothing (no equipment or gold)</SelectItem>
             </SelectContent>
           </Select>
         </SettingRow>

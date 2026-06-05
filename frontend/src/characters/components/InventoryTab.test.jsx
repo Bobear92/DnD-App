@@ -22,6 +22,7 @@ function renderTab(props = {}) {
       subclass={props.subclass}
       race={props.race ?? 'Human'}
       campaignId="1"
+      characterData={props.characterData ?? {}}
       readOnly={props.readOnly ?? false}
       onChange={props.onChange ?? vi.fn()}
     />
@@ -41,6 +42,43 @@ describe('InventoryTab', () => {
     ['weapons', 'armor', 'adventuring-gear', 'potions', 'magic-items', 'food-drink'].forEach((id) =>
       expect(screen.getByTestId(`inv-category-${id}`)).toBeInTheDocument()
     );
+  });
+
+  it('renders a Tools sub-tab', () => {
+    renderTab();
+    expect(screen.getByTestId('inv-category-tools')).toBeInTheDocument();
+  });
+
+  it('shows weapon proficiencies on the Weapons tab', () => {
+    renderTab({ charClass: 'Fighter' });
+    expect(screen.getByTestId('proficiency-banner')).toHaveTextContent(/martial weapons/i);
+  });
+
+  it('shows armor proficiencies on the Armor tab', () => {
+    renderTab({ charClass: 'Fighter' });
+    fireEvent.click(screen.getByTestId('inv-category-armor'));
+    expect(screen.getByTestId('proficiency-banner')).toHaveTextContent(/all armor/i);
+  });
+
+  it('shows tool proficiencies and owned tools on the Tools tab; gear excludes tools', () => {
+    const masonsTools = { uid: 't1', category: 'adventuring-gear', name: "Mason's tools", quantity: 1 };
+    const backpack = { uid: 'g1', category: 'adventuring-gear', name: 'Backpack', item_category: 'Gear', quantity: 1 };
+    renderTab({
+      inventory: [masonsTools, backpack],
+      charClass: 'Rogue',
+      characterData: { background_tool_choice: "Mason's tools" },
+    });
+    fireEvent.click(screen.getByTestId('inv-category-tools'));
+    // tool proficiency banner shows the class text + chosen tool grant
+    expect(screen.getByTestId('proficiency-banner')).toHaveTextContent(/thieves/i);
+    expect(screen.getByTestId('proficiency-banner')).toHaveTextContent("Mason's tools");
+    // the tool item row shows in the Tools tab, the backpack does not
+    expect(screen.getByTestId('inv-row-t1')).toBeInTheDocument();
+    expect(screen.queryByTestId('inv-row-g1')).not.toBeInTheDocument();
+    // the Gear tab shows the backpack, not the tool
+    fireEvent.click(screen.getByTestId('inv-category-adventuring-gear'));
+    expect(screen.getByTestId('inv-row-g1')).toBeInTheDocument();
+    expect(screen.queryByTestId('inv-row-t1')).not.toBeInTheDocument();
   });
 
   it('computes AC from equipped armor', () => {

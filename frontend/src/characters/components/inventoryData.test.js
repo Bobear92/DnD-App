@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  addEntry, removeEntry, setQuantity, getByCategory,
+  buildEntry, addEntry, removeEntry, setQuantity, getByCategory,
   toggleEquipped, toggleAttuned, attunedCount,
   equippedBodyArmor, equippedShield, computeArmorClass,
   isWeaponProficient, isArmorProficient, weaponAbility, computeAttack, getAttacks,
@@ -35,6 +35,17 @@ describe('inventory CRUD', () => {
     expect(setQuantity(inv, inv[0].uid, 5)[0].quantity).toBe(5);
     expect(setQuantity(inv, inv[0].uid, 0)[0].quantity).toBe(1);
     expect(setQuantity(inv, inv[0].uid, -3)[0].quantity).toBe(1);
+  });
+
+  it('buildEntry keeps the routing slug + count when the item has its own category/quantity fields', () => {
+    // Adventuring-gear / food items carry `category` ("Equipment Pack") and `quantity` ("50 ft."/null)
+    // fields that must NOT clobber the inventory routing slug or owned count.
+    const e = buildEntry('adventuring-gear', { id: 9, name: "Explorer's Pack", category: 'Equipment Pack', quantity: null, description: 'A backpack…' }, 1);
+    expect(e.category).toBe('adventuring-gear'); // routing slug, not "Equipment Pack"
+    expect(e.quantity).toBe(1);                  // owned count, not the item's null quantity
+    expect(e.item_category).toBe('Equipment Pack'); // preserved for display
+    expect(e.source_id).toBe(9);
+    expect(e.name).toBe("Explorer's Pack");
   });
 
   it('getByCategory filters', () => {

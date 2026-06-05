@@ -70,6 +70,8 @@ def update_campaign(campaign_id: int, campaign_data: CampaignUpdate, db: Session
         campaign.leveling_type = campaign_data.leveling_type
     if campaign_data.currency_type is not None:
         campaign.currency_type = campaign_data.currency_type
+    if campaign_data.starting_equipment is not None:
+        campaign.starting_equipment = campaign_data.starting_equipment
 
     db.commit()
     db.refresh(campaign)

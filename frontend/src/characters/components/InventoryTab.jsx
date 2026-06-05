@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Plus, Trash2, Shield, Swords, Minus } from 'lucide-react';
+import { Plus, Trash2, Shield, Swords, Minus, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ITEM_CATEGORIES, getItemCategory } from '../../encyclopedia/data/itemCategories';
 import { CLASS_PROFICIENCIES_5E } from './classProficienciesData';
 import { getRaceGrantedWeapons, getRaceGrantedArmor } from './raceProficienciesData';
+import { gatherProficiencies } from './inventoryProficiencies';
+import { isToolEntry } from './toolsData';
 import ItemPickerDialog from './ItemPickerDialog';
 import {
   addEntry, removeEntry, setQuantity, getByCategory,
@@ -14,17 +16,52 @@ import {
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
 } from './inventoryData';
 
+// Tools are stored as adventuring-gear entries but get their own sub-tab (inserted
+// right after Gear). It isn't a real encyclopedia category — the Add picker reuses
+// the adventuring-gear catalog.
+const TOOLS_CATEGORY = {
+  id: 'tools', label: 'Tools', singular: 'Tool', icon: Wrench, accent: 'bg-teal-600',
+  subtitle: (it) => (it.item_category && it.item_category !== 'Tools' ? it.item_category : 'Tool'),
+};
+const GEAR_IDX = ITEM_CATEGORIES.findIndex((c) => c.id === 'adventuring-gear');
+const CATEGORIES = [
+  ...ITEM_CATEGORIES.slice(0, GEAR_IDX + 1),
+  TOOLS_CATEGORY,
+  ...ITEM_CATEGORIES.slice(GEAR_IDX + 1),
+];
+
+function ProficiencyBanner({ label, text, grants }) {
+  const none = (!text || text === 'None') && grants.length === 0;
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3 space-y-1" data-testid="proficiency-banner">
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label} Proficiencies</div>
+      {none ? (
+        <div className="text-sm italic text-muted-foreground">None</div>
+      ) : (
+        <>
+          {text && text !== 'None' && <div className="text-sm">{text}</div>}
+          {grants.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {grants.map((g) => <Badge key={g} variant="secondary" className="text-xs">{g}</Badge>)}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 /**
  * Items tab body: combat summary (computed AC + attacks from equipped weapons),
- * category sub-tabs, and per-category owned-item lists with quantity / equip /
- * attune / remove. Inventory changes are pushed up via onChange(patch); equipping
- * armor also patches armor_class so the Stats AC field follows the equipment.
+ * category sub-tabs (incl. a Tools tab), per-category owned-item lists with quantity /
+ * equip / attune / remove, and weapon/armor/tool proficiency banners. Inventory
+ * changes are pushed up via onChange(patch); equipping armor patches armor_class too.
  */
 export default function InventoryTab({
   inventory = [], scores = {}, level = 1, charClass, subclass,
-  race, subrace, campaignId, readOnly = false, onChange,
+  race, subrace, campaignId, characterData = {}, readOnly = false, onChange,
 }) {
-  const [activeId, setActiveId] = useState(ITEM_CATEGORIES[0].id);
+  const [activeId, setActiveId] = useState(CATEGORIES[0].id);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const profs = CLASS_PROFICIENCIES_5E[charClass] || {};
@@ -32,13 +69,24 @@ export default function InventoryTab({
   const armorProfText = profs.armor || '';
   const raceWeapons = getRaceGrantedWeapons(race, subrace) || [];
   const raceArmor = getRaceGrantedArmor(race, subrace) || [];
+  const proficiencies = gatherProficiencies({ charClass, characterData });
 
   const ac = computeArmorClass({ inventory, scores, charClass, subclass });
   const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons });
   const attuned = attunedCount(inventory);
 
-  const activeCategory = getItemCategory(activeId) ?? ITEM_CATEGORIES[0];
-  const entries = getByCategory(inventory, activeId);
+  // Tools tab gathers tool entries from anywhere; the Gear tab excludes them.
+  const entriesFor = (id) => {
+    if (id === 'tools') return inventory.filter(isToolEntry);
+    if (id === 'adventuring-gear') return inventory.filter((e) => e.category === 'adventuring-gear' && !isToolEntry(e));
+    return getByCategory(inventory, id);
+  };
+
+  const activeCategory = CATEGORIES.find((c) => c.id === activeId) ?? CATEGORIES[0];
+  const entries = entriesFor(activeId);
+  // Tools live in the adventuring-gear catalog, so the picker/add use that slug.
+  const addCategoryId = activeId === 'tools' ? 'adventuring-gear' : activeId;
+  const pickerCategory = getItemCategory(addCategoryId) ?? activeCategory;
 
   const push = (next, syncAc = false) => {
     const patch = { inventory: next };
@@ -46,7 +94,7 @@ export default function InventoryTab({
     onChange?.(patch);
   };
 
-  const handleAdd = (item) => push(addEntry(inventory, activeId, item));
+  const handleAdd = (item) => push(addEntry(inventory, addCategoryId, item));
   const handleRemove = (entry) => push(removeEntry(inventory, entry.uid), entry.category === 'armor' && entry.equipped);
   const handleQty = (uid, q) => push(setQuantity(inventory, uid, q));
   const handleEquip = (uid) => push(toggleEquipped(inventory, uid), true);
@@ -96,9 +144,9 @@ export default function InventoryTab({
 
       {/* Category selector */}
       <div className="flex flex-wrap gap-1 border-b border-border pb-2">
-        {ITEM_CATEGORIES.map((c) => {
+        {CATEGORIES.map((c) => {
           const Icon = c.icon;
-          const count = getByCategory(inventory, c.id).length;
+          const count = entriesFor(c.id).length;
           const active = c.id === activeId;
           return (
             <button
@@ -118,10 +166,15 @@ export default function InventoryTab({
         })}
       </div>
 
+      {/* Proficiency banner (weapons / armor / tools tabs) */}
+      {activeId === 'weapons' && <ProficiencyBanner label="Weapon" text={proficiencies.weapons.text} grants={proficiencies.weapons.grants} />}
+      {activeId === 'armor' && <ProficiencyBanner label="Armor" text={proficiencies.armor.text} grants={proficiencies.armor.grants} />}
+      {activeId === 'tools' && <ProficiencyBanner label="Tool" text={proficiencies.tools.text} grants={proficiencies.tools.grants} />}
+
       {/* Active category */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">{activeCategory.label}</h3>
+          <h3 className="text-sm font-semibold">{activeId === 'tools' ? 'Tools Carried' : activeCategory.label}</h3>
           {!readOnly && (
             <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} data-testid="inv-add-btn">
               <Plus className="h-4 w-4 mr-1" /> Add {activeCategory.singular}
@@ -205,7 +258,7 @@ export default function InventoryTab({
       </div>
 
       <ItemPickerDialog
-        category={activeCategory}
+        category={pickerCategory}
         campaignId={campaignId}
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}

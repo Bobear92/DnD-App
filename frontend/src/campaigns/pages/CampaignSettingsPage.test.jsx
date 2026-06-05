@@ -63,3 +63,19 @@ describe('CampaignSettingsPage — currency', () => {
     expect(screen.getByText('CP, SP, EP, GP, PP')).toBeInTheDocument();
   });
 });
+
+describe('CampaignSettingsPage — starting equipment', () => {
+  it('shows the starting-equipment select for a GM', () => {
+    setCampaign({ userRole: 'gm' });
+    render(<CampaignSettingsPage />);
+    expect(screen.getByText('Starting Equipment')).toBeInTheDocument();
+    expect(screen.getByTestId('starting-equipment-select')).toBeInTheDocument();
+  });
+
+  it('shows read-only starting-equipment text for a player', () => {
+    setCampaign({ userRole: 'player', starting_equipment: 'none' });
+    render(<CampaignSettingsPage />);
+    expect(screen.getByText('None')).toBeInTheDocument();
+    expect(screen.queryByTestId('starting-equipment-select')).not.toBeInTheDocument();
+  });
+});

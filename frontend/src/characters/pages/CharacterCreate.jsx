@@ -49,6 +49,7 @@ import { getClassConfig } from '../components/classSheet/configs';
 import { SUBCLASS_UNLOCK_LEVEL_5E, SUBCLASS_UNLOCK_LEVEL_2024 } from '../components/classChoicesData';
 import { startingGoldForBackground, EMPTY_WALLET } from '../components/currencyData';
 import { CLASS_PROFICIENCIES_5E } from '../components/classProficienciesData';
+import StartingEquipmentStep from '../components/StartingEquipmentStep';
 
 // ─── Ability score validation constants ──────────────────────────────────────
 
@@ -497,8 +498,7 @@ function normalizeApiBg(bg) {
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-function StepIndicator({ current }) {
-  const steps = ['Class', 'Overview', 'Identity', 'Features', 'Review'];
+function StepIndicator({ current, steps = ['Class', 'Overview', 'Identity', 'Features', 'Review'] }) {
   return (
     <div className="flex items-center gap-2 text-sm">
       {steps.map((label, i) => {
@@ -1218,8 +1218,12 @@ export default function CharacterCreate() {
   const { campaignId } = useParams();
   const { campaign } = useCampaign();
 
-  const [step, setStep] = useState('class'); // 'class' | 'class_overview' | 'identity' | 'details' | 'overview'
+  const [step, setStep] = useState('class'); // 'class' | 'class_overview' | 'identity' | 'details' | 'equipment' | 'overview'
   const [selectedClass, setSelectedClass] = useState('');
+  // Starting-equipment mode is a GM campaign setting.
+  const startingEquipmentMode = campaign?.starting_equipment ?? 'equipment';
+  const hasEquipmentStep = startingEquipmentMode !== 'none';
+  const [equipmentResult, setEquipmentResult] = useState({ inventory: [], bonusGold: 0 });
   const [classOverviewData, setClassOverviewData] = useState(null);
   const [classOverviewLoading, setClassOverviewLoading] = useState(false);
 
@@ -1495,7 +1499,13 @@ export default function CharacterCreate() {
           ...(raceChoices.half_elf_skills ?? []),
           ...(isVariantHuman && raceChoices.human_variant_skill ? [raceChoices.human_variant_skill] : []),
         ])],
-        currency: { ...EMPTY_WALLET, gp: startingGold },
+        // Starting wealth + equipment per the campaign's starting_equipment setting:
+        //   none → empty wallet + empty inventory; otherwise background gold (+ class
+        //   gold if the player swapped equipment for gold) and the resolved inventory.
+        currency: startingEquipmentMode === 'none'
+          ? { ...EMPTY_WALLET }
+          : { ...EMPTY_WALLET, gp: startingGold + (equipmentResult.bonusGold || 0) },
+        inventory: startingEquipmentMode === 'none' ? [] : (equipmentResult.inventory || []),
         subrace: selectedSubraceObj?.name ?? null,
         race_traits: allRaceTraits,
         race_languages: allRaceLanguages,
@@ -1522,14 +1532,17 @@ export default function CharacterCreate() {
     }
   };
 
+  const totalSteps = hasEquipmentStep ? 6 : 5;
   const stepNum = step === 'class' ? 1
     : step === 'class_overview' ? 2
     : step === 'identity' ? 3
     : step === 'details' ? 4
-    : 5;
+    : step === 'equipment' ? 5
+    : totalSteps;
 
   const handleBack = () => {
-    if (step === 'overview') { setStep('details'); return; }
+    if (step === 'overview') { setStep(hasEquipmentStep ? 'equipment' : 'details'); return; }
+    if (step === 'equipment') { setStep('details'); return; }
     if (step === 'details') { setStep('identity'); return; }
     if (step === 'identity') { setStep('class_overview'); return; }
     if (step === 'class_overview') { setStep('class'); return; }
@@ -1543,12 +1556,14 @@ export default function CharacterCreate() {
   const headerSub = step === 'class'
     ? `${campaign?.edition?.toUpperCase() ?? '5E'} · Select a class to continue`
     : step === 'class_overview'
-    ? 'Step 2 of 5 — Class Overview'
+    ? `Step 2 of ${totalSteps} — Class Overview`
     : step === 'identity'
-    ? 'Step 3 of 5 — Race, Background & Identity'
+    ? `Step 3 of ${totalSteps} — Race, Background & Identity`
     : step === 'details'
-    ? 'Step 4 of 5 — Class Features & Ability Scores'
-    : 'Step 5 of 5 — Review & Create';
+    ? `Step 4 of ${totalSteps} — Class Features & Ability Scores`
+    : step === 'equipment'
+    ? `Step 5 of ${totalSteps} — Starting Equipment`
+    : `Step ${totalSteps} of ${totalSteps} — Review & Create`;
 
   // Next is blocked when name is missing, subrace not chosen, or required race/background choices incomplete
   const bgSpec = selectedBgObj ? BACKGROUND_CHOICES_MAP[selectedBgObj.name] : null;
@@ -1687,7 +1702,12 @@ export default function CharacterCreate() {
 
         {/* Step indicator */}
         {step !== 'class' && (
-          <StepIndicator current={stepNum} />
+          <StepIndicator
+            current={stepNum}
+            steps={hasEquipmentStep
+              ? ['Class', 'Overview', 'Identity', 'Features', 'Equipment', 'Review']
+              : ['Class', 'Overview', 'Identity', 'Features', 'Review']}
+          />
         )}
 
         {/* ── Step 1: Class picker ─────────────────────────────────────────── */}
@@ -2122,14 +2142,41 @@ export default function CharacterCreate() {
                 <Button type="button" variant="outline" onClick={() => setStep('identity')} data-testid="details-back">
                   <ChevronLeft className="h-4 w-4 mr-1" /> Back
                 </Button>
-                <Button type="button" onClick={() => setStep('overview')} disabled={!abilityScoresReady || !skillsReady || !classChoicesReady || !featPrereqReady} data-testid="details-next">
-                  Next: Review <ChevronRight className="h-4 w-4 ml-1" />
+                <Button type="button" onClick={() => setStep(hasEquipmentStep ? 'equipment' : 'overview')} disabled={!abilityScoresReady || !skillsReady || !classChoicesReady || !featPrereqReady} data-testid="details-next">
+                  {hasEquipmentStep ? 'Next: Equipment' : 'Next: Review'} <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
             </div>
           </div>
         )}
-        {/* ── Step 4: Overview / Review ────────────────────────────────────── */}
+        {/* ── Step 5: Starting Equipment ───────────────────────────────────── */}
+        {step === 'equipment' && (
+          <div className="space-y-6">
+            <div className="rounded-lg border bg-card p-4 sm:p-6 space-y-4">
+              <div>
+                <h2 className="font-semibold">Starting Equipment</h2>
+                <p className="text-sm text-muted-foreground">Choose your class equipment options. Everything is added to your character's inventory — you can change it later.</p>
+              </div>
+              <StartingEquipmentStep
+                charClass={selectedClass}
+                backgroundName={selectedBgObj?.name}
+                backgroundToolChoice={bgChoices.tool_choice}
+                campaignId={campaignId}
+                mode={startingEquipmentMode}
+                onResult={setEquipmentResult}
+              />
+            </div>
+            <div className="flex justify-between gap-3">
+              <Button type="button" variant="outline" onClick={() => setStep('details')} data-testid="equipment-back">
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+              <Button type="button" onClick={() => setStep('overview')} data-testid="equipment-next">
+                Next: Review <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+        {/* ── Step 6: Overview / Review ────────────────────────────────────── */}
         {step === 'overview' && (() => {
           const finalScores = {
             strength:     form.strength     + (combinedRaceAsi.strength     ?? 0),
@@ -2419,11 +2466,44 @@ export default function CharacterCreate() {
                   </div>
                   <div className="rounded-lg border bg-muted/30 p-3" data-testid="review-starting-gold">
                     <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Starting Gold</div>
-                    <div className="text-2xl font-bold">{startingGold} gp</div>
-                    <div className="text-xs text-muted-foreground">from background</div>
+                    <div className="text-2xl font-bold">{startingEquipmentMode === 'none' ? 0 : startingGold + (equipmentResult.bonusGold || 0)} gp</div>
+                    <div className="text-xs text-muted-foreground">{equipmentResult.bonusGold ? 'background + class' : 'from background'}</div>
                   </div>
+                  {startingEquipmentMode !== 'none' && (
+                    <div className="rounded-lg border bg-muted/30 p-3" data-testid="review-starting-items">
+                      <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Starting Items</div>
+                      <div className="text-2xl font-bold">{(equipmentResult.inventory || []).length}</div>
+                      <div className="text-xs text-muted-foreground">in inventory</div>
+                    </div>
+                  )}
                 </div>
               </section>
+
+              {/* Starting Equipment & Wallet — the full list of what the character begins with */}
+              {startingEquipmentMode !== 'none' && (
+                <section className="rounded-lg border bg-card p-4 space-y-3" data-testid="review-equipment">
+                  <h2 className="font-semibold">Starting Equipment &amp; Wallet</h2>
+                  <div className="text-sm">
+                    <span className="font-medium">Wallet:</span>{' '}
+                    {startingGold + (equipmentResult.bonusGold || 0)} gp
+                    <span className="text-muted-foreground"> {equipmentResult.bonusGold ? '(background + class gold)' : '(from background)'}</span>
+                  </div>
+                  {(equipmentResult.inventory || []).length > 0 ? (
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground uppercase mb-1">Items ({equipmentResult.inventory.length})</div>
+                      <ul className="text-sm text-muted-foreground grid sm:grid-cols-2 gap-x-6 gap-y-0.5 list-disc pl-5">
+                        {equipmentResult.inventory.map((e) => (
+                          <li key={e.uid}>
+                            {e.name}{e.quantity > 1 ? ` ×${e.quantity}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No items{equipmentResult.bonusGold ? ' — you took starting gold instead' : ''}.</p>
+                  )}
+                </section>
+              )}
 
               {/* Proficiencies */}
               <ProficienciesCard cls={selectedClass} chosenTools={[raceChoices.dwarf_tool, ...raceTools, ...backgroundFixedTools(selectedBgObj), bgChoices.tool_choice, classData.tool_choice]} raceWeapons={raceWeapons} raceArmor={raceArmor} />

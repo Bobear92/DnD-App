@@ -41,6 +41,9 @@ const mockNavigate = vi.fn();
 const mockCampaign = {
   id: 1, name: 'Test Campaign', userRole: 'player', edition: '5e',
   use_alignment: true, ability_score_method: 'standard_spread', allow_reroll_ones: false,
+  // Default 'none' keeps the (separately-tested) Equipment step out of the existing
+  // creation-flow tests; the Starting equipment describe sets it explicitly.
+  starting_equipment: 'none',
 };
 
 vi.mock('../../campaigns/CampaignContext', () => ({
@@ -53,6 +56,12 @@ vi.mock('../../auth/AuthContext', () => ({
 
 vi.mock('../../shared/components/layout/MainLayout', () => ({
   default: ({ children }) => <div>{children}</div>,
+}));
+
+// The Starting Equipment step fetches encyclopedia items; default to empty so it
+// renders cleanly (the resolver falls back to plain entries).
+vi.mock('../../encyclopedia/itemService', () => ({
+  default: { getItems: vi.fn().mockResolvedValue([]) },
 }));
 
 function renderCreate() {
@@ -71,7 +80,8 @@ async function selectClass(cls) {
   fireEvent.click(screen.getByText(cls));
   await waitFor(() => expect(screen.getByTestId('overview-next')).toBeInTheDocument());
   fireEvent.click(screen.getByTestId('overview-next'));
-  await waitFor(() => expect(screen.getByText('Step 3 of 5 — Race, Background & Identity')).toBeInTheDocument());
+  // Identity step reached — assert via a step-count-independent element (the name input).
+  await waitFor(() => expect(screen.getByPlaceholderText('Enter a name…')).toBeInTheDocument());
 }
 
 async function advanceToFeatures(cls, name = 'Thorin') {
@@ -142,6 +152,13 @@ async function advanceToReview(cls, name = 'Thorin') {
   await selectRequiredSkills(cls);
   await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
   fireEvent.click(screen.getByTestId('details-next'));
+  // Pass through the Equipment step when the campaign has one (starting_equipment != 'none').
+  await waitFor(() => expect(
+    screen.queryByTestId('equipment-next') || screen.queryByText('Character Summary')
+  ).toBeTruthy());
+  if (screen.queryByTestId('equipment-next')) {
+    fireEvent.click(screen.getByTestId('equipment-next'));
+  }
   await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
 }
 
@@ -166,6 +183,7 @@ describe('CharacterCreate', () => {
       ability_score_method: 'standard_spread',
       allow_reroll_ones: false,
       edition: '5e',
+      starting_equipment: 'none',
     });
   });
 
@@ -482,6 +500,8 @@ describe('CharacterCreate', () => {
   // ── Starting currency (from background) ──────────────────────────────────
 
   describe('Starting currency', () => {
+    beforeEach(() => { mockCampaign.starting_equipment = 'equipment'; });
+
     it('shows 0 gp in review when no background is chosen', async () => {
       renderCreate();
       await advanceToReview('Fighter');
@@ -500,6 +520,8 @@ describe('CharacterCreate', () => {
       await selectRequiredSkills('Fighter');
       await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
       fireEvent.click(screen.getByTestId('details-next'));
+      await waitFor(() => expect(screen.getByTestId('equipment-next')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('equipment-next'));
       await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
 
       expect(screen.getByTestId('review-starting-gold')).toHaveTextContent('15 gp');
@@ -510,6 +532,92 @@ describe('CharacterCreate', () => {
       expect(payload.character_data.currency).toEqual(
         expect.objectContaining({ gp: 15, cp: 0, sp: 0, ep: 0, pp: 0 })
       );
+    });
+  });
+
+  // ── Starting equipment step ──────────────────────────────────────────────
+
+  describe('Starting equipment step', () => {
+    async function advanceToEquipment(cls, name = 'Thorin') {
+      await advanceToFeatures(cls, name);
+      await assignStandardSpread();
+      await selectRequiredSkills(cls);
+      await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+      fireEvent.click(screen.getByTestId('details-next'));
+      await waitFor(() => expect(screen.getByTestId('equipment-step')).toBeInTheDocument());
+    }
+
+    it('shows the Equipment step in equipment mode with class choice options', async () => {
+      mockCampaign.starting_equipment = 'equipment';
+      renderCreate();
+      await advanceToEquipment('Fighter');
+      expect(screen.getByTestId('equip-opt-f1-a')).toBeInTheDocument(); // chain mail
+      expect(screen.getByTestId('equip-opt-f1-b')).toBeInTheDocument(); // leather + longbow
+    });
+
+    it('includes the resolved starting inventory in the payload', async () => {
+      mockCampaign.starting_equipment = 'equipment';
+      characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 8 } });
+      renderCreate();
+      await advanceToEquipment('Fighter');
+      fireEvent.click(screen.getByTestId('equipment-next'));
+      await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Create Character'));
+      await waitFor(() => expect(characterService.createCharacter).toHaveBeenCalled());
+      const inv = characterService.createCharacter.mock.calls[0][0].character_data.inventory;
+      expect(inv.length).toBeGreaterThan(0);
+      expect(inv.some((e) => e.name === 'Chain Mail')).toBe(true); // Fighter f1 default
+    });
+
+    it('review lists the starting equipment items and wallet', async () => {
+      mockCampaign.starting_equipment = 'equipment';
+      renderCreate();
+      await advanceToEquipment('Fighter');
+      fireEvent.click(screen.getByTestId('equipment-next'));
+      await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+      const eq = screen.getByTestId('review-equipment');
+      expect(eq).toHaveTextContent('Wallet:');
+      expect(eq).toHaveTextContent('Chain Mail'); // Fighter f1 default item listed
+    });
+
+    it('none mode skips the step and grants no equipment or gold', async () => {
+      mockCampaign.starting_equipment = 'none';
+      characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 9 } });
+      renderCreate();
+      await selectClass('Fighter');
+      fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Pauper' } });
+      fireEvent.click(screen.getByTestId('bg-card-Charlatan')); // would give 15 gp if not 'none'
+      fireEvent.click(screen.getByTestId('identity-next'));
+      await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+      await assignStandardSpread();
+      await selectRequiredSkills('Fighter');
+      await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+      fireEvent.click(screen.getByTestId('details-next'));
+      await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+      expect(screen.queryByTestId('equipment-step')).not.toBeInTheDocument();
+      expect(screen.getByTestId('review-starting-gold')).toHaveTextContent('0 gp');
+      fireEvent.click(screen.getByText('Create Character'));
+      await waitFor(() => expect(characterService.createCharacter).toHaveBeenCalled());
+      const cd = characterService.createCharacter.mock.calls[0][0].character_data;
+      expect(cd.inventory).toEqual([]);
+      expect(cd.currency.gp).toBe(0);
+    });
+
+    it('equipment_or_gold lets the player take class gold instead of equipment', async () => {
+      mockCampaign.starting_equipment = 'equipment_or_gold';
+      characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 10 } });
+      renderCreate();
+      await advanceToEquipment('Fighter');
+      expect(screen.getByTestId('equip-take-gold')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('equip-take-gold'));
+      fireEvent.click(screen.getByTestId('equipment-next'));
+      await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+      expect(screen.getByTestId('review-starting-gold')).toHaveTextContent('125 gp'); // Fighter wealth
+      fireEvent.click(screen.getByText('Create Character'));
+      await waitFor(() => expect(characterService.createCharacter).toHaveBeenCalled());
+      const cd = characterService.createCharacter.mock.calls[0][0].character_data;
+      expect(cd.currency.gp).toBe(125);
+      expect(cd.inventory.some((e) => e.name === 'Chain Mail')).toBe(false); // class equipment swapped for gold
     });
   });
 

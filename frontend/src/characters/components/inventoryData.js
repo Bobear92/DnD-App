@@ -27,21 +27,35 @@ function genUid() {
 
 // ─── Inventory CRUD (pure) ──────────────────────────────────────────────────────
 
-export function addEntry(inventory = [], categoryId, item) {
+/**
+ * Build a single inventory entry (snapshot of an item) with a quantity.
+ * The entry's `category` is the REST routing slug ('weapons', 'adventuring-gear', …)
+ * and `quantity` is the owned count — both must win over the snapshot. Some item
+ * categories (adventuring-gear, food-drink) carry their OWN `category`/`quantity`
+ * fields (e.g. "Equipment Pack", "50 ft."), so we preserve those as
+ * `item_category`/`item_quantity` rather than letting them clobber the routing slug/count.
+ */
+export function buildEntry(categoryId, item, quantity = 1) {
   const snapshot = {};
   for (const [k, v] of Object.entries(item || {})) {
-    if (!STRIP_KEYS.has(k)) snapshot[k] = v;
+    if (STRIP_KEYS.has(k)) continue;
+    if (k === 'category') { snapshot.item_category = v; continue; }
+    if (k === 'quantity') { snapshot.item_quantity = v; continue; }
+    snapshot[k] = v;
   }
-  const entry = {
+  return {
+    ...snapshot,
     uid: genUid(),
     category: categoryId,
     source_id: item?.id ?? null,
-    quantity: 1,
+    quantity: Math.max(1, Math.floor(Number(quantity) || 1)),
     equipped: false,
     attuned: false,
-    ...snapshot,
   };
-  return [...(inventory || []), entry];
+}
+
+export function addEntry(inventory = [], categoryId, item) {
+  return [...(inventory || []), buildEntry(categoryId, item, 1)];
 }
 
 export function removeEntry(inventory = [], uid) {

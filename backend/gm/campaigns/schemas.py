@@ -12,6 +12,7 @@ class CampaignCreate(BaseModel):
     allow_reroll_ones: bool = False
     leveling_type: str = "milestone"
     currency_type: str = "standard"
+    starting_equipment: str = "equipment"
 
 
 class CampaignUpdate(BaseModel):
@@ -23,6 +24,7 @@ class CampaignUpdate(BaseModel):
     allow_reroll_ones: Optional[bool] = None
     leveling_type: Optional[str] = None
     currency_type: Optional[str] = None
+    starting_equipment: Optional[str] = None
 
 
 class UserInfo(BaseModel):
@@ -55,6 +57,7 @@ class CampaignResponse(BaseModel):
     allow_reroll_ones: bool
     leveling_type: str
     currency_type: str
+    starting_equipment: str
     created_by: int
     created_at: datetime
     updated_at: Optional[datetime]
@@ -74,6 +77,7 @@ class CampaignListItem(BaseModel):
     allow_reroll_ones: bool
     leveling_type: str
     currency_type: str
+    starting_equipment: str
     created_by: int
     created_at: datetime
 

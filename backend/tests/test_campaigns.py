@@ -170,6 +170,29 @@ class TestCampaignCurrency:
         assert resp[0]["currency_type"] == "full"
 
 
+class TestCampaignStartingEquipment:
+    def test_defaults_to_equipment(self, client):
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        detail = client.get(f"/api/gm/campaigns/{campaign_id}", headers=headers).json()
+        assert detail["starting_equipment"] == "equipment"
+
+    def test_gm_can_set_mode(self, client):
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        for mode in ("equipment_or_gold", "none", "equipment"):
+            resp = client.put(f"/api/gm/campaigns/{campaign_id}", json={"starting_equipment": mode}, headers=headers)
+            assert resp.status_code == 200
+            assert resp.json()["starting_equipment"] == mode
+
+    def test_in_list(self, client):
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        client.put(f"/api/gm/campaigns/{campaign_id}", json={"starting_equipment": "none"}, headers=headers)
+        resp = client.get("/api/gm/campaigns", headers=headers).json()
+        assert resp[0]["starting_equipment"] == "none"
+
+
 # ---------------------------------------------------------------------------
 # Deleting campaigns
 # ---------------------------------------------------------------------------
