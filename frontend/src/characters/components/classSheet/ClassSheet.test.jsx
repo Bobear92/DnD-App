@@ -37,6 +37,40 @@ describe('ClassSheet — martial section isolation', () => {
   });
 });
 
+describe('ClassSheet — Features tab sub-tabs', () => {
+  it('shows General + subclass-named sub-tabs in the features section', () => {
+    fighter();
+    expect(screen.getByTestId('features-subtab-general')).toHaveTextContent('General Fighter Features');
+    expect(screen.getByTestId('features-subtab-subclass')).toHaveTextContent('Champion Features');
+  });
+
+  it('defaults to General; subclass content appears only after clicking the subclass tab', () => {
+    fighter({ gmEdit: false });
+    expect(screen.getByText('Extra Attacks')).toBeInTheDocument(); // general content
+    expect(screen.queryByText('Champion')).not.toBeInTheDocument(); // subclass hidden
+    fireEvent.click(screen.getByTestId('features-subtab-subclass'));
+    expect(screen.getByText('Champion')).toBeInTheDocument();        // subclass shown
+    expect(screen.queryByText('Extra Attacks')).not.toBeInTheDocument(); // general hidden
+  });
+
+  it('labels the subclass tab "Subclass Features" when none is chosen', () => {
+    render(<FighterSheet data={{ ...FIGHTER_DATA, subclass: undefined }} level={5} section="features" />);
+    expect(screen.getByTestId('features-subtab-subclass')).toHaveTextContent('Subclass Features');
+  });
+
+  it('renders the Battle Master panel under the subclass tab for a Battle Master', () => {
+    render(<FighterSheet data={{ ...FIGHTER_DATA, subclass: 'Battle Master' }} level={5} section="features" />);
+    fireEvent.click(screen.getByTestId('features-subtab-subclass'));
+    expect(screen.getByTestId('battle-master-panel')).toBeInTheDocument();
+  });
+
+  it('renders no subclass panel for a subclass without one (Champion)', () => {
+    fighter(); // Champion
+    fireEvent.click(screen.getByTestId('features-subtab-subclass'));
+    expect(screen.queryByTestId('battle-master-panel')).not.toBeInTheDocument();
+  });
+});
+
 describe('ClassSheet — locked choices + GM Edit (Epic 1)', () => {
   it('locks Fighting Style to plain text outside creation when gmEdit is off', () => {
     fighter({ gmEdit: false });
@@ -57,12 +91,14 @@ describe('ClassSheet — locked choices + GM Edit (Epic 1)', () => {
 
   it('locks subclass to SubclassDetails when gmEdit is off (no picker info buttons)', () => {
     fighter({ gmEdit: false });
+    fireEvent.click(screen.getByTestId('features-subtab-subclass'));
     expect(screen.getByText('Champion')).toBeInTheDocument();
     expect(screen.queryAllByTestId(/^subclass-info-/).length).toBe(0);
   });
 
   it('shows the subclass picker when gmEdit is on', () => {
     fighter({ gmEdit: true });
+    fireEvent.click(screen.getByTestId('features-subtab-subclass'));
     expect(screen.getByTestId('subclass-info-Champion')).toBeInTheDocument();
   });
 });

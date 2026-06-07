@@ -499,6 +499,9 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             patch['action_surge_used'] = 0
             patch['second_wind_used'] = 0
             changes.append('Action Surge & Second Wind recovered')
+            if cd.get('subclass') == 'Battle Master':
+                patch['superiority_dice_used'] = 0
+                changes.append('Superiority Dice recovered')
         if cls == 'Bard' and (edition == '5.5e' or level >= 5):
             patch['bardic_inspiration_used'] = 0
             changes.append('Bardic Inspiration recovered')
@@ -550,6 +553,9 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             patch['action_surge_used'] = 0
             patch['indomitable_used'] = 0
             changes.append('Action Surge, Second Wind & Indomitable recovered')
+            if cd.get('subclass') == 'Battle Master':
+                patch['superiority_dice_used'] = 0
+                changes.append('Superiority Dice recovered')
         elif cls == 'Monk':
             patch['ki_used'] = 0
             changes.append('Focus points recovered' if edition == '5.5e' else 'Ki points recovered')

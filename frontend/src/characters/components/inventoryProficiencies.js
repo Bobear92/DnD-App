@@ -18,6 +18,7 @@ export function gatherProficiencies({ charClass, characterData = {} } = {}) {
         ...(cd.race_tool_proficiencies || []),
         cd.background_tool_choice,
         cd.tool_choice,
+        ...(cd.subclass_tool_proficiencies || []), // tools chosen via subclass features (e.g. Student of War)
       ]),
     },
   };

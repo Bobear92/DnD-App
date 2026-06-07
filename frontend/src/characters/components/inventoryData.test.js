@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildEntry, addEntry, removeEntry, setQuantity, getByCategory,
+  buildEntry, addEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons,
   toggleEquipped, toggleAttuned, attunedCount,
   equippedBodyArmor, equippedShield, computeArmorClass,
   isWeaponProficient, isArmorProficient, weaponAbility, computeAttack, getAttacks,
@@ -9,6 +9,34 @@ import {
 
 const armor = (over) => ({ uid: Math.random().toString(), category: 'armor', equipped: false, ...over });
 const weapon = (over) => ({ uid: Math.random().toString(), category: 'weapons', equipped: false, ...over });
+
+describe('normalizeWeapons', () => {
+  it('splits a stacked weapon into individual quantity-1 entries', () => {
+    const inv = normalizeWeapons([weapon({ uid: 'h1', name: 'Handaxe', quantity: 2, equipped: true })]);
+    expect(inv).toHaveLength(2);
+    expect(inv.map((e) => e.uid)).toEqual(['h1', 'h1-2']);
+    expect(inv.every((e) => e.quantity === 1)).toBe(true);
+    // only the first copy inherits the equipped flag
+    expect(inv[0].equipped).toBe(true);
+    expect(inv[1].equipped).toBe(false);
+  });
+
+  it('leaves single weapons and non-weapons untouched', () => {
+    const inv = normalizeWeapons([
+      weapon({ uid: 'w1', name: 'Longsword', quantity: 1 }),
+      { uid: 'g1', category: 'adventuring-gear', name: 'Arrows', quantity: 20 },
+    ]);
+    expect(inv).toHaveLength(2);
+    expect(inv.find((e) => e.uid === 'g1').quantity).toBe(20); // ammo still stacks
+  });
+
+  it('is idempotent (re-running on split inventory is a no-op)', () => {
+    const once = normalizeWeapons([weapon({ uid: 'h1', name: 'Handaxe', quantity: 3 })]);
+    const twice = normalizeWeapons(once);
+    expect(twice.map((e) => e.uid)).toEqual(['h1', 'h1-2', 'h1-3']);
+    expect(twice).toHaveLength(3);
+  });
+});
 
 describe('inventory CRUD', () => {
   it('addEntry snapshots the item, strips id/owner, defaults quantity/equipped', () => {

@@ -22,10 +22,43 @@
       "Bash(git add *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/docs)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(cd \"c:/Users/rober/Documents/Projects/dnd-app/.claude/commands\" && rm class-sheet.md && echo \"deleted class-sheet.md\")",
+      "Bash(curl -s -o /dev/null -w \"backend: %{http_code}\\\\n\" http://localhost:8000/docs)",
+      "Bash(curl -s -o /dev/null -w \"frontend: %{http_code}\\\\n\" http://localhost:5173)",
+      "PowerShell(\"killed python processes\")",
+      "Bash(curl -s http://localhost:8000/docs)",
+      "Bash(echo \"STATUS:$?\")",
+      "PowerShell(\"killed all python \\(pytest + uvicorn\\)\")",
+      "Bash(curl -s \"http://localhost:8000/feats?edition=5e\" -H \"Authorization: Bearer x\" -o /dev/null -w \"feats endpoint HTTP %{http_code}\\\\n\")",
+      "PowerShell(\"killed\")",
+      "Bash(curl -s -X POST http://localhost:8000/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"gm@dnd.com\",\"password\":\"password123\"}')",
+      "Bash(tail -30 /tmp/uvicorn.log | grep -A20 -i \"error\\\\|traceback\\\\|validation\" | head -40)",
+      "Read(//tmp/**)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('campaigns:', len\\(d\\)\\); print\\('currency_type present:', all\\('currency_type' in c for c in d\\)\\); print\\('sample:', d[0]['currency_type'] if d else 'none'\\)\")",
+      "Bash(git restore *)",
+      "Bash(git commit -m 'Add encyclopedia inventory, character wallet/currency, and feats system *)",
+      "Bash(git commit -m 'Wire items into the character sheet \\(Items tab with equip + auto-stats\\) *)",
+      "Bash(cd \"c:/Users/rober/Documents/Projects/dnd-app/backend\")",
+      "Bash(curl -s -o /dev/null -w \"backend /docs: %{http_code}\\\\n\" http://localhost:8000/docs)",
+      "Bash(python -c ' *)",
+      "Bash(cd \"c:/Users/rober/Documents/Projects/dnd-app/frontend\" && npm run dev > /tmp/vite.log 2>&1 & *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('starting_equipment:', repr\\(d.get\\('starting_equipment'\\)\\), '| currency_type:', repr\\(d.get\\('currency_type'\\)\\)\\)\")",
+      "PowerShell(Get-Process -Name python,python3,uvicorn -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 2; $p = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue; if \\($p\\) { \"still listening on 8000: PID $\\($p.OwningProcess\\)\" } else { \"port 8000 free\" })",
+      "Bash(curl -s \"http://localhost:8000/api/encyclopedia/items/weapons\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); rows=d if isinstance\\(d,list\\) else d.get\\('items',d\\); [print\\(repr\\(w.get\\('name'\\)\\),'|',repr\\(w.get\\('weapon_category'\\)\\),'|',repr\\(w.get\\('weapon_type'\\)\\)\\) for w in rows if 'crossbow' in \\(w.get\\('name'\\) or ''\\).lower\\(\\) or 'dagger' in \\(w.get\\('name'\\) or ''\\).lower\\(\\) or 'longsword' in \\(w.get\\('name'\\) or ''\\).lower\\(\\)]\")",
+      "Bash(curl -s -X POST http://localhost:8000/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"gm@dnd.com\",\"password\":\"password123\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(cd /c/Users/rober/Documents/Projects/dnd-app/frontend && grep -n \"category\\\\|weapons\\\\|properties\\\\|WEAPON\\\\|getItemCategory\\\\|import\" src/encyclopedia/pages/ItemsTab.test.jsx | head -30)",
+      "Read(//c/c/Users/rober/Documents/Projects/dnd-app/frontend/src/encyclopedia/pages/**)",
+      "Bash(cd /c/Users/rober/Documents/Projects/dnd-app/frontend && grep -n \"buildStartingInventory\\\\|buildEntry\\\\|quantity\\\\|weapons\" src/characters/components/startingEquipmentResolver.js | head -40)",
+      "Read(//c/c/Users/rober/Documents/Projects/dnd-app/frontend/src/characters/components/**)",
+      "Bash(cd /c/Users/rober/Documents/Projects/dnd-app && grep -n \"maneuversData\\\\|BattleMasterPanel\\\\|ManeuversPage\\\\|superiority_dice\\\\|subclassPanels\\\\|maneuvers\" CLAUDE.md | head)",
+      "Read(//c/c/Users/rober/Documents/Projects/dnd-app/**)",
+      "Bash(git checkout *)"
     ],
     "additionalDirectories": [
-      "\\tmp"
+      "\\tmp",
+      "c:\\Users\\rober\\Documents\\Projects\\dnd-app\\.claude\\commands"
     ]
   }
 }

@@ -97,6 +97,15 @@ describe('ItemsTab', () => {
     await waitFor(() => expect(screen.getByText('A versatile blade.')).toBeInTheDocument());
   });
 
+  it('explains weapon attributes in the detail dialog', async () => {
+    renderTab();
+    await waitFor(() => screen.getByText('Longsword'));
+    fireEvent.click(screen.getByTestId('item-row-1'));
+    await waitFor(() => screen.getByText(/tap to learn what they mean/i));
+    fireEvent.click(screen.getByTestId('weapon-prop-Versatile'));
+    expect(screen.getByTestId('weapon-prop-description')).toHaveTextContent(/one or two hands/i);
+  });
+
   it('shows Override button for system items when GM', async () => {
     renderTab({ isGm: true });
     await waitFor(() => screen.getByText('Longsword'));

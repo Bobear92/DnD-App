@@ -27,6 +27,11 @@ describe('gatherProficiencies', () => {
     expect(p.tools.grants).toEqual(expect.arrayContaining(["Mason's tools", "Smith's tools", "Tinker's tools", 'Lute']));
   });
 
+  it('includes subclass tool proficiencies (e.g. Student of War choice)', () => {
+    const p = gatherProficiencies({ charClass: 'Fighter', characterData: { subclass_tool_proficiencies: ["Smith's Tools"] } });
+    expect(p.tools.grants).toContain("Smith's Tools");
+  });
+
   it('dedups and drops falsy grants', () => {
     const p = gatherProficiencies({
       charClass: 'Fighter',

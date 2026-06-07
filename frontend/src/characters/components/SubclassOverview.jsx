@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { BookOpen, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { BookOpen, ChevronRight, Swords } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { SUBCLASS_DATA } from './subclassData/index';
@@ -27,7 +28,7 @@ const CLASS_ACCENT_BORDER = {
   Sorcerer: 'border-rose-500', Warlock: 'border-violet-500', Wizard: 'border-blue-500',
 };
 
-export default function SubclassOverview({ className, subclassName, edition }) {
+export default function SubclassOverview({ className, subclassName, edition, maneuversTo }) {
   const [expanded, setExpanded] = useState({});
   const toggle = (key) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -75,6 +76,22 @@ export default function SubclassOverview({ className, subclassName, edition }) {
             <p key={i} className="text-sm text-muted-foreground leading-relaxed">{p}</p>
           ))}
         </div>
+      )}
+
+      {/* Maneuvers link (Battle Master only; provided by the encyclopedia) */}
+      {maneuversTo && subclassName === 'Battle Master' && (
+        <Link
+          to={maneuversTo}
+          data-testid="subclass-maneuvers-link"
+          className={cn(
+            'flex items-center gap-2 rounded-xl border p-4 text-sm font-medium transition-colors',
+            'hover:bg-muted/40', accentBorder, accentText,
+          )}
+        >
+          <Swords className="w-4 h-4 shrink-0" />
+          View all Battle Master maneuvers
+          <ChevronRight className="w-4 h-4 ml-auto shrink-0" />
+        </Link>
       )}
 
       {/* Features by level */}

@@ -22,6 +22,7 @@ import CampaignSettingsPage from './campaigns/pages/CampaignSettingsPage';
 import EncyclopediaPage from './encyclopedia/pages/EncyclopediaPage';
 import SpellEditPage from './encyclopedia/pages/SpellEditPage';
 import ItemEditPage from './encyclopedia/pages/ItemEditPage';
+import ManeuversPage from './encyclopedia/pages/ManeuversPage';
 import MainLayout from './shared/components/layout/MainLayout';
 
 function App() {
@@ -48,6 +49,7 @@ function App() {
             <Route path="/campaigns/:campaignId/members" element={<ProtectedRoute><CampaignMembers /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/settings" element={<ProtectedRoute><CampaignSettingsPage /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia" element={<ProtectedRoute><MainLayout><EncyclopediaPage /></MainLayout></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/maneuvers" element={<ProtectedRoute><MainLayout><ManeuversPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/spells/:spellId" element={<ProtectedRoute><MainLayout><SpellEditPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/items/:category/:itemId" element={<ProtectedRoute><MainLayout><ItemEditPage /></MainLayout></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/campaigns" replace />} />

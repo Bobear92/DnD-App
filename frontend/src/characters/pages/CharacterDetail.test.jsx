@@ -687,13 +687,14 @@ describe('CharacterDetail', () => {
   });
 
   describe('tab structure', () => {
-    it('always shows Narrative, Stats, Features, and Items tab triggers', async () => {
+    it('always shows Narrative, Stats, Features, Items, and Action Economy tab triggers', async () => {
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByRole('tab', { name: /Narrative/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Stats/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Features/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Items/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Action Economy/i })).toBeInTheDocument();
     });
 
     it('does NOT show Spells tab for non-spellcasting Fighter with no race cantrips', async () => {
@@ -750,11 +751,21 @@ describe('CharacterDetail', () => {
       expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
     });
 
-    it('non-spellcasting Fighter has exactly 4 tabs; spellcasting Wizard has 5', async () => {
-      // Fighter: Narrative + Stats + Features + Items = 4
+    it('non-spellcasting Fighter has exactly 5 tabs; spellcasting Wizard has 6', async () => {
+      // Fighter: Narrative + Stats + Features + Items + Action Economy = 5
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
-      expect(screen.getAllByRole('tab')).toHaveLength(4);
+      expect(screen.getAllByRole('tab')).toHaveLength(5);
+    });
+
+    it('spellcasting Wizard has 6 tabs (adds Spells)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, char_class: 'Wizard', character_data: { skill_proficiencies: [] } },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getAllByRole('tab')).toHaveLength(6);
     });
   });
 
@@ -791,6 +802,8 @@ describe('CharacterDetail', () => {
       renderDetail();
       // Tabs mock renders all panels unconditionally — Fighter Features is always in the DOM
       await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+      // Subclass content lives under the "Subclass" sub-tab of the Features tab
+      fireEvent.click(screen.getByTestId('features-subtab-subclass'));
       // Locked: subclass name rendered as plain text
       expect(screen.getByText('Champion')).toBeInTheDocument();
       // Picker hidden: no SubclassPickerWithDetail info buttons
@@ -805,6 +818,7 @@ describe('CharacterDetail', () => {
       });
       renderDetail();
       await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('features-subtab-subclass'));
       // Picker shown: info buttons visible for Fighter subclass options
       expect(screen.getByTestId('subclass-info-Champion')).toBeInTheDocument();
     });
@@ -820,6 +834,7 @@ describe('CharacterDetail', () => {
       });
       renderDetail();
       await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('features-subtab-subclass'));
       expect(screen.getByText(/archetypal Champion focuses on the development/)).toBeInTheDocument();
     });
 
@@ -834,6 +849,7 @@ describe('CharacterDetail', () => {
       });
       renderDetail();
       await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('features-subtab-subclass'));
       // Improved Critical unlocks at level 3, character is level 5 — must appear
       expect(screen.getByText('Improved Critical')).toBeInTheDocument();
       // Remarkable Athlete unlocks at level 7, character is level 5 — must NOT appear

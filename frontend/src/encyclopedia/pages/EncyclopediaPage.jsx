@@ -170,7 +170,11 @@ export default function EncyclopediaPage() {
                 </div>
               ) : (
                 <div className="p-6">
-                  <ClassOverview classData={classData} loading={loading} />
+                  <ClassOverview
+                    classData={classData}
+                    loading={loading}
+                    maneuversTo={`/campaigns/${campaignId}/encyclopedia/maneuvers`}
+                  />
                 </div>
               )}
             </div>

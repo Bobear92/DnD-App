@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildItemIndex, weaponNamesOfCategory, defaultSelectedOptions,
-  enumerateChooseSlots, buildStartingInventory,
+  enumerateChooseSlots, buildStartingInventory, normalizeItemName, lookupItem,
 } from './startingEquipmentResolver';
 import {
   CLASS_STARTING_EQUIPMENT_5E, CLASS_STARTING_WEALTH_5E,
@@ -33,6 +33,49 @@ describe('item index + weapon filters', () => {
   it('weaponNamesOfCategory filters by simple/martial', () => {
     expect(weaponNamesOfCategory(WEAPONS, 'martial')).toEqual(['Greataxe', 'Longsword']);
     expect(weaponNamesOfCategory(WEAPONS, 'simple')).toEqual(['Dagger', 'Light Crossbow']);
+  });
+});
+
+describe('name normalization (encyclopedia naming conventions)', () => {
+  it('de-inverts comma-form names', () => {
+    expect(normalizeItemName('Crossbow, light')).toBe('light crossbow');
+    expect(normalizeItemName('Crossbow, hand')).toBe('hand crossbow');
+  });
+
+  it('strips the trailing " Armor" suffix', () => {
+    expect(normalizeItemName('Leather Armor')).toBe('leather');
+    expect(normalizeItemName('Studded Leather Armor')).toBe('studded leather');
+  });
+
+  it('leaves natural names unchanged (lowercased)', () => {
+    expect(normalizeItemName('Light Crossbow')).toBe('light crossbow');
+    expect(normalizeItemName('Scale Mail')).toBe('scale mail');
+  });
+
+  // Encyclopedia stores comma-inverted weapons + " Armor"-suffixed armor; refs use natural form.
+  const ENCY = buildItemIndex({
+    weapons: [{ id: 100, name: 'Crossbow, light', weapon_category: 'Simple', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing' }],
+    armor: [
+      { id: 101, name: 'Leather Armor', armor_type: 'Light', armor_class: 11 },
+      { id: 102, name: 'Studded Leather Armor', armor_type: 'Light', armor_class: 12 },
+    ],
+  });
+
+  it("matches a ref's natural name to the encyclopedia's comma-inverted weapon", () => {
+    const hit = lookupItem(ENCY.weapons, 'Light Crossbow');
+    expect(hit).toMatchObject({ id: 100, weapon_category: 'Simple' });
+  });
+
+  it("matches a ref's short armor name to the suffixed encyclopedia name", () => {
+    expect(lookupItem(ENCY.armor, 'Leather')).toMatchObject({ id: 101, armor_class: 11 });
+    expect(lookupItem(ENCY.armor, 'Studded Leather')).toMatchObject({ id: 102, armor_class: 12 });
+  });
+
+  it('resolves a Cleric light crossbow to a full snapshot (not a stat-less plain entry)', () => {
+    const cleric = classStartingEquipment('Cleric');
+    const inv = buildStartingInventory({ classEquip: cleric, selectedOptions: defaultSelectedOptions(cleric), index: ENCY });
+    const xbow = inv.find((e) => e.source_id === 100);
+    expect(xbow).toMatchObject({ category: 'weapons', weapon_category: 'Simple', damage: '1d8' });
   });
 });
 
@@ -73,6 +116,14 @@ describe('buildStartingInventory', () => {
     const inv = buildStartingInventory({ classEquip: fighter, selectedOptions: { f1: 'a', f2: 'a', f3: 'a', f4: 'a' }, picks: { 'f2:a:0': 'Longsword' }, index });
     const bolts = inv.find((e) => e.name === 'Crossbow Bolts');
     expect(bolts.quantity).toBe(20);
+  });
+
+  it('splits a multi-quantity weapon (two handaxes) into individual entries', () => {
+    const classEquip = { groups: [{ fixed: [{ name: 'Handaxe', category: 'weapons', quantity: 2 }] }] };
+    const inv = buildStartingInventory({ classEquip, index });
+    const handaxes = inv.filter((e) => e.name === 'Handaxe');
+    expect(handaxes).toHaveLength(2);
+    expect(handaxes.every((e) => e.quantity === 1 && e.category === 'weapons')).toBe(true);
   });
 
   it('falls back to a plain entry when an item is not in the encyclopedia', () => {

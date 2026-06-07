@@ -142,6 +142,23 @@ describe('InventoryTab', () => {
     }));
   });
 
+  it('does not show a quantity stepper for weapons (individual items)', () => {
+    renderTab({ inventory: [longsword] }); // weapons is the default tab
+    const row = screen.getByTestId('inv-row-w1');
+    expect(screen.queryByTestId('qty-w1')).not.toBeInTheDocument();
+    expect(row.querySelector('[aria-label="Increase quantity"]')).toBeNull();
+  });
+
+  it('splits a stacked weapon into individual, separately-equippable rows', () => {
+    const handaxes = { uid: 'h1', category: 'weapons', name: 'Handaxe', weapon_category: 'Simple', weapon_type: 'Melee', damage: '1d6', quantity: 2 };
+    renderTab({ inventory: [handaxes] });
+    expect(screen.getByTestId('inv-row-h1')).toBeInTheDocument();
+    expect(screen.getByTestId('inv-row-h1-2')).toBeInTheDocument();
+    // each has its own Equip button
+    expect(screen.getByTestId('equip-btn-h1')).toBeInTheDocument();
+    expect(screen.getByTestId('equip-btn-h1-2')).toBeInTheDocument();
+  });
+
   it('flags an equipped weapon the character is not proficient with', () => {
     // Wizard is not proficient with a Martial Longsword
     renderTab({ inventory: [longsword], charClass: 'Wizard', scores: { strength: 16 } });

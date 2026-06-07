@@ -9,6 +9,10 @@ import {
   FIGHTER_FIGHTING_STYLES_5E, FIGHTER_FIGHTING_STYLES_2024,
   FIGHTER_SUBCLASSES_5E, FIGHTER_SUBCLASSES_2024,
 } from '../../classChoicesData';
+import BattleMasterPanel from '../../BattleMasterPanel';
+
+// Interactive per-subclass panels (maneuver picker + superiority dice, etc.).
+const FIGHTER_SUBCLASS_PANELS = { 'Battle Master': BattleMasterPanel };
 
 const FIGHTER_SKILLS = [
   'Acrobatics', 'Animal Handling', 'Athletics', 'History',
@@ -40,6 +44,7 @@ export const FIGHTER_5E = {
   restResources: REST_RESOURCES,
   notes: [],
   subclass: { label: 'Martial Archetype (Subclass)', options: FIGHTER_SUBCLASSES_5E, unlockLevel: 3, subclassEdition: '5e' },
+  subclassPanels: FIGHTER_SUBCLASS_PANELS,
   asiLevels: ASI_LEVELS,
   skill: { allowed: FIGHTER_SKILLS, count: 2 },
   caster: null,
@@ -60,6 +65,7 @@ export const FIGHTER_2024 = {
     { label: 'Tactical Mind (L2)', text: 'When you fail an ability check, expend one Action Surge use to add 1d10 to the check.', minLevel: 2 },
   ],
   subclass: { label: 'Warrior Subclass', options: FIGHTER_SUBCLASSES_2024, unlockLevel: 3, subclassEdition: '5.5e' },
+  subclassPanels: FIGHTER_SUBCLASS_PANELS,
   asiLevels: ASI_LEVELS,
   skill: { allowed: FIGHTER_SKILLS, count: 2 },
   caster: null,

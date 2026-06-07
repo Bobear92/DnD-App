@@ -563,11 +563,12 @@ describe('WizardSheet Portent (Divination subclass)', () => {
     expect(screen.queryByTestId('portent-tracker')).not.toBeInTheDocument();
   });
 
-  it('renders Portent tracker in the Features section for a Divination Wizard', () => {
+  it('renders Portent tracker in the Features section (subclass sub-tab) for a Divination Wizard', () => {
     render(<WizardSheet
       data={{ ...BASE_DATA, subclass: 'School of Divination' }}
       level={5} section="features" onChange={vi.fn()}
     />);
+    fireEvent.click(screen.getByTestId('features-subtab-subclass'));
     expect(screen.getByTestId('portent-tracker')).toBeInTheDocument();
     expect(screen.getByTestId('portent-roll-btn')).toBeInTheDocument();
   });
@@ -587,6 +588,7 @@ describe('WizardSheet Portent (Divination subclass)', () => {
       data={{ ...BASE_DATA, subclass: 'School of Divination' }}
       level={5} section="features" onChange={onChange}
     />);
+    fireEvent.click(screen.getByTestId('features-subtab-subclass'));
     fireEvent.click(screen.getByTestId('portent-roll-btn'));
     expect(onChange).toHaveBeenCalledWith({
       portent_rolls: [{ value: 11, used: false }, { value: 11, used: false }],
@@ -600,6 +602,7 @@ describe('WizardSheet Portent (Divination subclass)', () => {
       data={{ ...BASE_DATA, subclass: 'School of Divination', portent_rolls: [{ value: 9, used: false }] }}
       level={5} section="features" onChange={onChange}
     />);
+    fireEvent.click(screen.getByTestId('features-subtab-subclass'));
     fireEvent.click(screen.getByTestId('portent-die-0'));
     expect(onChange).toHaveBeenCalledWith({ portent_rolls: [{ value: 9, used: true }] });
   });

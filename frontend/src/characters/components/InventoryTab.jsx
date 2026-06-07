@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Trash2, Shield, Swords, Minus, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +10,7 @@ import { gatherProficiencies } from './inventoryProficiencies';
 import { isToolEntry } from './toolsData';
 import ItemPickerDialog from './ItemPickerDialog';
 import {
-  addEntry, removeEntry, setQuantity, getByCategory,
+  addEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons,
   toggleEquipped, toggleAttuned, attunedCount, computeArmorClass, getAttacks,
   isWeaponProficient, isArmorProficient,
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
@@ -58,11 +58,15 @@ function ProficiencyBanner({ label, text, grants }) {
  * changes are pushed up via onChange(patch); equipping armor patches armor_class too.
  */
 export default function InventoryTab({
-  inventory = [], scores = {}, level = 1, charClass, subclass,
+  inventory: inventoryProp = [], scores = {}, level = 1, charClass, subclass,
   race, subrace, campaignId, characterData = {}, readOnly = false, onChange,
 }) {
   const [activeId, setActiveId] = useState(CATEGORIES[0].id);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Weapons are individual items (no stacking) — normalize so a "Handaxe ×2" stack shows
+  // as two separate, independently-equippable rows. Idempotent + deterministic uids.
+  const inventory = useMemo(() => normalizeWeapons(inventoryProp), [inventoryProp]);
 
   const profs = CLASS_PROFICIENCIES_5E[charClass] || {};
   const weaponProfText = profs.weapons || '';
@@ -207,23 +211,25 @@ export default function InventoryTab({
                     <div className="text-xs text-muted-foreground truncate">{activeCategory.subtitle(e)}</div>
                   </div>
 
-                  {/* Quantity */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {!readOnly && (
-                      <button className="h-6 w-6 rounded border hover:bg-muted disabled:opacity-40"
-                        onClick={() => handleQty(e.uid, (e.quantity ?? 1) - 1)} disabled={(e.quantity ?? 1) <= 1}
-                        aria-label="Decrease quantity">
-                        <Minus className="h-3 w-3 mx-auto" />
-                      </button>
-                    )}
-                    <span className="text-xs text-muted-foreground w-8 text-center tabular-nums" data-testid={`qty-${e.uid}`}>×{e.quantity ?? 1}</span>
-                    {!readOnly && (
-                      <button className="h-6 w-6 rounded border hover:bg-muted"
-                        onClick={() => handleQty(e.uid, (e.quantity ?? 1) + 1)} aria-label="Increase quantity">
-                        <Plus className="h-3 w-3 mx-auto" />
-                      </button>
-                    )}
-                  </div>
+                  {/* Quantity — hidden for weapons (each weapon is an individual item) */}
+                  {e.category !== 'weapons' && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      {!readOnly && (
+                        <button className="h-6 w-6 rounded border hover:bg-muted disabled:opacity-40"
+                          onClick={() => handleQty(e.uid, (e.quantity ?? 1) - 1)} disabled={(e.quantity ?? 1) <= 1}
+                          aria-label="Decrease quantity">
+                          <Minus className="h-3 w-3 mx-auto" />
+                        </button>
+                      )}
+                      <span className="text-xs text-muted-foreground w-8 text-center tabular-nums" data-testid={`qty-${e.uid}`}>×{e.quantity ?? 1}</span>
+                      {!readOnly && (
+                        <button className="h-6 w-6 rounded border hover:bg-muted"
+                          onClick={() => handleQty(e.uid, (e.quantity ?? 1) + 1)} aria-label="Increase quantity">
+                          <Plus className="h-3 w-3 mx-auto" />
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {/* Equip / Attune */}
                   {!readOnly && canEquip && (

@@ -23,6 +23,12 @@ describe('MaxHpValue', () => {
     expect(screen.getByText('+6 Dwarven Toughness')).toBeInTheDocument();
   });
 
+  it('shows the Tough feat (+2/level) folded into Max HP', () => {
+    render(<MaxHpValue charClass="Fighter" subclass="Champion" level={4} feats={[{ id: 1, name: 'Tough' }]} baseMaxHp={40} />);
+    expect(screen.getByText('48')).toBeInTheDocument(); // 40 + 2×4
+    expect(screen.getByText('+8 Tough')).toBeInTheDocument();
+  });
+
   it('renders an em dash when baseMaxHp is missing', () => {
     render(<MaxHpValue charClass="Sorcerer" subclass="Draconic Bloodline" level={3} />);
     expect(screen.getByText('—')).toBeInTheDocument();

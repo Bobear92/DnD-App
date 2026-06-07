@@ -45,6 +45,8 @@ export const ITEM_CATEGORIES = [
       { label: 'Cost', get: (it) => it.cost },
       { label: 'Weight', get: (it) => it.weight },
     ],
+    // Renders a click-to-explain weapon-attribute section in the detail dialog (ItemsTab).
+    explainWeaponProperties: true,
     bodyKey: 'description',
     fields: [
       { key: 'name', label: 'Name', type: 'text', required: true },

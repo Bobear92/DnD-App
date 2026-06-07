@@ -71,11 +71,36 @@ export function getByCategory(inventory = [], categoryId) {
   return (inventory || []).filter((e) => e.category === categoryId);
 }
 
+/**
+ * Weapons are tracked as individual items, never stacked — so "equip" is unambiguous
+ * (this exact weapon) rather than "some of N". Splits any weapon entry with quantity > 1
+ * into that many quantity-1 entries. Deterministic uids (`uid`, `uid-2`, `uid-3`, …) and
+ * idempotent, so it's safe to run on every render and on already-split inventories.
+ * Only the first split copy inherits the `equipped` flag.
+ */
+export function normalizeWeapons(inventory = []) {
+  const out = [];
+  for (const e of inventory || []) {
+    const qty = Math.max(1, Math.floor(Number(e.quantity) || 1));
+    if (e.category !== 'weapons' || qty <= 1) { out.push(e); continue; }
+    for (let i = 0; i < qty; i++) {
+      out.push({
+        ...e,
+        uid: i === 0 ? e.uid : `${e.uid}-${i + 1}`,
+        quantity: 1,
+        equipped: i === 0 ? !!e.equipped : false,
+      });
+    }
+  }
+  return out;
+}
+
 const isShield = (e) => (e.armor_type || '').toLowerCase() === 'shield';
 
 /**
  * Toggle the equipped flag. Only one body armor and one shield may be equipped at
- * once — equipping a new one unequips the previous of that kind. Weapons stack freely.
+ * once — equipping a new one unequips the previous of that kind. Weapons are individual
+ * items and can each be equipped independently (e.g. dual-wielding).
  */
 export function toggleEquipped(inventory = [], uid) {
   const target = (inventory || []).find((e) => e.uid === uid);

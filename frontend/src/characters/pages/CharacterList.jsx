@@ -52,7 +52,10 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
     const items = [];
     if (cls === 'Warlock') items.push('Pact magic slots');
     if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');
-    if (cls === 'Fighter') items.push('Action Surge & Second Wind');
+    if (cls === 'Fighter') {
+      items.push('Action Surge & Second Wind');
+      if (characterData?.subclass === 'Battle Master') items.push('Superiority Dice');
+    }
     if (cls === 'Bard' && (is2024 || level >= 5)) items.push('Bardic Inspiration');
     if ((cls === 'Cleric' || cls === 'Paladin') && is2024) items.push('Channel Divinity');
     if (cls === 'Wizard') items.push('Arcane Recovery');
@@ -67,7 +70,10 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
   else if (cls === 'Bard') items.push('Bardic Inspiration');
   else if (cls === 'Cleric') items.push('Channel Divinity, spell preparation unlocked');
   else if (cls === 'Druid') items.push('Wild Shape, spell preparation unlocked');
-  else if (cls === 'Fighter') items.push('Action Surge, Second Wind & Indomitable');
+  else if (cls === 'Fighter') {
+    items.push('Action Surge, Second Wind & Indomitable');
+    if (characterData?.subclass === 'Battle Master') items.push('Superiority Dice');
+  }
   else if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');
   else if (cls === 'Paladin') items.push('Lay on Hands, Divine Sense & Channel Divinity, spell preparation unlocked');
   else if (cls === 'Ranger') items.push('Spell preparation unlocked');

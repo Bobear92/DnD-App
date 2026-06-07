@@ -19,19 +19,40 @@ export function isDraconicSorcerer(charClass, subclass) {
   return subclass === 'Draconic Bloodline' || subclass === 'Draconic Sorcery';
 }
 
+/** True when the character has the Tough feat (feats may be strings or {name}). */
+export function hasToughFeat(feats = []) {
+  return (feats ?? []).some(f => (typeof f === 'string' ? f : f?.name) === 'Tough');
+}
+
 /**
- * Hit-point bonuses from subclass/race/class features.
- * Returns [{ source, detail, amount }] — amount is the total bonus at this level.
+ * Per-level HP bonus rates from subclass/race/feat (the amount added each level).
+ * Returns [{ source, detail, perLevel }]. The wizard uses this to show a single
+ * level's increment; getHpBonuses multiplies it out to the total at a given level.
  */
-export function getHpBonuses({ charClass, subclass, raceTraits = [], level = 1 } = {}) {
-  const bonuses = [];
+export function getHpBonusesPerLevel({ charClass, subclass, raceTraits = [], feats = [] } = {}) {
+  const out = [];
   if (isDraconicSorcerer(charClass, subclass)) {
-    bonuses.push({ source: 'Draconic Resilience', detail: '1 HP per Sorcerer level', amount: level });
+    out.push({ source: 'Draconic Resilience', detail: '1 HP per Sorcerer level', perLevel: 1 });
   }
   if ((raceTraits ?? []).includes('Dwarven Toughness')) {
-    bonuses.push({ source: 'Dwarven Toughness', detail: '1 HP per level (Hill Dwarf)', amount: level });
+    out.push({ source: 'Dwarven Toughness', detail: '1 HP per level (Hill Dwarf)', perLevel: 1 });
   }
-  return bonuses;
+  if (hasToughFeat(feats)) {
+    out.push({ source: 'Tough', detail: '2 HP per level (Tough feat)', perLevel: 2 });
+  }
+  return out;
+}
+
+/**
+ * Hit-point bonuses from subclass/race/feat.
+ * Returns [{ source, detail, amount }] — amount is the total bonus at this level.
+ */
+export function getHpBonuses({ level = 1, ...rest } = {}) {
+  return getHpBonusesPerLevel(rest).map(b => ({
+    source: b.source,
+    detail: b.detail,
+    amount: b.perLevel * level,
+  }));
 }
 
 /** Sum of all HP bonuses at this level. */

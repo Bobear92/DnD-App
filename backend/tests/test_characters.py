@@ -549,6 +549,48 @@ class TestApplyRest:
         updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
         assert updated["character_data"]["pact_slots_used"] == 0
 
+    def test_short_rest_resets_battle_master_superiority_dice(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=3,
+            character_data={"subclass": "Battle Master", "superiority_dice_used": 2},
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert updated["character_data"]["superiority_dice_used"] == 0
+
+    def test_long_rest_resets_battle_master_superiority_dice(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=3,
+            character_data={"subclass": "Battle Master", "superiority_dice_used": 2, "hp_max": 28},
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert updated["character_data"]["superiority_dice_used"] == 0
+
+    def test_non_battle_master_fighter_has_no_superiority_dice_reset(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=3,
+            character_data={"subclass": "Champion"},
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert "superiority_dice_used" not in updated["character_data"]
+
     def test_long_rest_restores_hp_and_spell_slots(self, client):
         h_gm, _, campaign_id = self._setup(client)
         char_id = self._create_char(

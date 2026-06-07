@@ -270,6 +270,284 @@ describe('LevelUpWizard', () => {
     });
   });
 
+  describe('HP step — methods and lock-in', () => {
+    const FIGHTER_L1 = { ...FIGHTER_L2, level: 1 };
+
+    function renderFighter(onComplete = vi.fn()) {
+      render(
+        <LevelUpWizard
+          character={FIGHTER_L1}
+          campaign={CAMPAIGN_5E}
+          onComplete={onComplete}
+          onClose={vi.fn()}
+        />
+      );
+    }
+
+    it('renders all three HP methods (roll, average, roll at the table)', () => {
+      renderFighter();
+      expect(screen.getByTestId('hp-method-roll')).toBeInTheDocument();
+      expect(screen.getByTestId('hp-method-average')).toBeInTheDocument();
+      expect(screen.getByTestId('hp-method-manual')).toBeInTheDocument();
+    });
+
+    it('locks the other methods once Take Average is chosen', () => {
+      renderFighter();
+      fireEvent.click(screen.getByTestId('hp-method-average'));
+      expect(screen.getByTestId('hp-method-roll')).toBeDisabled();
+      expect(screen.getByTestId('hp-method-manual')).toBeDisabled();
+      expect(screen.getByTestId('hp-method-average')).not.toBeDisabled();
+    });
+
+    it('locks the other methods once the dice are rolled (no roll-then-switch)', () => {
+      renderFighter();
+      fireEvent.click(screen.getByTestId('hp-method-roll'));
+      expect(screen.getByTestId('hp-method-average')).toBeDisabled();
+      expect(screen.getByTestId('hp-method-manual')).toBeDisabled();
+    });
+
+    it('shows a lock notice once a method is chosen', () => {
+      renderFighter();
+      expect(screen.queryByText(/locked in/i)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('hp-method-average'));
+      expect(screen.getByText(/locked in/i)).toBeInTheDocument();
+    });
+
+    it('reveals a manual input only after Roll at the Table is chosen', () => {
+      renderFighter();
+      expect(screen.queryByTestId('hp-manual-input')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('hp-method-manual'));
+      expect(screen.getByTestId('hp-manual-input')).toBeInTheDocument();
+    });
+
+    it('blocks Next until a valid manual value is entered', () => {
+      renderFighter();
+      fireEvent.click(screen.getByTestId('hp-method-manual'));
+      expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled();
+      // Out of range (Fighter d10) stays blocked
+      fireEvent.change(screen.getByTestId('hp-manual-input'), { target: { value: '11' } });
+      expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled();
+      // Valid value enables Next
+      fireEvent.change(screen.getByTestId('hp-manual-input'), { target: { value: '6' } });
+      expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled();
+    });
+
+    it('applies the manual roll + CON to hp_max in onComplete', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      renderFighter(onComplete);
+      fireEvent.click(screen.getByTestId('hp-method-manual'));
+      fireEvent.change(screen.getByTestId('hp-manual-input'), { target: { value: '6' } });
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));   // hp → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));   // features → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+
+      // Fighter L1 hp_max 26, CON 14 (+2): 26 + (6 + 2) = 34
+      await waitFor(() => {
+        expect(onComplete).toHaveBeenCalledWith(
+          2,
+          expect.objectContaining({ hp_max: 34 })
+        );
+      });
+    });
+  });
+
+  describe('HP step — per-level bonuses (Hill Dwarf / Tough)', () => {
+    // Hill Dwarf Fighter: Dwarven Toughness grants +1 HP per level (display-only on the sheet).
+    const HILL_DWARF_FIGHTER_L1 = {
+      ...FIGHTER_L2,
+      level: 1,
+      character_data: { hp_max: 26, race_traits: ['Dwarven Toughness'] },
+    };
+    // Variant Human Fighter with the Tough feat: +2 HP per level.
+    const TOUGH_FIGHTER_L1 = {
+      ...FIGHTER_L2,
+      level: 1,
+      character_data: { hp_max: 26, feats: [{ id: 1, name: 'Tough' }] },
+    };
+
+    function renderChar(character, onComplete = vi.fn()) {
+      render(
+        <LevelUpWizard
+          character={character}
+          campaign={CAMPAIGN_5E}
+          onComplete={onComplete}
+          onClose={vi.fn()}
+        />
+      );
+    }
+
+    it('shows the Dwarven Toughness +1 line for a Hill Dwarf', () => {
+      renderChar(HILL_DWARF_FIGHTER_L1);
+      fireEvent.click(screen.getByTestId('hp-method-average'));
+      expect(screen.getByTestId('hp-bonus-Dwarven Toughness')).toHaveTextContent('+1');
+    });
+
+    it('folds Dwarven Toughness into HP gained but NOT into the stored hp_max', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      renderChar(HILL_DWARF_FIGHTER_L1, onComplete);
+      fireEvent.click(screen.getByTestId('hp-method-average')); // d10 avg 6, +2 CON, +1 dwarf = +9
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // hp → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → confirm
+      // Confirm summary shows the effective new max: 26 + 8 stored + 2 (Toughness at L2) = 36
+      expect(screen.getByText('36')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      // Stored hp_max excludes the passive bonus (sheet adds it): 26 + (6 + 2) = 34
+      await waitFor(() => {
+        expect(onComplete).toHaveBeenCalledWith(2, expect.objectContaining({ hp_max: 34 }));
+      });
+    });
+
+    it('shows the Tough +2 line for a character with the Tough feat', () => {
+      renderChar(TOUGH_FIGHTER_L1);
+      fireEvent.click(screen.getByTestId('hp-method-average'));
+      expect(screen.getByTestId('hp-bonus-Tough')).toHaveTextContent('+2');
+    });
+
+    it('shows no bonus lines for a plain Fighter', () => {
+      renderChar({ ...FIGHTER_L2, level: 1 });
+      fireEvent.click(screen.getByTestId('hp-method-average'));
+      expect(screen.queryByTestId('hp-bonus-Dwarven Toughness')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('hp-bonus-Tough')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('subclass proficiency step (Battle Master — Student of War)', () => {
+    // FIGHTER_L2 levels 2 → 3, the Fighter subclass-unlock level.
+    function toSubclassStep(character = FIGHTER_L2, onComplete = vi.fn()) {
+      render(<LevelUpWizard character={character} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // hp → subclass
+    }
+
+    it('adds a Proficiencies step for Battle Master and saves the chosen tool', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toSubclassStep(FIGHTER_L2, onComplete);
+      fireEvent.click(screen.getByText('Battle Master'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // subclass → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → proficiencies
+      expect(screen.getByText(/Student of War/i)).toBeInTheDocument();
+      // Next blocked until a tool is picked
+      expect(screen.getByTestId('wizard-next')).toBeDisabled();
+      fireEvent.click(screen.getByTestId("prof-opt-student_of_war-Smith's Tools"));
+      fireEvent.click(screen.getByTestId('wizard-next')); // proficiencies → maneuvers (Battle Master learns 3 at L3)
+      fireEvent.click(screen.getByTestId('lvl-maneuver-Trip Attack'));
+      fireEvent.click(screen.getByTestId('lvl-maneuver-Riposte'));
+      fireEvent.click(screen.getByTestId('lvl-maneuver-Parry'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // maneuvers → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(3, expect.objectContaining({
+        subclass: 'Battle Master',
+        subclass_tool_proficiencies: ["Smith's Tools"],
+        maneuvers: ['Trip Attack', 'Riposte', 'Parry'],
+      })));
+    });
+
+    it('does not add a Proficiencies step for a subclass without a choice grant (Champion)', () => {
+      toSubclassStep();
+      fireEvent.click(screen.getByText('Champion'));
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // subclass → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → confirm (no proficiencies)
+      expect(screen.getByRole('button', { name: /Confirm Level Up/i })).toBeInTheDocument();
+      expect(screen.queryByText(/Student of War/i)).not.toBeInTheDocument();
+    });
+
+    it('hides a tool the character already has from the Student of War options', () => {
+      toSubclassStep({ ...FIGHTER_L2, character_data: { hp_max: 26, background_tool_choice: "Smith's Tools" } });
+      fireEvent.click(screen.getByText('Battle Master'));
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // → proficiencies
+      expect(screen.queryByTestId("prof-opt-student_of_war-Smith's Tools")).not.toBeInTheDocument();
+      expect(screen.getByTestId("prof-opt-student_of_war-Brewer's Supplies")).toBeInTheDocument();
+    });
+  });
+
+  describe('Ability Score Improvement step', () => {
+    // Fighter 3 → 4 is an ASI level.
+    const FIGHTER_L3 = { ...FIGHTER_L2, level: 3, strength: 15, dexterity: 14 };
+
+    function toAsiStep(character = FIGHTER_L3, onComplete = vi.fn()) {
+      render(<LevelUpWizard character={character} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // hp → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → asi
+    }
+
+    it('does not add an Ability Scores step at a non-ASI level (Fighter 1→2)', () => {
+      render(<LevelUpWizard character={{ ...FIGHTER_L2, level: 1 }} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      expect(screen.queryByText('Ability Scores')).not.toBeInTheDocument();
+    });
+
+    it('adds an Ability Scores step at an ASI level and applies +1/+1', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toAsiStep(FIGHTER_L3, onComplete);
+      expect(screen.getByText('Ability Scores')).toBeInTheDocument();
+      // Next blocked until both points are spent
+      expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled();
+      fireEvent.click(screen.getByTestId('asi-inc-strength'));
+      fireEvent.click(screen.getByTestId('asi-inc-dexterity'));
+      expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));            // asi → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4, expect.any(Object), expect.objectContaining({ strength: 16, dexterity: 15 })
+      ));
+    });
+
+    it('allows +2 to one score and caps it at 20', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toAsiStep({ ...FIGHTER_L3, strength: 18 }, onComplete);
+      fireEvent.click(screen.getByTestId('asi-inc-strength')); // 18 → 19
+      fireEvent.click(screen.getByTestId('asi-inc-strength')); // 19 → 20
+      // can't go past 20
+      expect(screen.getByTestId('asi-inc-strength')).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));            // asi → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4, expect.any(Object), expect.objectContaining({ strength: 20 })
+      ));
+    });
+  });
+
+  describe('Battle Master maneuver step', () => {
+    // Battle Master 6 → 7 learns 2 new maneuvers (3 → 5 known); subclass already set.
+    const BM_L6 = {
+      ...FIGHTER_L2, level: 6,
+      character_data: { hp_max: 50, subclass: 'Battle Master', maneuvers: ['Trip Attack', 'Riposte', 'Parry'] },
+    };
+
+    it('does not add a Maneuvers step for a non-Battle-Master Fighter', () => {
+      render(
+        <LevelUpWizard
+          character={{ ...BM_L6, character_data: { hp_max: 50, subclass: 'Champion' } }}
+          campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()}
+        />
+      );
+      expect(screen.queryByText('Maneuvers')).not.toBeInTheDocument();
+    });
+
+    it('prompts the new maneuvers at a learn level and appends them on confirm', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={BM_L6} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → maneuvers
+      expect(screen.getByTestId('maneuvers-picked')).toHaveTextContent('0/2');
+      // already-known maneuvers aren't offered again
+      expect(screen.queryByTestId('lvl-maneuver-Trip Attack')).not.toBeInTheDocument();
+      // Next blocked until 2 are chosen (use the test-id — maneuver descriptions contain "next")
+      expect(screen.getByTestId('wizard-next')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('lvl-maneuver-Precision Attack'));
+      fireEvent.click(screen.getByTestId('lvl-maneuver-Menacing Attack'));
+      expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('wizard-next'));                        // maneuvers → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ maneuvers: ['Trip Attack', 'Riposte', 'Parry', 'Precision Attack', 'Menacing Attack'] })
+      ));
+    });
+  });
+
   describe('spell step — known casters', () => {
     it('shows the New Spells step for a known caster (Sorcerer)', () => {
       render(

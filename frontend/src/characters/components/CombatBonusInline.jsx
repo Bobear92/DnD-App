@@ -18,10 +18,10 @@ import React from 'react';
 import { Shield } from 'lucide-react';
 import { getHpBonuses, getAcOptions } from './combatBonuses';
 
-export function MaxHpValue({ charClass, subclass, raceTraits = [], level = 1, baseMaxHp }) {
+export function MaxHpValue({ charClass, subclass, raceTraits = [], feats = [], level = 1, baseMaxHp }) {
   const hasBase = typeof baseMaxHp === 'number' && !Number.isNaN(baseMaxHp);
   if (!hasBase) return <>—</>;
-  const bonuses = getHpBonuses({ charClass, subclass, raceTraits, level });
+  const bonuses = getHpBonuses({ charClass, subclass, raceTraits, feats, level });
   if (bonuses.length === 0) return <>{baseMaxHp}</>;
   const total = bonuses.reduce((sum, b) => sum + b.amount, 0);
   return (

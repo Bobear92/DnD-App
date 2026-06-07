@@ -3,7 +3,7 @@
 // but some chosen tools (e.g. "Mason's tools") are plain entries, so we also match
 // against a known name list. All matching is case-insensitive.
 
-const ARTISAN_TOOLS = [
+export const ARTISAN_TOOLS = [
   "Alchemist's Supplies", "Brewer's Supplies", "Calligrapher's Supplies", "Carpenter's Tools",
   "Cartographer's Tools", "Cobbler's Tools", "Cook's Utensils", "Glassblower's Tools",
   "Jeweler's Tools", "Leatherworker's Tools", "Mason's Tools", "Painter's Supplies",

@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { Coins, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import itemService from '../../encyclopedia/itemService';
+import WeaponPropertyBadges from './WeaponPropertyBadges';
+import { weaponBadges } from './weaponPropertyData';
 import {
   classStartingEquipment, backgroundStartingEquipment, classStartingWealth,
 } from './startingEquipmentData';
@@ -9,6 +11,39 @@ import {
   buildItemIndex, weaponNamesOfCategory, defaultSelectedOptions,
   enumerateChooseSlots, buildStartingInventory,
 } from './startingEquipmentResolver';
+
+// A selectable weapon card showing the full stat block, used by the "choose a weapon"
+// slots so players can compare weapons in full instead of picking blind from a dropdown.
+// A <div> (not <button>) so the property badges inside can themselves be clickable for
+// their explanations; clicking the card anywhere else selects the weapon.
+function WeaponCard({ weapon, selected, onSelect, testId }) {
+  const dmg = [weapon.damage, weapon.damage_type].filter(Boolean).join(' ');
+  const physical = [weapon.weight ? `${weapon.weight} lb` : null, weapon.cost].filter(Boolean).join(' · ');
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}
+      data-testid={testId}
+      className={cn('rounded-lg border p-3 text-left transition-colors cursor-pointer',
+        selected ? 'border-primary bg-primary/5' : 'hover:bg-muted/50')}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="font-medium text-sm">{weapon.name}</span>
+        {dmg && <span className="text-xs font-semibold whitespace-nowrap">{dmg}</span>}
+      </div>
+      <WeaponPropertyBadges badges={weaponBadges(weapon)} stop className="mt-1.5" />
+      {(weapon.range || physical || weapon.description) && (
+        <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5">
+          {weapon.range && <div>Range: {weapon.range}</div>}
+          {physical && <div>{physical}</div>}
+          {weapon.description && <div className="italic leading-relaxed">{weapon.description}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Character-creation Equipment step. Lets the player resolve their class's (a)/(b)
@@ -49,6 +84,13 @@ export default function StartingEquipmentStep({ charClass, backgroundName, backg
   }, [campaignId]);
 
   const slots = useMemo(() => enumerateChooseSlots(classEquip, selectedOptions), [classEquip, selectedOptions]);
+
+  // name → weapon object, for enriching the choose-a-weapon dropdowns with stats.
+  const weaponByName = useMemo(() => {
+    const m = {};
+    for (const w of weapons) m[(w.name || '').toLowerCase()] = w;
+    return m;
+  }, [weapons]);
 
   // Contents of any equipment packs in an option (from the seeded pack description),
   // so players can compare what's inside before choosing.
@@ -141,23 +183,29 @@ export default function StartingEquipmentStep({ charClass, backgroundName, backg
             );
           })}
 
-          {/* Weapon-choice dropdowns for the selected options */}
+          {/* Weapon-choice cards for the selected options — full stats per weapon */}
           {slots.length > 0 && (
-            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
               {slots.map((slot) => {
                 const names = weaponNamesOfCategory(weapons, slot.filter);
+                const selected = (picks[slot.slotKey] ?? '').toLowerCase();
                 return (
-                  <div key={slot.slotKey} className="flex items-center justify-between gap-3">
-                    <label className="text-sm capitalize">{slot.label}</label>
-                    <select
-                      value={picks[slot.slotKey] ?? ''}
-                      onChange={(e) => setPicks((p) => ({ ...p, [slot.slotKey]: e.target.value }))}
-                      className="h-9 rounded-md border border-input bg-background px-3 text-sm min-w-[160px]"
-                      data-testid={`equip-pick-${slot.slotKey}`}
-                    >
-                      <option value="">Choose…</option>
-                      {names.map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
+                  <div key={slot.slotKey} className="space-y-1.5" data-testid={`equip-pick-${slot.slotKey}`}>
+                    <div className="text-xs font-medium text-muted-foreground capitalize">{slot.label}</div>
+                    <div className="grid sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+                      {names.map((n) => {
+                        const w = weaponByName[n.toLowerCase()];
+                        return (
+                          <WeaponCard
+                            key={n}
+                            weapon={w ?? { name: n }}
+                            selected={selected === n.toLowerCase()}
+                            onSelect={() => setPicks((p) => ({ ...p, [slot.slotKey]: n }))}
+                            testId={`equip-weapon-${slot.slotKey}-${n}`}
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}

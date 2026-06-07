@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, BookOpen, Award, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search, BookOpen, Award, RefreshCw, Swords, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,9 +16,10 @@ function prereqText(feat) {
   return null;
 }
 
-function FeatDetailDialog({ feat, onClose }) {
+function FeatDetailDialog({ feat, onClose, campaignId }) {
   if (!feat) return null;
   const prereq = prereqText(feat);
+  const grantsManeuvers = /maneuver/i.test(feat.description || '');
 
   return (
     <Dialog open={!!feat} onOpenChange={(open) => !open && onClose()}>
@@ -43,6 +45,18 @@ function FeatDetailDialog({ feat, onClose }) {
           <div className="whitespace-pre-wrap leading-relaxed text-foreground">
             {feat.description}
           </div>
+
+          {grantsManeuvers && (
+            <Link
+              to={`/campaigns/${campaignId}/encyclopedia/maneuvers`}
+              data-testid="feat-maneuvers-link"
+              className="flex items-center gap-2 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-3 text-sm font-medium text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors"
+            >
+              <Swords className="w-4 h-4 shrink-0" />
+              View all Battle Master maneuvers
+              <ChevronRight className="w-4 h-4 ml-auto shrink-0" />
+            </Link>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -138,7 +152,7 @@ export default function FeatsTab({ campaignId, edition }) {
         )}
       </div>
 
-      <FeatDetailDialog feat={selectedFeat} onClose={() => setSelectedFeat(null)} />
+      <FeatDetailDialog feat={selectedFeat} onClose={() => setSelectedFeat(null)} campaignId={campaignId} />
     </div>
   );
 }

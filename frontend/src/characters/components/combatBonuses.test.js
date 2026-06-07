@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isDraconicSorcerer, getHpBonuses, totalHpBonus, getAcOptions } from './combatBonuses';
+import { isDraconicSorcerer, hasToughFeat, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, getAcOptions } from './combatBonuses';
 
 describe('isDraconicSorcerer', () => {
   it('true for 5e Draconic Bloodline', () => {
@@ -37,8 +37,46 @@ describe('getHpBonuses', () => {
     expect(b).toHaveLength(2);
     expect(totalHpBonus({ charClass: 'Sorcerer', subclass: 'Draconic Sorcery', raceTraits: ['Dwarven Toughness'], level: 4 })).toBe(8);
   });
+  it('returns the Tough feat at 2 HP per level', () => {
+    const b = getHpBonuses({ charClass: 'Fighter', feats: [{ id: 1, name: 'Tough' }], level: 5 });
+    expect(b).toHaveLength(1);
+    expect(b[0].source).toBe('Tough');
+    expect(b[0].amount).toBe(10); // 2 × 5
+  });
+  it('stacks Dwarven Toughness and the Tough feat', () => {
+    const args = { charClass: 'Fighter', raceTraits: ['Dwarven Toughness'], feats: ['Tough'], level: 3 };
+    expect(getHpBonuses(args)).toHaveLength(2);
+    expect(totalHpBonus(args)).toBe(3 + 6); // +1/level dwarf + +2/level tough
+  });
   it('returns empty for a plain Wizard', () => {
     expect(getHpBonuses({ charClass: 'Wizard', subclass: 'School of Evocation', level: 10 })).toEqual([]);
+  });
+});
+
+describe('hasToughFeat', () => {
+  it('true for an object feat list', () => {
+    expect(hasToughFeat([{ id: 1, name: 'Tough' }])).toBe(true);
+  });
+  it('true for a string feat list', () => {
+    expect(hasToughFeat(['Alert', 'Tough'])).toBe(true);
+  });
+  it('false when absent / empty / nullish', () => {
+    expect(hasToughFeat([{ name: 'Alert' }])).toBe(false);
+    expect(hasToughFeat([])).toBe(false);
+    expect(hasToughFeat()).toBe(false);
+  });
+});
+
+describe('getHpBonusesPerLevel', () => {
+  it('reports the per-level rate (not the total)', () => {
+    const rows = getHpBonusesPerLevel({ charClass: 'Fighter', raceTraits: ['Dwarven Toughness'], feats: ['Tough'] });
+    expect(rows).toEqual([
+      { source: 'Dwarven Toughness', detail: '1 HP per level (Hill Dwarf)', perLevel: 1 },
+      { source: 'Tough', detail: '2 HP per level (Tough feat)', perLevel: 2 },
+    ]);
+  });
+  it('is empty when no sources apply', () => {
+    expect(getHpBonusesPerLevel({ charClass: 'Fighter' })).toEqual([]);
   });
 });
 

@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import {
   ChevronLeft, Eye, EyeOff, Trash2, Save, RotateCcw, TrendingUp, Star, Plus, Wand2, Shield,
-  Sword, Zap, BookOpen, Music, User, X, Upload, Clock,
+  Sword, Swords, Zap, BookOpen, Music, User, X, Upload, Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,7 @@ import { getBackgroundSkills } from '../components/backgroundSkillsData';
 import RacialResourceTracker from '../components/RacialResourceTracker';
 import WalletCard from '../components/WalletCard';
 import InventoryTab from '../components/InventoryTab';
+import ActionEconomyTab from '../components/ActionEconomyTab';
 import { MaxHpValue, AcOptionsLine } from '../components/CombatBonusInline';
 import { totalHpBonus } from '../components/combatBonuses';
 import { draconicLabel } from '../components/draconicData';
@@ -379,15 +380,18 @@ export default function CharacterDetail() {
     else setError(result.error);
   };
 
-  const handleLevelUpComplete = async (newLevel, newCharacterData) => {
+  const handleLevelUpComplete = async (newLevel, newCharacterData, extraUpdates = {}) => {
+    // extraUpdates carries top-level character fields changed by level-up (e.g. ability
+    // score increases from an ASI). character_data holds everything else.
     const result = await characterService.updateCharacter(characterId, {
       level: newLevel,
       character_data: newCharacterData,
       level_up_pending: false,
+      ...extraUpdates,
     });
     if (result.success) {
       setCharacter(result.data);
-      identity.commit({ ...identity.draft, level: newLevel });
+      identity.commit({ ...identity.draft, level: newLevel, ...extraUpdates });
       classSection.commit(newCharacterData);
       setLevelUpWizardOpen(false);
     } else {
@@ -515,7 +519,7 @@ export default function CharacterDetail() {
 
   const raceGrantedCantrips = computeRaceGrantedCantrips(character);
   const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || raceGrantedCantrips.length > 0;
-  const tabCount = hasSpells ? 5 : 4;
+  const tabCount = hasSpells ? 6 : 5;
 
   const calendarEras = calendar?.eras ?? [];
   const calendarMonths = calendar?.months ?? [];
@@ -623,6 +627,9 @@ export default function CharacterDetail() {
               </TabsTrigger>
               <TabsTrigger value="items" className="flex items-center gap-1.5">
                 <Sword className="h-3.5 w-3.5" /> Items
+              </TabsTrigger>
+              <TabsTrigger value="actions" className="flex items-center gap-1.5">
+                <Swords className="h-3.5 w-3.5" /> Action Economy
               </TabsTrigger>
               {hasSpells && (
                 <TabsTrigger value="spells" className="flex items-center gap-1.5">
@@ -1307,6 +1314,7 @@ export default function CharacterDetail() {
                         charClass: character.char_class,
                         subclass: classSection.draft?.subclass,
                         raceTraits: character?.character_data?.race_traits ?? [],
+                        feats: character?.character_data?.feats ?? [],
                         level: identity.draft?.level ?? character.level,
                       })
                     }
@@ -1322,6 +1330,7 @@ export default function CharacterDetail() {
                         charClass={character.char_class}
                         subclass={classSection.draft?.subclass}
                         raceTraits={character?.character_data?.race_traits ?? []}
+                        feats={character?.character_data?.feats ?? []}
                         level={identity.draft?.level ?? character.level}
                         baseMaxHp={classSection.draft?.hp_max}
                       />
@@ -1421,7 +1430,27 @@ export default function CharacterDetail() {
               )}
             </TabsContent>
 
-            {/* ── Tab 4: Spells ── */}
+            {/* ── Tab 4: Action Economy ── */}
+            <TabsContent value="actions" className="space-y-4">
+              {classSection.draft !== null && (
+                <ActionEconomyTab
+                  charClass={character.char_class}
+                  subclass={classSection.draft.subclass}
+                  level={identity.draft?.level ?? character.level}
+                  edition={edition}
+                  characterData={classSection.draft}
+                  inventory={classSection.draft.inventory ?? []}
+                  scores={identity.draft ?? {}}
+                  race={identity.draft?.race ?? character.race}
+                  subrace={character?.character_data?.subrace}
+                  campaignId={campaignId}
+                  onChange={autoSaveClassPatch}
+                  readOnly={!showEditable}
+                />
+              )}
+            </TabsContent>
+
+            {/* ── Tab 5: Spells ── */}
             {hasSpells && (
               <TabsContent value="spells" className="space-y-4">
                 {ClassSheet && classSection.draft !== null && SPELLCASTING_CLASSES.has(character.char_class) && (

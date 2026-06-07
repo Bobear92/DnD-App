@@ -20,45 +20,49 @@ import { cn } from '@/lib/utils';
 export default function OptionCardPicker({ options, value, onChange, onDetailClick }) {
   return (
     <div className="space-y-2">
-      {options.map(opt => (
-        <div
-          key={opt.value}
-          className={cn(
-            'w-full rounded-md border transition-colors',
-            value === opt.value
-              ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-              : 'border-border hover:border-muted-foreground/40',
-          )}
-        >
-          <button
-            type="button"
-            onClick={() => onChange(value === opt.value ? '' : opt.value)}
-            className="w-full text-left px-3 py-2.5"
+      {options.map(opt => {
+        const selected = value === opt.value;
+        return (
+          <div
+            key={opt.value}
+            className={cn(
+              'relative w-full rounded-md border transition-colors',
+              selected
+                ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                : 'border-border hover:border-muted-foreground/40',
+            )}
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className={cn('font-medium text-sm', value === opt.value && 'text-primary')}>
+            {/* The card-select button and the info button are SIBLINGS — never nest a
+                <button> inside a <button> (invalid HTML; the browser repairs it by
+                closing the outer button mid-card, which breaks the layout). */}
+            <button
+              type="button"
+              onClick={() => onChange(selected ? '' : opt.value)}
+              className="w-full text-left px-3 py-2.5"
+            >
+              <div className={cn('font-medium text-sm', selected && 'text-primary', onDetailClick && 'pr-6')}>
                 {opt.value}
               </div>
-              {onDetailClick && (
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); onDetailClick(opt.value); }}
-                  data-testid={`subclass-info-${opt.value}`}
-                  className="shrink-0 mt-0.5 text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label={`View details for ${opt.value}`}
-                >
-                  <Info className="w-3.5 h-3.5" />
-                </button>
+              {opt.description && (
+                <div className={cn('text-xs text-muted-foreground mt-0.5 leading-relaxed', onDetailClick && 'pr-6')}>
+                  {opt.description}
+                </div>
               )}
-            </div>
-            {opt.description && (
-              <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                {opt.description}
-              </div>
+            </button>
+            {onDetailClick && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); onDetailClick(opt.value); }}
+                data-testid={`subclass-info-${opt.value}`}
+                className="absolute top-2.5 right-2.5 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={`View details for ${opt.value}`}
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
             )}
-          </button>
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

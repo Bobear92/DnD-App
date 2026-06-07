@@ -249,7 +249,7 @@ function ProgressionTable({ name, edition, byLevel }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function ClassOverview({ classData, loading }) {
+export default function ClassOverview({ classData, loading, maneuversTo }) {
   const [selectedSubclass, setSelectedSubclass] = useState(null);
 
   if (loading) {
@@ -398,6 +398,7 @@ export default function ClassOverview({ classData, loading }) {
               className={name}
               subclassName={selectedSubclass}
               edition={edition}
+              maneuversTo={maneuversTo}
             />
           )}
         </DialogContent>

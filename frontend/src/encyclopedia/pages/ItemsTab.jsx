@@ -9,6 +9,8 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import itemService from '../itemService';
+import WeaponPropertyBadges from '../../characters/components/WeaponPropertyBadges';
+import { weaponBadges } from '../../characters/components/weaponPropertyData';
 
 function distinct(items, key) {
   return [...new Set(items.map((it) => it[key]).filter((v) => v != null && v !== ''))].sort();
@@ -74,6 +76,15 @@ function ItemDetailDialog({ category, item, isGm, campaignId, onClose, onOverrid
               );
             })}
           </div>
+
+          {category.explainWeaponProperties && weaponBadges(item).length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Attributes — tap to learn what they mean
+              </div>
+              <WeaponPropertyBadges badges={weaponBadges(item)} />
+            </div>
+          )}
 
           {body && (
             <div className="whitespace-pre-wrap leading-relaxed text-foreground">{body}</div>
