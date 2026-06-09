@@ -61,4 +61,37 @@ describe('FeatPicker', () => {
     fireEvent.change(screen.getByTestId('feat-search'), { target: { value: 'zzzzz' } });
     expect(screen.getByText('No feats match your search.')).toBeInTheDocument();
   });
+
+  describe('getDisabledReason — locked feats', () => {
+    // Lock Grappler (id 2); leave Alert (1) and Lucky (3) selectable.
+    const lockGrappler = (f) => (f.id === 2 ? 'requires Strength 13+ (highest is 10)' : null);
+
+    it('disables a feat with a reason and shows the unmet-prerequisite note', async () => {
+      render(<FeatPicker feats={FEATS} value={null} onChange={vi.fn()} testIdPrefix="feat" getDisabledReason={lockGrappler} />);
+      fireEvent.click(screen.getByTestId('feat-select'));
+      await waitFor(() => expect(screen.getByTestId('feat-option-2')).toBeInTheDocument());
+      expect(screen.getByTestId('feat-option-2')).toBeDisabled();
+      expect(screen.getByTestId('feat-locked-2')).toHaveTextContent("You don't meet the prerequisite — requires Strength 13+ (highest is 10)");
+      expect(screen.getByTestId('feat-option-1')).not.toBeDisabled();
+    });
+
+    it('does not select a locked feat when clicked', async () => {
+      const onChange = vi.fn();
+      render(<FeatPicker feats={FEATS} value={null} onChange={onChange} testIdPrefix="feat" getDisabledReason={lockGrappler} />);
+      fireEvent.click(screen.getByTestId('feat-select'));
+      await waitFor(() => expect(screen.getByTestId('feat-option-2')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('feat-option-2'));
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('sorts locked feats to the bottom of the list', async () => {
+      // Lock Alert (first in source order) so the order changes only if sorting works.
+      const lockAlert = (f) => (f.id === 1 ? 'locked' : null);
+      render(<FeatPicker feats={FEATS} value={null} onChange={vi.fn()} testIdPrefix="feat" getDisabledReason={lockAlert} />);
+      fireEvent.click(screen.getByTestId('feat-select'));
+      await waitFor(() => expect(screen.getByTestId('feat-option-1')).toBeInTheDocument());
+      const ids = screen.getAllByTestId(/^feat-option-/).map((el) => el.getAttribute('data-testid'));
+      expect(ids[ids.length - 1]).toBe('feat-option-1'); // Alert sorted to the bottom
+    });
+  });
 });

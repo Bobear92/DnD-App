@@ -178,4 +178,38 @@ describe('buildActionEconomy — Fighter', () => {
     args.characterData = { race_traits: ['Breath Weapon'] };
     expect(buildActionEconomy(args).action.map((e) => e.name)).toContain('Breath Weapon');
   });
+
+  describe('feat effects', () => {
+    const TAVERN_BRAWLER = {
+      id: 14, name: 'Tavern Brawler', level: 4,
+      effects: [
+        { kind: 'attack_mod', target: 'unarmed', dice: '1d4' },
+        { kind: 'action', name: 'Grapple (Tavern Brawler)', economy: 'bonus', trigger: 'After an unarmed hit', description: 'Grapple the target.' },
+      ],
+    };
+
+    it('adds a feat action (Tavern Brawler grapple) under Bonus with source Feat', () => {
+      const args = fighterArgs(5, '5e');
+      args.characterData = { feats: [TAVERN_BRAWLER] };
+      const grapple = buildActionEconomy(args).bonus.find((e) => e.name === 'Grapple (Tavern Brawler)');
+      expect(grapple).toBeTruthy();
+      expect(grapple.source).toBe('Feat');
+      expect(grapple.cost).toBe('bonus action');
+      expect(grapple.detail).toMatch(/After an unarmed hit/);
+    });
+
+    it('shows the feat unarmed die (1d4) even with a weapon equipped', () => {
+      const args = fighterArgs(5, '5e'); // already has a Longsword in attacks
+      args.characterData = { feats: [TAVERN_BRAWLER] };
+      const unarmed = buildActionEconomy(args).action.find((e) => e.name === 'Unarmed Strike');
+      expect(unarmed).toBeTruthy();
+      expect(unarmed.detail).toMatch(/1d4/);
+    });
+
+    it('no Feat-source entries and no unarmed row when the character has no feats and a weapon', () => {
+      const ec = buildActionEconomy(fighterArgs(5, '5e'));
+      expect(ec.action.find((e) => e.name === 'Unarmed Strike')).toBeFalsy();
+      expect([...ec.action, ...ec.bonus].some((e) => e.source === 'Feat')).toBe(false);
+    });
+  });
 });

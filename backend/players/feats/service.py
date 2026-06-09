@@ -58,6 +58,7 @@ def create_feat(db: Session, feat_data: schemas.FeatCreate, user_id: int, is_adm
         benefits=feat_data.benefits,
         repeatable=feat_data.repeatable,
         source=feat_data.source,
+        effects=feat_data.effects,
         owner_type=models.OwnerType.system,
         owner_id=None
     )

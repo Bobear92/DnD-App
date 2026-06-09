@@ -45,6 +45,15 @@ vi.mock('../../shared/components/layout/MainLayout', () => ({
   default: ({ children }) => <div>{children}</div>,
 }));
 
+// FeatsSubTab fetches the feat catalogue — mock it to a marker that echoes its props.
+vi.mock('../components/FeatsSubTab', () => ({
+  default: ({ feats = [], canManage }) => (
+    <div data-testid="feats-subtab-mock" data-can-manage={String(!!canManage)}>
+      {feats.map((f, i) => <span key={i} data-testid="feat-name">{f.name ?? f}</span>)}
+    </div>
+  ),
+}));
+
 // Render all tab panels unconditionally so tests can find content without clicking tabs
 vi.mock('@/components/ui/tabs', () => ({
   Tabs: ({ children }) => <div>{children}</div>,
@@ -1309,6 +1318,134 @@ describe('CharacterDetail', () => {
       expect(screen.getByText('52')).toBeInTheDocument();
       expect(screen.queryByText(/Draconic Resilience/)).not.toBeInTheDocument();
       expect(screen.queryByText('Armor Class Options')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Features tab — Class Features / Feats sub-tab', () => {
+    it('shows the Class Features / Feats sub-tab toggle', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('features-subtab-class')).toBeInTheDocument());
+      expect(screen.getByTestId('features-subtab-feats')).toBeInTheDocument();
+    });
+
+    it('defaults to Class Features (FeatsSubTab hidden until toggled)', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+      expect(screen.queryByTestId('feats-subtab-mock')).not.toBeInTheDocument();
+    });
+
+    it('clicking Feats shows the FeatsSubTab with the character feats', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, character_data: { ...BASE_CHARACTER.character_data, feats: [{ id: 1, name: 'Tough' }] } },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('features-subtab-feats')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('features-subtab-feats'));
+      expect(screen.getByTestId('feats-subtab-mock')).toBeInTheDocument();
+      expect(screen.getByTestId('feat-name')).toHaveTextContent('Tough');
+    });
+
+    it('player owner cannot manage feats (canManage false)', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('features-subtab-feats')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('features-subtab-feats'));
+      expect(screen.getByTestId('feats-subtab-mock')).toHaveAttribute('data-can-manage', 'false');
+    });
+
+    it('GM can manage feats (canManage true)', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm' } });
+      useAuth.mockReturnValue({ user: { id: 99, username: 'gm' } });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('features-subtab-feats')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('features-subtab-feats'));
+      expect(screen.getByTestId('feats-subtab-mock')).toHaveAttribute('data-can-manage', 'true');
+    });
+  });
+
+  describe('Feat effects — initiative (Alert)', () => {
+    it('adds a feat initiative stat_mod to the Initiative value', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{ id: 1, name: 'Alert', level: 4, effects: [{ kind: 'stat_mod', stat: 'initiative', amount: 5 }] }],
+          },
+        },
+      });
+      renderDetail();
+      // BASE_CHARACTER DEX 12 → +1, plus Alert +5 = +6
+      await waitFor(() => expect(screen.getByTestId('initiative-value')).toHaveTextContent('+6'));
+      expect(screen.getByTestId('initiative-feat-note')).toHaveTextContent('+5 Alert');
+    });
+
+    it('shows plain DEX initiative with no feat note when no feat modifies it', async () => {
+      renderDetail(); // BASE_CHARACTER has no feats
+      await waitFor(() => expect(screen.getByTestId('initiative-value')).toHaveTextContent('+1'));
+      expect(screen.queryByTestId('initiative-feat-note')).not.toBeInTheDocument();
+    });
+
+    it('adds a feat passive_perception stat_mod (Observant +5)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{ id: 2, name: 'Observant', level: 4, effects: [{ kind: 'stat_mod', stat: 'passive_perception', amount: 5 }] }],
+          },
+        },
+      });
+      renderDetail();
+      // BASE_CHARACTER WIS 12 → +1, level 5 prof +3, base 10 = 14, plus Observant +5 = 19
+      await waitFor(() => expect(screen.getByTestId('passive-perception-value')).toHaveTextContent('19'));
+      expect(screen.getByTestId('passive-perception-feat-note')).toHaveTextContent('+5 Observant');
+    });
+
+    it('shows plain passive Perception with no feat note when no feat modifies it', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('passive-perception-value')).toHaveTextContent('14'));
+      expect(screen.queryByTestId('passive-perception-feat-note')).not.toBeInTheDocument();
+    });
+
+    it('shows a feat speed bonus note (Mobile +10)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{ id: 4, name: 'Mobile', level: 4, effects: [{ kind: 'stat_mod', stat: 'speed', amount: 10 }] }],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('speed-feat-note')).toHaveTextContent('+10 ft speed from Mobile'));
+    });
+
+    it('no speed feat note when no feat grants speed', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('speed-feat-note')).not.toBeInTheDocument();
+    });
+
+    it('grants a saving-throw proficiency from Resilient (chosen ability)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{ id: 3, name: 'Resilient', level: 4, choices: { ability: 'wisdom' },
+              effects: [{ kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true }] }],
+          },
+        },
+      });
+      renderDetail();
+      // WIS 12 (+1) + proficiency bonus +3 (level 5) = +4
+      await waitFor(() => expect(within(screen.getByTestId('save-wisdom')).getByText('+4')).toBeInTheDocument());
     });
   });
 });

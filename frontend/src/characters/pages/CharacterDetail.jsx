@@ -27,6 +27,8 @@ import RacialResourceTracker from '../components/RacialResourceTracker';
 import WalletCard from '../components/WalletCard';
 import InventoryTab from '../components/InventoryTab';
 import ActionEconomyTab from '../components/ActionEconomyTab';
+import FeatsSubTab from '../components/FeatsSubTab';
+import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '../components/featEffects';
 import { MaxHpValue, AcOptionsLine } from '../components/CombatBonusInline';
 import { totalHpBonus } from '../components/combatBonuses';
 import { draconicLabel } from '../components/draconicData';
@@ -166,6 +168,7 @@ export default function CharacterDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [playerView, setPlayerView] = useState(false);
   const [gmEdit, setGmEdit] = useState(false); // GM Edit toggle: unlocks permanent choices (Epic 1)
+  const [featuresSubTab, setFeaturesSubTab] = useState('class'); // 'class' | 'feats'
 
   const [xpInput, setXpInput] = useState('');
   const [addingXp, setAddingXp] = useState(false);
@@ -1244,11 +1247,40 @@ export default function CharacterDetail() {
                     </div>
                     <div className="rounded-md border py-2">
                       <div className="text-[10px] text-muted-foreground uppercase">Initiative</div>
-                      <div className="font-bold">{modStr(identity.draft.dexterity)}</div>
+                      {(() => {
+                        const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
+                        const bonus = getFeatStatMods(feats, 'initiative');
+                        const total = mod(identity.draft.dexterity) + bonus;
+                        const sources = getFeatStatModSources(feats, 'initiative');
+                        return (
+                          <>
+                            <div className="font-bold" data-testid="initiative-value">{total >= 0 ? `+${total}` : total}</div>
+                            {sources.length > 0 && (
+                              <div className="text-[9px] text-emerald-600 leading-tight" data-testid="initiative-feat-note">
+                                {sources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                     <div className="rounded-md border py-2">
                       <div className="text-[10px] text-muted-foreground uppercase">Passive Perc.</div>
-                      <div className="font-bold">{10 + mod(identity.draft.wisdom) + pb}</div>
+                      {(() => {
+                        const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
+                        const bonus = getFeatStatMods(feats, 'passive_perception');
+                        const sources = getFeatStatModSources(feats, 'passive_perception');
+                        return (
+                          <>
+                            <div className="font-bold" data-testid="passive-perception-value">{10 + mod(identity.draft.wisdom) + pb + bonus}</div>
+                            {sources.length > 0 && (
+                              <div className="text-[9px] text-emerald-600 leading-tight" data-testid="passive-perception-feat-note">
+                                {sources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                     <div className="rounded-md border py-2">
                       <div className="text-[10px] text-muted-foreground uppercase">Inspiration</div>
@@ -1256,15 +1288,30 @@ export default function CharacterDetail() {
                     </div>
                   </div>
 
+                  {/* Feat speed bonus (e.g. Mobile +10). Shown centrally here for all classes;
+                      the class sheet's own Total Speed row doesn't fold it in yet. */}
+                  {(() => {
+                    const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
+                    const featSpeed = getFeatStatMods(feats, 'speed');
+                    if (!featSpeed) return null;
+                    const sources = getFeatStatModSources(feats, 'speed');
+                    return (
+                      <div className="text-xs text-emerald-600" data-testid="speed-feat-note">
+                        +{featSpeed} ft speed from {sources.map((s) => s.source).join(', ')}
+                      </div>
+                    );
+                  })()}
+
                   {/* Saving Throws */}
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Saving Throws</div>
                     <div className="grid grid-cols-3 gap-1.5">
                       {ABILITY_LABELS.map(({ key, abbrev, save }) => {
-                        const isProficient = savingThrows.draft?.[save] ?? false;
+                        const featSaves = getFeatSaveProficiencies(classSection.draft?.feats ?? character.character_data?.feats ?? []);
+                        const isProficient = (savingThrows.draft?.[save] ?? false) || featSaves.includes(key);
                         const bonus = mod(identity.draft[key]) + (isProficient ? pb : 0);
                         return (
-                          <div key={key} className="flex items-center gap-2 rounded border px-2 py-1.5 text-sm">
+                          <div key={key} data-testid={`save-${key}`} className="flex items-center gap-2 rounded border px-2 py-1.5 text-sm">
                             {showEditable ? (
                               <button
                                 type="button"
@@ -1371,7 +1418,30 @@ export default function CharacterDetail() {
 
             {/* ── Tab 2: Features ── */}
             <TabsContent value="features" className="space-y-4">
-              {ClassSheet && classSection.draft !== null && (
+              {/* Class Features / Feats sub-tab toggle — feats apply to every class, so the
+                  toggle lives here (not inside any one class sheet). */}
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant={featuresSubTab === 'class' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFeaturesSubTab('class')}
+                  data-testid="features-subtab-class"
+                >
+                  Class Features
+                </Button>
+                <Button
+                  type="button"
+                  variant={featuresSubTab === 'feats' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFeaturesSubTab('feats')}
+                  data-testid="features-subtab-feats"
+                >
+                  Feats
+                </Button>
+              </div>
+
+              {featuresSubTab === 'class' && ClassSheet && classSection.draft !== null && (
                 <SectionCard
                   title={`${character.char_class} Features`}
                   isDirty={classSection.isDirty || savingThrows.isDirty}
@@ -1388,6 +1458,20 @@ export default function CharacterDetail() {
                     section="features"
                     scores={identity.draft ?? {}}
                     abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
+                  />
+                </SectionCard>
+              )}
+
+              {featuresSubTab === 'feats' && (
+                <SectionCard title="Feats" canEdit={false}>
+                  <FeatsSubTab
+                    feats={classSection.draft?.feats ?? character.character_data?.feats ?? []}
+                    campaignId={campaignId}
+                    edition={edition}
+                    canManage={isGm && !playerView}
+                    onChange={autoSaveClassPatch}
+                    characterData={classSection.draft ?? character.character_data ?? {}}
+                    readOnly={!showEditable}
                   />
                 </SectionCard>
               )}

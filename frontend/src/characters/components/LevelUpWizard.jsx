@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Dices, ChevronRight, ChevronLeft, Star, Check, Lock, PencilLine } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Dices, ChevronRight, ChevronLeft, Star, Check, Lock, PencilLine, Sparkles, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,11 +21,24 @@ import {
   getSubclassProficiencyGrants, availableOptions, applyProficiencyChoice,
 } from './subclassProficiencyData';
 import { getManeuvers, maneuversKnownAtLevel } from './maneuversData';
+import FeatPicker from './FeatPicker';
+import { checkFeatPrerequisite } from './featPrerequisites';
+import { featAbilityChoices, featFixedAbilityScores } from './featEffects';
+import featService from '../../encyclopedia/featService';
+
+const ABILITY_LABEL = {
+  strength: 'Strength', dexterity: 'Dexterity', constitution: 'Constitution',
+  intelligence: 'Intelligence', wisdom: 'Wisdom', charisma: 'Charisma',
+};
 
 function conMod(score) { return Math.floor((score - 10) / 2); }
 
 // Known casters choose their spells at level-up (vs. prepared casters who swap each long rest).
 const KNOWN_CASTERS = new Set(['Bard', 'Sorcerer', 'Warlock']);
+
+// Spellcasting detection for feat prerequisites ("the ability to cast at least one spell").
+const SPELLCASTING_CLASSES = new Set(['Artificer', 'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Warlock', 'Wizard']);
+const CASTER_SUBCLASSES = new Set(['Eldritch Knight', 'Arcane Trickster']);
 
 const ABILITIES = [
   { key: 'strength', label: 'Strength' },
@@ -89,6 +102,11 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // feature list so the wizard prompts for the increase. (Class-agnostic.)
   const needsAsi = features.some((f) => /ability score improvement/i.test(f.name || ''));
 
+  // GM-controlled: what an ASI level grants — ability increase only, a choice of ASI or a
+  // feat (RAW 5e default), or both. Drives whether the wizard shows the choice/feat steps.
+  const asiFeatMode = campaign?.asi_feat_mode || 'asi_or_feat';
+  const featsAllowed = asiFeatMode === 'asi_or_feat' || asiFeatMode === 'asi_and_feat';
+
   const [step, setStep] = useState(0);
   const [hpChoice, setHpChoice] = useState(null); // 'roll' | 'average' | 'manual'
   const [rolledValue, setRolledValue] = useState(null);
@@ -99,7 +117,21 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const [profChoices, setProfChoices] = useState({}); // { [grant.key]: [chosen names] }
   const [asiAlloc, setAsiAlloc] = useState({}); // { [abilityKey]: 0|1|2 } — points added this ASI
   const [maneuverPicks, setManeuverPicks] = useState([]); // new maneuvers chosen this level-up
+  const [asiChoice, setAsiChoice] = useState(''); // 'asi' | 'feat' — only in asi_or_feat mode
+  const [featPick, setFeatPick] = useState(null); // { id, name } chosen this level-up
+  const [featAbilityPick, setFeatAbilityPick] = useState(''); // half-feat ability choice (e.g. Tavern Brawler)
+  const [allFeats, setAllFeats] = useState([]); // edition-filtered feat catalogue
   const [saving, setSaving] = useState(false);
+
+  // Fetch the feat catalogue once when feats can be granted at this ASI level.
+  useEffect(() => {
+    if (!needsAsi || !featsAllowed) return;
+    let cancelled = false;
+    featService.getFeats(campaign?.id, edition).then((list) => {
+      if (!cancelled) setAllFeats(Array.isArray(list) ? list : []);
+    });
+    return () => { cancelled = true; };
+  }, [needsAsi, featsAllowed, campaign?.id, edition]);
 
   // Subclass proficiency grants gained at this level (uses the subclass chosen in this
   // wizard, or the existing one for grants at later levels). Drives the Proficiencies step.
@@ -114,11 +146,28 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     : 0;
   const needsManeuvers = maneuverDelta > 0;
 
+  // ── ASI / feat step gating (driven by the campaign's asi_feat_mode) ──
+  // asi_only        → just the ASI step.
+  // asi_or_feat     → a choice step, then either the ASI step or the feat step.
+  // asi_and_feat    → both the ASI step and the feat step.
+  const needsAsiChoice = needsAsi && asiFeatMode === 'asi_or_feat';
+  const wantsAsiStep = needsAsi && (
+    asiFeatMode === 'asi_only' ||
+    asiFeatMode === 'asi_and_feat' ||
+    (asiFeatMode === 'asi_or_feat' && asiChoice === 'asi')
+  );
+  const wantsFeatStep = needsAsi && (
+    asiFeatMode === 'asi_and_feat' ||
+    (asiFeatMode === 'asi_or_feat' && asiChoice === 'feat')
+  );
+
   const STEPS = [
     'hp',
     ...(needsSubclass ? ['subclass'] : []),
     'features',
-    ...(needsAsi ? ['asi'] : []),
+    ...(needsAsiChoice ? ['asi_choice'] : []),
+    ...(wantsAsiStep ? ['asi'] : []),
+    ...(wantsFeatStep ? ['feat'] : []),
     ...(isKnownCaster ? ['spells'] : []),
     ...(needsProficiencies ? ['proficiencies'] : []),
     ...(needsManeuvers ? ['maneuvers'] : []),
@@ -128,7 +177,9 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     'Hit Points',
     ...(needsSubclass ? ['Subclass'] : []),
     'New Features',
-    ...(needsAsi ? ['Ability Scores'] : []),
+    ...(needsAsiChoice ? ['ASI or Feat'] : []),
+    ...(wantsAsiStep ? ['Ability Scores'] : []),
+    ...(wantsFeatStep ? ['Feat'] : []),
     ...(isKnownCaster ? ['New Spells'] : []),
     ...(needsProficiencies ? ['Proficiencies'] : []),
     ...(needsManeuvers ? ['Maneuvers'] : []),
@@ -159,12 +210,63 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       return { ...prev, [key]: next };
     });
   };
-  const asiScoreUpdates = () => {
-    const out = {};
-    for (const a of ABILITIES) {
-      const inc = asiAlloc[a.key] || 0;
-      if (inc) out[a.key] = (character[a.key] ?? 10) + inc;
+  // ── Feats offered at this ASI level ──
+  // Every feat is shown; ones whose prerequisites aren't met are disabled (and sorted to
+  // the bottom of the picker) with the reason, rather than hidden. Already-taken,
+  // non-repeatable feats are excluded entirely. Ability-score prerequisites are checked
+  // against the scores AFTER any increase chosen this level (so a +1 can unlock a feat in
+  // asi_and_feat mode); level prerequisites use the new level. Spell/armor prerequisites
+  // are left fail-open (skipped — not reliably knowable here).
+  const takenFeatNames = new Set((character.character_data?.feats ?? []).map((f) => (f?.name || f)));
+  const prereqScores = ABILITIES.reduce((acc, a) => {
+    acc[a.key] = (character[a.key] ?? 10) + (wantsAsiStep ? (asiAlloc[a.key] || 0) : 0);
+    return acc;
+  }, {});
+  const visibleFeats = useMemo(
+    () => allFeats.filter((f) => f.repeatable || !takenFeatNames.has(f.name)),
+    [allFeats], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // Can this character cast at least one spell? Drives "ability to cast a spell" feat prereqs.
+  // True for spellcasting classes, caster subclasses (Eldritch Knight / Arcane Trickster), or
+  // a character who already knows/prepared any spell or cantrip (incl. race-granted).
+  const cd = character.character_data ?? {};
+  const isSpellcaster = SPELLCASTING_CLASSES.has(character.char_class)
+    || CASTER_SUBCLASSES.has(cd.subclass)
+    || [cd.cantrips, cd.known_spells, cd.prepared_spells, cd.spellbook]
+      .some((arr) => Array.isArray(arr) && arr.length > 0)
+    || !!cd.high_elf_cantrip;
+
+  const featDisabledReason = (f) => {
+    const { met, unmet } = checkFeatPrerequisite(f, {
+      level: newLevel,
+      className: character.char_class,
+      scores: prereqScores,
+      abilityScoresKnown: true,
+      spellcaster: isSpellcaster,
+    });
+    return met ? null : unmet.map((u) => u.reason).join('; ');
+  };
+
+  // The full picked feat (with effects) + any ability-score choice it demands (half-feats).
+  const pickedFeat = featPick ? visibleFeats.find((f) => f.id === featPick.id) : null;
+  const featAbilityChoice = pickedFeat ? (featAbilityChoices(pickedFeat)[0] || null) : null; // slice: one choice
+  const selectFeat = (f) => { setFeatPick(f); setFeatAbilityPick(''); };
+
+  // Combined ability-score increases written this level: the ASI step's allocation plus any
+  // fixed/chosen increase from a half-feat, capped at 20. (Half-feats permanently raise a score.)
+  const combinedScoreUpdates = () => {
+    const inc = {};
+    if (wantsAsiStep) ABILITIES.forEach((a) => { if (asiAlloc[a.key]) inc[a.key] = (inc[a.key] || 0) + asiAlloc[a.key]; });
+    if (wantsFeatStep && pickedFeat) {
+      featFixedAbilityScores(pickedFeat).forEach(({ ability, amount }) => { inc[ability] = (inc[ability] || 0) + amount; });
+      if (featAbilityChoice && featAbilityPick) inc[featAbilityPick] = (inc[featAbilityPick] || 0) + featAbilityChoice.amount;
     }
+    const out = {};
+    ABILITIES.forEach((a) => {
+      const t = inc[a.key] || 0;
+      if (t) out[a.key] = Math.min(20, (character[a.key] ?? 10) + t);
+    });
     return out;
   };
 
@@ -241,6 +343,8 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       return profGrants.every((g) => (profChoices[g.key]?.length || 0) === g.count);
     }
     if (STEPS[step] === 'asi') return asiTotal === ASI_POINTS;
+    if (STEPS[step] === 'asi_choice') return asiChoice === 'asi' || asiChoice === 'feat';
+    if (STEPS[step] === 'feat') return !!featPick && (!featAbilityChoice || !!featAbilityPick);
     if (STEPS[step] === 'maneuvers') return maneuverPicks.length === maneuverDelta;
     return true;
   };
@@ -255,6 +359,21 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
         ...applyProficiencyChoice(g.type, profChoices[g.key] || [], { ...(character.character_data ?? {}), ...profPatch }),
       };
     }
+    // A feat chosen this level-up is appended to character_data.feats. We snapshot the feat's
+    // structured `effects` onto the instance (inventory pattern) so the sheet's resolvers
+    // (initiative, action economy, unarmed die) work without re-fetching the catalogue, and
+    // record any half-feat ability choice.
+    const existingFeats = character.character_data?.feats ?? [];
+    const featAddition = (wantsFeatStep && featPick)
+      ? [...existingFeats, {
+          id: featPick.id,
+          name: featPick.name,
+          level: newLevel,
+          ...(pickedFeat?.effects ? { effects: pickedFeat.effects } : {}),
+          ...(featAbilityChoice && featAbilityPick ? { choices: { ability: featAbilityPick } } : {}),
+        }]
+      : null;
+
     const newCharacterData = {
       ...(character.character_data ?? {}),
       ...(newStoredHpMax != null ? { hp_max: newStoredHpMax } : {}),
@@ -262,10 +381,11 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       ...(isKnownCaster ? { cantrips, known_spells: knownSpells } : {}),
       ...profPatch,
       ...(needsManeuvers ? { maneuvers: [...knownManeuvers, ...maneuverPicks] } : {}),
+      ...(featAddition ? { feats: featAddition } : {}),
     };
-    // Ability Score Improvements update top-level character fields, passed as a 3rd arg
-    // (only when there are increases, so existing 2-arg callers/tests are unaffected).
-    const scoreUpdates = needsAsi ? asiScoreUpdates() : {};
+    // Ability-score changes (ASI step + any half-feat increase) update top-level character
+    // fields, passed as a 3rd arg (only when non-empty, so existing 2-arg callers are unaffected).
+    const scoreUpdates = combinedScoreUpdates();
     const extra = Object.keys(scoreUpdates).length ? [scoreUpdates] : [];
     await onComplete(newLevel, newCharacterData, ...extra);
     setSaving(false);
@@ -548,6 +668,95 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
           </div>
         )}
 
+        {/* ── Step: ASI or Feat choice ── */}
+        {STEPS[step] === 'asi_choice' && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              At level {newLevel} you may either increase your ability scores
+              <span className="font-medium text-foreground"> or </span>
+              take a <span className="font-medium text-foreground">feat</span>. Choose one.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setAsiChoice('asi')}
+                data-testid="asi-choice-asi"
+                className={cn(
+                  'rounded-lg border-2 p-4 text-center transition-all hover:shadow-sm',
+                  asiChoice === 'asi' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                )}
+              >
+                <Sparkles className="h-7 w-7 mx-auto mb-2 text-primary" />
+                <div className="font-semibold text-sm">Ability Score Increase</div>
+                <div className="text-xs text-muted-foreground mt-1">+2 to one score, or +1 to two</div>
+                {asiChoice === 'asi' && <div className="text-xs text-primary mt-1 font-medium">Selected</div>}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAsiChoice('feat')}
+                data-testid="asi-choice-feat"
+                className={cn(
+                  'rounded-lg border-2 p-4 text-center transition-all hover:shadow-sm',
+                  asiChoice === 'feat' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                )}
+              >
+                <Award className="h-7 w-7 mx-auto mb-2 text-primary" />
+                <div className="font-semibold text-sm">Take a Feat</div>
+                <div className="text-xs text-muted-foreground mt-1">Gain a special talent instead</div>
+                {asiChoice === 'feat' && <div className="text-xs text-primary mt-1 font-medium">Selected</div>}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step: Feat ── */}
+        {STEPS[step] === 'feat' && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Choose a <span className="font-medium text-foreground">feat</span>. Feats you don't meet the
+              prerequisites for are shown at the bottom and can't be selected{takenFeatNames.size > 0 ? '; feats you already have are hidden' : ''}.
+            </p>
+            {visibleFeats.length === 0 ? (
+              <div className="rounded-md border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground" data-testid="feat-empty">
+                No feats are available for this character.
+              </div>
+            ) : (
+              <FeatPicker
+                feats={visibleFeats}
+                value={featPick}
+                onChange={selectFeat}
+                testIdPrefix="lvl-feat"
+                getDisabledReason={featDisabledReason}
+              />
+            )}
+
+            {/* Half-feat ability-score choice (e.g. Tavern Brawler: +1 Strength or Constitution) */}
+            {featAbilityChoice && (
+              <div className="space-y-2 rounded-md border bg-muted/30 p-3" data-testid="feat-ability-choice">
+                <p className="text-sm font-medium">
+                  This feat increases an ability score by {featAbilityChoice.amount}. Choose one:
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {featAbilityChoice.abilities.map((ab) => (
+                    <button
+                      key={ab}
+                      type="button"
+                      onClick={() => setFeatAbilityPick(ab)}
+                      data-testid={`feat-ability-${ab}`}
+                      className={cn(
+                        'rounded-md border px-3 py-1.5 text-sm transition-colors',
+                        featAbilityPick === ab ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
+                      )}
+                    >
+                      +{featAbilityChoice.amount} {ABILITY_LABEL[ab] || ab}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Step: Spells (known casters) ── */}
         {STEPS[step] === 'spells' && (
           <div className="space-y-4">
@@ -741,11 +950,22 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                     </span>
                   </div>
                 )}
-                {needsAsi && (
+                {wantsAsiStep && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Ability scores</span>
                     <span className="font-medium">
                       {ABILITIES.filter((a) => asiAlloc[a.key]).map((a) => `${a.label} +${asiAlloc[a.key]}`).join(', ') || '—'}
+                    </span>
+                  </div>
+                )}
+                {wantsFeatStep && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Feat</span>
+                    <span className="font-medium text-primary" data-testid="confirm-feat">
+                      {featPick?.name || '—'}
+                      {featAbilityChoice && featAbilityPick && (
+                        <span className="text-muted-foreground font-normal ml-1">(+{featAbilityChoice.amount} {ABILITY_LABEL[featAbilityPick]})</span>
+                      )}
                     </span>
                   </div>
                 )}

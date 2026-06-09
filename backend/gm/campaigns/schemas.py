@@ -13,6 +13,7 @@ class CampaignCreate(BaseModel):
     leveling_type: str = "milestone"
     currency_type: str = "standard"
     starting_equipment: str = "equipment"
+    asi_feat_mode: str = "asi_or_feat"
 
 
 class CampaignUpdate(BaseModel):
@@ -25,6 +26,7 @@ class CampaignUpdate(BaseModel):
     leveling_type: Optional[str] = None
     currency_type: Optional[str] = None
     starting_equipment: Optional[str] = None
+    asi_feat_mode: Optional[str] = None
 
 
 class UserInfo(BaseModel):
@@ -58,6 +60,7 @@ class CampaignResponse(BaseModel):
     leveling_type: str
     currency_type: str
     starting_equipment: str
+    asi_feat_mode: str
     created_by: int
     created_at: datetime
     updated_at: Optional[datetime]
@@ -78,6 +81,7 @@ class CampaignListItem(BaseModel):
     leveling_type: str
     currency_type: str
     starting_equipment: str
+    asi_feat_mode: str
     created_by: int
     created_at: datetime
 

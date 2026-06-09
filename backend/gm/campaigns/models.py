@@ -16,6 +16,7 @@ class Campaign(Base):
     leveling_type = Column(String(20), default="milestone", nullable=False)
     currency_type = Column(String(20), default="standard", nullable=False)  # "standard" (cp/sp/gp/pp) | "full" (+ ep)
     starting_equipment = Column(String(20), default="equipment", nullable=False)  # "equipment" | "equipment_or_gold" | "none"
+    asi_feat_mode = Column(String(20), default="asi_or_feat", nullable=False)  # "asi_only" | "asi_or_feat" | "asi_and_feat" — what an ASI level grants
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

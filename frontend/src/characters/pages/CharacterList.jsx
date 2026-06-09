@@ -15,6 +15,7 @@ import characterService from '../characterService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
 import { getRacialRestResources } from '../components/racialRestResources';
+import { getFeatResources } from '../components/featEffects';
 import { isDivination } from '../components/PortentTracker';
 import { cn } from '@/lib/utils';
 
@@ -47,6 +48,7 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
   const is2024 = edition === '5.5e';
   const traits = characterData?.race_traits ?? [];
   const racial = getRacialRestResources(traits, level);
+  const featResources = getFeatResources(characterData?.feats ?? []);
 
   if (restType === 'short') {
     const items = [];
@@ -61,6 +63,8 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
     if (cls === 'Wizard') items.push('Arcane Recovery');
     // Racial features that recharge on a short rest
     racial.filter(r => r.recharge === 'short').forEach(r => items.push(r.label));
+    // Feat resources that recharge on a short rest (e.g. Martial Adept superiority die)
+    featResources.filter(r => r.recharge === 'short').forEach(r => items.push(r.label));
     return items.length > 0 ? items : ['No short rest resources'];
   }
 
@@ -83,6 +87,8 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
   else if (cls === 'Artificer') items.push('Flash of Genius, spell preparation unlocked');
   // Racial features (long rest recovers both short- and long-recharge ones)
   racial.forEach(r => items.push(r.label));
+  // Feat resources (long rest recovers all)
+  featResources.forEach(r => items.push(r.label));
   // Divination Wizard: Portent dice cleared (re-roll after the rest)
   if (cls === 'Wizard' && isDivination(characterData?.subclass)) items.push('Portent dice cleared (re-roll)');
   return items;

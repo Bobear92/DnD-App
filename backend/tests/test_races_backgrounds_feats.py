@@ -184,3 +184,43 @@ class TestFeatEdition:
         resp = client.put(f"/feats/{feat['id']}", json={"edition": "5.5e"}, headers=admin_h)
         assert resp.status_code == 200
         assert resp.json()["edition"] == "5.5e"
+
+
+class TestFeatEffects:
+    EFFECTS = [
+        {"kind": "stat_mod", "stat": "initiative", "amount": 5},
+        {"kind": "ability_choice", "abilities": ["strength", "constitution"], "amount": 1},
+    ]
+
+    def _create(self, client, admin_h, effects=None):
+        payload = {**FEAT_PAYLOAD, "name": "Effecty Feat"}
+        if effects is not None:
+            payload["effects"] = effects
+        resp = client.post("/feats", json=payload, headers=admin_h)
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    def test_effects_default_to_null(self, client):
+        admin_h, _ = make_admin(client)
+        feat = self._create(client, admin_h)
+        assert feat["effects"] is None
+
+    def test_effects_round_trip_in_detail(self, client):
+        admin_h, _ = make_admin(client)
+        feat = self._create(client, admin_h, self.EFFECTS)
+        resp = client.get(f"/feats/{feat['id']}", headers=admin_h)
+        assert resp.json()["effects"] == self.EFFECTS
+
+    def test_effects_in_list_response(self, client):
+        admin_h, _ = make_admin(client)
+        self._create(client, admin_h, self.EFFECTS)
+        resp = client.get("/feats", headers=admin_h)
+        assert resp.json()[0]["effects"] == self.EFFECTS
+
+    def test_effects_survive_update(self, client):
+        admin_h, _ = make_admin(client)
+        feat = self._create(client, admin_h)
+        new_effects = [{"kind": "attack_mod", "target": "unarmed", "dice": "1d4"}]
+        resp = client.put(f"/feats/{feat['id']}", json={"effects": new_effects}, headers=admin_h)
+        assert resp.status_code == 200
+        assert resp.json()["effects"] == new_effects

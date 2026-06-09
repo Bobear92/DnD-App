@@ -15,6 +15,7 @@ import classService from '../classService';
 import ClassOverview from '../components/ClassOverview';
 import FeatPicker from '../components/FeatPicker';
 import { checkFeatPrerequisite } from '../components/featPrerequisites';
+import { featAbilityChoices, featFixedAbilityScores } from '../components/featEffects';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import {
   ArtificerSheet,
@@ -901,7 +902,7 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
                     ...choices,
                     human_variant: opt.variant,
                     // Clear variant-only picks when switching back to standard
-                    ...(opt.variant ? {} : { human_variant_asi: [], human_variant_skill: '', human_feat: null }),
+                    ...(opt.variant ? {} : { human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '' }),
                   })}
                   className={cn(
                     'rounded-lg border-2 p-2.5 text-left transition-all',
@@ -1017,10 +1018,37 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
             <FeatPicker
               feats={feats}
               value={choices.human_feat}
-              onChange={feat => onChange({ ...choices, human_feat: feat })}
+              onChange={feat => onChange({ ...choices, human_feat: feat, human_feat_ability: '' })}
               testIdPrefix="human-feat"
             />
           )}
+          {/* Half-feat ability-score choice (e.g. Tavern Brawler / Resilient at level 1) */}
+          {(() => {
+            const picked = feats.find(f => f.id === choices.human_feat?.id);
+            const ac = featAbilityChoices(picked)[0];
+            if (!ac) return null;
+            return (
+              <div className="space-y-1.5 rounded-md border bg-muted/30 p-2" data-testid="human-feat-ability-choice">
+                <p className="text-xs font-medium">This feat increases an ability score by {ac.amount}. Choose one:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {ac.abilities.map(ab => (
+                    <button
+                      key={ab}
+                      type="button"
+                      data-testid={`human-feat-ability-${ab}`}
+                      onClick={() => onChange({ ...choices, human_feat_ability: ab })}
+                      className={cn(
+                        'rounded-md border px-2 py-1 text-xs',
+                        choices.human_feat_ability === ab ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
+                      )}
+                    >
+                      +{ac.amount} {ab.charAt(0).toUpperCase() + ab.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1256,7 +1284,7 @@ export default function CharacterCreate() {
 
   const [raceSearch, setRaceSearch] = useState('');
 
-  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], half_elf_language: '', human_language: '', dwarf_tool: '', human_variant: false, human_variant_asi: [], human_variant_skill: '', human_feat: null };
+  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], half_elf_language: '', human_language: '', dwarf_tool: '', human_variant: false, human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '' };
   const EMPTY_BG_CHOICES   = { tool_choice: '', language_choices: [] };
   const [raceChoices, setRaceChoices] = useState(EMPTY_RACE_CHOICES);
   const [bgChoices,   setBgChoices]   = useState(EMPTY_BG_CHOICES);
@@ -1349,7 +1377,23 @@ export default function CharacterCreate() {
     ? Object.fromEntries((raceChoices.human_variant_asi ?? []).map(s => [s, 1]))
     : {};
   const baseRaceAsi = isVariantHuman ? null : selectedRaceObj?.asiBonus;
-  const combinedRaceAsi = mergeAsi(baseRaceAsi, selectedSubraceObj?.asiBonus, halfElfExtraAsi, humanVariantAsi);
+  // A Variant Human's level-1 feat may be a half-feat (fixed +1, e.g. Actor, or a choice,
+  // e.g. Tavern Brawler/Resilient). Fold its ability bump into the racial ASI so it applies
+  // to the final scores at submit. (humanFeatObj is reused below as selectedFeatObj.)
+  const humanFeatObj = (isVariantHuman && raceChoices.human_feat)
+    ? (apiFeats.find(f => f.id === raceChoices.human_feat.id) ?? null)
+    : null;
+  const humanFeatAbilityChoice = featAbilityChoices(humanFeatObj)[0] || null;
+  const humanFeatAsi = (() => {
+    if (!humanFeatObj) return {};
+    const out = {};
+    featFixedAbilityScores(humanFeatObj).forEach(({ ability, amount }) => { out[ability] = (out[ability] || 0) + amount; });
+    if (humanFeatAbilityChoice && raceChoices.human_feat_ability) {
+      out[raceChoices.human_feat_ability] = (out[raceChoices.human_feat_ability] || 0) + humanFeatAbilityChoice.amount;
+    }
+    return out;
+  })();
+  const combinedRaceAsi = mergeAsi(baseRaceAsi, selectedSubraceObj?.asiBonus, halfElfExtraAsi, humanVariantAsi, humanFeatAsi);
 
   // Race/subrace passive HP bonuses (e.g. Hill Dwarf "Dwarven Toughness", Draconic Resilience)
   // folded into starting HP — mirrors the CharacterDetail Stats-tab MaxHpValue. Level is 1 at creation.
@@ -1519,7 +1563,16 @@ export default function CharacterCreate() {
         ...(bgLanguages.length > 0 ? { background_languages: bgLanguages } : {}),
         ...(isVariantHuman ? {
           human_variant: true,
-          feats: raceChoices.human_feat ? [raceChoices.human_feat] : [],
+          // Variant Human's free feat is gained at level 1; every other feat is gained at
+          // the ASI level it was chosen (LevelUpWizard tags those). Record the level, snapshot
+          // the feat's structured effects, and store any half-feat ability choice (its +1 is
+          // already folded into the scores via humanFeatAsi/combinedRaceAsi).
+          feats: raceChoices.human_feat ? [{
+            ...raceChoices.human_feat,
+            level: 1,
+            ...(humanFeatObj?.effects ? { effects: humanFeatObj.effects } : {}),
+            ...(humanFeatAbilityChoice && raceChoices.human_feat_ability ? { choices: { ability: raceChoices.human_feat_ability } } : {}),
+          }] : [],
         } : {}),
       },
     });
@@ -1583,9 +1636,7 @@ export default function CharacterCreate() {
   // armor/spell — known as soon as the class is picked) gates Identity → Features,
   // and a "features" context (adds the assigned ability scores) gates Features →
   // Review. Unparseable prerequisites are ignored (fail-open).
-  const selectedFeatObj = (isVariantHuman && raceChoices.human_feat)
-    ? (apiFeats.find(f => f.id === raceChoices.human_feat.id) ?? null)
-    : null;
+  const selectedFeatObj = humanFeatObj; // computed above (with effects), reused for prereq gating
 
   // Can this class cast a spell at level 1? Casters have a spellcasting_ability;
   // the 5e Paladin is the lone exception (no spells until level 2).
@@ -1619,6 +1670,7 @@ export default function CharacterCreate() {
     (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_asi_stats.length < 2) ||
     (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_skills.length < 2) ||
     (isVariantHuman && (raceChoices.human_variant_asi.length < 2 || !raceChoices.human_variant_skill || !raceChoices.human_feat)) ||
+    (isVariantHuman && humanFeatAbilityChoice && !raceChoices.human_feat_ability) ||
     (selectedRaceObj?.name === 'Dwarf' && !raceChoices.dwarf_tool) ||
     (!!bgSpec?.tool && !bgChoices.tool_choice) ||
     (!!bgSpec?.languages && bgLanguagesChosen < bgSpec.languages) ||

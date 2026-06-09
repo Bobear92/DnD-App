@@ -30,13 +30,21 @@ function prereqText(feat) {
  *   onChange     — (feat|null) => void  (passes { id, name } or null)
  *   testIdPrefix — string; builds `${prefix}-select` (trigger), `${prefix}-detail`
  *                  (description box), `${prefix}-search`, `${prefix}-option-{id}`
+ *   getDisabledReason — optional (feat) => string|null. When it returns a reason, that
+ *                  feat is shown non-selectable with the reason, and sorted to the bottom
+ *                  of the list (e.g. unmet prerequisites at level-up).
  */
-export default function FeatPicker({ feats = [], value = null, onChange, testIdPrefix = 'feat' }) {
+export default function FeatPicker({ feats = [], value = null, onChange, testIdPrefix = 'feat', getDisabledReason }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
   const selected = value ? (feats.find(f => f.id === value.id) || value) : null;
-  const filtered = feats.filter(f => !search || f.name.toLowerCase().includes(search.toLowerCase()));
+  // Annotate with a disabled reason (if any), then sort selectable feats first and the
+  // unselectable ones (unmet prerequisite) to the bottom — preserving order within each group.
+  const filtered = feats
+    .filter(f => !search || f.name.toLowerCase().includes(search.toLowerCase()))
+    .map(f => ({ feat: f, reason: getDisabledReason ? getDisabledReason(f) : null }))
+    .sort((a, b) => (a.reason ? 1 : 0) - (b.reason ? 1 : 0));
 
   const choose = (feat) => {
     onChange?.(feat ? { id: feat.id, name: feat.name } : null);
@@ -96,16 +104,19 @@ export default function FeatPicker({ feats = [], value = null, onChange, testIdP
               <div className="p-6 text-center text-sm text-muted-foreground">
                 No feats match your search.
               </div>
-            ) : filtered.map(feat => {
+            ) : filtered.map(({ feat, reason }) => {
               const prereq = prereqText(feat);
               const isSel = selected?.id === feat.id;
+              const disabled = !!reason;
               return (
                 <button
                   key={feat.id}
                   type="button"
-                  onClick={() => choose(feat)}
+                  disabled={disabled}
+                  onClick={() => { if (!disabled) choose(feat); }}
                   className={cn(
-                    'w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors',
+                    'w-full text-left px-4 py-3 transition-colors',
+                    disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted/50',
                     isSel && 'bg-primary/10',
                   )}
                   data-testid={`${testIdPrefix}-option-${feat.id}`}
@@ -117,11 +128,17 @@ export default function FeatPicker({ feats = [], value = null, onChange, testIdP
                       <RefreshCw className="h-3 w-3 text-muted-foreground" aria-label="Repeatable" />
                     )}
                     {feat.source && <Badge variant="secondary" className="text-xs">{feat.source}</Badge>}
+                    {disabled && <Badge variant="outline" className="text-xs text-destructive border-destructive/40">Locked</Badge>}
                     {isSel && <Check className="h-4 w-4 text-primary ml-auto" />}
                   </div>
                   {prereq && (
                     <div className="text-xs text-amber-700 dark:text-amber-400 mt-1">
                       Prerequisite: {prereq}
+                    </div>
+                  )}
+                  {disabled && (
+                    <div className="text-xs text-destructive mt-1" data-testid={`${testIdPrefix}-locked-${feat.id}`}>
+                      You don't meet the prerequisite — {reason}
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap leading-relaxed">

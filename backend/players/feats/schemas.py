@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 # Feat creation (admin only for system feats)
@@ -11,7 +11,8 @@ class FeatCreate(BaseModel):
     benefits: Dict[str, Any]
     repeatable: bool = False
     source: Optional[str] = None
-    
+    effects: Optional[List[Dict[str, Any]]] = None
+
     # For campaign feats (GM custom)
     campaign_id: Optional[int] = None
 
@@ -24,6 +25,7 @@ class FeatUpdate(BaseModel):
     benefits: Optional[Dict[str, Any]] = None
     repeatable: Optional[bool] = None
     source: Optional[str] = None
+    effects: Optional[List[Dict[str, Any]]] = None
 
 # Feat response
 class FeatResponse(BaseModel):
@@ -35,13 +37,14 @@ class FeatResponse(BaseModel):
     benefits: Dict[str, Any]
     repeatable: bool
     source: Optional[str]
-    
+    effects: Optional[List[Dict[str, Any]]] = None
+
     owner_type: str
     owner_id: Optional[int]
-    
+
     created_at: datetime
     updated_at: Optional[datetime]
-    
+
     class Config:
         from_attributes = True
 
@@ -54,7 +57,8 @@ class FeatListItem(BaseModel):
     prerequisites: Dict[str, Any]
     source: Optional[str]
     repeatable: bool
+    effects: Optional[List[Dict[str, Any]]] = None
     owner_type: str
-    
+
     class Config:
         from_attributes = True

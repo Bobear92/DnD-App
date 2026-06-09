@@ -591,6 +591,53 @@ class TestApplyRest:
         updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
         assert "superiority_dice_used" not in updated["character_data"]
 
+    def test_long_rest_resets_feat_resource_pool(self, client):
+        # Lucky's luck_points (long-rest) resets; Martial Adept's superiority die (short-rest) also resets on a long rest.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=4,
+            character_data={
+                "hp_max": 28,
+                "luck_points_used": 3,
+                "martial_adept_superiority_used": 1,
+                "feats": [
+                    {"id": 1, "name": "Lucky", "effects": [{"kind": "resource", "key": "luck_points", "total": 3, "recharge": "long"}]},
+                    {"id": 2, "name": "Martial Adept", "effects": [{"kind": "resource", "key": "martial_adept_superiority", "total": 1, "recharge": "short"}]},
+                ],
+            },
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
+        assert cd["luck_points_used"] == 0
+        assert cd["martial_adept_superiority_used"] == 0
+
+    def test_short_rest_resets_only_short_recharge_feat_resource(self, client):
+        # On a short rest, Martial Adept's superiority die (short) resets but Lucky's points (long) do NOT.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=4,
+            character_data={
+                "luck_points_used": 3,
+                "martial_adept_superiority_used": 1,
+                "feats": [
+                    {"id": 1, "name": "Lucky", "effects": [{"kind": "resource", "key": "luck_points", "total": 3, "recharge": "long"}]},
+                    {"id": 2, "name": "Martial Adept", "effects": [{"kind": "resource", "key": "martial_adept_superiority", "total": 1, "recharge": "short"}]},
+                ],
+            },
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
+        assert cd["martial_adept_superiority_used"] == 0
+        assert cd["luck_points_used"] == 3  # long-rest resource untouched by a short rest
+
     def test_long_rest_restores_hp_and_spell_slots(self, client):
         h_gm, _, campaign_id = self._setup(client)
         char_id = self._create_char(

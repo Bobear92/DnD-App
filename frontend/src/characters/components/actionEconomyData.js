@@ -21,6 +21,13 @@
 import { abilityMod, profBonus, formatSigned } from './inventoryData';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
 import { CLASS_FEATURES_2024 } from './classFeatures2024';
+import { getFeatActions, getFeatUnarmedDice } from './featEffects';
+
+// Display label for a bucket key, used as an entry's `cost` badge.
+const ECONOMY_COST_LABEL = {
+  no_action: 'no action', action: 'action', bonus: 'bonus action',
+  'action+bonus': 'action + bonus action', reaction: 'reaction',
+};
 
 export const TABS = ['no_action', 'action', 'bonus', 'action+bonus', 'reaction'];
 export const TAB_LABELS = {
@@ -152,13 +159,17 @@ export function canTwoWeaponFight(inventory = []) {
   return (inventory || []).filter((e) => e.equipped && isLightMelee(e)).length >= 2;
 }
 
-function unarmedAttack(scores = {}, level = 1) {
+function unarmedAttack(scores = {}, level = 1, dice = null) {
   const str = abilityMod(scores.strength);
-  const dmg = 1 + str;
+  // Base unarmed strike deals 1 + STR bludgeoning; a feat (e.g. Tavern Brawler) can replace
+  // the flat 1 with a die like 1d4.
+  const damage = dice
+    ? `${dice} ${formatSigned(str)} bludgeoning`
+    : `${Math.max(1, 1 + str)} bludgeoning`;
   return {
     name: 'Unarmed Strike',
     toHit: formatSigned(str + profBonus(level)),
-    damage: `${dmg < 1 ? 1 : dmg} bludgeoning`,
+    damage,
     proficient: true,
   };
 }
@@ -185,8 +196,12 @@ export function buildActionEconomy({
   const buckets = { no_action: [], action: [], bonus: [], 'action+bonus': [], reaction: [] };
   const push = (tab, entry) => { if (buckets[tab]) buckets[tab].push(entry); };
 
-  // Weapon attacks (Action). Fall back to an unarmed strike when nothing is equipped.
-  const weaponRows = attacks.length ? attacks : [unarmedAttack(scores, level)];
+  // Weapon attacks (Action). Show an unarmed strike when nothing is equipped, or whenever a
+  // feat upgrades the unarmed die (e.g. Tavern Brawler's 1d4) so the upgrade is visible.
+  const feats = characterData.feats || [];
+  const unarmedDice = getFeatUnarmedDice(feats);
+  const weaponRows = [...attacks];
+  if (unarmedDice || weaponRows.length === 0) weaponRows.push(unarmedAttack(scores, level, unarmedDice));
   weaponRows.forEach((atk, i) => {
     const flag = atk.proficient === false ? ' · not proficient' : '';
     push('action', {
@@ -236,6 +251,17 @@ export function buildActionEconomy({
       source: 'Racial',
       cost: def.cost,
       detail: def.description,
+    });
+  }
+
+  // Feat actions (e.g. Tavern Brawler's bonus-action grapple), from snapshotted feat effects.
+  for (const a of getFeatActions(feats)) {
+    push(a.economy, {
+      key: a.key,
+      name: a.name,
+      source: 'Feat',
+      cost: ECONOMY_COST_LABEL[a.economy] || a.economy,
+      detail: [a.trigger, a.description].filter(Boolean).join(' — '),
     });
   }
 

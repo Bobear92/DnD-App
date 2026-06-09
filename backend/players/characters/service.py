@@ -613,6 +613,24 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             changes.append('Portent dice cleared — roll anew')
         patch['portent_rolls'] = []
 
+    # ── Feat resource pools (Lucky, Martial Adept, …) — from snapshotted feat effects ──
+    feat_recovered = False
+    for feat in (cd.get('feats') or []):
+        if not isinstance(feat, dict):
+            continue
+        for eff in (feat.get('effects') or []):
+            if not isinstance(eff, dict) or eff.get('kind') != 'resource' or not eff.get('key'):
+                continue
+            recharges_now = eff.get('recharge') == 'short' or rest_type == 'long'
+            if not recharges_now:
+                continue
+            used_key = f"{eff['key']}_used"
+            if cd.get(used_key):
+                feat_recovered = True
+            patch[used_key] = 0
+    if feat_recovered:
+        changes.append('Feat resources recovered')
+
     if rest_type == 'short' and not changes:
         changes.append('No short rest resources to recover')
 

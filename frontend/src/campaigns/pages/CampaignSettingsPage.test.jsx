@@ -79,3 +79,24 @@ describe('CampaignSettingsPage — starting equipment', () => {
     expect(screen.queryByTestId('starting-equipment-select')).not.toBeInTheDocument();
   });
 });
+
+describe('CampaignSettingsPage — ASI / feat mode', () => {
+  it('shows the asi-feat-mode select for a GM', () => {
+    setCampaign({ userRole: 'gm' });
+    render(<CampaignSettingsPage />);
+    expect(screen.getByTestId('asi-feat-mode-select')).toBeInTheDocument();
+  });
+
+  it('shows read-only asi-or-feat text for a player (default)', () => {
+    setCampaign({ userRole: 'player', asi_feat_mode: 'asi_or_feat' });
+    render(<CampaignSettingsPage />);
+    expect(screen.getByTestId('asi-feat-mode-readonly')).toHaveTextContent('Ability score increase or a feat');
+    expect(screen.queryByTestId('asi-feat-mode-select')).not.toBeInTheDocument();
+  });
+
+  it('shows read-only asi-and-feat text for a player', () => {
+    setCampaign({ userRole: 'player', asi_feat_mode: 'asi_and_feat' });
+    render(<CampaignSettingsPage />);
+    expect(screen.getByTestId('asi-feat-mode-readonly')).toHaveTextContent('Ability score increase and a feat');
+  });
+});

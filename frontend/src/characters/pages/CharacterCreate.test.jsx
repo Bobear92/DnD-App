@@ -13,6 +13,8 @@ const TEST_FEATS = [
   { id: 3, name: 'Inspiring Leader', edition: '5e', description: 'Grant temp HP.', prerequisites: { text: 'Charisma 13 or higher' }, source: 'PHB 2014', repeatable: false },
   { id: 4, name: 'War Caster', edition: '5e', description: 'Advantage on concentration.', prerequisites: { text: 'The ability to cast at least one spell' }, source: 'PHB 2014', repeatable: false },
   { id: 5, name: 'Heavily Armored', edition: '5e', description: 'Heavy armor proficiency.', prerequisites: { text: 'Proficiency with medium armor' }, source: 'PHB 2014', repeatable: false },
+  { id: 6, name: 'Tavern Brawler', edition: '5e', description: 'Brawl.', prerequisites: {}, source: 'PHB 2014', repeatable: false,
+    effects: [{ kind: 'ability_choice', abilities: ['strength', 'constitution'], amount: 1 }] },
 ];
 
 vi.mock('../characterService', () => ({
@@ -1341,8 +1343,48 @@ describe('CharacterCreate', () => {
       expect(call.constitution).toBe(11);
       expect(call.dexterity).toBe(14); // unchanged — no longer +1 from standard human
       expect(call.character_data.human_variant).toBe(true);
-      expect(call.character_data.feats).toEqual([{ id: 1, name: 'Alert' }]);
+      expect(call.character_data.feats).toEqual([{ id: 1, name: 'Alert', level: 1 }]); // Variant Human feat gained at level 1
       expect(call.character_data.skill_proficiencies).toContain('Arcana');
+    });
+  });
+
+  it('Variant Human half-feat (Tavern Brawler) prompts an ability choice and applies it', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 40 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Brawler' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-variant-asi-strength'));
+    fireEvent.click(screen.getByTestId('human-variant-asi-constitution'));
+    fireEvent.click(screen.getByTestId('human-variant-skill-Arcana'));
+    await chooseFeat(6); // Tavern Brawler (half-feat with an ability choice)
+
+    // The ability chooser appears and blocks Next until a score is chosen.
+    expect(screen.getByTestId('human-feat-ability-choice')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-next')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('human-feat-ability-strength'));
+    expect(screen.getByTestId('identity-next')).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+
+    await waitFor(() => {
+      const call = characterService.createCharacter.mock.calls[0][0];
+      // STR 15 (spread) + 1 (variant) + 1 (Tavern Brawler choice) = 17; CON 10 + 1 (variant) = 11.
+      expect(call.strength).toBe(17);
+      expect(call.constitution).toBe(11);
+      expect(call.character_data.feats).toEqual([
+        expect.objectContaining({ id: 6, name: 'Tavern Brawler', level: 1, choices: { ability: 'strength' } }),
+      ]);
     });
   });
 

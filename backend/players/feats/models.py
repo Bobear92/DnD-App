@@ -18,6 +18,17 @@ class Feat(Base):
     # Benefits (what the feat grants)
     # Example: {"ability_score_increase": {"strength": 1}, "features": ["Great Weapon Master attack"]}
     benefits = Column(JSON, nullable=False)
+
+    # Structured mechanical effects (drives in-app mechanics, not just a description card).
+    # Array of typed effect objects, e.g.
+    #   {"kind": "stat_mod", "stat": "initiative", "amount": 5}                       (Alert)
+    #   {"kind": "ability_choice", "abilities": ["strength","constitution"], "amount": 1}  (Tavern Brawler)
+    #   {"kind": "attack_mod", "target": "unarmed", "dice": "1d4"}
+    #   {"kind": "action", "name": "...", "economy": "bonus", "description": "...", "trigger": "..."}
+    #   {"kind": "ability_score", "ability": "strength", "amount": 1}                  (fixed)
+    #   {"kind": "note", "text": "..."}                                               (display-only)
+    # NULL/empty = no structured effects yet (prose-only); surfaced by the coverage report.
+    effects = Column(JSON, nullable=True)
     
     # Repeatable (can this feat be taken multiple times?)
     repeatable = Column(Boolean, default=False, nullable=False)

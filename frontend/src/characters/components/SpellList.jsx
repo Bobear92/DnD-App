@@ -62,7 +62,7 @@ export default function SpellList({
   const ctx = useCampaign();
   const campaignId = ctx?.campaign?.id;
   const [catalog, setCatalog] = useState([]);
-  const [detail, setDetail] = useState(null);
+  const [detailName, setDetailName] = useState(null);
   const [newValue, setNewValue] = useState('');
   // Pending cast awaiting confirmation: { name, level } or null
   const [castConfirm, setCastConfirm] = useState(null);
@@ -105,9 +105,13 @@ export default function SpellList({
   };
 
   const openDetail = (name) => {
-    setDetail(spellMap[name] ?? { name });
+    setDetailName(name);
   };
 
+  // Derive the open dialog's detail from the LIVE catalog (not captured at click-time), so a
+  // spell clicked before the async catalog finishes loading fills in once it arrives instead
+  // of being stuck on the "not in compendium" fallback.
+  const detail = detailName ? (spellMap[detailName] ?? { name: detailName }) : null;
   const detailHasInfo = detail && (detail.school != null || detail.level != null);
 
   return (
@@ -225,7 +229,7 @@ export default function SpellList({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!detail} onOpenChange={open => !open && setDetail(null)}>
+      <Dialog open={!!detailName} onOpenChange={open => !open && setDetailName(null)}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{detail?.name}</DialogTitle>

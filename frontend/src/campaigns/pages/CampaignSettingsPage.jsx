@@ -30,6 +30,7 @@ function GeneralTab({ campaignId }) {
     leveling_type: campaign?.leveling_type ?? 'milestone',
     currency_type: campaign?.currency_type ?? 'standard',
     starting_equipment: campaign?.starting_equipment ?? 'equipment',
+    asi_feat_mode: campaign?.asi_feat_mode ?? 'asi_or_feat',
   });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -44,7 +45,8 @@ function GeneralTab({ campaignId }) {
     settings.allow_reroll_ones !== (campaign?.allow_reroll_ones ?? false) ||
     settings.leveling_type !== (campaign?.leveling_type ?? 'milestone') ||
     settings.currency_type !== (campaign?.currency_type ?? 'standard') ||
-    settings.starting_equipment !== (campaign?.starting_equipment ?? 'equipment');
+    settings.starting_equipment !== (campaign?.starting_equipment ?? 'equipment') ||
+    settings.asi_feat_mode !== (campaign?.asi_feat_mode ?? 'asi_or_feat');
 
   const handleSave = async () => {
     setSaving(true);
@@ -71,6 +73,7 @@ function GeneralTab({ campaignId }) {
       leveling_type: campaign?.leveling_type ?? 'milestone',
       currency_type: campaign?.currency_type ?? 'standard',
       starting_equipment: campaign?.starting_equipment ?? 'equipment',
+      asi_feat_mode: campaign?.asi_feat_mode ?? 'asi_or_feat',
     });
     setError('');
   };
@@ -99,6 +102,9 @@ function GeneralTab({ campaignId }) {
             : campaign?.starting_equipment === 'equipment_or_gold' ? 'Equipment or starting gold'
             : 'Class & background equipment'
           }</span>
+        </SettingRow>
+        <SettingRow label="Ability Score Improvements">
+          <span className="text-sm" data-testid="asi-feat-mode-readonly">{asiFeatModeLabel(campaign?.asi_feat_mode)}</span>
         </SettingRow>
       </div>
     );
@@ -222,6 +228,25 @@ function GeneralTab({ campaignId }) {
             <SelectContent>
               <SelectItem value="milestone">Milestone</SelectItem>
               <SelectItem value="experience">Experience Points</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingRow>
+
+        <SettingRow
+          label="Ability Score Improvements"
+          description="What a character gets at Ability Score Improvement levels (4, 8, 12, 16, 19). 'ASI or feat' is the standard 5e choice; 'both' is a generous homebrew option."
+        >
+          <Select
+            value={settings.asi_feat_mode}
+            onValueChange={v => setSettings(s => ({ ...s, asi_feat_mode: v }))}
+          >
+            <SelectTrigger className="w-60" data-testid="asi-feat-mode-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="asi_only">Ability score increase only</SelectItem>
+              <SelectItem value="asi_or_feat">Ability score increase or a feat</SelectItem>
+              <SelectItem value="asi_and_feat">Ability score increase and a feat</SelectItem>
             </SelectContent>
           </Select>
         </SettingRow>
@@ -628,5 +653,13 @@ function methodLabel(method) {
     case 'point_buy': return 'Point Buy (27 pts)';
     case 'roll': return 'Dice Roll (4d6 drop lowest)';
     default: return 'Standard Array (15,14,13,12,10,8)';
+  }
+}
+
+function asiFeatModeLabel(mode) {
+  switch (mode) {
+    case 'asi_only': return 'Ability score increase only';
+    case 'asi_and_feat': return 'Ability score increase and a feat';
+    default: return 'Ability score increase or a feat';
   }
 }

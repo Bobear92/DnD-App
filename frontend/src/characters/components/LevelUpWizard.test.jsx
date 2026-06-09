@@ -31,6 +31,36 @@ vi.mock('./SpellList', () => ({
   ),
 }));
 
+// FeatPicker uses a Radix dialog — mock it to a flat button list so we can assert which
+// feats are offered (eligibility filtering) and pick one.
+vi.mock('./FeatPicker', () => ({
+  default: ({ feats = [], onChange, getDisabledReason }) => (
+    <div data-testid="feat-picker">
+      {feats.map((f) => {
+        const reason = getDisabledReason ? getDisabledReason(f) : null;
+        return (
+          <button
+            key={f.id}
+            type="button"
+            disabled={!!reason}
+            data-locked={String(!!reason)}
+            data-testid={`pick-feat-${f.id}`}
+            onClick={() => { if (!reason) onChange({ id: f.id, name: f.name }); }}
+          >
+            {f.name}{reason ? ` (locked: ${reason})` : ''}
+          </button>
+        );
+      })}
+    </div>
+  ),
+}));
+
+// featService.getFeats is fetched on mount for ASI-feat levels.
+vi.mock('../../encyclopedia/featService', () => ({
+  default: { getFeats: vi.fn().mockResolvedValue([]) },
+}));
+import featService from '../../encyclopedia/featService';
+
 // ─── shared test characters ───────────────────────────────────────────────────
 
 const WIZARD_L1 = {
@@ -64,6 +94,9 @@ const SORCERER_L1 = {
 
 const CAMPAIGN_5E = { id: 1, edition: '5e' };
 const CAMPAIGN_2024 = { id: 1, edition: '5.5e' };
+const CAMPAIGN_ASI_ONLY = { id: 1, edition: '5e', asi_feat_mode: 'asi_only' };
+const CAMPAIGN_ASI_OR_FEAT = { id: 1, edition: '5e', asi_feat_mode: 'asi_or_feat' };
+const CAMPAIGN_ASI_AND_FEAT = { id: 1, edition: '5e', asi_feat_mode: 'asi_and_feat' };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -465,15 +498,16 @@ describe('LevelUpWizard', () => {
     // Fighter 3 → 4 is an ASI level.
     const FIGHTER_L3 = { ...FIGHTER_L2, level: 3, strength: 15, dexterity: 14 };
 
+    // asi_only mode → the ASI step appears directly (no ASI-or-Feat choice step).
     function toAsiStep(character = FIGHTER_L3, onComplete = vi.fn()) {
-      render(<LevelUpWizard character={character} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      render(<LevelUpWizard character={character} campaign={CAMPAIGN_ASI_ONLY} onComplete={onComplete} onClose={vi.fn()} />);
       fireEvent.click(screen.getByText('Take Average'));
       fireEvent.click(screen.getByRole('button', { name: /Next/i })); // hp → features
       fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → asi
     }
 
     it('does not add an Ability Scores step at a non-ASI level (Fighter 1→2)', () => {
-      render(<LevelUpWizard character={{ ...FIGHTER_L2, level: 1 }} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      render(<LevelUpWizard character={{ ...FIGHTER_L2, level: 1 }} campaign={CAMPAIGN_ASI_ONLY} onComplete={vi.fn()} onClose={vi.fn()} />);
       expect(screen.queryByText('Ability Scores')).not.toBeInTheDocument();
     });
 
@@ -505,6 +539,170 @@ describe('LevelUpWizard', () => {
       await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
         4, expect.any(Object), expect.objectContaining({ strength: 20 })
       ));
+    });
+  });
+
+  describe('ASI / feat mode (campaign.asi_feat_mode)', () => {
+    // Fighter 3 → 4 is an ASI level.
+    const FIGHTER_L3 = { ...FIGHTER_L2, level: 3, strength: 15, dexterity: 14 };
+    const FEATS = [
+      { id: 10, name: 'Alert', prerequisites: {}, repeatable: false, description: 'Always on guard.' },
+      { id: 11, name: 'Grappler', prerequisites: { text: 'Strength 13 or higher' }, repeatable: false, description: 'Grab on.' },
+      { id: 12, name: 'Great Weapon Master', prerequisites: { text: 'Strength 16 or higher' }, repeatable: false, description: 'Big swing.' },
+      { id: 13, name: 'Fey Touched', prerequisites: { text: 'The ability to cast at least one spell' }, repeatable: false, description: 'Misty step.' },
+      { id: 14, name: 'Tavern Brawler', prerequisites: {}, repeatable: false, description: 'Brawl.', effects: [
+        { kind: 'ability_choice', abilities: ['strength', 'constitution'], amount: 1 },
+        { kind: 'attack_mod', target: 'unarmed', dice: '1d4' },
+        { kind: 'action', name: 'Grapple (Tavern Brawler)', economy: 'bonus', description: 'Grapple.' },
+      ] },
+    ];
+
+    function toChoiceStep(character = FIGHTER_L3, campaign = CAMPAIGN_ASI_OR_FEAT, onComplete = vi.fn()) {
+      render(<LevelUpWizard character={character} campaign={campaign} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → asi_choice
+    }
+
+    it('asi_only mode shows no ASI-or-Feat choice and no Feat step', () => {
+      render(<LevelUpWizard character={FIGHTER_L3} campaign={CAMPAIGN_ASI_ONLY} onComplete={vi.fn()} onClose={vi.fn()} />);
+      expect(screen.queryByText('ASI or Feat')).not.toBeInTheDocument();
+      expect(screen.queryByText('Feat')).not.toBeInTheDocument();
+      expect(screen.getByText('Ability Scores')).toBeInTheDocument();
+    });
+
+    it('asi_or_feat mode shows an "ASI or Feat" step at an ASI level', () => {
+      render(<LevelUpWizard character={FIGHTER_L3} campaign={CAMPAIGN_ASI_OR_FEAT} onComplete={vi.fn()} onClose={vi.fn()} />);
+      expect(screen.getByText('ASI or Feat')).toBeInTheDocument();
+    });
+
+    it('blocks Next on the choice step until ASI or Feat is selected', () => {
+      toChoiceStep();
+      expect(screen.getByTestId('wizard-next')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('asi-choice-asi'));
+      expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+    });
+
+    it('choosing ASI reveals the Ability Scores step and saves the increases', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT, onComplete);
+      fireEvent.click(screen.getByTestId('asi-choice-asi'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → asi
+      expect(screen.getByTestId('asi-row-strength')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('asi-inc-strength'));
+      fireEvent.click(screen.getByTestId('asi-inc-dexterity'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // asi → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4, expect.any(Object), expect.objectContaining({ strength: 16, dexterity: 15 })
+      ));
+    });
+
+    it('choosing Feat reveals the Feat step and saves the chosen feat to character_data.feats', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT, onComplete);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      const grappler = await screen.findByTestId('pick-feat-11');
+      expect(screen.getByTestId('wizard-next')).toBeDisabled(); // blocked until picked
+      fireEvent.click(grappler);
+      expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('wizard-next')); // feat → confirm
+      expect(screen.getByTestId('confirm-feat')).toHaveTextContent('Grappler');
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4,
+        expect.objectContaining({ feats: expect.arrayContaining([expect.objectContaining({ id: 11, name: 'Grappler' })]) })
+      ));
+    });
+
+    it('asi_and_feat mode shows both the Ability Scores and Feat steps and saves both', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={FIGHTER_L3} campaign={CAMPAIGN_ASI_AND_FEAT} onComplete={onComplete} onClose={vi.fn()} />);
+      expect(screen.queryByText('ASI or Feat')).not.toBeInTheDocument();
+      expect(screen.getByText('Ability Scores')).toBeInTheDocument();
+      expect(screen.getByText('Feat')).toBeInTheDocument();
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → asi
+      fireEvent.click(screen.getByTestId('asi-inc-strength'));
+      fireEvent.click(screen.getByTestId('asi-inc-dexterity'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // asi → feat
+      const grappler = await screen.findByTestId('pick-feat-11');
+      fireEvent.click(grappler);
+      fireEvent.click(screen.getByTestId('wizard-next')); // feat → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4,
+        expect.objectContaining({ feats: expect.arrayContaining([expect.objectContaining({ name: 'Grappler' })]) }),
+        expect.objectContaining({ strength: 16, dexterity: 15 })
+      ));
+    });
+
+    it('shows a feat with an unmet prerequisite but locks it (not selectable)', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      const gwm = await screen.findByTestId('pick-feat-12'); // GWM — STR 16, unmet (15)
+      expect(gwm).toBeDisabled();
+      expect(gwm).toHaveAttribute('data-locked', 'true');
+      expect(screen.getByTestId('pick-feat-11')).not.toBeDisabled(); // Grappler — STR 13, met (15)
+    });
+
+    it('locks a "cast a spell" feat for a non-caster (Battle Master Fighter)', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT); // Fighter, no spells in character_data
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      const feyTouched = await screen.findByTestId('pick-feat-13'); // requires spellcasting
+      expect(feyTouched).toBeDisabled();
+      expect(feyTouched).toHaveAttribute('data-locked', 'true');
+    });
+
+    it('does NOT lock a "cast a spell" feat for a caster (Eldritch Knight Fighter)', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const ekFighter = { ...FIGHTER_L3, character_data: { hp_max: 26, subclass: 'Eldritch Knight' } };
+      toChoiceStep(ekFighter, CAMPAIGN_ASI_OR_FEAT);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      const feyTouched = await screen.findByTestId('pick-feat-13');
+      expect(feyTouched).not.toBeDisabled();
+    });
+
+    it('half-feat (Tavern Brawler) requires an ability choice, applies it, and snapshots effects', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT, onComplete);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      fireEvent.click(await screen.findByTestId('pick-feat-14')); // Tavern Brawler
+      // Ability choice required → Next blocked until chosen
+      expect(screen.getByTestId('feat-ability-choice')).toBeInTheDocument();
+      expect(screen.getByTestId('wizard-next')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('feat-ability-strength'));
+      expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('wizard-next')); // feat → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4,
+        expect.objectContaining({ feats: expect.arrayContaining([expect.objectContaining({
+          name: 'Tavern Brawler', level: 4, choices: { ability: 'strength' }, effects: expect.any(Array),
+        })]) }),
+        expect.objectContaining({ strength: 16 }), // 15 base + 1 from the half-feat
+      ));
+    });
+
+    it('hides an already-taken non-repeatable feat', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const charWithAlert = { ...FIGHTER_L3, character_data: { hp_max: 26, feats: [{ id: 10, name: 'Alert' }] } };
+      toChoiceStep(charWithAlert, CAMPAIGN_ASI_OR_FEAT);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      await screen.findByTestId('pick-feat-11');
+      expect(screen.queryByTestId('pick-feat-10')).not.toBeInTheDocument();
     });
   });
 

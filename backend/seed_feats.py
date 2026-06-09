@@ -21,6 +21,202 @@ def _prereq(text):
     return {"text": text} if text else {}
 
 
+# ── Structured mechanical effects (5e batch) ───────────────────────────────────────
+# Keyed by feat name. See `.claude/commands/feat-effects.md` for the taxonomy + consumer
+# status. Only kinds with a live consumer are authored as structured effects; clauses that
+# need a not-yet-built consumer (resource pools, proficiency-CHOICE grants, speed) are kept
+# as `note` so no chip is shown that does nothing (upgrade them when the consumer ships).
+# Consumers live now: stat_mod (initiative, passive_perception), ability_score,
+# ability_choice, action, attack_mod, note.
+def _abil(ability, amount=1):
+    return {"kind": "ability_score", "ability": ability, "amount": amount,
+            "label": f"+{amount} {ability.capitalize()}"}
+
+def _abil_choice(abilities, amount=1):
+    label = f"+{amount} " + " or ".join(a.capitalize() for a in abilities)
+    return {"kind": "ability_choice", "abilities": abilities, "amount": amount, "label": label}
+
+def _note(text):
+    return {"kind": "note", "text": text}
+
+def _action(name, economy, trigger, description):
+    return {"kind": "action", "name": name, "economy": economy, "trigger": trigger, "description": description}
+
+_ALL_ABILITIES = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
+
+FEAT_EFFECTS_5E = {
+    "Alert": [
+        {"kind": "stat_mod", "stat": "initiative", "amount": 5, "label": "+5 initiative"},
+        _note("Can't be surprised while conscious; hidden attackers don't gain advantage against you."),
+    ],
+    "Tavern Brawler": [
+        _abil_choice(["strength", "constitution"]),
+        {"kind": "attack_mod", "target": "unarmed", "dice": "1d4", "label": "Unarmed strike deals 1d4"},
+        _action("Grapple (Tavern Brawler)", "bonus",
+                "After you hit with an unarmed strike or improvised weapon",
+                "Use a bonus action to grapple the target (Athletics check vs. the target's Athletics/Acrobatics)."),
+        _note("Proficiency with improvised weapons."),
+    ],
+    "Actor": [
+        _abil("charisma"),
+        _note("Advantage on Deception and Performance checks to pass as someone else; mimic speech and sounds you've heard."),
+    ],
+    "Athlete": [
+        _abil_choice(["strength", "dexterity"]),
+        _note("Stand from prone with only 5 ft of movement; climbing costs no extra movement; running jump after moving 5 ft."),
+    ],
+    "Charger": [
+        _note("After you Dash and move 10 ft straight toward a target, a melee attack/shove that turn gains +5 damage or pushes 10 ft."),
+    ],
+    "Crossbow Expert": [
+        _action("Hand Crossbow (Bonus Attack)", "bonus",
+                "After you make a one-handed attack",
+                "Make an attack with a hand crossbow you're holding as a bonus action."),
+        _note("Ignore the loading property of proficient crossbows; no disadvantage on ranged attacks within 5 ft of an enemy."),
+    ],
+    "Defensive Duelist": [
+        _action("Defensive Parry", "reaction",
+                "When hit by a melee attack while wielding a finesse weapon you're proficient with",
+                "Add your proficiency bonus to your AC against that attack, possibly causing it to miss."),
+    ],
+    "Dual Wielder": [
+        _note("+1 AC while wielding a separate melee weapon in each hand; two-weapon fighting with non-light weapons; draw/stow two one-handed weapons at once."),
+    ],
+    "Dungeon Delver": [
+        _note("Advantage to find secret doors and on saves vs traps; resistance to trap damage; search for traps at normal travel pace."),
+    ],
+    "Durable": [
+        _abil("constitution"),
+        _note("When you roll Hit Dice to regain HP, the minimum regained equals twice your CON modifier."),
+    ],
+    "Elemental Adept": [
+        _note("Choose acid/cold/fire/lightning/thunder: your spells ignore resistance to it and treat 1s on its damage dice as 2s. Repeatable."),
+    ],
+    "Grappler": [
+        _note("Advantage on attack rolls against a creature you're grappling; can use your action to pin a grappled creature."),
+    ],
+    "Great Weapon Master": [
+        _action("Cleave (Bonus Attack)", "bonus",
+                "When you score a critical hit or reduce a creature to 0 HP with a melee weapon",
+                "Make one melee weapon attack as a bonus action."),
+        _note("Before a melee attack with a heavy weapon you're proficient with, take -5 to the attack roll for +10 damage."),
+    ],
+    "Heavily Armored": [
+        _abil("strength"),
+        {"kind": "proficiency", "prof_type": "armor", "items": ["Heavy"]},
+    ],
+    "Heavy Armor Master": [
+        _abil("strength"),
+        _note("While wearing heavy armor, reduce nonmagical bludgeoning/piercing/slashing damage taken by 3."),
+    ],
+    "Inspiring Leader": [
+        _note("Spend 10 minutes to give up to six creatures temporary hit points equal to your level + CHA modifier."),
+    ],
+    "Keen Mind": [
+        _abil("intelligence"),
+        _note("Always know which way is north and the hours to sunrise/sunset; recall anything seen or heard in the past month."),
+    ],
+    "Lightly Armored": [
+        _abil_choice(["strength", "dexterity"]),
+        {"kind": "proficiency", "prof_type": "armor", "items": ["Light"]},
+    ],
+    "Linguist": [
+        _abil("intelligence"),
+        _note("Learn three languages of your choice; create written ciphers others can't read without a hard INT check."),
+    ],
+    "Lucky": [
+        {"kind": "resource", "key": "luck_points", "label": "Luck Points", "total": 3, "recharge": "long"},
+        _note("Spend a luck point to roll an extra d20 on an attack, check, or save you make, or on an attack roll against you."),
+    ],
+    "Mage Slayer": [
+        _action("Mage Slayer Strike", "reaction",
+                "When a creature within 5 ft of you casts a spell",
+                "Make a melee weapon attack against that creature."),
+        _note("Impose disadvantage on concentration saves you cause; advantage on saves vs spells cast by creatures within 5 ft."),
+    ],
+    "Magic Initiate": [
+        _note("Learn two cantrips and one 1st-level spell from a chosen class, castable once per long rest (or with slots). Repeatable."),
+    ],
+    "Martial Adept": [
+        {"kind": "resource", "key": "martial_adept_superiority", "label": "Superiority Die (d6)", "total": 1, "recharge": "short"},
+        _note("Learn two Battle Master maneuvers fueled by the superiority die."),
+    ],
+    "Medium Armor Master": [
+        _note("Medium armor doesn't impose disadvantage on Stealth; add up to +3 (instead of +2) DEX to AC if DEX is 16+."),
+    ],
+    "Mobile": [
+        {"kind": "stat_mod", "stat": "speed", "amount": 10, "label": "+10 speed"},
+        _note("Dashing ignores difficult terrain; a melee attack denies that creature's opportunity attacks against you for the turn."),
+    ],
+    "Moderately Armored": [
+        _abil_choice(["strength", "dexterity"]),
+        {"kind": "proficiency", "prof_type": "armor", "items": ["Medium", "Shields"]},
+    ],
+    "Mounted Combatant": [
+        _note("Advantage on melee attacks vs unmounted creatures smaller than your mount; redirect attacks from mount to you; mount avoids damage on successful DEX saves."),
+    ],
+    "Observant": [
+        _abil_choice(["intelligence", "wisdom"]),
+        {"kind": "stat_mod", "stat": "passive_perception", "amount": 5, "label": "+5 passive Perception"},
+        _note("Also +5 passive Investigation; can read lips."),
+    ],
+    "Polearm Master": [
+        _action("Polearm Butt (Bonus Attack)", "bonus",
+                "When you take the Attack action with a glaive, halberd, quarterstaff, or spear",
+                "Make a bonus-action attack with the weapon's opposite end (1d4 bludgeoning)."),
+        _note("Creatures provoke an opportunity attack when they enter your reach."),
+    ],
+    "Resilient": [
+        _abil_choice(_ALL_ABILITIES),
+        {"kind": "proficiency", "prof_type": "saving_throw", "from_ability_choice": True},
+        _note("Gain saving-throw proficiency in the chosen ability. Repeatable for a different ability."),
+    ],
+    "Ritual Caster": [
+        _note("Gain a ritual book with two 1st-level ritual spells from a chosen class; add more ritual spells you find."),
+    ],
+    "Savage Attacker": [
+        _note("Once per turn, reroll a melee weapon's damage dice and use either total."),
+    ],
+    "Sentinel": [
+        _action("Sentinel Strike", "reaction",
+                "When a creature within 5 ft attacks a target other than you",
+                "Make a melee weapon attack against the attacking creature."),
+        _note("Your opportunity-attack hits reduce the target's speed to 0; creatures provoke even when they Disengage."),
+    ],
+    "Sharpshooter": [
+        _note("Long range imposes no disadvantage; ignore half and three-quarters cover; -5 to hit for +10 damage with a proficient ranged weapon."),
+    ],
+    "Shield Master": [
+        _action("Shield Shove (Bonus)", "bonus",
+                "When you take the Attack action",
+                "Use a bonus action to shove a creature within 5 ft with your shield."),
+        _note("Add your shield's AC to DEX saves vs single-target effects; take no damage on a successful DEX save."),
+    ],
+    "Skilled": [
+        _note("Gain proficiency in any combination of three skills or tools of your choice. Repeatable."),
+    ],
+    "Skulker": [
+        _note("Hide when lightly obscured; missing a ranged attack doesn't reveal you; dim light doesn't impose disadvantage on sight Perception."),
+    ],
+    "Spell Sniper": [
+        _note("Double the range of attack-roll spells; spell attacks ignore half and three-quarters cover; learn one attack cantrip."),
+    ],
+    "Tough": [
+        _note("Your hit point maximum increases by 2 per level (applied automatically on the sheet)."),
+    ],
+    "War Caster": [
+        _action("War Caster Spell (Reaction)", "reaction",
+                "When a creature provokes an opportunity attack from you",
+                "Cast a single-target spell with a casting time of 1 action at it instead of making a weapon attack."),
+        _note("Advantage on concentration saves; perform somatic components while holding weapons or a shield."),
+    ],
+    "Weapon Master": [
+        _abil_choice(["strength", "dexterity"]),
+        _note("Gain proficiency with four weapons of your choice."),
+    ],
+}
+
+
 # ── 2014 PHB feats (edition "5e") ──────────────────────────────────────────────
 # Each: (name, description, prerequisite_text, repeatable)
 FEATS_5E = [
@@ -150,9 +346,11 @@ FEATS_2024 = [
 ]
 
 
-def _seed_list(db, feats, edition, source):
-    created, skipped = 0, 0
+def _seed_list(db, feats, edition, source, effects_map=None):
+    effects_map = effects_map or {}
+    created, skipped, updated = 0, 0, 0
     for name, description, prereq_text, repeatable in feats:
+        effects = effects_map.get(name)
         existing = (
             db.query(Feat)
             .filter(
@@ -163,7 +361,12 @@ def _seed_list(db, feats, edition, source):
             .first()
         )
         if existing:
-            skipped += 1
+            # Backfill structured effects onto an already-seeded feat (idempotent).
+            if effects is not None and existing.effects != effects:
+                existing.effects = effects
+                updated += 1
+            else:
+                skipped += 1
             continue
         db.add(
             Feat(
@@ -174,20 +377,21 @@ def _seed_list(db, feats, edition, source):
                 benefits={},
                 repeatable=repeatable,
                 source=source,
+                effects=effects,
                 owner_type=OwnerType.system,
                 owner_id=None,
             )
         )
         created += 1
     db.commit()
-    print(f"  {edition}: created {created}, skipped {skipped} (already present)")
+    print(f"  {edition}: created {created}, updated {updated} (effects), skipped {skipped}")
 
 
 def seed_feats():
     db = SessionLocal()
     try:
         print("Seeding feats...")
-        _seed_list(db, FEATS_5E, "5e", "PHB 2014")
+        _seed_list(db, FEATS_5E, "5e", "PHB 2014", FEAT_EFFECTS_5E)
         _seed_list(db, FEATS_2024, "5.5e", "PHB 2024")
         print("Done.")
     finally:
