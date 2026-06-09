@@ -19,18 +19,24 @@ export function allFeatEffects(feats = []) {
   return (feats ?? []).flatMap((f) => (f && Array.isArray(f.effects) ? f.effects.map((e) => ({ ...e, _featName: f.name })) : []));
 }
 
+// A stat_mod amount / resource total is a number, or the string 'pb' for proficiency-bonus
+// scaling (2024 Alert's initiative, Lucky's luck points) — resolved with the pb passed by the
+// consumer (CharacterDetail computes it; getRestSummary derives it from level). pb defaults to 0
+// so a PB-scaled value that isn't given a pb simply contributes nothing rather than crashing.
+const resolveAmount = (v, pb) => (v === 'pb' ? (Number(pb) || 0) : (Number(v) || 0));
+
 /** Sum the `stat_mod` amounts for a given derived stat (e.g. 'initiative' → Alert's +5). */
-export function getFeatStatMods(feats = [], stat) {
+export function getFeatStatMods(feats = [], stat, { pb } = {}) {
   return allFeatEffects(feats)
     .filter((e) => e.kind === 'stat_mod' && e.stat === stat)
-    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    .reduce((sum, e) => sum + resolveAmount(e.amount, pb), 0);
 }
 
 /** Per-source breakdown of a stat's feat modifiers, e.g. [{ source:'Alert', amount:5 }]. */
-export function getFeatStatModSources(feats = [], stat) {
+export function getFeatStatModSources(feats = [], stat, { pb } = {}) {
   return allFeatEffects(feats)
     .filter((e) => e.kind === 'stat_mod' && e.stat === stat)
-    .map((e) => ({ source: e._featName, amount: Number(e.amount) || 0, label: e.label }));
+    .map((e) => ({ source: e._featName, amount: resolveAmount(e.amount, pb), label: e.label }));
 }
 
 /** Action Economy entries contributed by feats (e.g. Tavern Brawler's bonus-action grapple). */
@@ -66,11 +72,11 @@ export function getFeatUnarmedDice(feats = []) {
  * deduped by key (largest total wins). The expended count lives in character_data as
  * `${key}_used`; reset on the matching rest by the backend (_compute_rest_patch).
  */
-export function getFeatResources(feats = []) {
+export function getFeatResources(feats = [], { pb } = {}) {
   const byKey = {};
   for (const e of allFeatEffects(feats)) {
     if (e.kind !== 'resource' || !e.key) continue;
-    const total = Number(e.total) || 0;
+    const total = resolveAmount(e.total, pb);
     const existing = byKey[e.key];
     if (!existing || total > existing.total) {
       byKey[e.key] = {

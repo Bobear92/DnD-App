@@ -14,7 +14,9 @@ export function gatherProficiencies({ charClass, characterData = {} } = {}) {
   // Fixed proficiency grants from feats (Heavily/Lightly/Moderately Armored, etc.).
   const feat = getFeatProficiencyGrants(cd.feats);
   return {
-    weapons: { text: profs.weapons || '', grants: dedup([...(cd.race_weapon_proficiencies || []), ...feat.weapons]) },
+    // feat.weapons/armor = fixed grants (Heavily Armored, …); feat_*_proficiencies = count-choice
+    // picks chosen at acquisition (Weapon Master weapons, Skilled tools).
+    weapons: { text: profs.weapons || '', grants: dedup([...(cd.race_weapon_proficiencies || []), ...feat.weapons, ...(cd.feat_weapon_proficiencies || [])]) },
     armor: { text: profs.armor || '', grants: dedup([...(cd.race_armor_proficiencies || []), ...labelArmor(feat.armor)]) },
     tools: {
       text: profs.tools || '',
@@ -25,6 +27,7 @@ export function gatherProficiencies({ charClass, characterData = {} } = {}) {
         cd.tool_choice,
         ...(cd.subclass_tool_proficiencies || []), // tools chosen via subclass features (e.g. Student of War)
         ...feat.tools,
+        ...(cd.feat_tool_proficiencies || []), // tools chosen via a feat (Skilled)
       ]),
     },
   };

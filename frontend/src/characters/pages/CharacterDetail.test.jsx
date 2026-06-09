@@ -1381,6 +1381,23 @@ describe('CharacterDetail', () => {
       expect(screen.getByTestId('initiative-feat-note')).toHaveTextContent('+5 Alert');
     });
 
+    it('resolves a PB-scaled initiative feat (2024 Alert) with the proficiency bonus', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER, // level 5 → PB +3, DEX 12 → +1
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{ id: 5, name: 'Alert', level: 1, effects: [{ kind: 'stat_mod', stat: 'initiative', amount: 'pb', label: '+PB initiative' }] }],
+          },
+        },
+      });
+      renderDetail();
+      // +1 DEX + 3 PB = +4
+      await waitFor(() => expect(screen.getByTestId('initiative-value')).toHaveTextContent('+4'));
+      expect(screen.getByTestId('initiative-feat-note')).toHaveTextContent('+3 Alert');
+    });
+
     it('shows plain DEX initiative with no feat note when no feat modifies it', async () => {
       renderDetail(); // BASE_CHARACTER has no feats
       await waitFor(() => expect(screen.getByTestId('initiative-value')).toHaveTextContent('+1'));
@@ -1429,6 +1446,17 @@ describe('CharacterDetail', () => {
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByTestId('speed-feat-note')).not.toBeInTheDocument();
+    });
+
+    it('shows feat-granted languages under "From Feats" (Linguist)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, character_data: { ...BASE_CHARACTER.character_data, feat_languages: ['Draconic', 'Giant'] } },
+      });
+      renderDetail();
+      const block = await screen.findByTestId('languages-from-feats');
+      expect(within(block).getByText('Draconic')).toBeInTheDocument();
+      expect(within(block).getByText('Giant')).toBeInTheDocument();
     });
 
     it('grants a saving-throw proficiency from Resilient (chosen ability)', async () => {

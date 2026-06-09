@@ -60,6 +60,12 @@ describe('InventoryTab', () => {
     expect(screen.getByTestId('proficiency-banner')).toHaveTextContent(/all armor/i);
   });
 
+  it('shows feat-granted weapon proficiencies (Weapon Master) on the Weapons tab', () => {
+    renderTab({ charClass: 'Wizard', characterData: { feat_weapon_proficiencies: ['Longbow', 'Rapier'] } });
+    expect(screen.getByTestId('proficiency-banner')).toHaveTextContent('Longbow');
+    expect(screen.getByTestId('proficiency-banner')).toHaveTextContent('Rapier');
+  });
+
   it('shows tool proficiencies and owned tools on the Tools tab; gear excludes tools', () => {
     const masonsTools = { uid: 't1', category: 'adventuring-gear', name: "Mason's tools", quantity: 1 };
     const backpack = { uid: 'g1', category: 'adventuring-gear', name: 'Backpack', item_category: 'Gear', quantity: 1 };

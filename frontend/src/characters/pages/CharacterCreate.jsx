@@ -16,6 +16,7 @@ import ClassOverview from '../components/ClassOverview';
 import FeatPicker from '../components/FeatPicker';
 import { checkFeatPrerequisite } from '../components/featPrerequisites';
 import { featAbilityChoices, featFixedAbilityScores } from '../components/featEffects';
+import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice } from '../components/featProficiencyData';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import {
   ArtificerSheet,
@@ -902,7 +903,7 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
                     ...choices,
                     human_variant: opt.variant,
                     // Clear variant-only picks when switching back to standard
-                    ...(opt.variant ? {} : { human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '' }),
+                    ...(opt.variant ? {} : { human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '', human_feat_prof: {} }),
                   })}
                   className={cn(
                     'rounded-lg border-2 p-2.5 text-left transition-all',
@@ -1018,7 +1019,7 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
             <FeatPicker
               feats={feats}
               value={choices.human_feat}
-              onChange={feat => onChange({ ...choices, human_feat: feat, human_feat_ability: '' })}
+              onChange={feat => onChange({ ...choices, human_feat: feat, human_feat_ability: '', human_feat_prof: {} })}
               testIdPrefix="human-feat"
             />
           )}
@@ -1048,6 +1049,54 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
                 </div>
               </div>
             );
+          })()}
+          {/* Count-choice proficiency picks (Skilled / Linguist / Weapon Master) at level 1 */}
+          {(() => {
+            const picked = feats.find(f => f.id === choices.human_feat?.id);
+            const grants = getFeatProficiencyChoices(picked);
+            if (grants.length === 0) return null;
+            const profChoices = choices.human_feat_prof || {};
+            const toggle = (profType, name, max) => {
+              const cur = profChoices[profType] || [];
+              const next = cur.includes(name)
+                ? cur.filter(n => n !== name)
+                : (cur.length >= max ? cur : [...cur, name]);
+              onChange({ ...choices, human_feat_prof: { ...profChoices, [profType]: next } });
+            };
+            return grants.map(g => {
+              const chosen = profChoices[g.prof_type] || [];
+              const opts = availableFeatOptions(g, { characterData: {} });
+              return (
+                <div key={g.key} className="space-y-1.5 rounded-md border bg-muted/30 p-2" data-testid={`human-feat-prof-grant-${g.prof_type}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">{g.label}</span>
+                    <span className={cn('text-xs', chosen.length === g.count ? 'text-muted-foreground' : 'text-amber-600')}>{chosen.length}/{g.count}</span>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto pr-1 grid grid-cols-2 gap-1.5">
+                    {opts.map(o => {
+                      const isSel = chosen.includes(o);
+                      const atLimit = chosen.length >= g.count && !isSel;
+                      return (
+                        <button
+                          key={o}
+                          type="button"
+                          disabled={atLimit}
+                          onClick={() => toggle(g.prof_type, o, g.count)}
+                          data-testid={`human-feat-prof-opt-${g.prof_type}-${o}`}
+                          className={cn(
+                            'rounded-md border px-2 py-1 text-xs text-left',
+                            isSel ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
+                            atLimit && 'opacity-40 cursor-not-allowed',
+                          )}
+                        >
+                          {o}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            });
           })()}
         </div>
       )}
@@ -1284,7 +1333,7 @@ export default function CharacterCreate() {
 
   const [raceSearch, setRaceSearch] = useState('');
 
-  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], half_elf_language: '', human_language: '', dwarf_tool: '', human_variant: false, human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '' };
+  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], half_elf_language: '', human_language: '', dwarf_tool: '', human_variant: false, human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '', human_feat_prof: {} };
   const EMPTY_BG_CHOICES   = { tool_choice: '', language_choices: [] };
   const [raceChoices, setRaceChoices] = useState(EMPTY_RACE_CHOICES);
   const [bgChoices,   setBgChoices]   = useState(EMPTY_BG_CHOICES);
@@ -1384,6 +1433,10 @@ export default function CharacterCreate() {
     ? (apiFeats.find(f => f.id === raceChoices.human_feat.id) ?? null)
     : null;
   const humanFeatAbilityChoice = featAbilityChoices(humanFeatObj)[0] || null;
+  const humanFeatProfGrants = getFeatProficiencyChoices(humanFeatObj);
+  const humanFeatProfComplete = humanFeatProfGrants.every(
+    g => (raceChoices.human_feat_prof?.[g.prof_type]?.length || 0) === g.count,
+  );
   const humanFeatAsi = (() => {
     if (!humanFeatObj) return {};
     const out = {};
@@ -1394,6 +1447,18 @@ export default function CharacterCreate() {
     return out;
   })();
   const combinedRaceAsi = mergeAsi(baseRaceAsi, selectedSubraceObj?.asiBonus, halfElfExtraAsi, humanVariantAsi, humanFeatAsi);
+
+  // Variant Human count-choice proficiency picks (Skilled/Linguist/Weapon Master). Skill picks
+  // merge into the final skill_proficiencies set; languages/tools/weapons go to their own fields.
+  const humanFeatProfPatch = (() => {
+    let patch = {};
+    if (!isVariantHuman) return patch;
+    for (const g of humanFeatProfGrants) {
+      patch = { ...patch, ...applyFeatProficiencyChoice(g.prof_type, raceChoices.human_feat_prof?.[g.prof_type] || [], patch) };
+    }
+    return patch;
+  })();
+  const { skill_proficiencies: humanFeatSkillPicks = [], ...humanFeatProfRest } = humanFeatProfPatch;
 
   // Race/subrace passive HP bonuses (e.g. Hill Dwarf "Dwarven Toughness", Draconic Resilience)
   // folded into starting HP — mirrors the CharacterDetail Stats-tab MaxHpValue. Level is 1 at creation.
@@ -1542,7 +1607,9 @@ export default function CharacterCreate() {
           ...raceSkills,
           ...(raceChoices.half_elf_skills ?? []),
           ...(isVariantHuman && raceChoices.human_variant_skill ? [raceChoices.human_variant_skill] : []),
+          ...humanFeatSkillPicks, // Skilled (skill_or_tool) skill picks
         ])],
+        ...humanFeatProfRest, // feat_languages / feat_tool_proficiencies / feat_weapon_proficiencies (Variant Human)
         // Starting wealth + equipment per the campaign's starting_equipment setting:
         //   none → empty wallet + empty inventory; otherwise background gold (+ class
         //   gold if the player swapped equipment for gold) and the resolved inventory.
@@ -1671,6 +1738,7 @@ export default function CharacterCreate() {
     (selectedRaceObj?.name === 'Half-Elf' && raceChoices.half_elf_skills.length < 2) ||
     (isVariantHuman && (raceChoices.human_variant_asi.length < 2 || !raceChoices.human_variant_skill || !raceChoices.human_feat)) ||
     (isVariantHuman && humanFeatAbilityChoice && !raceChoices.human_feat_ability) ||
+    (isVariantHuman && !humanFeatProfComplete) ||
     (selectedRaceObj?.name === 'Dwarf' && !raceChoices.dwarf_tool) ||
     (!!bgSpec?.tool && !bgChoices.tool_choice) ||
     (!!bgSpec?.languages && bgLanguagesChosen < bgSpec.languages) ||

@@ -48,7 +48,7 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
   const is2024 = edition === '5.5e';
   const traits = characterData?.race_traits ?? [];
   const racial = getRacialRestResources(traits, level);
-  const featResources = getFeatResources(characterData?.feats ?? []);
+  const featResources = getFeatResources(characterData?.feats ?? [], { pb: Math.ceil((level || 1) / 4) + 1 });
 
   if (restType === 'short') {
     const items = [];

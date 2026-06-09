@@ -555,6 +555,10 @@ describe('LevelUpWizard', () => {
         { kind: 'attack_mod', target: 'unarmed', dice: '1d4' },
         { kind: 'action', name: 'Grapple (Tavern Brawler)', economy: 'bonus', description: 'Grapple.' },
       ] },
+      { id: 15, name: 'Linguist', prerequisites: {}, repeatable: false, description: 'Languages.', effects: [
+        { kind: 'ability_score', ability: 'intelligence', amount: 1 },
+        { kind: 'proficiency', prof_type: 'language', count: 3, label: '3 languages' },
+      ] },
     ];
 
     function toChoiceStep(character = FIGHTER_L3, campaign = CAMPAIGN_ASI_OR_FEAT, onComplete = vi.fn()) {
@@ -692,6 +696,29 @@ describe('LevelUpWizard', () => {
           name: 'Tavern Brawler', level: 4, choices: { ability: 'strength' }, effects: expect.any(Array),
         })]) }),
         expect.objectContaining({ strength: 16 }), // 15 base + 1 from the half-feat
+      ));
+    });
+
+    it('count-choice proficiency feat (Linguist) requires N picks and saves them', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT, onComplete);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      fireEvent.click(await screen.findByTestId('pick-feat-15')); // Linguist
+      expect(screen.getByTestId('feat-prof-grant-language')).toBeInTheDocument();
+      expect(screen.getByTestId('wizard-next')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('feat-prof-opt-language-Draconic'));
+      fireEvent.click(screen.getByTestId('feat-prof-opt-language-Giant'));
+      expect(screen.getByTestId('wizard-next')).toBeDisabled(); // 2/3, still blocked
+      fireEvent.click(screen.getByTestId('feat-prof-opt-language-Goblin'));
+      expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('wizard-next')); // feat → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4,
+        expect.objectContaining({ feat_languages: expect.arrayContaining(['Draconic', 'Giant', 'Goblin']) }),
+        expect.objectContaining({ intelligence: 11 }), // Linguist's fixed +1 INT (10 → 11)
       ));
     });
 

@@ -15,6 +15,8 @@ const TEST_FEATS = [
   { id: 5, name: 'Heavily Armored', edition: '5e', description: 'Heavy armor proficiency.', prerequisites: { text: 'Proficiency with medium armor' }, source: 'PHB 2014', repeatable: false },
   { id: 6, name: 'Tavern Brawler', edition: '5e', description: 'Brawl.', prerequisites: {}, source: 'PHB 2014', repeatable: false,
     effects: [{ kind: 'ability_choice', abilities: ['strength', 'constitution'], amount: 1 }] },
+  { id: 7, name: 'Linguist', edition: '5e', description: 'Languages.', prerequisites: {}, source: 'PHB 2014', repeatable: false,
+    effects: [{ kind: 'ability_score', ability: 'intelligence', amount: 1 }, { kind: 'proficiency', prof_type: 'language', count: 3 }] },
 ];
 
 vi.mock('../characterService', () => ({
@@ -1385,6 +1387,44 @@ describe('CharacterCreate', () => {
       expect(call.character_data.feats).toEqual([
         expect.objectContaining({ id: 6, name: 'Tavern Brawler', level: 1, choices: { ability: 'strength' } }),
       ]);
+    });
+  });
+
+  it('Variant Human count-choice feat (Linguist) prompts language picks and stores them', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 41 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Wordsmith' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-variant-asi-strength'));
+    fireEvent.click(screen.getByTestId('human-variant-asi-constitution'));
+    fireEvent.click(screen.getByTestId('human-variant-skill-Arcana'));
+    await chooseFeat(7); // Linguist (count-choice languages)
+
+    // Language picker appears and blocks Next until 3 are chosen.
+    expect(screen.getByTestId('human-feat-prof-grant-language')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-next')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('human-feat-prof-opt-language-Draconic'));
+    fireEvent.click(screen.getByTestId('human-feat-prof-opt-language-Giant'));
+    expect(screen.getByTestId('identity-next')).toBeDisabled(); // 2/3
+    fireEvent.click(screen.getByTestId('human-feat-prof-opt-language-Goblin'));
+    expect(screen.getByTestId('identity-next')).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+
+    await waitFor(() => {
+      const call = characterService.createCharacter.mock.calls[0][0];
+      expect(call.character_data.feat_languages).toEqual(expect.arrayContaining(['Draconic', 'Giant', 'Goblin']));
     });
   });
 

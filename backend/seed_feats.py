@@ -122,7 +122,8 @@ FEAT_EFFECTS_5E = {
     ],
     "Linguist": [
         _abil("intelligence"),
-        _note("Learn three languages of your choice; create written ciphers others can't read without a hard INT check."),
+        {"kind": "proficiency", "prof_type": "language", "count": 3, "label": "3 languages"},
+        _note("Create written ciphers others can't read without a hard INT check."),
     ],
     "Lucky": [
         {"kind": "resource", "key": "luck_points", "label": "Luck Points", "total": 3, "recharge": "long"},
@@ -193,7 +194,8 @@ FEAT_EFFECTS_5E = {
         _note("Add your shield's AC to DEX saves vs single-target effects; take no damage on a successful DEX save."),
     ],
     "Skilled": [
-        _note("Gain proficiency in any combination of three skills or tools of your choice. Repeatable."),
+        {"kind": "proficiency", "prof_type": "skill_or_tool", "count": 3, "label": "3 skills or tools"},
+        _note("Repeatable for three more skills or tools."),
     ],
     "Skulker": [
         _note("Hide when lightly obscured; missing a ranged attack doesn't reveal you; dim light doesn't impose disadvantage on sight Perception."),
@@ -212,8 +214,154 @@ FEAT_EFFECTS_5E = {
     ],
     "Weapon Master": [
         _abil_choice(["strength", "dexterity"]),
-        _note("Gain proficiency with four weapons of your choice."),
+        {"kind": "proficiency", "prof_type": "weapon", "count": 4, "label": "4 weapons"},
     ],
+}
+
+# ── 2024 PHB feat effects (edition "5.5e") ─────────────────────────────────────────
+# Authored per 2024 rules (NOT copied from 2014): Origin feats grant no ASI; most General
+# feats are half-feats with a +1; Alert grants Initiative *Proficiency* (PB, not +5);
+# Observant has no +5 passive Perception; Lucky's points scale with PB. PB-scaled values
+# (Alert init, Lucky points) and conditional/fighting-style riders are honest `note`s until
+# a PB-scaled stat_mod/resource consumer exists.
+FEAT_EFFECTS_2024 = {
+    # ── Origin feats (level 1, no ASI) ──
+    "Alert": [
+        {"kind": "stat_mod", "stat": "initiative", "amount": "pb", "label": "+PB initiative"},
+        _note("After rolling initiative, you can swap your initiative with a willing ally's."),
+    ],
+    "Crafter": [_note("Proficiency with three Artisan's Tools; 20% discount on nonmagical purchases; craft faster on a long rest.")],
+    "Healer": [
+        _action("Healer's Kit (Use)", "bonus", "When you have a Healer's Kit",
+                "Spend one use as a Bonus Action to let a creature regain Hit Dice worth of hit points."),
+        _note("Proficiency with a Healer's Kit; reroll a 1 on any healing die."),
+    ],
+    "Lucky": [
+        {"kind": "resource", "key": "luck_points", "total": "pb", "recharge": "long", "label": "Luck Points"},
+        _note("Spend a Luck Point for Advantage on a d20 Test, or to impose Disadvantage on an attack roll against you."),
+    ],
+    "Magic Initiate": [_note("Learn two cantrips and a 1st-level spell from a chosen list (Arcane/Divine/Primal), castable once per long rest for free. Repeatable.")],
+    "Musician": [_note("Proficiency with three Musical Instruments; after a rest, grant Heroic Inspiration to allies who hear you (up to your proficiency bonus).")],
+    "Savage Attacker": [_note("Once per turn, roll a weapon's damage dice twice and use either roll.")],
+    "Skilled": [
+        {"kind": "proficiency", "prof_type": "skill_or_tool", "count": 3, "label": "3 skills or tools"},
+        _note("Repeatable for three more skills or tools."),
+    ],
+    "Tavern Brawler": [
+        {"kind": "attack_mod", "target": "unarmed", "dice": "1d4", "label": "Unarmed strike deals 1d4"},
+        _note("Improvised-weapon proficiency; reroll a 1 on the unarmed die; push a target 5 ft with an Unarmed Strike."),
+    ],
+    "Tough": [_note("Your hit point maximum increases by 2 per level (applied automatically on the sheet).")],
+
+    # ── General feats (level 4+; half-feats) ──
+    "Ability Score Improvement": [_note("Increase one ability score by 2, or two by 1 each (max 20). Repeatable. Use the Ability Score step at level-up.")],
+    "Actor": [_abil("charisma"), _note("Advantage on Deception/Performance to impersonate; mimic speech and sounds you've heard.")],
+    "Athlete": [_abil_choice(["strength", "dexterity"]), _note("Stand from prone with 5 ft; climb without extra cost; running jump after moving 5 ft.")],
+    "Charger": [_abil_choice(["strength", "dexterity"]), _note("Once per turn after moving 10 ft straight toward a target, add bonus damage to a melee attack or shove it 10 ft as part of a Dash.")],
+    "Chef": [_abil_choice(["constitution", "wisdom"]), _note("Cook's utensils proficiency; cook food on a short rest to heal allies; bake treats granting temporary hit points.")],
+    "Crossbow Expert": [_abil("dexterity"), _note("Ignore the Loading property of crossbows; no disadvantage on ranged attacks within 5 ft; fire a hand crossbow as part of the Attack action's extra attack.")],
+    "Crusher": [_abil_choice(["strength", "constitution"]), _note("Once per turn, move a creature 5 ft when you deal bludgeoning damage; a bludgeoning crit gives attackers advantage against it.")],
+    "Defensive Duelist": [
+        _abil("dexterity"),
+        _action("Defensive Parry", "reaction", "When hit by a melee attack while wielding a Finesse weapon",
+                "Add your proficiency bonus to your AC against that attack."),
+    ],
+    "Dual Wielder": [_abil_choice(["strength", "dexterity"]), _note("+1 AC while wielding two melee weapons; two-weapon fighting with non-Light weapons; draw/stow two weapons at once.")],
+    "Durable": [_abil("constitution"), _note("Spend Hit Dice to heal during any rest; regain at least twice your CON modifier when you roll Hit Dice.")],
+    "Elemental Adept": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Choose a damage type: your spells ignore resistance to it and treat 1s on its damage dice as 2s. Repeatable.")],
+    "Fey Touched": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Learn Misty Step and one 1st-level Divination or Enchantment spell, castable once per long rest for free.")],
+    "Grappler": [_abil_choice(["strength", "dexterity"]), _note("Advantage on attacks vs creatures you're Grappling; move a grappled creature with you; a free Unarmed Strike to grapple after an attack.")],
+    "Great Weapon Master": [
+        _abil("strength"),
+        _action("Cleave (Bonus Attack)", "bonus", "When you score a crit or drop a creature to 0 HP with a melee weapon",
+                "Make one melee weapon attack as a bonus action."),
+        _note("Add your proficiency bonus to a Heavy weapon's damage when you take the Attack action."),
+    ],
+    "Heavily Armored": [_abil_choice(["strength", "constitution"]), {"kind": "proficiency", "prof_type": "armor", "items": ["Heavy"]}],
+    "Heavy Armor Master": [_abil_choice(["strength", "constitution"]), _note("While wearing Heavy armor, reduce bludgeoning/piercing/slashing damage taken by your proficiency bonus.")],
+    "Inspiring Leader": [_abil_choice(["wisdom", "charisma"]), _note("As a Magic action, grant up to six creatures temporary hit points equal to your level + the chosen ability modifier.")],
+    "Keen Mind": [
+        _abil("intelligence"),
+        {"kind": "proficiency", "prof_type": "skill_or_tool", "count": 1, "label": "1 skill or tool"},
+        _note("Always know north and time to sunrise/sunset; perfectly recall the last month.")],
+    "Lightly Armored": [_abil_choice(["strength", "dexterity"]), {"kind": "proficiency", "prof_type": "armor", "items": ["Light"]}],
+    "Mage Slayer": [
+        _abil_choice(["strength", "dexterity", "constitution"]),
+        _action("Mage Slayer Strike", "reaction", "When a creature within 5 ft casts a spell",
+                "Make a melee weapon attack against it."),
+        _note("Impose disadvantage on concentration saves you cause.")],
+    "Martial Weapon Training": [_abil_choice(["strength", "dexterity"]), {"kind": "proficiency", "prof_type": "weapon", "items": ["Martial weapons"]}],
+    "Medium Armor Master": [_abil_choice(["strength", "dexterity"]), _note("Medium armor doesn't impose disadvantage on Stealth; add up to +3 DEX to AC.")],
+    "Mobile": [_abil_choice(["strength", "dexterity"]), {"kind": "stat_mod", "stat": "speed", "amount": 10, "label": "+10 speed"}, _note("Dashing ignores difficult terrain; a melee attack denies that creature's opportunity attacks against you this turn.")],
+    "Moderately Armored": [_abil_choice(["strength", "dexterity"]), {"kind": "proficiency", "prof_type": "armor", "items": ["Medium", "Shields"]}],
+    "Mounted Combatant": [_abil_choice(["strength", "dexterity", "wisdom"]), _note("Advantage vs creatures smaller than your mount; redirect attacks from mount to you; mount avoids damage on DEX saves.")],
+    "Observant": [_abil_choice(["intelligence", "wisdom"]), _note("Read lips; proficiency in Insight or Investigation; take the Search action as a Bonus Action.")],
+    "Piercer": [_abil_choice(["strength", "dexterity"]), _note("Once per turn, reroll one piercing damage die; a piercing crit rolls one extra damage die.")],
+    "Poisoner": [_abil_choice(["dexterity", "intelligence"]), _note("Your poison damage ignores resistance; apply potent poison as a Bonus Action; poisoner's kit proficiency.")],
+    "Polearm Master": [
+        _abil_choice(["strength", "dexterity"]),
+        _action("Polearm Butt (Bonus Attack)", "bonus", "When you Attack with a glaive, halberd, quarterstaff, or spear",
+                "Make a bonus-action attack with the opposite end (1d4 bludgeoning)."),
+        _note("Creatures provoke an opportunity attack when they enter your reach.")],
+    "Resilient": [_abil_choice(_ALL_ABILITIES), {"kind": "proficiency", "prof_type": "saving_throw", "from_ability_choice": True}, _note("Gain saving-throw proficiency in the chosen ability. Repeatable.")],
+    "Ritual Caster": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Gain a ritual book with two 1st-level ritual spells; add more ritual spells you find.")],
+    "Sentinel": [
+        _abil_choice(["strength", "dexterity"]),
+        _action("Sentinel Strike", "reaction", "When a creature within 5 ft attacks a target other than you",
+                "Make a melee weapon attack against the attacker."),
+        _note("Opportunity-attack hits reduce speed to 0; creatures provoke even when they Disengage.")],
+    "Shadow Touched": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Learn Invisibility and one 1st-level Illusion or Necromancy spell, castable once per long rest for free.")],
+    "Sharpshooter": [_abil("dexterity"), _note("Long range imposes no disadvantage; ignore half and three-quarters cover; add your proficiency bonus to a ranged weapon's damage on the Attack action.")],
+    "Shield Master": [
+        _abil("strength"),
+        _action("Shield Shove (Bonus)", "bonus", "When you wield a shield and take the Attack action",
+                "Use a bonus action to shove a creature within 5 ft."),
+        _note("Add your shield's AC to DEX saves vs single-target effects; take no damage on a successful DEX save.")],
+    "Skill Expert": [
+        _abil_choice(_ALL_ABILITIES),
+        {"kind": "proficiency", "prof_type": "skill", "count": 1, "label": "1 skill"},
+        _note("Also gain Expertise in one skill you're proficient with.")],
+    "Skulker": [_abil("dexterity"), _note("Hide as a Bonus Action while lightly obscured; missing a ranged attack doesn't reveal you; Blindsight 10 ft in darkness.")],
+    "Slasher": [_abil_choice(["strength", "dexterity"]), _note("Once per turn, reduce a creature's speed by 10 ft on slashing damage; a slashing crit gives it disadvantage on attacks.")],
+    "Speedy": [_abil_choice(["strength", "dexterity"]), {"kind": "stat_mod", "stat": "speed", "amount": 10, "label": "+10 speed"}, _note("Dashing ignores difficult terrain; no opportunity attacks from creatures you've damaged this turn.")],
+    "Spell Sniper": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Spell attacks ignore half and three-quarters cover; learn one attack cantrip.")],
+    "Telekinetic": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Learn Mage Hand (cast without components); shove a creature 5 ft as a Bonus Action.")],
+    "Telepathic": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Speak telepathically to creatures within 60 ft; cast Detect Thoughts once per long rest for free.")],
+    "War Caster": [
+        _abil_choice(["intelligence", "wisdom", "charisma"]),
+        _action("War Caster Spell (Reaction)", "reaction", "When a creature provokes an opportunity attack from you",
+                "Cast a single-target spell at it instead of making a weapon attack."),
+        _note("Advantage on concentration saves; perform somatic components while holding weapons or a shield.")],
+
+    # ── Fighting Style feats (no ASI; mostly passive combat riders) ──
+    "Archery": [_note("+2 bonus to attack rolls with ranged weapons.")],
+    "Blind Fighting": [_note("Blindsight 10 ft — see anything not behind total cover even while blinded or in darkness.")],
+    "Defense": [_note("+1 bonus to Armor Class while wearing armor.")],
+    "Dueling": [_note("+2 bonus to damage rolls with a one-handed melee weapon when wielding no other weapon.")],
+    "Great Weapon Fighting": [_note("Treat a 1 or 2 on a two-handed melee weapon's damage die as a 3.")],
+    "Interception": [
+        _action("Interception", "reaction", "When a creature you can see hits another within 5 ft of you",
+                "Reduce the damage by 1d10 + your proficiency bonus.")],
+    "Protection": [
+        _action("Protection", "reaction", "When a creature you can see attacks a target other than you within 5 ft (you're wielding a shield)",
+                "Impose disadvantage on the attack roll.")],
+    "Thrown Weapon Fighting": [_note("Draw a thrown weapon as part of the attack; +2 to damage rolls with thrown weapons.")],
+    "Two-Weapon Fighting": [_note("Add your ability modifier to the damage of the second attack when two-weapon fighting.")],
+    "Unarmed Fighting": [
+        {"kind": "attack_mod", "target": "unarmed", "dice": "1d6", "label": "Unarmed strike deals 1d6"},
+        _note("1d8 with no weapon or shield; deal 1d4 to a creature you're grappling at the start of your turns.")],
+
+    # ── Epic Boon feats (level 19+; ability scores can exceed 20 — left as notes) ──
+    "Boon of Combat Prowess": [_note("Increase one ability score by 1 (max 30). When you miss a creature you can see, you can choose to hit instead (once per turn).")],
+    "Boon of Dimensional Travel": [_note("Increase one ability score by 1 (max 30). After the Attack or Magic action, teleport up to 30 ft.")],
+    "Boon of Energy Resistance": [_note("Increase one ability score by 1 (max 30). Resistance to two damage types; reaction to gain resistance to one instance.")],
+    "Boon of Fate": [_note("Increase one ability score by 1 (max 30). Roll a Fate die (d10) to add/subtract on a nearby creature's d20 Test, once per rest.")],
+    "Boon of Irresistible Offense": [_note("Increase Strength or Dexterity by 1 (max 30). Your B/P/S damage ignores resistance; a natural 20 adds extra damage equal to the score.")],
+    "Boon of Recovery": [_note("Increase one ability score by 1 (max 30). React to roll half your Hit Dice and regain that many HP; drop to 1 instead of 0.")],
+    "Boon of Skill": [_note("Increase one ability score by 1 (max 30). Proficiency in all skills; Expertise in two.")],
+    "Boon of Spell Recall": [_note("Increase your spellcasting ability by 1 (max 30). Cast a 1st–4th-level spell without a slot once per turn.")],
+    "Boon of the Night Spirit": [_note("Increase one ability score by 1 (max 30). In Dim Light/Darkness gain resistance to all but force/radiant/psychic; Hide as a Bonus Action; meld into shadow.")],
+    "Boon of Truesight": [_note("Increase one ability score by 1 (max 30). Truesight 60 ft.")],
 }
 
 
@@ -392,7 +540,7 @@ def seed_feats():
     try:
         print("Seeding feats...")
         _seed_list(db, FEATS_5E, "5e", "PHB 2014", FEAT_EFFECTS_5E)
-        _seed_list(db, FEATS_2024, "5.5e", "PHB 2024")
+        _seed_list(db, FEATS_2024, "5.5e", "PHB 2024", FEAT_EFFECTS_2024)
         print("Done.")
     finally:
         db.close()

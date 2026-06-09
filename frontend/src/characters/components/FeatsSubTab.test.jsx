@@ -102,6 +102,15 @@ describe('FeatsSubTab', () => {
     expect(onChange).toHaveBeenCalledWith({ luck_points_used: 2 });
   });
 
+  it('scales a PB-total resource (2024 Lucky) by the pb prop', async () => {
+    featService.getFeats.mockResolvedValue([]);
+    render(<FeatsSubTab
+      feats={[{ id: 31, name: 'Lucky', effects: [{ kind: 'resource', key: 'luck_points', label: 'Luck Points', total: 'pb', recharge: 'long' }] }]}
+      campaignId={1} edition="5.5e" characterData={{}} pb={3} />);
+    const res = await screen.findByTestId('feat-resource-luck_points');
+    expect(res).toHaveTextContent('3 / 3 remaining'); // total = pb (3)
+  });
+
   it('hides feat resource Use controls when readOnly', async () => {
     featService.getFeats.mockResolvedValue([]);
     render(<FeatsSubTab

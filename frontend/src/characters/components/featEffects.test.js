@@ -49,6 +49,19 @@ describe('featEffects resolver', () => {
     ]);
   });
 
+  it("resolves a 'pb' stat_mod amount with the proficiency bonus (2024 Alert)", () => {
+    const alert2024 = { name: 'Alert', effects: [{ kind: 'stat_mod', stat: 'initiative', amount: 'pb', label: '+PB initiative' }] };
+    expect(getFeatStatMods([alert2024], 'initiative', { pb: 3 })).toBe(3);
+    expect(getFeatStatMods([alert2024], 'initiative')).toBe(0); // no pb provided → contributes nothing
+    expect(getFeatStatModSources([alert2024], 'initiative', { pb: 4 })[0].amount).toBe(4);
+  });
+
+  it("resolves a 'pb' resource total with the proficiency bonus (2024 Lucky)", () => {
+    const lucky2024 = { name: 'Lucky', effects: [{ kind: 'resource', key: 'luck_points', total: 'pb', recharge: 'long', label: 'Luck Points' }] };
+    expect(getFeatResources([lucky2024], { pb: 3 })[0].total).toBe(3);
+    expect(getFeatResources([lucky2024], { pb: 5 })[0].total).toBe(5);
+  });
+
   it('extracts feat actions for the Action Economy tab', () => {
     const actions = getFeatActions([TAVERN_BRAWLER]);
     expect(actions).toHaveLength(1);

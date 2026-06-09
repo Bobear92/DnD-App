@@ -31,7 +31,10 @@ function effectChipLabel(e, feat) {
         : (e.label || `+${e.amount || 1} ${(e.abilities || []).map((a) => ABILITY_LABEL[a] || a).join(' / ')}`);
     case 'attack_mod': return e.label || `${e.target} ${e.dice}`;
     case 'action': return e.label || `${e.name} (${e.economy})`;
-    case 'resource': return e.label ? `${e.label} ×${e.total}` : `${e.key} ×${e.total}`;
+    case 'resource': {
+      const name = e.label || e.key;
+      return e.total === 'pb' ? `${name} (PB)` : `${name} ×${e.total}`;
+    }
     case 'proficiency':
       if (Array.isArray(e.items)) {
         return e.items.map((i) => (e.prof_type === 'armor' && !/armor|shield/i.test(i) ? `${i} armor` : i)).join(', ');
@@ -54,7 +57,7 @@ function effectChipLabel(e, feat) {
  * view) it also offers an Add Feat picker and a per-feat remove. Changes are emitted via
  * `onChange({ feats })` (CharacterDetail persists immediately through autoSaveClassPatch).
  */
-export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', canManage = false, onChange, characterData = {}, readOnly = false }) {
+export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', canManage = false, onChange, characterData = {}, readOnly = false, pb = 0 }) {
   const [catalogue, setCatalogue] = useState([]);
   const [adding, setAdding] = useState(false);
 
@@ -78,7 +81,7 @@ export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', ca
 
   // Rest-rechargeable resource pools from feats (Lucky, Martial Adept). The expended count
   // lives in character_data as `${key}_used`; RestResourceControl persists it via onChange.
-  const featResources = getFeatResources(resolved);
+  const featResources = getFeatResources(resolved, { pb });
   const resourceRow = (r) => {
     const used = characterData?.[r.usedKey] || 0;
     return {

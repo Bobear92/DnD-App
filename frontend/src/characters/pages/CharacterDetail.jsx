@@ -1182,8 +1182,10 @@ export default function CharacterDetail() {
                     const raceLangs = [...new Set(cd.race_languages ?? [])];
                     const raceSet = new Set(raceLangs);
                     const bgLangs = [...new Set(cd.background_languages ?? [])].filter(l => !raceSet.has(l));
+                    const bgSet = new Set(bgLangs);
+                    const featLangs = [...new Set(cd.feat_languages ?? [])].filter(l => !raceSet.has(l) && !bgSet.has(l));
                     const hasTraits = (cd.race_traits?.length ?? 0) > 0;
-                    if (!hasTraits && raceLangs.length === 0 && bgLangs.length === 0) return null;
+                    if (!hasTraits && raceLangs.length === 0 && bgLangs.length === 0 && featLangs.length === 0) return null;
                     return (
                       <div className="space-y-2">
                         {hasTraits && (
@@ -1192,7 +1194,7 @@ export default function CharacterDetail() {
                             <TraitBadgeList traits={cd.race_traits} />
                           </div>
                         )}
-                        {(raceLangs.length > 0 || bgLangs.length > 0) && (
+                        {(raceLangs.length > 0 || bgLangs.length > 0 || featLangs.length > 0) && (
                           <div>
                             <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Languages</div>
                             <div className="space-y-1.5">
@@ -1211,6 +1213,16 @@ export default function CharacterDetail() {
                                   <div className="text-[10px] font-medium text-muted-foreground/70 mb-1 uppercase tracking-wide">From Background</div>
                                   <div className="flex flex-wrap gap-1.5">
                                     {bgLangs.map(l => (
+                                      <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {featLangs.length > 0 && (
+                                <div data-testid="languages-from-feats">
+                                  <div className="text-[10px] font-medium text-muted-foreground/70 mb-1 uppercase tracking-wide">From Feats</div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {featLangs.map(l => (
                                       <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
                                     ))}
                                   </div>
@@ -1249,9 +1261,9 @@ export default function CharacterDetail() {
                       <div className="text-[10px] text-muted-foreground uppercase">Initiative</div>
                       {(() => {
                         const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
-                        const bonus = getFeatStatMods(feats, 'initiative');
+                        const bonus = getFeatStatMods(feats, 'initiative', { pb });
                         const total = mod(identity.draft.dexterity) + bonus;
-                        const sources = getFeatStatModSources(feats, 'initiative');
+                        const sources = getFeatStatModSources(feats, 'initiative', { pb });
                         return (
                           <>
                             <div className="font-bold" data-testid="initiative-value">{total >= 0 ? `+${total}` : total}</div>
@@ -1268,8 +1280,8 @@ export default function CharacterDetail() {
                       <div className="text-[10px] text-muted-foreground uppercase">Passive Perc.</div>
                       {(() => {
                         const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
-                        const bonus = getFeatStatMods(feats, 'passive_perception');
-                        const sources = getFeatStatModSources(feats, 'passive_perception');
+                        const bonus = getFeatStatMods(feats, 'passive_perception', { pb });
+                        const sources = getFeatStatModSources(feats, 'passive_perception', { pb });
                         return (
                           <>
                             <div className="font-bold" data-testid="passive-perception-value">{10 + mod(identity.draft.wisdom) + pb + bonus}</div>
@@ -1292,9 +1304,9 @@ export default function CharacterDetail() {
                       the class sheet's own Total Speed row doesn't fold it in yet. */}
                   {(() => {
                     const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
-                    const featSpeed = getFeatStatMods(feats, 'speed');
+                    const featSpeed = getFeatStatMods(feats, 'speed', { pb });
                     if (!featSpeed) return null;
-                    const sources = getFeatStatModSources(feats, 'speed');
+                    const sources = getFeatStatModSources(feats, 'speed', { pb });
                     return (
                       <div className="text-xs text-emerald-600" data-testid="speed-feat-note">
                         +{featSpeed} ft speed from {sources.map((s) => s.source).join(', ')}
@@ -1472,6 +1484,7 @@ export default function CharacterDetail() {
                     onChange={autoSaveClassPatch}
                     characterData={classSection.draft ?? character.character_data ?? {}}
                     readOnly={!showEditable}
+                    pb={pb}
                   />
                 </SectionCard>
               )}

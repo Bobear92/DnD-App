@@ -24,6 +24,7 @@ import { getManeuvers, maneuversKnownAtLevel } from './maneuversData';
 import FeatPicker from './FeatPicker';
 import { checkFeatPrerequisite } from './featPrerequisites';
 import { featAbilityChoices, featFixedAbilityScores } from './featEffects';
+import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice } from './featProficiencyData';
 import featService from '../../encyclopedia/featService';
 
 const ABILITY_LABEL = {
@@ -120,6 +121,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const [asiChoice, setAsiChoice] = useState(''); // 'asi' | 'feat' — only in asi_or_feat mode
   const [featPick, setFeatPick] = useState(null); // { id, name } chosen this level-up
   const [featAbilityPick, setFeatAbilityPick] = useState(''); // half-feat ability choice (e.g. Tavern Brawler)
+  const [featProfChoices, setFeatProfChoices] = useState({}); // { [prof_type]: [chosen] } — Skilled/Linguist/Weapon Master
   const [allFeats, setAllFeats] = useState([]); // edition-filtered feat catalogue
   const [saving, setSaving] = useState(false);
 
@@ -251,7 +253,18 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // The full picked feat (with effects) + any ability-score choice it demands (half-feats).
   const pickedFeat = featPick ? visibleFeats.find((f) => f.id === featPick.id) : null;
   const featAbilityChoice = pickedFeat ? (featAbilityChoices(pickedFeat)[0] || null) : null; // slice: one choice
-  const selectFeat = (f) => { setFeatPick(f); setFeatAbilityPick(''); };
+  // Count-choice proficiency grants the picked feat demands (Skilled / Linguist / Weapon Master).
+  const featProfGrants = pickedFeat ? getFeatProficiencyChoices(pickedFeat) : [];
+  const featProfComplete = featProfGrants.every((g) => (featProfChoices[g.prof_type]?.length || 0) === g.count);
+  const selectFeat = (f) => { setFeatPick(f); setFeatAbilityPick(''); setFeatProfChoices({}); };
+  const toggleFeatProf = (profType, name, max) => {
+    setFeatProfChoices((prev) => {
+      const cur = prev[profType] || [];
+      if (cur.includes(name)) return { ...prev, [profType]: cur.filter((n) => n !== name) };
+      if (cur.length >= max) return prev;
+      return { ...prev, [profType]: [...cur, name] };
+    });
+  };
 
   // Combined ability-score increases written this level: the ASI step's allocation plus any
   // fixed/chosen increase from a half-feat, capped at 20. (Half-feats permanently raise a score.)
@@ -344,7 +357,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     }
     if (STEPS[step] === 'asi') return asiTotal === ASI_POINTS;
     if (STEPS[step] === 'asi_choice') return asiChoice === 'asi' || asiChoice === 'feat';
-    if (STEPS[step] === 'feat') return !!featPick && (!featAbilityChoice || !!featAbilityPick);
+    if (STEPS[step] === 'feat') return !!featPick && (!featAbilityChoice || !!featAbilityPick) && featProfComplete;
     if (STEPS[step] === 'maneuvers') return maneuverPicks.length === maneuverDelta;
     return true;
   };
@@ -358,6 +371,17 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
         ...profPatch,
         ...applyProficiencyChoice(g.type, profChoices[g.key] || [], { ...(character.character_data ?? {}), ...profPatch }),
       };
+    }
+    // Feat count-choice proficiency picks (Skilled / Linguist / Weapon Master) merge into
+    // their character_data fields (skills→skill_proficiencies, tools→feat_tool_proficiencies, …).
+    let featProfPatch = {};
+    if (wantsFeatStep && pickedFeat) {
+      for (const g of featProfGrants) {
+        featProfPatch = {
+          ...featProfPatch,
+          ...applyFeatProficiencyChoice(g.prof_type, featProfChoices[g.prof_type] || [], { ...(character.character_data ?? {}), ...featProfPatch }),
+        };
+      }
     }
     // A feat chosen this level-up is appended to character_data.feats. We snapshot the feat's
     // structured `effects` onto the instance (inventory pattern) so the sheet's resolvers
@@ -380,6 +404,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       ...(subclassChoice ? { subclass: subclassChoice } : {}),
       ...(isKnownCaster ? { cantrips, known_spells: knownSpells } : {}),
       ...profPatch,
+      ...featProfPatch,
       ...(needsManeuvers ? { maneuvers: [...knownManeuvers, ...maneuverPicks] } : {}),
       ...(featAddition ? { feats: featAddition } : {}),
     };
@@ -754,6 +779,44 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                 </div>
               </div>
             )}
+
+            {/* Count-choice proficiency grants (Skilled / Linguist / Weapon Master) */}
+            {featProfGrants.map((g) => {
+              const opts = availableFeatOptions(g, { charClass: character.char_class, characterData: character.character_data ?? {} });
+              const chosen = featProfChoices[g.prof_type] || [];
+              return (
+                <div key={g.key} className="space-y-2 rounded-md border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{g.label}</span>
+                    <span className={cn('text-xs', chosen.length === g.count ? 'text-muted-foreground' : 'text-amber-600')}>
+                      {chosen.length}/{g.count}
+                    </span>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto pr-1 grid grid-cols-2 gap-1.5" data-testid={`feat-prof-grant-${g.prof_type}`}>
+                    {opts.map((o) => {
+                      const isSel = chosen.includes(o);
+                      const atLimit = chosen.length >= g.count && !isSel;
+                      return (
+                        <button
+                          key={o}
+                          type="button"
+                          disabled={atLimit}
+                          onClick={() => toggleFeatProf(g.prof_type, o, g.count)}
+                          data-testid={`feat-prof-opt-${g.prof_type}-${o}`}
+                          className={cn(
+                            'rounded-md border px-2 py-1.5 text-xs text-left transition-colors',
+                            isSel ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
+                            atLimit && 'opacity-40 cursor-not-allowed',
+                          )}
+                        >
+                          {o}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 

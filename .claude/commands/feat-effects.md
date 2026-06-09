@@ -9,7 +9,8 @@ support. This is the recurring authoring procedure — 5e feats now, 2024 feats 
 
 **Status:** 5e Alert + Tavern Brawler are fully wired (vertical slice). The rest are prose-only —
 run `python report_feat_effects.py` (in `backend/`, venv active) for the current mechanized-vs-prose
-worklist. 2024 feats: none yet.
+worklist (5e 26/41, 2024 48/73). Both editions are authored (`FEAT_EFFECTS_5E` / `FEAT_EFFECTS_2024`)
+per their own rules — **don't copy 2014 effects to 2024** (Alert, Observant, Origin-feat ASIs differ).
 
 ## Where things live
 - **Backend** `players/feats/models.py` → `effects` JSON column (nullable). `schemas.py` carries it on
@@ -30,14 +31,14 @@ Each effect is `{ kind, …, label? }`. `label` is the chip text in the Feats su
 
 | kind | shape | consumer | status |
 |------|-------|----------|--------|
-| `stat_mod` | `{stat, amount}` | `getFeatStatMods(feats, stat)` | **initiative wired** (CharacterDetail derived row). AC / `speed` / `passive_perception` need consumers. |
+| `stat_mod` | `{stat, amount}` | `getFeatStatMods(feats, stat, {pb})` | **wired**: initiative + passive_perception (CharacterDetail derived row), speed (CharacterDetail annotation). `amount: 'pb'` scales with the proficiency bonus (2024 Alert). AC still needs a consumer. |
 | `ability_score` | `{ability, amount}` | folded into level-up score updates | **wired** (LevelUpWizard). Variant-Human-creation path: TODO. |
 | `ability_choice` | `{abilities:[...], amount}` | acquisition chooser → score | **wired in LevelUpWizard** (`feat-ability-{stat}`). Variant Human creation: TODO. |
 | `attack_mod` | `{target:'unarmed', dice}` | `getFeatUnarmedDice` → Action Economy unarmed row | **unarmed wired**. Weapon attack bonuses (Archery +2) need a consumer in `inventoryData`/`getAttacks`. |
 | `action` | `{name, economy, description, trigger}` | `getFeatActions` → Action Economy bucket | **wired**. `economy` ∈ `no_action\|action\|bonus\|action+bonus\|reaction`. |
-| `resource` | `{key, label, total, recharge:'short'\|'long'}` | feat resource tracker | **NEEDS consumer** (reuse `RestResourceTracker`; mirror reset in backend `_compute_rest_patch` + `getRestSummary`). Lucky, Martial Adept. |
-| `proficiency` | `{prof_type:'skill'\|'tool'\|'weapon'\|'armor'\|'language'\|'saving_throw', items?:[...], count?}` | proficiency banners / skills panel | **NEEDS consumer**. Fixed grant (Heavily Armored armor) or choice (Skilled 3). Choice grants need an acquisition chooser like `subclassProficiencyData`. |
-| `expertise` | `{count}` | skills panel expertise | **NEEDS consumer**. Skill Expert. |
+| `resource` | `{key, label, total, recharge:'short'\|'long'}` | FeatsSubTab tracker (RestResourceControl) + backend `_compute_rest_patch` reset + `getRestSummary` | **wired** (Lucky, Martial Adept). `total: 'pb'` scales with the proficiency bonus (2024 Lucky). |
+| `proficiency` | `{prof_type:'skill'\|'tool'\|'weapon'\|'armor'\|'language'\|'saving_throw'\|'skill_or_tool', items?:[...], count?}` | banners / skills / saves / languages | **wired**. Fixed `items` grants → `featEffects.getFeatProficiencyGrants` (banners). `saving_throw` (Resilient) → saves display. **count-choice** (`count`, no items: Skilled/Linguist/Weapon Master) → `featProficiencyData.js` pickers in the LevelUpWizard feat step + Variant Human creation; picks stored in skill_proficiencies / feat_tool_proficiencies / feat_languages / feat_weapon_proficiencies. |
+| `expertise` | `{count}` | skills panel expertise | **NEEDS consumer**. Skill Expert (2024). |
 | `note` | `{text}` | shown via the description (not a chip) | **wired** — use for rules we can't mechanize yet (advantage on X, ignore difficult terrain, can't be surprised). Honest "flavor, not forgotten". |
 
 **Special case — Tough:** `+2 HP/level` is already handled by `combatBonuses.hasToughFeat` (reads `character_data.feats` by name). Don't add an HP `stat_mod` for it (double-count); give it a `note`.
