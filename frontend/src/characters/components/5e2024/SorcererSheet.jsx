@@ -13,12 +13,11 @@ import HitDiceTracker from '../HitDiceTracker';
 import { CLASS_FEATURES_2024 } from '../classFeatures2024';
 import DraconicAncestorPicker from '../DraconicAncestorPicker';
 import { isDraconicSorcerer } from '../combatBonuses';
+import { METAMAGIC_OPTIONS as METAMAGIC_POOL, metamagicKnownAtLevel } from '../levelChoicesData';
 
-const METAMAGIC_OPTIONS = [
-  'Careful Spell', 'Distant Spell', 'Empowered Spell',
-  'Extended Spell', 'Heightened Spell', 'Quickened Spell',
-  'Seeking Spell', 'Subtle Spell', 'Transmuted Spell', 'Twinned Spell',
-];
+// Names only — canonical pool (with descriptions) + count live in levelChoicesData,
+// shared with the LevelUpWizard's Metamagic step.
+const METAMAGIC_OPTIONS = METAMAGIC_POOL.map((o) => o.name);
 
 const SPELL_SLOTS = {
   1:  [2, 0, 0, 0, 0, 0, 0, 0, 0], 2:  [3, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -34,12 +33,7 @@ const SPELL_SLOTS = {
 };
 
 function slotsForLevel(lvl) { return SPELL_SLOTS[Math.min(Math.max(lvl, 1), 20)]; }
-function metamagicCount(level) {
-  if (level >= 17) return 4;
-  if (level >= 10) return 3;
-  if (level >= 3)  return 2;
-  return 0;
-}
+const metamagicCount = metamagicKnownAtLevel;
 
 const SORCERER_CANTRIPS_2024 = [
   'Acid Splash', 'Blade Ward', 'Chill Touch', 'Dancing Lights', 'Elementalism',

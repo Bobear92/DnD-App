@@ -17,12 +17,11 @@ import { SORCERER_SUBCLASSES_5E } from './classChoicesData';
 import HitDiceTracker from './HitDiceTracker';
 import DraconicAncestorPicker from './DraconicAncestorPicker';
 import { isDraconicSorcerer } from './combatBonuses';
+import { METAMAGIC_OPTIONS as METAMAGIC_POOL, metamagicKnownAtLevel } from './levelChoicesData';
 
-const METAMAGIC_OPTIONS = [
-  'Careful Spell', 'Distant Spell', 'Empowered Spell', 'Extended Spell',
-  'Heightened Spell', 'Quickened Spell', 'Subtle Spell', 'Twinned Spell',
-  'Seeking Spell', 'Transmuted Spell',
-];
+// Names only — the canonical pool (with descriptions) and count live in levelChoicesData,
+// shared with the LevelUpWizard's Metamagic step so picks land in the same array.
+const METAMAGIC_OPTIONS = METAMAGIC_POOL.map((o) => o.name);
 
 const WIZARD_SLOTS = {
   1:  [2,0,0,0,0,0,0,0,0], 2:  [3,0,0,0,0,0,0,0,0],
@@ -41,12 +40,7 @@ function slotsForLevel(level) {
   return WIZARD_SLOTS[Math.min(Math.max(level, 1), 20)];
 }
 
-function metamagicCount(level) {
-  if (level >= 17) return 4;
-  if (level >= 10) return 3;
-  if (level >= 3)  return 2;
-  return 0;
-}
+const metamagicCount = metamagicKnownAtLevel;
 
 const ASI_LEVELS = [4, 8, 12, 16, 19];
 

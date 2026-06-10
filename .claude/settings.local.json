@@ -54,7 +54,17 @@
       "Read(//c/c/Users/rober/Documents/Projects/dnd-app/frontend/src/characters/components/**)",
       "Bash(cd /c/Users/rober/Documents/Projects/dnd-app && grep -n \"maneuversData\\\\|BattleMasterPanel\\\\|ManeuversPage\\\\|superiority_dice\\\\|subclassPanels\\\\|maneuvers\" CLAUDE.md | head)",
       "Read(//c/c/Users/rober/Documents/Projects/dnd-app/**)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --base main --head feature/character-system-level-up-and-encyclopedia --title 'Character system: level-up choices, encyclopedia, inventory & UI fixes' --body ' *)",
+      "Bash(curl -s -o /dev/null -w \"backend:%{http_code}\\\\n\" http://localhost:8000/docs)",
+      "Bash(curl -s -o /dev/null -w \"frontend:%{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -s \"http://localhost:8000/feats?edition=5e\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); tb=[f for f in d if f['name']=='Tavern Brawler']; print\\('Tavern Brawler effects:', tb[0]['effects'] if tb else 'NOT FOUND'\\)\")",
+      "Bash(curl -s -o /dev/null -w \"backend:%{http_code} \" http://localhost:8000/docs)",
+      "Bash(cd \"c:/Users/rober/Documents/Projects/dnd-app/frontend/src\" && echo \"=== skillsData exports ===\" && grep -n \"export\" characters/../encyclopedia/data/skillsData.js | head; echo \"=== toolsData exports ===\" && grep -n \"export\" characters/components/toolsData.js | head; echo \"=== STANDARD_LANGUAGES_LIST ===\" && grep -rn \"STANDARD_LANGUAGES_LIST =\" characters/)",
+      "Read(//c/Users/rober/Documents/Projects/dnd-app/encyclopedia/data/**)"
     ],
     "additionalDirectories": [
       "\\tmp",

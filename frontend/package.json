@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "report:class-coverage": "node --import ./scripts/register-loader.mjs scripts/report-class-coverage.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

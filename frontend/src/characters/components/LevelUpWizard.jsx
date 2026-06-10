@@ -21,10 +21,12 @@ import {
   getSubclassProficiencyGrants, availableOptions, applyProficiencyChoice,
 } from './subclassProficiencyData';
 import { getManeuvers, maneuversKnownAtLevel } from './maneuversData';
+import { getLevelChoices, availablePoolOptions, applyLevelChoice } from './levelChoicesData';
 import FeatPicker from './FeatPicker';
 import { checkFeatPrerequisite } from './featPrerequisites';
-import { featAbilityChoices, featFixedAbilityScores } from './featEffects';
+import { featAbilityChoices, featFixedAbilityScores, getFeatProficiencyGrants } from './featEffects';
 import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, FEAT_SKILL_OPTIONS } from './featProficiencyData';
+import { CLASS_PROFICIENCIES_5E } from './classProficienciesData';
 import featService from '../../encyclopedia/featService';
 
 const ABILITY_LABEL = {
@@ -118,6 +120,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const [profChoices, setProfChoices] = useState({}); // { [grant.key]: [chosen names] }
   const [asiAlloc, setAsiAlloc] = useState({}); // { [abilityKey]: 0|1|2 } — points added this ASI
   const [maneuverPicks, setManeuverPicks] = useState([]); // new maneuvers chosen this level-up
+  const [levelChoicePicks, setLevelChoicePicks] = useState({}); // { [choice.key]: [chosen names] }
   const [asiChoice, setAsiChoice] = useState(''); // 'asi' | 'feat' — only in asi_or_feat mode
   const [featPick, setFeatPick] = useState(null); // { id, name } chosen this level-up
   const [featAbilityPick, setFeatAbilityPick] = useState(''); // half-feat ability choice (e.g. Tavern Brawler)
@@ -148,6 +151,12 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     : 0;
   const needsManeuvers = maneuverDelta > 0;
 
+  // Class-wide pool selections gained this level (Metamagic, etc.) — data-driven via
+  // levelChoicesData. Each carries a resolved `count` = the per-level delta to pick.
+  const levelChoices = getLevelChoices(character.char_class, edition, character.level ?? 1, newLevel);
+  const needsLevelChoices = levelChoices.length > 0;
+  const levelChoicesLabel = levelChoices.length === 1 ? levelChoices[0].label : 'Class Choices';
+
   // ── ASI / feat step gating (driven by the campaign's asi_feat_mode) ──
   // asi_only        → just the ASI step.
   // asi_or_feat     → a choice step, then either the ASI step or the feat step.
@@ -172,6 +181,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     ...(wantsFeatStep ? ['feat'] : []),
     ...(isKnownCaster ? ['spells'] : []),
     ...(needsProficiencies ? ['proficiencies'] : []),
+    ...(needsLevelChoices ? ['level-choices'] : []),
     ...(needsManeuvers ? ['maneuvers'] : []),
     'confirm',
   ];
@@ -184,6 +194,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     ...(wantsFeatStep ? ['Feat'] : []),
     ...(isKnownCaster ? ['New Spells'] : []),
     ...(needsProficiencies ? ['Proficiencies'] : []),
+    ...(needsLevelChoices ? [levelChoicesLabel] : []),
     ...(needsManeuvers ? ['Maneuvers'] : []),
     'Confirm',
   ];
@@ -239,6 +250,21 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       .some((arr) => Array.isArray(arr) && arr.length > 0)
     || !!cd.high_elf_cantrip;
 
+  // Armor proficiency categories (light/medium/heavy) the character has — drives armor-prereq
+  // feats (Heavily/Moderately Armored, Heavy Armor Master). Sources: the class table, race
+  // grants, and feat-granted armor (so the ladder works: Lightly → Moderately → Heavily Armored).
+  const ARMOR_CATS = ['light', 'medium', 'heavy'];
+  const armorProficiencies = (() => {
+    const cats = new Set();
+    const classArmor = (CLASS_PROFICIENCIES_5E[character.char_class]?.armor || '').toLowerCase();
+    if (classArmor.includes('all armor')) ARMOR_CATS.forEach((c) => cats.add(c));
+    ARMOR_CATS.forEach((c) => { if (classArmor.includes(c)) cats.add(c); });
+    [...(cd.race_armor_proficiencies || []), ...getFeatProficiencyGrants(cd.feats).armor].forEach((a) => {
+      ARMOR_CATS.forEach((c) => { if (String(a).toLowerCase().includes(c)) cats.add(c); });
+    });
+    return [...cats];
+  })();
+
   const featDisabledReason = (f) => {
     const { met, unmet } = checkFeatPrerequisite(f, {
       level: newLevel,
@@ -246,6 +272,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       scores: prereqScores,
       abilityScoresKnown: true,
       spellcaster: isSpellcaster,
+      armorProficiencies,
     });
     return met ? null : unmet.map((u) => u.reason).join('; ');
   };
@@ -298,6 +325,19 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       if (prev.includes(name)) return prev.filter((n) => n !== name);
       if (prev.length >= maneuverDelta) return prev; // at this level's pick limit
       return [...prev, name];
+    });
+  };
+
+  // Pool-choice picks (Metamagic, etc.). Required count is capped by what's still available
+  // (so a near-exhausted pool doesn't block Next), mirroring the feat count-choice grants.
+  const levelChoiceRequired = (c) =>
+    Math.min(c.count, availablePoolOptions(c, character.character_data ?? {}).length);
+  const toggleLevelChoice = (choiceKey, name, max) => {
+    setLevelChoicePicks((prev) => {
+      const cur = prev[choiceKey] || [];
+      if (cur.includes(name)) return { ...prev, [choiceKey]: cur.filter((n) => n !== name) };
+      if (cur.length >= max) return prev; // at this level's pick limit
+      return { ...prev, [choiceKey]: [...cur, name] };
     });
   };
 
@@ -369,6 +409,9 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     if (STEPS[step] === 'asi_choice') return asiChoice === 'asi' || asiChoice === 'feat';
     if (STEPS[step] === 'feat') return !!featPick && (!featAbilityChoice || !!featAbilityPick) && featProfComplete;
     if (STEPS[step] === 'maneuvers') return maneuverPicks.length === maneuverDelta;
+    if (STEPS[step] === 'level-choices') {
+      return levelChoices.every((c) => (levelChoicePicks[c.key]?.length || 0) >= levelChoiceRequired(c));
+    }
     return true;
   };
 
@@ -408,6 +451,15 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
         }]
       : null;
 
+    // Class-wide pool selections (Metamagic, etc.) merge into their character_data field.
+    let levelChoicePatch = {};
+    for (const c of levelChoices) {
+      levelChoicePatch = {
+        ...levelChoicePatch,
+        ...applyLevelChoice(c, levelChoicePicks[c.key] || [], { ...(character.character_data ?? {}), ...levelChoicePatch }),
+      };
+    }
+
     const newCharacterData = {
       ...(character.character_data ?? {}),
       ...(newStoredHpMax != null ? { hp_max: newStoredHpMax } : {}),
@@ -416,6 +468,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       ...profPatch,
       ...featProfPatch,
       ...(needsManeuvers ? { maneuvers: [...knownManeuvers, ...maneuverPicks] } : {}),
+      ...levelChoicePatch,
       ...(featAddition ? { feats: featAddition } : {}),
     };
     // Ability-score changes (ASI step + any half-feat increase) update top-level character
@@ -974,6 +1027,62 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
           </div>
         )}
 
+        {/* ── Step: Level choices (Metamagic, etc.) ── */}
+        {STEPS[step] === 'level-choices' && (
+          <div className="space-y-4">
+            {levelChoices.map((c) => {
+              const opts = availablePoolOptions(c, character.character_data ?? {});
+              const chosen = levelChoicePicks[c.key] || [];
+              const required = levelChoiceRequired(c);
+              return (
+                <div key={c.key} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      Your <span className="font-medium text-foreground">{character.char_class}</span> learns{' '}
+                      <span className="font-medium text-foreground">{required}</span> {c.label} option{required === 1 ? '' : 's'}.
+                      Choose below — options you already have are hidden.
+                    </p>
+                    <span
+                      className={cn('text-xs shrink-0 ml-2', chosen.length >= required ? 'text-muted-foreground' : 'text-amber-600')}
+                      data-testid={`level-choice-count-${c.key}`}
+                    >
+                      {chosen.length}/{required}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1" data-testid={`level-choice-${c.key}`}>
+                    {opts.map((o) => {
+                      const sel = chosen.includes(o.name);
+                      const atLimit = !sel && chosen.length >= required;
+                      return (
+                        <button
+                          key={o.name}
+                          type="button"
+                          disabled={atLimit}
+                          onClick={() => toggleLevelChoice(c.key, o.name, required)}
+                          data-testid={`level-choice-${c.key}-${o.name}`}
+                          className={cn(
+                            'w-full rounded-md border p-2.5 text-left transition-colors',
+                            sel ? 'border-primary bg-primary/5' : 'hover:bg-muted/50',
+                            atLimit && 'opacity-50 cursor-not-allowed'
+                          )}
+                        >
+                          <span className="font-medium text-sm">{o.name}</span>
+                          {o.description && (
+                            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{o.description}</p>
+                          )}
+                        </button>
+                      );
+                    })}
+                    {opts.length === 0 && (
+                      <span className="text-xs text-muted-foreground">You already know all available options.</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* ── Step: Confirm ── */}
         {STEPS[step] === 'confirm' && (
           <div className="space-y-4">
@@ -1049,6 +1158,14 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                     <span className="font-medium">{maneuverPicks.join(', ') || '—'}</span>
                   </div>
                 )}
+                {needsLevelChoices && levelChoices.map((c) => (
+                  <div key={c.key} className="flex justify-between">
+                    <span className="text-muted-foreground">New {c.label}</span>
+                    <span className="font-medium" data-testid={`confirm-level-choice-${c.key}`}>
+                      {(levelChoicePicks[c.key] || []).join(', ') || '—'}
+                    </span>
+                  </div>
+                ))}
                 {isKnownCaster && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Spells known</span>

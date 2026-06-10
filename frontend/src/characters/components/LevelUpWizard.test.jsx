@@ -564,6 +564,8 @@ describe('LevelUpWizard', () => {
         { kind: 'proficiency', prof_type: 'skill', count: 1, label: '1 skill' },
         { kind: 'expertise', count: 1, label: '1 skill for Expertise' },
       ] },
+      { id: 17, name: 'Heavy Armor Master', prerequisites: { text: 'Proficiency with heavy armor' }, repeatable: false, description: 'Tank.' },
+      { id: 18, name: 'Moderately Armored', prerequisites: { text: 'Proficiency with light armor' }, repeatable: false, description: 'Armored.' },
     ];
 
     function toChoiceStep(character = FIGHTER_L3, campaign = CAMPAIGN_ASI_OR_FEAT, onComplete = vi.fn()) {
@@ -752,6 +754,38 @@ describe('LevelUpWizard', () => {
       ));
     });
 
+    it('locks an armor-prereq feat for a class without that armor proficiency (Wizard + Heavy Armor Master)', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const wizard = { ...FIGHTER_L3, char_class: 'Wizard', character_data: { hp_max: 26 } };
+      toChoiceStep(wizard, CAMPAIGN_ASI_OR_FEAT);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      const ham = await screen.findByTestId('pick-feat-17'); // Heavy Armor Master (needs heavy armor)
+      expect(ham).toBeDisabled();
+      expect(ham).toHaveAttribute('data-locked', 'true');
+    });
+
+    it('does NOT lock an armor-prereq feat for a class with that proficiency (Fighter + Heavy Armor Master)', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT); // Fighter has heavy armor proficiency
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      expect(await screen.findByTestId('pick-feat-17')).not.toBeDisabled();
+    });
+
+    it('feat-granted armor satisfies an armor prereq (Lightly Armored → Moderately Armored unlocked)', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const wizard = { ...FIGHTER_L3, char_class: 'Wizard', character_data: { hp_max: 26,
+        feats: [{ name: 'Lightly Armored', effects: [{ kind: 'proficiency', prof_type: 'armor', items: ['Light'] }] }] } };
+      toChoiceStep(wizard, CAMPAIGN_ASI_OR_FEAT);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      // Moderately Armored needs light armor → satisfied by the feat-granted light proficiency.
+      expect(await screen.findByTestId('pick-feat-18')).not.toBeDisabled();
+      // Heavy Armor Master still locked (no heavy proficiency).
+      expect(screen.getByTestId('pick-feat-17')).toBeDisabled();
+    });
+
     it('hides an already-taken non-repeatable feat', async () => {
       featService.getFeats.mockResolvedValueOnce(FEATS);
       const charWithAlert = { ...FIGHTER_L3, character_data: { hp_max: 26, feats: [{ id: 10, name: 'Alert' }] } };
@@ -799,6 +833,65 @@ describe('LevelUpWizard', () => {
       await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
         7,
         expect.objectContaining({ maneuvers: ['Trip Attack', 'Riposte', 'Parry', 'Precision Attack', 'Menacing Attack'] })
+      ));
+    });
+  });
+
+  describe('level choices — Sorcerer Metamagic', () => {
+    // Sorcerer L2→3 learns its first 2 Metamagic options; subclass already chosen at L1.
+    const SORCERER_L2 = {
+      id: 30, name: 'Raistlin', char_class: 'Sorcerer', level: 2, constitution: 12,
+      character_data: { hp_max: 13, subclass: 'Draconic Bloodline', cantrips: ['Fire Bolt'], known_spells: ['Magic Missile'] },
+    };
+    // L9→10 learns 1 more (2 → 3 known); already knows two options.
+    const SORCERER_L9 = {
+      ...SORCERER_L2, level: 9,
+      character_data: { ...SORCERER_L2.character_data, hp_max: 50, metamagic: ['Quickened Spell', 'Subtle Spell'] },
+    };
+
+    it('does not show a Metamagic step at a non-learn level (3 → 4)', () => {
+      render(
+        <LevelUpWizard
+          character={{ ...SORCERER_L2, level: 3 }}
+          campaign={CAMPAIGN_ASI_ONLY} onComplete={vi.fn()} onClose={vi.fn()}
+        />
+      );
+      expect(screen.queryByText('Metamagic')).not.toBeInTheDocument();
+    });
+
+    it('prompts the metamagic delta at L3, blocks Next until chosen, and appends on confirm', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={SORCERER_L2} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      chooseTakeAverage();                                 // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next'));  // features → spells
+      fireEvent.click(screen.getByTestId('wizard-next'));  // spells → level-choices
+      expect(screen.getByTestId('level-choice-count-metamagic')).toHaveTextContent('0/2');
+      expect(screen.getByTestId('wizard-next')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('level-choice-metamagic-Quickened Spell'));
+      fireEvent.click(screen.getByTestId('level-choice-metamagic-Subtle Spell'));
+      expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('wizard-next'));  // level-choices → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        3,
+        expect.objectContaining({ metamagic: ['Quickened Spell', 'Subtle Spell'] }),
+      ));
+    });
+
+    it('hides already-known options and appends to the existing list', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={SORCERER_L9} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      chooseTakeAverage();                                 // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next'));  // features → spells
+      fireEvent.click(screen.getByTestId('wizard-next'));  // spells → level-choices
+      expect(screen.getByTestId('level-choice-count-metamagic')).toHaveTextContent('0/1');
+      expect(screen.queryByTestId('level-choice-metamagic-Quickened Spell')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('level-choice-metamagic-Twinned Spell'));
+      fireEvent.click(screen.getByTestId('wizard-next'));  // level-choices → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        10,
+        expect.objectContaining({ metamagic: ['Quickened Spell', 'Subtle Spell', 'Twinned Spell'] }),
       ));
     });
   });
