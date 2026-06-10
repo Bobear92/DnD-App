@@ -1427,11 +1427,12 @@ describe('CharacterDetail', () => {
       expect(screen.queryByTestId('passive-perception-feat-note')).not.toBeInTheDocument();
     });
 
-    it('shows a feat speed bonus note (Mobile +10)', async () => {
+    it('shows the central speed annotation for a hand-written class (Barbarian + Mobile)', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,
         data: {
           ...BASE_CHARACTER,
+          char_class: 'Barbarian', // hand-written sheet → no CombatBlock fold-in, annotation shown
           character_data: {
             ...BASE_CHARACTER.character_data,
             feats: [{ id: 4, name: 'Mobile', level: 4, effects: [{ kind: 'stat_mod', stat: 'speed', amount: 10 }] }],
@@ -1440,6 +1441,22 @@ describe('CharacterDetail', () => {
       });
       renderDetail();
       await waitFor(() => expect(screen.getByTestId('speed-feat-note')).toHaveTextContent('+10 ft speed from Mobile'));
+    });
+
+    it('folds feat speed into Total Speed for a data-driven class (Fighter), suppressing the annotation', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER, // Fighter is data-driven
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{ id: 4, name: 'Mobile', level: 4, effects: [{ kind: 'stat_mod', stat: 'speed', amount: 10 }] }],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('total-speed')).toHaveTextContent('40')); // 30 + 10 in CombatBlock
+      expect(screen.queryByTestId('speed-feat-note')).not.toBeInTheDocument(); // central annotation suppressed
     });
 
     it('no speed feat note when no feat grants speed', async () => {

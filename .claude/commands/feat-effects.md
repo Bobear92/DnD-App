@@ -31,7 +31,7 @@ Each effect is `{ kind, …, label? }`. `label` is the chip text in the Feats su
 
 | kind | shape | consumer | status |
 |------|-------|----------|--------|
-| `stat_mod` | `{stat, amount}` | `getFeatStatMods(feats, stat, {pb})` | **wired**: initiative + passive_perception (CharacterDetail derived row), speed (CharacterDetail annotation). `amount: 'pb'` scales with the proficiency bonus (2024 Alert). |
+| `stat_mod` | `{stat, amount}` | `getFeatStatMods(feats, stat, {pb})` | **wired**: initiative + passive_perception (CharacterDetail derived row); speed folds into CombatBlock's Total Speed for data-driven sheets + a CharacterDetail annotation for hand-written ones (suppressed where `getClassConfig` finds a config). `amount: 'pb'` scales with the proficiency bonus (2024 Alert). |
 | `ac_mod` | `{amount?, condition:'armor'\|'two_melee_weapons'\|'medium_armor_dex_cap', dex_cap?}` | `getFeatAcMods` → evaluated in `computeArmorClass` | **wired**. Conditional AC: Defense (+1 in armor), Dual Wielder (+1 with two melee weapons), Medium Armor Master (medium DEX cap → `dex_cap`). |
 | `ability_score` | `{ability, amount}` | folded into level-up score updates | **wired** (LevelUpWizard). Variant-Human-creation path: TODO. |
 | `ability_choice` | `{abilities:[...], amount}` | acquisition chooser → score | **wired in LevelUpWizard** (`feat-ability-{stat}`). Variant Human creation: TODO. |

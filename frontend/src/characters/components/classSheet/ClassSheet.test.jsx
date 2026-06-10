@@ -35,6 +35,14 @@ describe('ClassSheet — martial section isolation', () => {
     expect(screen.getByText('Class Features')).toBeInTheDocument();
     expect(screen.getByText('Extra Attack (2 attacks)')).toBeInTheDocument();
   });
+
+  it('folds a feat speed bonus (Mobile +10) into Total Speed in the stats section', () => {
+    render(<FighterSheet
+      data={{ ...FIGHTER_DATA, speed: 30, feats: [{ name: 'Mobile', effects: [{ kind: 'stat_mod', stat: 'speed', amount: 10 }] }] }}
+      level={5} section="stats" />);
+    expect(screen.getByTestId('total-speed')).toHaveTextContent('40'); // 30 + 10
+    expect(screen.getByTestId('total-speed-feat-note')).toHaveTextContent('+10 Mobile');
+  });
 });
 
 describe('ClassSheet — Features tab sub-tabs', () => {

@@ -29,6 +29,7 @@ import InventoryTab from '../components/InventoryTab';
 import ActionEconomyTab from '../components/ActionEconomyTab';
 import FeatsSubTab from '../components/FeatsSubTab';
 import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '../components/featEffects';
+import { getClassConfig } from '../components/classSheet/configs';
 import { MaxHpValue, AcOptionsLine } from '../components/CombatBonusInline';
 import { totalHpBonus } from '../components/combatBonuses';
 import { draconicLabel } from '../components/draconicData';
@@ -1300,12 +1301,13 @@ export default function CharacterDetail() {
                     </div>
                   </div>
 
-                  {/* Feat speed bonus (e.g. Mobile +10). Shown centrally here for all classes;
-                      the class sheet's own Total Speed row doesn't fold it in yet. */}
+                  {/* Feat speed bonus (e.g. Mobile +10). Data-driven sheets (Fighter/Wizard) fold it
+                      into CombatBlock's Total Speed, so only the hand-written sheets — which can't yet —
+                      show this central annotation. Drops away as classes migrate to the config. */}
                   {(() => {
                     const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
                     const featSpeed = getFeatStatMods(feats, 'speed', { pb });
-                    if (!featSpeed) return null;
+                    if (!featSpeed || getClassConfig(character.char_class, edition)) return null;
                     const sources = getFeatStatModSources(feats, 'speed', { pb });
                     return (
                       <div className="text-xs text-emerald-600" data-testid="speed-feat-note">

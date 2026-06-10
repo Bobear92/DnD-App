@@ -7,6 +7,7 @@ import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import HitDiceTracker from '../HitDiceTracker';
+import { getFeatStatMods, getFeatStatModSources } from '../featEffects';
 
 function Field({ label, children }) {
   return (
@@ -51,17 +52,32 @@ export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, 
 
       {acExtra}
 
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Speed (ft)">
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.speed ?? 30}</div>
-        </Field>
-        <Field label="Speed Bonus (ft)">
-          <Input type="number" value={data.speed_bonus ?? 0} onChange={e => set('speed_bonus', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
-        </Field>
-        <Field label="Total Speed (ft)">
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{(data.speed ?? 30) + (data.speed_bonus ?? 0)}</div>
-        </Field>
-      </div>
+      {(() => {
+        // Feat speed bonuses (e.g. Mobile +10) fold into Total Speed here — the shared speed
+        // renderer — so every data-driven sheet shows the real number.
+        const pb = Math.ceil(level / 4) + 1;
+        const featSpeed = getFeatStatMods(data.feats, 'speed', { pb });
+        const sources = getFeatStatModSources(data.feats, 'speed', { pb });
+        const total = (data.speed ?? 30) + (data.speed_bonus ?? 0) + featSpeed;
+        return (
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Speed (ft)">
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium">{data.speed ?? 30}</div>
+            </Field>
+            <Field label="Speed Bonus (ft)">
+              <Input type="number" value={data.speed_bonus ?? 0} onChange={e => set('speed_bonus', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
+            </Field>
+            <Field label="Total Speed (ft)">
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-center font-medium" data-testid="total-speed">{total}</div>
+              {sources.length > 0 && (
+                <div className="text-[9px] text-emerald-600 leading-tight text-center" data-testid="total-speed-feat-note">
+                  {sources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
+                </div>
+              )}
+            </Field>
+          </div>
+        );
+      })()}
     </>
   );
 }
