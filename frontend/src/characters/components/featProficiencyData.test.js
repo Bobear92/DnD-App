@@ -62,4 +62,22 @@ describe('featProficiencyData', () => {
     expect(applyFeatProficiencyChoice('language', ['Orc', 'Draconic'], { feat_languages: ['Orc'] }))
       .toEqual({ feat_languages: ['Orc', 'Draconic'] });
   });
+
+  it('extracts an Expertise grant with a dynamic proficient-skills pool (Skill Expert)', () => {
+    const skillExpert = { name: 'Skill Expert', effects: [
+      { kind: 'proficiency', prof_type: 'skill', count: 1 },
+      { kind: 'expertise', count: 1 },
+    ] };
+    const choices = getFeatProficiencyChoices(skillExpert, { proficientSkills: ['Stealth', 'Arcana'] });
+    const exp = choices.find((c) => c.prof_type === 'expertise');
+    expect(exp).toMatchObject({ count: 1, options: ['Stealth', 'Arcana'] });
+    // No proficient skills passed → empty pool (so the picker can be skipped / auto-complete)
+    expect(getFeatProficiencyChoices(skillExpert).find((c) => c.prof_type === 'expertise').options).toEqual([]);
+  });
+
+  it('routes Expertise to expertise_skills and tracks already-held', () => {
+    expect(applyFeatProficiencyChoice('expertise', ['Stealth'], { expertise_skills: ['Arcana'] }))
+      .toEqual({ expertise_skills: ['Arcana', 'Stealth'] });
+    expect(existingFeatProfNames('expertise', { characterData: { expertise_skills: ['Stealth'] } }).has('stealth')).toBe(true);
+  });
 });

@@ -39,6 +39,17 @@ export function getFeatStatModSources(feats = [], stat, { pb } = {}) {
     .map((e) => ({ source: e._featName, amount: resolveAmount(e.amount, pb), label: e.label }));
 }
 
+/**
+ * Conditional AC modifiers from feats (Defense +1 in armor, Dual Wielder +1 with two melee
+ * weapons, Medium Armor Master's raised DEX cap). Returns the raw `ac_mod` effects; the
+ * condition is evaluated by computeArmorClass, which has the equipment context.
+ */
+export function getFeatAcMods(feats = []) {
+  return allFeatEffects(feats)
+    .filter((e) => e.kind === 'ac_mod')
+    .map((e) => ({ amount: Number(e.amount) || 0, condition: e.condition, dexCap: Number(e.dex_cap) || 0, source: e._featName }));
+}
+
 /** Action Economy entries contributed by feats (e.g. Tavern Brawler's bonus-action grapple). */
 export function getFeatActions(feats = []) {
   return allFeatEffects(feats)

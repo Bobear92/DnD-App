@@ -153,6 +153,30 @@ describe('computeArmorClass', () => {
     const ac = computeArmorClass({ inventory: [], scores: { dexterity: 14 }, charClass: 'Fighter' });
     expect(ac.value).toBe(12);
   });
+
+  it('Defense feat adds +1 AC only while wearing armor', () => {
+    const feats = [{ name: 'Defense', effects: [{ kind: 'ac_mod', amount: 1, condition: 'armor' }] }];
+    const inv = [armor({ armor_type: 'Light', armor_class: 11, equipped: true, name: 'Leather' })];
+    expect(computeArmorClass({ inventory: inv, scores: { dexterity: 14 }, feats }).value).toBe(14); // 11 + 2 + 1
+    expect(computeArmorClass({ inventory: [], scores: { dexterity: 14 }, charClass: 'Fighter', feats }).value).toBe(12); // no armor → no bonus
+  });
+
+  it('Dual Wielder adds +1 AC only with two equipped melee weapons', () => {
+    const feats = [{ name: 'Dual Wielder', effects: [{ kind: 'ac_mod', amount: 1, condition: 'two_melee_weapons' }] }];
+    const two = [
+      weapon({ name: 'Shortsword', weapon_type: 'Melee', equipped: true }),
+      weapon({ name: 'Scimitar', weapon_type: 'Melee', equipped: true }),
+    ];
+    expect(computeArmorClass({ inventory: two, scores: { dexterity: 14 }, charClass: 'Fighter', feats }).value).toBe(13); // 10 + 2 + 1
+    expect(computeArmorClass({ inventory: [two[0]], scores: { dexterity: 14 }, charClass: 'Fighter', feats }).value).toBe(12); // one weapon → no bonus
+  });
+
+  it('Medium Armor Master raises the medium DEX cap to +3', () => {
+    const feats = [{ name: 'Medium Armor Master', effects: [{ kind: 'ac_mod', condition: 'medium_armor_dex_cap', dex_cap: 3 }] }];
+    const inv = [armor({ armor_type: 'Medium', armor_class: 15, equipped: true, name: 'Half Plate' })];
+    expect(computeArmorClass({ inventory: inv, scores: { dexterity: 18 }, feats }).value).toBe(18); // 15 + min(4,3) = 3
+    expect(computeArmorClass({ inventory: inv, scores: { dexterity: 14 }, feats }).value).toBe(17); // 15 + min(2,3) = 2
+  });
 });
 
 describe('proficiency parsing', () => {

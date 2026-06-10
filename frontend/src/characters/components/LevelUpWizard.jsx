@@ -24,7 +24,7 @@ import { getManeuvers, maneuversKnownAtLevel } from './maneuversData';
 import FeatPicker from './FeatPicker';
 import { checkFeatPrerequisite } from './featPrerequisites';
 import { featAbilityChoices, featFixedAbilityScores } from './featEffects';
-import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice } from './featProficiencyData';
+import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, FEAT_SKILL_OPTIONS } from './featProficiencyData';
 import featService from '../../encyclopedia/featService';
 
 const ABILITY_LABEL = {
@@ -253,9 +253,19 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // The full picked feat (with effects) + any ability-score choice it demands (half-feats).
   const pickedFeat = featPick ? visibleFeats.find((f) => f.id === featPick.id) : null;
   const featAbilityChoice = pickedFeat ? (featAbilityChoices(pickedFeat)[0] || null) : null; // slice: one choice
-  // Count-choice proficiency grants the picked feat demands (Skilled / Linguist / Weapon Master).
-  const featProfGrants = pickedFeat ? getFeatProficiencyChoices(pickedFeat) : [];
-  const featProfComplete = featProfGrants.every((g) => (featProfChoices[g.prof_type]?.length || 0) === g.count);
+  // Count-choice proficiency grants the picked feat demands (Skilled / Linguist / Weapon Master),
+  // plus Expertise grants (Skill Expert) whose pool is the character's proficient skills — including
+  // a skill picked from this same feat (so you can expertise what you just gained).
+  const _skillSet = new Set(FEAT_SKILL_OPTIONS.map((s) => s.toLowerCase()));
+  const proficientSkills = [...new Set([
+    ...(character.character_data?.skill_proficiencies ?? []),
+    ...(featProfChoices.skill || []),
+    ...((featProfChoices.skill_or_tool || []).filter((s) => _skillSet.has(s.toLowerCase()))),
+  ])];
+  const featProfCtx = { charClass: character.char_class, characterData: character.character_data ?? {} };
+  const featProfGrants = pickedFeat ? getFeatProficiencyChoices(pickedFeat, { proficientSkills }) : [];
+  const featProfRequired = (g) => Math.min(g.count, availableFeatOptions(g, featProfCtx).length);
+  const featProfComplete = featProfGrants.every((g) => (featProfChoices[g.prof_type]?.length || 0) >= featProfRequired(g));
   const selectFeat = (f) => { setFeatPick(f); setFeatAbilityPick(''); setFeatProfChoices({}); };
   const toggleFeatProf = (profType, name, max) => {
     setFeatProfChoices((prev) => {
@@ -782,7 +792,8 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
 
             {/* Count-choice proficiency grants (Skilled / Linguist / Weapon Master) */}
             {featProfGrants.map((g) => {
-              const opts = availableFeatOptions(g, { charClass: character.char_class, characterData: character.character_data ?? {} });
+              const opts = availableFeatOptions(g, featProfCtx);
+              if (opts.length === 0) return null; // nothing left to pick (e.g. no proficient skills to expertise)
               const chosen = featProfChoices[g.prof_type] || [];
               return (
                 <div key={g.key} className="space-y-2 rounded-md border bg-muted/30 p-3">

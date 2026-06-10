@@ -31,14 +31,15 @@ Each effect is `{ kind, …, label? }`. `label` is the chip text in the Feats su
 
 | kind | shape | consumer | status |
 |------|-------|----------|--------|
-| `stat_mod` | `{stat, amount}` | `getFeatStatMods(feats, stat, {pb})` | **wired**: initiative + passive_perception (CharacterDetail derived row), speed (CharacterDetail annotation). `amount: 'pb'` scales with the proficiency bonus (2024 Alert). AC still needs a consumer. |
+| `stat_mod` | `{stat, amount}` | `getFeatStatMods(feats, stat, {pb})` | **wired**: initiative + passive_perception (CharacterDetail derived row), speed (CharacterDetail annotation). `amount: 'pb'` scales with the proficiency bonus (2024 Alert). |
+| `ac_mod` | `{amount?, condition:'armor'\|'two_melee_weapons'\|'medium_armor_dex_cap', dex_cap?}` | `getFeatAcMods` → evaluated in `computeArmorClass` | **wired**. Conditional AC: Defense (+1 in armor), Dual Wielder (+1 with two melee weapons), Medium Armor Master (medium DEX cap → `dex_cap`). |
 | `ability_score` | `{ability, amount}` | folded into level-up score updates | **wired** (LevelUpWizard). Variant-Human-creation path: TODO. |
 | `ability_choice` | `{abilities:[...], amount}` | acquisition chooser → score | **wired in LevelUpWizard** (`feat-ability-{stat}`). Variant Human creation: TODO. |
 | `attack_mod` | `{target:'unarmed', dice}` | `getFeatUnarmedDice` → Action Economy unarmed row | **unarmed wired**. Weapon attack bonuses (Archery +2) need a consumer in `inventoryData`/`getAttacks`. |
 | `action` | `{name, economy, description, trigger}` | `getFeatActions` → Action Economy bucket | **wired**. `economy` ∈ `no_action\|action\|bonus\|action+bonus\|reaction`. |
 | `resource` | `{key, label, total, recharge:'short'\|'long'}` | FeatsSubTab tracker (RestResourceControl) + backend `_compute_rest_patch` reset + `getRestSummary` | **wired** (Lucky, Martial Adept). `total: 'pb'` scales with the proficiency bonus (2024 Lucky). |
 | `proficiency` | `{prof_type:'skill'\|'tool'\|'weapon'\|'armor'\|'language'\|'saving_throw'\|'skill_or_tool', items?:[...], count?}` | banners / skills / saves / languages | **wired**. Fixed `items` grants → `featEffects.getFeatProficiencyGrants` (banners). `saving_throw` (Resilient) → saves display. **count-choice** (`count`, no items: Skilled/Linguist/Weapon Master) → `featProficiencyData.js` pickers in the LevelUpWizard feat step + Variant Human creation; picks stored in skill_proficiencies / feat_tool_proficiencies / feat_languages / feat_weapon_proficiencies. |
-| `expertise` | `{count}` | skills panel expertise | **NEEDS consumer**. Skill Expert (2024). |
+| `expertise` | `{count}` | skills panel (purple) via `expertise_skills` | **wired**. `featProficiencyData` builds a count-choice grant whose pool is the character's proficient skills (incl. one picked from the same feat); routed to `expertise_skills`. Skill Expert. |
 | `note` | `{text}` | shown via the description (not a chip) | **wired** — use for rules we can't mechanize yet (advantage on X, ignore difficult terrain, can't be surprised). Honest "flavor, not forgotten". |
 
 **Special case — Tough:** `+2 HP/level` is already handled by `combatBonuses.hasToughFeat` (reads `character_data.feats` by name). Don't add an HP `stat_mod` for it (double-count); give it a `note`.

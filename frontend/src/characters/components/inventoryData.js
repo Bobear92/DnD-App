@@ -10,6 +10,14 @@
  * the result via the normal character_data save path.
  */
 import { getAcOptions } from './combatBonuses';
+import { getFeatAcMods } from './featEffects';
+
+/** Two or more equipped melee weapons (Dual Wielder's condition). */
+function twoMeleeWeaponsEquipped(inventory = []) {
+  return (inventory || []).filter(
+    (e) => e.category === 'weapons' && e.equipped && (e.weapon_type || '').toLowerCase() !== 'ranged',
+  ).length >= 2;
+}
 
 export const EQUIPPABLE_CATEGORIES = new Set(['weapons', 'armor']);
 export const ATTUNABLE_CATEGORIES = new Set(['magic-items']);
@@ -142,11 +150,15 @@ export function equippedShield(inventory = []) {
  * Effective AC from equipped armor + shield, or the best unarmored formula when no
  * body armor is worn. Returns { value, source, parts:[string] }.
  */
-export function computeArmorClass({ inventory = [], scores = {}, charClass, subclass } = {}) {
+export function computeArmorClass({ inventory = [], scores = {}, charClass, subclass, feats = [] } = {}) {
   const dex = abilityMod(scores.dexterity);
   const armor = equippedBodyArmor(inventory);
   const shield = equippedShield(inventory);
   const shieldBonus = shield ? 2 : 0;
+  const acMods = getFeatAcMods(feats);
+  // Medium Armor Master raises the medium-armor DEX cap (2 → 3).
+  const mediumDexCap = acMods.filter((m) => m.condition === 'medium_armor_dex_cap')
+    .reduce((cap, m) => Math.max(cap, m.dexCap || 0), 2);
   const parts = [];
   let base;
   let source;
@@ -158,9 +170,9 @@ export function computeArmorClass({ inventory = [], scores = {}, charClass, subc
       base = baseAc;
       parts.push(`${baseAc} ${armor.name}`);
     } else if (type === 'medium') {
-      const dexApplied = Math.min(dex, 2);
+      const dexApplied = Math.min(dex, mediumDexCap);
       base = baseAc + dexApplied;
-      parts.push(`${baseAc} ${armor.name}`, `${formatSigned(dexApplied)} DEX (max +2)`);
+      parts.push(`${baseAc} ${armor.name}`, `${formatSigned(dexApplied)} DEX (max +${mediumDexCap})`);
     } else {
       // light or unknown → full DEX
       base = baseAc + dex;
@@ -183,7 +195,16 @@ export function computeArmorClass({ inventory = [], scores = {}, charClass, subc
   }
 
   if (shieldBonus) parts.push(`+2 ${shield.name}`);
-  return { value: base + shieldBonus, source, parts };
+
+  // Conditional flat feat bonuses: Defense (+1 while wearing armor), Dual Wielder (+1 with
+  // two melee weapons). The medium-armor DEX cap mod is applied above, not here.
+  let featBonus = 0;
+  for (const m of acMods) {
+    const applies = (m.condition === 'armor' && armor) || (m.condition === 'two_melee_weapons' && twoMeleeWeaponsEquipped(inventory));
+    if (applies && m.amount) { featBonus += m.amount; parts.push(`${formatSigned(m.amount)} ${m.source}`); }
+  }
+
+  return { value: base + shieldBonus + featBonus, source, parts };
 }
 
 // ─── Proficiency ─────────────────────────────────────────────────────────────────

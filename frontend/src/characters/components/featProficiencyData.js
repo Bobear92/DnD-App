@@ -57,19 +57,33 @@ const PROF_LABEL = {
 /**
  * Count-choice proficiency grants on a single feat (the one being picked). Returns
  * [{ key, prof_type, count, label, options }] — empty for feats with no count-choice
- * proficiency (fixed-item grants are excluded; they aren't a choice).
+ * proficiency (fixed-item grants are excluded; they aren't a choice). Also includes
+ * `expertise` grants (Skill Expert), whose pool is DYNAMIC — the character's currently
+ * proficient skills (pass `proficientSkills`, including any picked from this same feat).
  */
-export function getFeatProficiencyChoices(feat) {
+export function getFeatProficiencyChoices(feat, { proficientSkills = [] } = {}) {
   if (!feat || !Array.isArray(feat.effects)) return [];
-  return feat.effects
-    .filter((e) => e.kind === 'proficiency' && e.count > 0 && !Array.isArray(e.items))
-    .map((e) => ({
-      key: `feat-prof-${e.prof_type}`,
-      prof_type: e.prof_type,
-      count: e.count,
-      label: e.label || `Choose ${e.count} ${PROF_LABEL[e.prof_type] || e.prof_type}`,
-      options: optionsFor(e.prof_type),
-    }));
+  const out = [];
+  for (const e of feat.effects) {
+    if (e.kind === 'proficiency' && e.count > 0 && !Array.isArray(e.items)) {
+      out.push({
+        key: `feat-prof-${e.prof_type}`,
+        prof_type: e.prof_type,
+        count: e.count,
+        label: e.label || `Choose ${e.count} ${PROF_LABEL[e.prof_type] || e.prof_type}`,
+        options: optionsFor(e.prof_type),
+      });
+    } else if (e.kind === 'expertise' && e.count > 0) {
+      out.push({
+        key: 'feat-expertise',
+        prof_type: 'expertise',
+        count: e.count,
+        label: e.label || `Choose ${e.count} skill${e.count > 1 ? 's' : ''} for Expertise`,
+        options: [...new Set(proficientSkills)],
+      });
+    }
+  }
+  return out;
 }
 
 /** Lowercased set of proficiencies of `profType` the character already has. */
@@ -86,6 +100,9 @@ export function existingFeatProfNames(profType, { charClass, characterData = {} 
   }
   if (profType === 'skill') {
     return new Set((cd.skill_proficiencies || []).map(lc));
+  }
+  if (profType === 'expertise') {
+    return new Set((cd.expertise_skills || []).map(lc));
   }
   if (profType === 'tool' || profType === 'skill_or_tool') {
     const tools = gatherProficiencies({ charClass, characterData: cd }).tools.grants.map(lc);
@@ -107,6 +124,7 @@ export function applyFeatProficiencyChoice(profType, chosen = [], characterData 
   const merge = (field, vals) => ({ [field]: dedup([...(cd[field] || []), ...vals]) });
   switch (profType) {
     case 'skill': return merge('skill_proficiencies', chosen);
+    case 'expertise': return merge('expertise_skills', chosen);
     case 'tool': return merge('feat_tool_proficiencies', chosen);
     case 'language': return merge('feat_languages', chosen);
     case 'weapon': return merge('feat_weapon_proficiencies', chosen);

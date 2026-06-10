@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   allFeatEffects, getFeatStatMods, getFeatStatModSources, getFeatActions,
   getFeatUnarmedDice, featAbilityChoices, featFixedAbilityScores, isMechanized,
-  getFeatResources, getFeatProficiencyGrants, getFeatSaveProficiencies,
+  getFeatResources, getFeatProficiencyGrants, getFeatSaveProficiencies, getFeatAcMods,
 } from './featEffects';
 
 const ALERT = {
@@ -113,6 +113,14 @@ describe('featEffects resolver', () => {
     // explicit ability + no-choice-yet
     expect(getFeatSaveProficiencies([{ name: 'X', effects: [{ kind: 'proficiency', prof_type: 'saving_throw', ability: 'wisdom' }] }])).toEqual(['wisdom']);
     expect(getFeatSaveProficiencies([{ name: 'Y', effects: [{ kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true }] }])).toEqual([]);
+  });
+
+  it('getFeatAcMods returns conditional AC effects', () => {
+    const defense = { name: 'Defense', effects: [{ kind: 'ac_mod', amount: 1, condition: 'armor' }] };
+    const mam = { name: 'Medium Armor Master', effects: [{ kind: 'ac_mod', condition: 'medium_armor_dex_cap', dex_cap: 3 }] };
+    expect(getFeatAcMods([defense])).toEqual([{ amount: 1, condition: 'armor', dexCap: 0, source: 'Defense' }]);
+    expect(getFeatAcMods([mam])[0]).toMatchObject({ condition: 'medium_armor_dex_cap', dexCap: 3 });
+    expect(getFeatAcMods([NO_EFFECTS])).toEqual([]);
   });
 
   it('isMechanized: true when a non-note effect exists', () => {

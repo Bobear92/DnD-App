@@ -80,7 +80,8 @@ FEAT_EFFECTS_5E = {
                 "Add your proficiency bonus to your AC against that attack, possibly causing it to miss."),
     ],
     "Dual Wielder": [
-        _note("+1 AC while wielding a separate melee weapon in each hand; two-weapon fighting with non-light weapons; draw/stow two one-handed weapons at once."),
+        {"kind": "ac_mod", "amount": 1, "condition": "two_melee_weapons", "label": "+1 AC (dual-wielding)"},
+        _note("Two-weapon fighting with non-light weapons; draw/stow two one-handed weapons at once."),
     ],
     "Dungeon Delver": [
         _note("Advantage to find secret doors and on saves vs traps; resistance to trap damage; search for traps at normal travel pace."),
@@ -143,7 +144,8 @@ FEAT_EFFECTS_5E = {
         _note("Learn two Battle Master maneuvers fueled by the superiority die."),
     ],
     "Medium Armor Master": [
-        _note("Medium armor doesn't impose disadvantage on Stealth; add up to +3 (instead of +2) DEX to AC if DEX is 16+."),
+        {"kind": "ac_mod", "condition": "medium_armor_dex_cap", "dex_cap": 3, "label": "+3 DEX cap (medium armor)"},
+        _note("Medium armor doesn't impose disadvantage on Stealth."),
     ],
     "Mobile": [
         {"kind": "stat_mod", "stat": "speed", "amount": 10, "label": "+10 speed"},
@@ -266,7 +268,7 @@ FEAT_EFFECTS_2024 = {
         _action("Defensive Parry", "reaction", "When hit by a melee attack while wielding a Finesse weapon",
                 "Add your proficiency bonus to your AC against that attack."),
     ],
-    "Dual Wielder": [_abil_choice(["strength", "dexterity"]), _note("+1 AC while wielding two melee weapons; two-weapon fighting with non-Light weapons; draw/stow two weapons at once.")],
+    "Dual Wielder": [_abil_choice(["strength", "dexterity"]), {"kind": "ac_mod", "amount": 1, "condition": "two_melee_weapons", "label": "+1 AC (dual-wielding)"}, _note("Two-weapon fighting with non-Light weapons; draw/stow two weapons at once.")],
     "Durable": [_abil("constitution"), _note("Spend Hit Dice to heal during any rest; regain at least twice your CON modifier when you roll Hit Dice.")],
     "Elemental Adept": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Choose a damage type: your spells ignore resistance to it and treat 1s on its damage dice as 2s. Repeatable.")],
     "Fey Touched": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Learn Misty Step and one 1st-level Divination or Enchantment spell, castable once per long rest for free.")],
@@ -291,7 +293,7 @@ FEAT_EFFECTS_2024 = {
                 "Make a melee weapon attack against it."),
         _note("Impose disadvantage on concentration saves you cause.")],
     "Martial Weapon Training": [_abil_choice(["strength", "dexterity"]), {"kind": "proficiency", "prof_type": "weapon", "items": ["Martial weapons"]}],
-    "Medium Armor Master": [_abil_choice(["strength", "dexterity"]), _note("Medium armor doesn't impose disadvantage on Stealth; add up to +3 DEX to AC.")],
+    "Medium Armor Master": [_abil_choice(["strength", "dexterity"]), {"kind": "ac_mod", "condition": "medium_armor_dex_cap", "dex_cap": 3, "label": "+3 DEX cap (medium armor)"}, _note("Medium armor doesn't impose disadvantage on Stealth.")],
     "Mobile": [_abil_choice(["strength", "dexterity"]), {"kind": "stat_mod", "stat": "speed", "amount": 10, "label": "+10 speed"}, _note("Dashing ignores difficult terrain; a melee attack denies that creature's opportunity attacks against you this turn.")],
     "Moderately Armored": [_abil_choice(["strength", "dexterity"]), {"kind": "proficiency", "prof_type": "armor", "items": ["Medium", "Shields"]}],
     "Mounted Combatant": [_abil_choice(["strength", "dexterity", "wisdom"]), _note("Advantage vs creatures smaller than your mount; redirect attacks from mount to you; mount avoids damage on DEX saves.")],
@@ -320,7 +322,7 @@ FEAT_EFFECTS_2024 = {
     "Skill Expert": [
         _abil_choice(_ALL_ABILITIES),
         {"kind": "proficiency", "prof_type": "skill", "count": 1, "label": "1 skill"},
-        _note("Also gain Expertise in one skill you're proficient with.")],
+        {"kind": "expertise", "count": 1, "label": "1 skill for Expertise"}],
     "Skulker": [_abil("dexterity"), _note("Hide as a Bonus Action while lightly obscured; missing a ranged attack doesn't reveal you; Blindsight 10 ft in darkness.")],
     "Slasher": [_abil_choice(["strength", "dexterity"]), _note("Once per turn, reduce a creature's speed by 10 ft on slashing damage; a slashing crit gives it disadvantage on attacks.")],
     "Speedy": [_abil_choice(["strength", "dexterity"]), {"kind": "stat_mod", "stat": "speed", "amount": 10, "label": "+10 speed"}, _note("Dashing ignores difficult terrain; no opportunity attacks from creatures you've damaged this turn.")],
@@ -336,7 +338,7 @@ FEAT_EFFECTS_2024 = {
     # ── Fighting Style feats (no ASI; mostly passive combat riders) ──
     "Archery": [_note("+2 bonus to attack rolls with ranged weapons.")],
     "Blind Fighting": [_note("Blindsight 10 ft — see anything not behind total cover even while blinded or in darkness.")],
-    "Defense": [_note("+1 bonus to Armor Class while wearing armor.")],
+    "Defense": [{"kind": "ac_mod", "amount": 1, "condition": "armor", "label": "+1 AC (in armor)"}],
     "Dueling": [_note("+2 bonus to damage rolls with a one-handed melee weapon when wielding no other weapon.")],
     "Great Weapon Fighting": [_note("Treat a 1 or 2 on a two-handed melee weapon's damage die as a 3.")],
     "Interception": [

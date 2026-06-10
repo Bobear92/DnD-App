@@ -1066,6 +1066,7 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
             return grants.map(g => {
               const chosen = profChoices[g.prof_type] || [];
               const opts = availableFeatOptions(g, { characterData: {} });
+              if (opts.length === 0) return null; // nothing pickable (e.g. Expertise pre-skills)
               return (
                 <div key={g.key} className="space-y-1.5 rounded-md border bg-muted/30 p-2" data-testid={`human-feat-prof-grant-${g.prof_type}`}>
                   <div className="flex items-center justify-between">
@@ -1434,8 +1435,10 @@ export default function CharacterCreate() {
     : null;
   const humanFeatAbilityChoice = featAbilityChoices(humanFeatObj)[0] || null;
   const humanFeatProfGrants = getFeatProficiencyChoices(humanFeatObj);
+  // required = min(count, available) so a grant with no pickable options (e.g. Expertise with no
+  // proficient skills assembled yet at creation) auto-completes instead of blocking Next.
   const humanFeatProfComplete = humanFeatProfGrants.every(
-    g => (raceChoices.human_feat_prof?.[g.prof_type]?.length || 0) === g.count,
+    g => (raceChoices.human_feat_prof?.[g.prof_type]?.length || 0) >= Math.min(g.count, availableFeatOptions(g, { characterData: {} }).length),
   );
   const humanFeatAsi = (() => {
     if (!humanFeatObj) return {};

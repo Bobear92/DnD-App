@@ -75,7 +75,7 @@ export default function InventoryTab({
   const raceArmor = getRaceGrantedArmor(race, subrace) || [];
   const proficiencies = gatherProficiencies({ charClass, characterData });
 
-  const ac = computeArmorClass({ inventory, scores, charClass, subclass });
+  const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats });
   const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons });
   const attuned = attunedCount(inventory);
 
@@ -94,7 +94,7 @@ export default function InventoryTab({
 
   const push = (next, syncAc = false) => {
     const patch = { inventory: next };
-    if (syncAc) patch.armor_class = computeArmorClass({ inventory: next, scores, charClass, subclass }).value;
+    if (syncAc) patch.armor_class = computeArmorClass({ inventory: next, scores, charClass, subclass, feats: characterData?.feats }).value;
     onChange?.(patch);
   };
 

@@ -559,6 +559,11 @@ describe('LevelUpWizard', () => {
         { kind: 'ability_score', ability: 'intelligence', amount: 1 },
         { kind: 'proficiency', prof_type: 'language', count: 3, label: '3 languages' },
       ] },
+      { id: 16, name: 'Skill Expert', prerequisites: {}, repeatable: false, description: 'Expert.', effects: [
+        { kind: 'ability_choice', abilities: ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'], amount: 1 },
+        { kind: 'proficiency', prof_type: 'skill', count: 1, label: '1 skill' },
+        { kind: 'expertise', count: 1, label: '1 skill for Expertise' },
+      ] },
     ];
 
     function toChoiceStep(character = FIGHTER_L3, campaign = CAMPAIGN_ASI_OR_FEAT, onComplete = vi.fn()) {
@@ -719,6 +724,31 @@ describe('LevelUpWizard', () => {
         4,
         expect.objectContaining({ feat_languages: expect.arrayContaining(['Draconic', 'Giant', 'Goblin']) }),
         expect.objectContaining({ intelligence: 11 }), // Linguist's fixed +1 INT (10 → 11)
+      ));
+    });
+
+    it('Skill Expert: Expertise pool includes the skill picked from the same feat', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT, onComplete);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      fireEvent.click(await screen.findByTestId('pick-feat-16')); // Skill Expert
+      fireEvent.click(screen.getByTestId('feat-ability-intelligence')); // +1 ability
+      // Expertise picker is hidden until a proficient skill exists; pick the skill proficiency first.
+      expect(screen.queryByTestId('feat-prof-grant-expertise')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('feat-prof-opt-skill-Stealth'));
+      // Now Stealth is available to Expertise.
+      fireEvent.click(await screen.findByTestId('feat-prof-opt-expertise-Stealth'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // feat → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4,
+        expect.objectContaining({
+          skill_proficiencies: expect.arrayContaining(['Stealth']),
+          expertise_skills: ['Stealth'],
+        }),
+        expect.objectContaining({ intelligence: 11 }), // chosen +1 INT (10 → 11)
       ));
     });
 

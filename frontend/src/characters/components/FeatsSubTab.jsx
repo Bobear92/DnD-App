@@ -44,6 +44,8 @@ function effectChipLabel(e, feat) {
       }
       if (e.count) return `${e.count} ${String(e.prof_type).replace(/_/g, ' ')}`;
       return e.label || String(e.prof_type);
+    case 'expertise': return e.label || `Expertise ×${e.count || 1}`;
+    case 'ac_mod': return e.label || (e.amount ? `+${e.amount} AC` : 'AC');
     default: return null; // note
   }
 }
