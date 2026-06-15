@@ -241,6 +241,20 @@ describe('CharacterList — rest buttons (GM view)', () => {
     expect(screen.getByTestId('confirm-rest-btn')).toBeTruthy();
   });
 
+  it('long rest summary lists a feat spell free cast (Magic Initiate)', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], character_data: { feats: [
+        { id: 10, name: 'Magic Initiate', choices: { spell_grant: { leveled: [{ name: 'Mage Armor', level: 1 }], free_casts: ['Mage Armor'] } } },
+      ] } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText(/Mage Armor \(feat free cast\)/i)).toBeInTheDocument();
+  });
+
   it('confirmation dialog shows selected character names', async () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));

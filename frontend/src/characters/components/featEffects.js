@@ -10,9 +10,10 @@
 //   { kind: 'ability_choice', abilities:[...], amount }        player picks one of the abilities (half-feats)
 //   { kind: 'attack_mod',     target:'unarmed', dice }         changes an attack (e.g. unarmed strike die)
 //   { kind: 'action',         name, economy, description, trigger }  an Action Economy entry
+//   { kind: 'spell_grant',    source_kind, cantrips, leveled, fixed, free_cast, ability }  grants spells (Magic Initiate)
 //   { kind: 'note',           text }                           display-only rider (explicitly not a mechanic)
 
-export const FEAT_EFFECT_KINDS = ['stat_mod', 'ability_score', 'ability_choice', 'attack_mod', 'action', 'note'];
+export const FEAT_EFFECT_KINDS = ['stat_mod', 'ability_score', 'ability_choice', 'attack_mod', 'action', 'spell_grant', 'note'];
 
 /** All effect objects across a character's feats (each feat instance may carry a snapshot). */
 export function allFeatEffects(feats = []) {
@@ -149,6 +150,78 @@ export function getFeatSaveProficiencies(feats = []) {
     }
   }
   return [...new Set(out)];
+}
+
+/**
+ * Spell-grant specs a feat asks the player to fulfil at acquisition (Magic Initiate, etc.).
+ * Pass a single feat object (the one being picked). Returns
+ * [{ source_kind, cantrips, leveled:[{level,count}], fixed:[{name,level}], free_cast, ability, label }].
+ */
+export function getSpellGrantSpecs(feat) {
+  if (!feat || !Array.isArray(feat.effects)) return [];
+  return feat.effects
+    .filter((e) => e.kind === 'spell_grant')
+    .map((e) => ({
+      source_kind: e.source_kind || 'class',
+      cantrips: Number(e.cantrips) || 0,
+      leveled: Array.isArray(e.leveled) ? e.leveled : [],
+      fixed: Array.isArray(e.fixed) ? e.fixed : [],
+      free_cast: e.free_cast || null,
+      ability: e.ability || 'choice',
+      label: e.label || feat.name,
+    }));
+}
+
+/**
+ * Spells a character has gained from feats — read from each feat instance's
+ * `choices.spell_grant` snapshot (recorded by the acquisition picker). Returns
+ * { cantrips:[{name,level,source}], leveled:[{name,level,source}],
+ *   freeCasts:[{name,level,source,ability}],
+ *   ritualBooks:[{featIndex,source,spells:[names]}] }. The Spells-tab Feats section consumes
+ * this; free casts are 1/long rest; ritual books (Ritual Caster) are cast as rituals only and
+ * are editable (the `featIndex` locates the feat instance to persist add/remove).
+ */
+export function getFeatGrantedSpells(feats = []) {
+  const cantrips = [];
+  const leveled = [];
+  const freeCasts = [];
+  const ritualBooks = [];
+  (feats ?? []).forEach((f, featIndex) => {
+    const sg = f?.choices?.spell_grant;
+    if (!sg) return;
+    const source = f.name;
+    // Ritual Caster: a growable, editable ritual book (cast as rituals only — no free cast).
+    // `featIndex` lets the Feats tab persist add/remove back to the right feat instance.
+    if (sg.ritual) {
+      ritualBooks.push({ featIndex, source, spells: [...(sg.ritual_book || [])] });
+      return;
+    }
+    for (const name of sg.cantrips || []) cantrips.push({ name, level: 0, source });
+    for (const s of sg.leveled || []) leveled.push({ name: s.name, level: s.level ?? 1, source });
+    // Always-granted spells (Telekinetic's Mage Hand, Telepathic's Detect Thoughts, …).
+    for (const fx of sg.fixed || []) {
+      ((fx.level ?? 0) === 0 ? cantrips : leveled).push({ name: fx.name, level: fx.level ?? 0, source });
+    }
+    // Free casts (each 1/long rest). New snapshots store a `free_casts` list; tolerate an older
+    // singular `free_cast` name for safety.
+    const fcNames = sg.free_casts || (sg.free_cast ? [sg.free_cast] : []);
+    const all = [...(sg.leveled || []), ...(sg.fixed || [])];
+    for (const name of fcNames) {
+      const lv = all.find((s) => s.name === name);
+      freeCasts.push({ name, level: lv?.level ?? 1, source, ability: sg.ability, usedKey: featFreeCastUsedKey(name) });
+    }
+  });
+  return { cantrips, leveled, freeCasts, ritualBooks };
+}
+
+/**
+ * character_data key tracking whether a feat-granted spell's 1/long-rest free cast has been used.
+ * MUST stay in sync with the backend `_feat_freecast_used_key` (players/characters/service.py),
+ * which resets it on a long rest.
+ */
+export function featFreeCastUsedKey(name) {
+  const slug = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return `feat_freecast_${slug}_used`;
 }
 
 /** Fixed ability increases a feat grants (no choice needed), e.g. [{ ability, amount }]. */

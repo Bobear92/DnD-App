@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isDraconicSorcerer, hasToughFeat, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, getAcOptions } from './combatBonuses';
+import { isDraconicSorcerer, hasToughFeat, hasDurableFeat, durableHitDieMin, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, getAcOptions } from './combatBonuses';
 
 describe('isDraconicSorcerer', () => {
   it('true for 5e Draconic Bloodline', () => {
@@ -64,6 +64,30 @@ describe('hasToughFeat', () => {
     expect(hasToughFeat([{ name: 'Alert' }])).toBe(false);
     expect(hasToughFeat([])).toBe(false);
     expect(hasToughFeat()).toBe(false);
+  });
+});
+
+describe('hasDurableFeat', () => {
+  it('detects Durable in object/string feat lists', () => {
+    expect(hasDurableFeat([{ id: 1, name: 'Durable' }])).toBe(true);
+    expect(hasDurableFeat(['Alert', 'Durable'])).toBe(true);
+  });
+  it('false when absent / empty / nullish', () => {
+    expect(hasDurableFeat([{ name: 'Tough' }])).toBe(false);
+    expect(hasDurableFeat([])).toBe(false);
+    expect(hasDurableFeat()).toBe(false);
+  });
+});
+
+describe('durableHitDieMin', () => {
+  it('returns twice the CON modifier (min 2) when Durable is present', () => {
+    expect(durableHitDieMin(3, true)).toBe(6);
+    expect(durableHitDieMin(0, true)).toBe(2);   // floored at 2
+    expect(durableHitDieMin(-1, true)).toBe(2);  // negative CON → still 2
+  });
+  it('returns 0 without Durable', () => {
+    expect(durableHitDieMin(3, false)).toBe(0);
+    expect(durableHitDieMin(3)).toBe(0);
   });
 });
 

@@ -638,6 +638,51 @@ class TestApplyRest:
         assert cd["martial_adept_superiority_used"] == 0
         assert cd["luck_points_used"] == 3  # long-rest resource untouched by a short rest
 
+    def test_long_rest_resets_feat_spell_free_cast(self, client):
+        # Magic Initiate's 1/long-rest free cast (feat_freecast_<spell>_used) resets on a long rest.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=4,
+            character_data={
+                "hp_max": 28,
+                "feat_freecast_mage_armor_used": 1,
+                "feats": [
+                    {"id": 1, "name": "Magic Initiate", "choices": {"spell_grant": {
+                        "source": "Wizard", "ability": "intelligence",
+                        "cantrips": ["Fire Bolt", "Light"],
+                        "leveled": [{"name": "Mage Armor", "level": 1}], "free_casts": ["Mage Armor"]}}},
+                ],
+            },
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
+        assert cd["feat_freecast_mage_armor_used"] == 0
+
+    def test_short_rest_leaves_feat_spell_free_cast_untouched(self, client):
+        # The free cast recharges on a long rest only, so a short rest leaves it used.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=4,
+            character_data={
+                "feat_freecast_mage_armor_used": 1,
+                "feats": [
+                    {"id": 1, "name": "Magic Initiate", "choices": {"spell_grant": {
+                        "leveled": [{"name": "Mage Armor", "level": 1}], "free_casts": ["Mage Armor"]}}},
+                ],
+            },
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
+        assert cd["feat_freecast_mage_armor_used"] == 1
+
     def test_long_rest_restores_hp_and_spell_slots(self, client):
         h_gm, _, campaign_id = self._setup(client)
         char_id = self._create_char(

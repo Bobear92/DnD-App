@@ -23,9 +23,10 @@ import {
 import { getManeuvers, maneuversKnownAtLevel } from './maneuversData';
 import { getLevelChoices, availablePoolOptions, applyLevelChoice } from './levelChoicesData';
 import FeatPicker from './FeatPicker';
+import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from './FeatSpellGrantPicker';
 import { checkFeatPrerequisite } from './featPrerequisites';
-import { featAbilityChoices, featFixedAbilityScores, getFeatProficiencyGrants } from './featEffects';
-import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, FEAT_SKILL_OPTIONS } from './featProficiencyData';
+import { featAbilityChoices, featFixedAbilityScores, getFeatProficiencyGrants, getSpellGrantSpecs } from './featEffects';
+import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, groupFeatProfOptions, FEAT_SKILL_OPTIONS } from './featProficiencyData';
 import { CLASS_PROFICIENCIES_5E } from './classProficienciesData';
 import featService from '../../encyclopedia/featService';
 
@@ -125,6 +126,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const [featPick, setFeatPick] = useState(null); // { id, name } chosen this level-up
   const [featAbilityPick, setFeatAbilityPick] = useState(''); // half-feat ability choice (e.g. Tavern Brawler)
   const [featProfChoices, setFeatProfChoices] = useState({}); // { [prof_type]: [chosen] } — Skilled/Linguist/Weapon Master
+  const [featSpellGrant, setFeatSpellGrant] = useState(null); // spell_grant picks (Magic Initiate): { source, ability, cantrips, leveled }
   const [allFeats, setAllFeats] = useState([]); // edition-filtered feat catalogue
   const [saving, setSaving] = useState(false);
 
@@ -284,16 +286,24 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // plus Expertise grants (Skill Expert) whose pool is the character's proficient skills — including
   // a skill picked from this same feat (so you can expertise what you just gained).
   const _skillSet = new Set(FEAT_SKILL_OPTIONS.map((s) => s.toLowerCase()));
-  const proficientSkills = [...new Set([
-    ...(character.character_data?.skill_proficiencies ?? []),
+  // The skills granted by THIS feat being picked (a Skilled skill_or_tool pick or a Skill
+  // Expert skill pick) — recorded on the feat instance so the Stats skills panel can flag them.
+  const featSkillPicks = [...new Set([
     ...(featProfChoices.skill || []),
     ...((featProfChoices.skill_or_tool || []).filter((s) => _skillSet.has(s.toLowerCase()))),
+  ])];
+  const proficientSkills = [...new Set([
+    ...(character.character_data?.skill_proficiencies ?? []),
+    ...featSkillPicks,
   ])];
   const featProfCtx = { charClass: character.char_class, characterData: character.character_data ?? {} };
   const featProfGrants = pickedFeat ? getFeatProficiencyChoices(pickedFeat, { proficientSkills }) : [];
   const featProfRequired = (g) => Math.min(g.count, availableFeatOptions(g, featProfCtx).length);
   const featProfComplete = featProfGrants.every((g) => (featProfChoices[g.prof_type]?.length || 0) >= featProfRequired(g));
-  const selectFeat = (f) => { setFeatPick(f); setFeatAbilityPick(''); setFeatProfChoices({}); };
+  // Spell-grant spec (Magic Initiate) the picked feat asks the player to fulfil.
+  const featSpellSpec = pickedFeat ? (getSpellGrantSpecs(pickedFeat)[0] || null) : null;
+  const featSpellComplete = !featSpellSpec || spellGrantComplete(featSpellSpec, featSpellGrant);
+  const selectFeat = (f) => { setFeatPick(f); setFeatAbilityPick(''); setFeatProfChoices({}); setFeatSpellGrant(null); };
   const toggleFeatProf = (profType, name, max) => {
     setFeatProfChoices((prev) => {
       const cur = prev[profType] || [];
@@ -331,7 +341,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // Pool-choice picks (Metamagic, etc.). Required count is capped by what's still available
   // (so a near-exhausted pool doesn't block Next), mirroring the feat count-choice grants.
   const levelChoiceRequired = (c) =>
-    Math.min(c.count, availablePoolOptions(c, character.character_data ?? {}).length);
+    Math.min(c.count, availablePoolOptions(c, character.character_data ?? {}, newLevel).length);
   const toggleLevelChoice = (choiceKey, name, max) => {
     setLevelChoicePicks((prev) => {
       const cur = prev[choiceKey] || [];
@@ -407,7 +417,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     }
     if (STEPS[step] === 'asi') return asiTotal === ASI_POINTS;
     if (STEPS[step] === 'asi_choice') return asiChoice === 'asi' || asiChoice === 'feat';
-    if (STEPS[step] === 'feat') return !!featPick && (!featAbilityChoice || !!featAbilityPick) && featProfComplete;
+    if (STEPS[step] === 'feat') return !!featPick && (!featAbilityChoice || !!featAbilityPick) && featProfComplete && featSpellComplete;
     if (STEPS[step] === 'maneuvers') return maneuverPicks.length === maneuverDelta;
     if (STEPS[step] === 'level-choices') {
       return levelChoices.every((c) => (levelChoicePicks[c.key]?.length || 0) >= levelChoiceRequired(c));
@@ -441,13 +451,18 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     // (initiative, action economy, unarmed die) work without re-fetching the catalogue, and
     // record any half-feat ability choice.
     const existingFeats = character.character_data?.feats ?? [];
+    const featChoices = {
+      ...(featAbilityChoice && featAbilityPick ? { ability: featAbilityPick } : {}),
+      ...(featSkillPicks.length ? { skills: featSkillPicks } : {}),
+      ...(featSpellSpec ? { spell_grant: resolveSpellGrantValue(featSpellSpec, featSpellGrant) } : {}),
+    };
     const featAddition = (wantsFeatStep && featPick)
       ? [...existingFeats, {
           id: featPick.id,
           name: featPick.name,
           level: newLevel,
           ...(pickedFeat?.effects ? { effects: pickedFeat.effects } : {}),
-          ...(featAbilityChoice && featAbilityPick ? { choices: { ability: featAbilityPick } } : {}),
+          ...(Object.keys(featChoices).length ? { choices: featChoices } : {}),
         }]
       : null;
 
@@ -856,31 +871,51 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                       {chosen.length}/{g.count}
                     </span>
                   </div>
-                  <div className="max-h-56 overflow-y-auto pr-1 grid grid-cols-2 gap-1.5" data-testid={`feat-prof-grant-${g.prof_type}`}>
-                    {opts.map((o) => {
-                      const isSel = chosen.includes(o);
-                      const atLimit = chosen.length >= g.count && !isSel;
-                      return (
-                        <button
-                          key={o}
-                          type="button"
-                          disabled={atLimit}
-                          onClick={() => toggleFeatProf(g.prof_type, o, g.count)}
-                          data-testid={`feat-prof-opt-${g.prof_type}-${o}`}
-                          className={cn(
-                            'rounded-md border px-2 py-1.5 text-xs text-left transition-colors',
-                            isSel ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
-                            atLimit && 'opacity-40 cursor-not-allowed',
-                          )}
-                        >
-                          {o}
-                        </button>
-                      );
-                    })}
+                  <div className="max-h-56 overflow-y-auto pr-1 space-y-2" data-testid={`feat-prof-grant-${g.prof_type}`}>
+                    {groupFeatProfOptions(g.prof_type, opts).map(({ category, options }) => (
+                      <div key={category || '_'} className="space-y-1.5">
+                        {category && (
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{category}</div>
+                        )}
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {options.map((o) => {
+                            const isSel = chosen.includes(o);
+                            const atLimit = chosen.length >= g.count && !isSel;
+                            return (
+                              <button
+                                key={o}
+                                type="button"
+                                disabled={atLimit}
+                                onClick={() => toggleFeatProf(g.prof_type, o, g.count)}
+                                data-testid={`feat-prof-opt-${g.prof_type}-${o}`}
+                                className={cn(
+                                  'rounded-md border px-2 py-1.5 text-xs text-left transition-colors',
+                                  isSel ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
+                                  atLimit && 'opacity-40 cursor-not-allowed',
+                                )}
+                              >
+                                {o}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
             })}
+
+            {/* Spell-grant picker (Magic Initiate): choose a list + cantrips + a 1st-level spell */}
+            {featSpellSpec && (
+              <FeatSpellGrantPicker
+                spec={featSpellSpec}
+                value={featSpellGrant}
+                onChange={setFeatSpellGrant}
+                campaignId={campaign?.id}
+                testIdPrefix="lvl-feat-spell"
+              />
+            )}
           </div>
         )}
 
@@ -1031,7 +1066,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
         {STEPS[step] === 'level-choices' && (
           <div className="space-y-4">
             {levelChoices.map((c) => {
-              const opts = availablePoolOptions(c, character.character_data ?? {});
+              const opts = availablePoolOptions(c, character.character_data ?? {}, newLevel);
               const chosen = levelChoicePicks[c.key] || [];
               const required = levelChoiceRequired(c);
               return (

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   METAMAGIC_OPTIONS,
   metamagicKnownAtLevel,
+  ELDRITCH_INVOCATIONS_5E,
+  eldritchInvocationsKnownAtLevel,
   getLevelChoices,
   availablePoolOptions,
   applyLevelChoice,
@@ -71,6 +73,58 @@ describe('availablePoolOptions', () => {
   it('returns the full pool when nothing is held', () => {
     const choice = getLevelChoices('Sorcerer', '5e', 2, 3)[0];
     expect(availablePoolOptions(choice, {})).toHaveLength(METAMAGIC_OPTIONS.length);
+  });
+});
+
+describe('eldritchInvocationsKnownAtLevel', () => {
+  it('5e: none until L2, then 2/3/4 at 2/3/5, 8 at 15', () => {
+    expect(eldritchInvocationsKnownAtLevel(1, '5e')).toBe(0);
+    expect(eldritchInvocationsKnownAtLevel(2, '5e')).toBe(2);
+    expect(eldritchInvocationsKnownAtLevel(3, '5e')).toBe(3);
+    expect(eldritchInvocationsKnownAtLevel(5, '5e')).toBe(4);
+    expect(eldritchInvocationsKnownAtLevel(15, '5e')).toBe(8);
+  });
+
+  it('2024: 1 from L1, then 2 at L2', () => {
+    expect(eldritchInvocationsKnownAtLevel(1, '5.5e')).toBe(1);
+    expect(eldritchInvocationsKnownAtLevel(2, '5.5e')).toBe(2);
+  });
+});
+
+describe('getLevelChoices — Warlock invocations', () => {
+  it('5e 1→2 gives the first 2 invocations (none before L2)', () => {
+    const choices = getLevelChoices('Warlock', '5e', 1, 2);
+    expect(choices).toHaveLength(1);
+    expect(choices[0].key).toBe('eldritch_invocations');
+    expect(choices[0].count).toBe(2);
+  });
+
+  it('5e 4→5 gives 1 more', () => {
+    expect(getLevelChoices('Warlock', '5e', 4, 5)[0].count).toBe(1);
+  });
+
+  it('2024 1→2 gives 1 (already had 1 at L1)', () => {
+    expect(getLevelChoices('Warlock', '5.5e', 1, 2)[0].count).toBe(1);
+  });
+});
+
+describe('availablePoolOptions — minLevel gating', () => {
+  const warlock = getLevelChoices('Warlock', '5e', 1, 2)[0];
+
+  it('hides options gated above the level when a level is passed', () => {
+    const atL2 = availablePoolOptions(warlock, {}, 2).map((o) => o.name);
+    expect(atL2).toContain('Agonizing Blast');     // minLevel 2
+    expect(atL2).not.toContain('Thirsting Blade');  // minLevel 5
+  });
+
+  it('includes higher-level options once the level is high enough', () => {
+    const atL15 = availablePoolOptions(warlock, {}, 15).map((o) => o.name);
+    expect(atL15).toContain('Thirsting Blade');
+    expect(atL15).toContain('Witch Sight');         // minLevel 15
+  });
+
+  it('does not filter by level when level is omitted (backward compatible)', () => {
+    expect(availablePoolOptions(warlock, {})).toHaveLength(ELDRITCH_INVOCATIONS_5E.length);
   });
 });
 

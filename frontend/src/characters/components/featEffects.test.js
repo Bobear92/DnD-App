@@ -3,7 +3,18 @@ import {
   allFeatEffects, getFeatStatMods, getFeatStatModSources, getFeatActions,
   getFeatUnarmedDice, featAbilityChoices, featFixedAbilityScores, isMechanized,
   getFeatResources, getFeatProficiencyGrants, getFeatSaveProficiencies, getFeatAcMods,
+  getSpellGrantSpecs, getFeatGrantedSpells, featFreeCastUsedKey,
 } from './featEffects';
+
+const MAGIC_INITIATE = {
+  id: 9, name: 'Magic Initiate', level: 4,
+  effects: [
+    { kind: 'spell_grant', source_kind: 'class', cantrips: 2, leveled: [{ level: 1, count: 1 }], free_cast: 'long_rest', ability: 'class', label: 'Magic Initiate' },
+    { kind: 'note', text: 'Castable once per long rest.' },
+  ],
+  // A snapshot of the player's picks, recorded at acquisition.
+  choices: { spell_grant: { source: 'Wizard', ability: 'intelligence', cantrips: ['Fire Bolt', 'Light'], leveled: [{ name: 'Mage Armor', level: 1 }], free_casts: ['Mage Armor'] } },
+};
 
 const ALERT = {
   id: 1, name: 'Alert', level: 4,
@@ -126,7 +137,61 @@ describe('featEffects resolver', () => {
   it('isMechanized: true when a non-note effect exists', () => {
     expect(isMechanized(ALERT)).toBe(true);
     expect(isMechanized(TAVERN_BRAWLER)).toBe(true);
+    expect(isMechanized(MAGIC_INITIATE)).toBe(true); // spell_grant counts
     expect(isMechanized(PROSE_ONLY)).toBe(false); // note-only
     expect(isMechanized(NO_EFFECTS)).toBe(false);
+  });
+
+  it('getSpellGrantSpecs reads the grant spec the player must fulfil at acquisition', () => {
+    expect(getSpellGrantSpecs(MAGIC_INITIATE)).toEqual([{
+      source_kind: 'class', cantrips: 2, leveled: [{ level: 1, count: 1 }],
+      fixed: [], free_cast: 'long_rest', ability: 'class', label: 'Magic Initiate',
+    }]);
+    expect(getSpellGrantSpecs(ALERT)).toEqual([]); // no spell_grant effect
+    expect(getSpellGrantSpecs(NO_EFFECTS)).toEqual([]);
+  });
+
+  it('getFeatGrantedSpells flattens the picked spells from each feat instance', () => {
+    const out = getFeatGrantedSpells([MAGIC_INITIATE, ALERT]);
+    expect(out.cantrips).toEqual([
+      { name: 'Fire Bolt', level: 0, source: 'Magic Initiate' },
+      { name: 'Light', level: 0, source: 'Magic Initiate' },
+    ]);
+    expect(out.leveled).toEqual([{ name: 'Mage Armor', level: 1, source: 'Magic Initiate' }]);
+    expect(out.freeCasts).toEqual([{ name: 'Mage Armor', level: 1, source: 'Magic Initiate', ability: 'intelligence', usedKey: 'feat_freecast_mage_armor_used' }]);
+  });
+
+  it('getFeatGrantedSpells includes always-granted fixed spells (Telekinetic/Telepathic)', () => {
+    const telepathic = { id: 11, name: 'Telepathic', choices: { spell_grant: {
+      fixed: [{ name: 'Detect Thoughts', level: 2 }], cantrips: [], leveled: [], free_casts: ['Detect Thoughts'],
+    } } };
+    const telekinetic = { id: 12, name: 'Telekinetic', choices: { spell_grant: {
+      fixed: [{ name: 'Mage Hand', level: 0 }], cantrips: [], leveled: [], free_casts: [],
+    } } };
+    const out = getFeatGrantedSpells([telepathic, telekinetic]);
+    expect(out.leveled).toEqual([{ name: 'Detect Thoughts', level: 2, source: 'Telepathic' }]);
+    expect(out.cantrips).toEqual([{ name: 'Mage Hand', level: 0, source: 'Telekinetic' }]);
+    expect(out.freeCasts).toEqual([{ name: 'Detect Thoughts', level: 2, source: 'Telepathic', ability: undefined, usedKey: 'feat_freecast_detect_thoughts_used' }]);
+  });
+
+  it('getFeatGrantedSpells is empty for feats without a spell_grant snapshot', () => {
+    expect(getFeatGrantedSpells([ALERT, NO_EFFECTS])).toEqual({ cantrips: [], leveled: [], freeCasts: [], ritualBooks: [] });
+    expect(getFeatGrantedSpells()).toEqual({ cantrips: [], leveled: [], freeCasts: [], ritualBooks: [] });
+  });
+
+  it('getFeatGrantedSpells returns an editable ritual book (Ritual Caster), excluded from leveled', () => {
+    const ritualCaster = { id: 13, name: 'Ritual Caster', choices: { spell_grant: {
+      source: 'Wizard', ability: 'intelligence', ritual: true, ritual_book: ['Detect Magic', 'Identify'],
+    } } };
+    const out = getFeatGrantedSpells([{ name: 'Alert' }, ritualCaster]);
+    expect(out.ritualBooks).toEqual([{ featIndex: 1, source: 'Ritual Caster', spells: ['Detect Magic', 'Identify'] }]);
+    expect(out.leveled).toEqual([]); // ritual spells aren't lumped into the generic leveled list
+    expect(out.freeCasts).toEqual([]); // cast as rituals only, no free cast
+  });
+
+  it('featFreeCastUsedKey slugifies the spell name (must match the backend key)', () => {
+    expect(featFreeCastUsedKey('Mage Armor')).toBe('feat_freecast_mage_armor_used');
+    expect(featFreeCastUsedKey("Tasha's Hideous Laughter")).toBe('feat_freecast_tasha_s_hideous_laughter_used');
+    expect(featFreeCastUsedKey('')).toBe('feat_freecast__used');
   });
 });

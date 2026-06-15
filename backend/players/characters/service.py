@@ -1,4 +1,5 @@
 import math
+import re
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile, status
 from typing import List
@@ -476,6 +477,13 @@ _RACIAL_REST_RESOURCES = [
     ('Infernal Legacy', 'infernal_darkness_used', 'long', 5),
 ]
 
+
+def _feat_freecast_used_key(spell_name: str) -> str:
+    """character_data key tracking a feat-granted spell's 1/long-rest free cast.
+    MUST stay in sync with the frontend `featFreeCastUsedKey` (featEffects.js)."""
+    slug = re.sub(r'[^a-z0-9]+', '_', (spell_name or '').lower()).strip('_')
+    return f"feat_freecast_{slug}_used"
+
 # Divination Wizard subclasses (5e "School of Divination", 2024 "Diviner")
 _DIVINATION_SUBCLASSES = {'School of Divination', 'Diviner'}
 
@@ -630,6 +638,25 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             patch[used_key] = 0
     if feat_recovered:
         changes.append('Feat resources recovered')
+
+    # ── Feat spell-grant free casts (Magic Initiate, …) — 1 per long rest ──
+    if rest_type == 'long':
+        freecast_recovered = False
+        for feat in (cd.get('feats') or []):
+            if not isinstance(feat, dict):
+                continue
+            sg = (feat.get('choices') or {}).get('spell_grant')
+            if not isinstance(sg, dict):
+                continue
+            # New snapshots store a `free_casts` list; tolerate an older singular `free_cast`.
+            fc_names = sg.get('free_casts') or ([sg['free_cast']] if sg.get('free_cast') else [])
+            for name in fc_names:
+                used_key = _feat_freecast_used_key(name)
+                if cd.get(used_key):
+                    freecast_recovered = True
+                patch[used_key] = 0
+        if freecast_recovered:
+            changes.append('Feat spell casts recovered')
 
     if rest_type == 'short' and not changes:
         changes.append('No short rest resources to recover')

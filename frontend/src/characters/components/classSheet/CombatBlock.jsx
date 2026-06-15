@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import HitDiceTracker from '../HitDiceTracker';
 import { getFeatStatMods, getFeatStatModSources } from '../featEffects';
+import { hasDurableFeat } from '../combatBonuses';
 
 function Field({ label, children }) {
   return (
@@ -44,6 +45,7 @@ export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, 
         currentHp={data.current_hp}
         maxHp={effectiveMaxHp ?? data.hp_max}
         onHeal={onHeal}
+        durable={hasDurableFeat(data.feats)}
       />
 
       <Field label="Armor Class">

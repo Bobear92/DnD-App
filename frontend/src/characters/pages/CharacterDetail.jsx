@@ -23,6 +23,7 @@ import characterService, { mapCharacterImageUrl } from '../characterService';
 import TraitBadgeList from '../components/TraitBadge';
 import { getRaceGrantedSkillsFromTraits } from '../components/raceProficienciesData';
 import { getBackgroundSkills } from '../components/backgroundSkillsData';
+import { getFeatGrantedSkills } from '../components/featProficiencyData';
 import RacialResourceTracker from '../components/RacialResourceTracker';
 import WalletCard from '../components/WalletCard';
 import InventoryTab from '../components/InventoryTab';
@@ -33,7 +34,9 @@ import { getClassConfig } from '../components/classSheet/configs';
 import { MaxHpValue, AcOptionsLine } from '../components/CombatBonusInline';
 import { totalHpBonus } from '../components/combatBonuses';
 import { draconicLabel } from '../components/draconicData';
-import SpellList from '../components/SpellList';
+import SpellLevelTabs from '../components/SpellLevelTabs';
+import FeatSpellsSection from '../components/FeatSpellsSection';
+import { getFeatGrantedSpells } from '../components/featEffects';
 import { getRacialRestResources } from '../components/racialRestResources';
 import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
@@ -170,6 +173,7 @@ export default function CharacterDetail() {
   const [playerView, setPlayerView] = useState(false);
   const [gmEdit, setGmEdit] = useState(false); // GM Edit toggle: unlocks permanent choices (Epic 1)
   const [featuresSubTab, setFeaturesSubTab] = useState('class'); // 'class' | 'feats'
+  const [spellSource, setSpellSource] = useState('class'); // Spells tab source sub-tab: 'class' | 'racial' | 'feats'
 
   const [xpInput, setXpInput] = useState('');
   const [addingXp, setAddingXp] = useState(false);
@@ -522,7 +526,9 @@ export default function CharacterDetail() {
   const ClassSheet = (edition === '5.5e' ? CLASS_SHEETS_2024 : CLASS_SHEETS_5E)[character.char_class];
 
   const raceGrantedCantrips = computeRaceGrantedCantrips(character);
-  const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || raceGrantedCantrips.length > 0;
+  const featGrantedSpells = getFeatGrantedSpells(character.character_data?.feats);
+  const hasFeatSpells = featGrantedSpells.cantrips.length + featGrantedSpells.leveled.length > 0;
+  const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || raceGrantedCantrips.length > 0 || hasFeatSpells;
   const tabCount = hasSpells ? 6 : 5;
 
   const calendarEras = calendar?.eras ?? [];
@@ -1552,39 +1558,85 @@ export default function CharacterDetail() {
             {/* ── Tab 5: Spells ── */}
             {hasSpells && (
               <TabsContent value="spells" className="space-y-4">
-                {ClassSheet && classSection.draft !== null && SPELLCASTING_CLASSES.has(character.char_class) && (
-                  <SectionCard
-                    title="Spellcasting"
-                    isDirty={classSection.isDirty}
-                    onSave={saveClassData}
-                    onReset={classSection.reset}
-                    canEdit={showEditable}
-                  >
-                    <ClassSheet
-                      data={classSection.draft}
-                      onChange={autoSaveClassPatch}
-                      readOnly={!showEditable}
-                      gmEdit={gmEdit}
-                      level={identity.draft?.level ?? character.level}
-                      section="spells"
-                      abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
-                      campaignId={campaignId}
-                      isGm={isGm}
-                    />
-                  </SectionCard>
-                )}
-                {raceGrantedCantrips.length > 0 && (
-                  <div className="rounded-lg border bg-card p-4 space-y-2">
-                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Race-Granted Cantrips</div>
-                    <SpellList
-                      spells={raceGrantedCantrips}
-                      isCantrips
-                      readOnly
-                      label="Click a cantrip to see its details"
-                    />
-                    <p className="text-xs text-muted-foreground">Always known. No spell slot required.</p>
-                  </div>
-                )}
+                {(() => {
+                  // Spells are grouped by SOURCE — Class / Racial / Feats — each shown only when
+                  // the character actually has spells from it (so the tab doesn't get crowded).
+                  const isCaster = ClassSheet && classSection.draft !== null && SPELLCASTING_CLASSES.has(character.char_class);
+                  const featData = classSection.draft?.feats ?? character.character_data?.feats ?? [];
+                  const fg = getFeatGrantedSpells(featData);
+                  const hasFeat = fg.cantrips.length + fg.leveled.length > 0;
+                  const sources = [
+                    isCaster && { key: 'class', label: 'Class' },
+                    raceGrantedCantrips.length > 0 && { key: 'racial', label: 'Racial' },
+                    hasFeat && { key: 'feats', label: 'Feats' },
+                  ].filter(Boolean);
+                  const active = sources.some(s => s.key === spellSource) ? spellSource : sources[0]?.key;
+                  return (
+                    <>
+                      {sources.length > 1 && (
+                        <div className="flex gap-1.5">
+                          {sources.map(s => (
+                            <Button
+                              key={s.key}
+                              type="button"
+                              size="sm"
+                              variant={active === s.key ? 'default' : 'outline'}
+                              data-testid={`spell-source-${s.key}`}
+                              onClick={() => setSpellSource(s.key)}
+                            >
+                              {s.label}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+
+                      {active === 'class' && (
+                        <SectionCard
+                          title="Spellcasting"
+                          isDirty={classSection.isDirty}
+                          onSave={saveClassData}
+                          onReset={classSection.reset}
+                          canEdit={showEditable}
+                        >
+                          <ClassSheet
+                            data={classSection.draft}
+                            onChange={autoSaveClassPatch}
+                            readOnly={!showEditable}
+                            gmEdit={gmEdit}
+                            level={identity.draft?.level ?? character.level}
+                            section="spells"
+                            abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
+                            campaignId={campaignId}
+                            isGm={isGm}
+                          />
+                        </SectionCard>
+                      )}
+
+                      {active === 'racial' && (
+                        <div className="rounded-lg border bg-card p-4 space-y-2">
+                          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Race-Granted Cantrips</div>
+                          <SpellLevelTabs
+                            spells={raceGrantedCantrips.map(name => ({ name, level: 0 }))}
+                            testIdPrefix="racial-spell-tab"
+                          />
+                          <p className="text-xs text-muted-foreground">Always known. No spell slot required.</p>
+                        </div>
+                      )}
+
+                      {active === 'feats' && (
+                        <div className="rounded-lg border bg-card p-4 space-y-2">
+                          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Spells from Feats</div>
+                          <FeatSpellsSection
+                            feats={featData}
+                            characterData={classSection.draft ?? character.character_data ?? {}}
+                            onChange={autoSaveClassPatch}
+                            readOnly={!showEditable}
+                          />
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </TabsContent>
             )}
           </Tabs>
@@ -1761,6 +1813,8 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
   // Skills granted by the chosen background, limited to those the character is
   // actually proficient in, so background-sourced profs can be shown distinctly.
   const bgGranted = getBackgroundSkills(identityDraft.background).filter((s) => skillProfs.includes(s));
+  // Skills picked via a feat (Skilled / Skill Expert) — recorded on each feat instance.
+  const featGranted = getFeatGrantedSkills(classData?.feats ?? []).filter((s) => skillProfs.includes(s));
 
   const hasExpertise = expertiseSkills.length > 0;
   const legendParts = [];
@@ -1768,6 +1822,7 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
   legendParts.push('Gold = proficient');
   if (bgGranted.length > 0) legendParts.push('Amber = from background');
   if (raceGranted.length > 0) legendParts.push('Emerald = from race');
+  if (featGranted.length > 0) legendParts.push('Blue = from feat');
 
   return (
     <div>
@@ -1779,6 +1834,7 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
           const isExpert = expertiseSkills.includes(skill);
           const isFromBg = bgGranted.includes(skill);
           const isFromRace = raceGranted.includes(skill);
+          const isFromFeat = featGranted.includes(skill);
           const bonus = base + (isExpert ? pb * 2 : isProf ? pb : 0);
           return (
             <div key={skill} className="flex items-center gap-2 text-xs py-0.5">
@@ -1791,7 +1847,9 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
                         ? 'bg-amber-500 border-amber-500'
                         : isFromRace
                           ? 'bg-emerald-500 border-emerald-500'
-                          : 'bg-primary border-primary')
+                          : isFromFeat
+                            ? 'bg-sky-500 border-sky-500'
+                            : 'bg-primary border-primary')
                     : 'bg-muted border-border'
               )} />
               <span className="flex-1 truncate">{skill}</span>

@@ -9,12 +9,12 @@ export const ARTISAN_TOOLS = [
   "Jeweler's Tools", "Leatherworker's Tools", "Mason's Tools", "Painter's Supplies",
   "Potter's Tools", "Smith's Tools", "Tinker's Tools", "Weaver's Tools", "Woodcarver's Tools",
 ];
-const OTHER_TOOLS = [
+export const OTHER_TOOLS = [
   "Thieves' Tools", "Navigator's Tools", "Disguise Kit", "Forgery Kit", "Herbalism Kit",
   "Poisoner's Kit", "Artisan's Tools",
 ];
-const GAMING_SETS = ["Dice Set", "Dragonchess Set", "Playing Card Set", "Three-Dragon Ante Set", "Gaming Set"];
-const INSTRUMENTS = [
+export const GAMING_SETS = ["Dice Set", "Dragonchess Set", "Playing Card Set", "Three-Dragon Ante Set", "Gaming Set"];
+export const INSTRUMENTS = [
   "Bagpipes", "Drum", "Dulcimer", "Flute", "Horn", "Lute", "Lyre", "Pan Flute", "Shawm", "Viol", "Musical Instrument",
 ];
 

@@ -58,6 +58,7 @@ export default function SpellList({
   isCantrips = false,
   onCastSpell,
   availableSlots,
+  hideLevelHeadings = false,
 }) {
   const ctx = useCampaign();
   const campaignId = ctx?.campaign?.id;
@@ -130,9 +131,11 @@ export default function SpellList({
           : (lvl === -1 ? 'Other Spells' : (LEVEL_LABELS[lvl] ?? `Level ${lvl}`));
         return (
           <div key={lvl}>
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pb-1 pt-1">
-              {heading}
-            </div>
+            {!hideLevelHeadings && (
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pb-1 pt-1">
+                {heading}
+              </div>
+            )}
             <div className="rounded-md border divide-y">
               {names.map(name => {
                 const castable = onCastSpell && lvl > 0;

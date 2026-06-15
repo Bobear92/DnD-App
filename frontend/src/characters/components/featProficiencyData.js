@@ -12,7 +12,7 @@
  * `feat_weapon_proficiencies`. `skill_or_tool` picks are split by membership.
  */
 import { SKILLS } from '../../encyclopedia/data/skillsData';
-import { TOOL_NAMES } from './toolsData';
+import { TOOL_NAMES, ARTISAN_TOOLS, OTHER_TOOLS, GAMING_SETS, INSTRUMENTS } from './toolsData';
 import { gatherProficiencies } from './inventoryProficiencies';
 
 const lc = (s) => (s || '').toLowerCase();
@@ -86,6 +86,37 @@ export function getFeatProficiencyChoices(feat, { proficientSkills = [] } = {}) 
   return out;
 }
 
+// Category buckets (in display order) for organizing a Skilled/tool grant's options
+// instead of one flat list. Each option falls into the first bucket whose set contains it;
+// anything tool-ish that matches none lands in "Tools & Kits".
+const _CATEGORY_BUCKETS = [
+  { category: 'Skills', set: new Set(FEAT_SKILL_OPTIONS.map(lc)) },
+  { category: "Artisan's Tools", set: new Set(ARTISAN_TOOLS.map(lc)) },
+  { category: 'Gaming Sets', set: new Set(GAMING_SETS.map(lc)) },
+  { category: 'Musical Instruments', set: new Set(INSTRUMENTS.map(lc)) },
+  // OTHER_TOOLS (Thieves' Tools, kits, etc.) + any unmatched tool → "Tools & Kits"
+];
+
+/**
+ * Group a grant's options into labeled categories for the acquisition picker.
+ * Only skill/tool/skill_or_tool grants are split (Skilled = Skills + Artisan's Tools +
+ * Gaming Sets + Musical Instruments + Tools & Kits); every other grant type (language,
+ * weapon, expertise) stays a single uncategorized group.
+ * Returns [{ category | null, options: [...] }] in display order, empty groups dropped.
+ */
+export function groupFeatProfOptions(profType, options = []) {
+  if (!['skill', 'tool', 'skill_or_tool'].includes(profType)) {
+    return options.length ? [{ category: null, options }] : [];
+  }
+  const order = ['Skills', "Artisan's Tools", 'Gaming Sets', 'Musical Instruments', 'Tools & Kits'];
+  const buckets = Object.fromEntries(order.map((c) => [c, []]));
+  for (const o of options) {
+    const hit = _CATEGORY_BUCKETS.find((b) => b.set.has(lc(o)));
+    buckets[hit ? hit.category : 'Tools & Kits'].push(o);
+  }
+  return order.filter((c) => buckets[c].length).map((category) => ({ category, options: buckets[category] }));
+}
+
 /** Lowercased set of proficiencies of `profType` the character already has. */
 export function existingFeatProfNames(profType, { charClass, characterData = {} } = {}) {
   const cd = characterData || {};
@@ -110,6 +141,21 @@ export function existingFeatProfNames(profType, { charClass, characterData = {} 
     return new Set([...tools, ...skills]);
   }
   return new Set();
+}
+
+/**
+ * Skills a character gained from feats — read from each feat instance's recorded
+ * `choices.skills` (the skill picks of a Skilled/Skill Expert feat, snapshotted at
+ * acquisition). Returns a deduped list; used to colour those skills distinctly on the
+ * Stats-tab skills panel. (Skills merge into skill_proficiencies at acquisition, so this
+ * is the only way to tell a feat-granted skill apart from a class/background/race one.)
+ */
+export function getFeatGrantedSkills(feats = []) {
+  const out = [];
+  for (const f of feats || []) {
+    for (const s of f?.choices?.skills || []) out.push(s);
+  }
+  return dedup(out);
 }
 
 /** A grant's options minus any the character already has (no doubling up). */

@@ -760,6 +760,34 @@ describe('CharacterDetail', () => {
       expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
     });
 
+    it('shows the Spells tab + Feats spell source for a Fighter with Magic Initiate (granted spells)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, char_class: 'Fighter', character_data: { skill_proficiencies: [], feats: [
+          { id: 10, name: 'Magic Initiate', choices: { spell_grant: { source: 'Wizard', ability: 'intelligence', cantrips: ['Fire Bolt', 'Light'], leveled: [{ name: 'Mage Armor', level: 1 }], free_casts: ['Mage Armor'] } } },
+        ] } },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
+      // Non-caster → only the Feats source, so it renders directly (no source toggle buttons).
+      expect(screen.getByText('Spells from Feats')).toBeInTheDocument();
+      expect(screen.getByTestId('feat-freecast-Mage Armor')).toBeInTheDocument();
+    });
+
+    it('shows Class + Feats spell-source sub-tabs for a Wizard with Magic Initiate', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, char_class: 'Wizard', character_data: { skill_proficiencies: [], feats: [
+          { id: 10, name: 'Magic Initiate', choices: { spell_grant: { cantrips: ['Fire Bolt'], leveled: [{ name: 'Mage Armor', level: 1 }], free_casts: ['Mage Armor'] } } },
+        ] } },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('spell-source-class')).toBeInTheDocument();
+      expect(screen.getByTestId('spell-source-feats')).toBeInTheDocument();
+    });
+
     it('non-spellcasting Fighter has exactly 5 tabs; spellcasting Wizard has 6', async () => {
       // Fighter: Narrative + Stats + Features + Items + Action Economy = 5
       renderDetail();
@@ -1248,6 +1276,29 @@ describe('CharacterDetail', () => {
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText(/Amber = from background/)).not.toBeInTheDocument();
+    });
+
+    it('shows "Blue = from feat" when a proficient skill was picked via a feat', async () => {
+      const skilledChar = {
+        ...BASE_CHARACTER,
+        char_class: 'Fighter',
+        background: 'Soldier',
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          skill_proficiencies: ['Athletics', 'Arcana'], // Arcana came from the Skilled feat
+          feats: [{ id: 9, name: 'Skilled', level: 4, choices: { skills: ['Arcana'] } }],
+        },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: skilledChar });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText(/Blue = from feat/)).toBeInTheDocument();
+    });
+
+    it('does NOT show "Blue = from feat" when no feat granted a proficient skill', async () => {
+      renderDetail(); // BASE_CHARACTER has no feats
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByText(/Blue = from feat/)).not.toBeInTheDocument();
     });
 
     it('does not double-count Perception when both race_traits AND skill_proficiencies include it', async () => {

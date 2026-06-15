@@ -122,4 +122,49 @@ describe('HitDiceTracker — heal mode (onHeal provided)', () => {
     render(<HitDiceTracker {...baseProps} onHeal={() => {}} readOnly />);
     expect(screen.queryByTestId('hit-dice-use-btn')).not.toBeInTheDocument();
   });
+
+  describe('Durable feat', () => {
+    it('notates the guaranteed minimum HP for the chosen number of dice', () => {
+      // conMod 2 → per-die minimum = 2 × 2 = 4
+      render(<HitDiceTracker {...baseProps} onHeal={() => {}} durable />);
+      fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
+      const note = screen.getByTestId('hit-dice-durable-min');
+      expect(note).toHaveTextContent('at least 4 HP');
+      expect(note).toHaveTextContent('4 per die');
+      expect(note).toHaveTextContent('from 1 die');
+      // Bumping to 2 dice doubles the minimum.
+      fireEvent.click(screen.getByLabelText('More Hit Dice'));
+      expect(screen.getByTestId('hit-dice-durable-min')).toHaveTextContent('at least 8 HP');
+    });
+
+    it('is not shown without the Durable feat', () => {
+      render(<HitDiceTracker {...baseProps} onHeal={() => {}} />);
+      fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
+      expect(screen.queryByTestId('hit-dice-durable-min')).not.toBeInTheDocument();
+    });
+
+    it('floors a low roll at twice the CON modifier and flags it', () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0); // d10 -> 1
+      const onHeal = vi.fn();
+      render(<HitDiceTracker {...baseProps} onHeal={onHeal} durable />);
+      fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
+      fireEvent.click(screen.getByTestId('hit-dice-roll-btn'));
+      // 1 + 2 = 3, raised to the Durable minimum of 4; 45 -> 49
+      expect(onHeal).toHaveBeenCalledWith({ hit_dice_used: 1, current_hp: 49 });
+      expect(screen.getByText('+4 HP regained')).toBeInTheDocument();
+      expect(screen.getByTestId('hit-dice-durable-applied')).toBeInTheDocument();
+    });
+
+    it('does not lower a roll already above the minimum', () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.99); // d10 -> 10
+      const onHeal = vi.fn();
+      render(<HitDiceTracker {...baseProps} currentHp={30} onHeal={onHeal} durable />);
+      fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
+      fireEvent.click(screen.getByTestId('hit-dice-roll-btn'));
+      // 10 + 2 = 12 (above the minimum of 4); 30 -> 42; no Durable flag
+      expect(onHeal).toHaveBeenCalledWith({ hit_dice_used: 1, current_hp: 42 });
+      expect(screen.getByText('+12 HP regained')).toBeInTheDocument();
+      expect(screen.queryByTestId('hit-dice-durable-applied')).not.toBeInTheDocument();
+    });
+  });
 });

@@ -17,6 +17,11 @@ const TEST_FEATS = [
     effects: [{ kind: 'ability_choice', abilities: ['strength', 'constitution'], amount: 1 }] },
   { id: 7, name: 'Linguist', edition: '5e', description: 'Languages.', prerequisites: {}, source: 'PHB 2014', repeatable: false,
     effects: [{ kind: 'ability_score', ability: 'intelligence', amount: 1 }, { kind: 'proficiency', prof_type: 'language', count: 3 }] },
+  { id: 8, name: 'Skill Expert', edition: '5e', description: 'Expertise.', prerequisites: {}, source: 'PHB 2014', repeatable: false,
+    effects: [{ kind: 'proficiency', prof_type: 'skill', count: 1 }, { kind: 'expertise', count: 1 }] },
+  { id: 9, name: 'Tough', edition: '5e', description: '+2 HP per level.', prerequisites: {}, source: 'PHB 2014', repeatable: false },
+  { id: 10, name: 'Magic Initiate', edition: '5e', description: 'Learn spells.', prerequisites: {}, source: 'PHB 2014', repeatable: true,
+    effects: [{ kind: 'spell_grant', source_kind: 'class', cantrips: 2, leveled: [{ level: 1, count: 1 }], free_cast: 'long_rest', ability: 'class', label: 'Magic Initiate' }] },
 ];
 
 vi.mock('../characterService', () => ({
@@ -29,6 +34,25 @@ vi.mock('../referenceService', () => ({
 
 vi.mock('../../encyclopedia/featService', () => ({
   default: { getFeats: vi.fn() },
+}));
+
+// FeatSpellGrantPicker is unit-tested separately; mock it so the creation flow can fill a
+// complete spell-grant value without the spell catalogue.
+vi.mock('../components/FeatSpellGrantPicker', () => ({
+  default: ({ onChange }) => (
+    <div data-testid="spell-grant-picker">
+      <button
+        type="button"
+        data-testid="spell-grant-fill"
+        onClick={() => onChange({ source: 'Wizard', ability: 'intelligence', cantrips: ['Fire Bolt', 'Light'], leveled: [{ name: 'Mage Armor', level: 1 }], free_cast: 'Mage Armor' })}
+      >Fill spells</button>
+    </div>
+  ),
+  spellGrantComplete: (spec, v) => !!(v && v.source && (v.cantrips?.length || 0) === (spec?.cantrips || 0) && (v.leveled?.length || 0) === (spec?.leveled?.length || 0)),
+  resolveSpellGrantValue: (spec, v) => ({
+    ...(v || {}), fixed: spec?.fixed || [],
+    free_casts: spec?.free_cast ? [...(spec.fixed || []).filter((s) => (s.level ?? 0) >= 1).map((s) => s.name), ...((v?.leveled) || []).map((s) => s.name)] : [],
+  }),
 }));
 
 vi.mock('../classService', () => ({
@@ -723,13 +747,13 @@ describe('CharacterCreate', () => {
     });
   });
 
-  it('applies racial CON bonus and Dwarven Toughness to hp_max calculation', async () => {
+  it('stores die+CON in hp_max and shows the effective HP (incl. Dwarven Toughness) in the review', async () => {
     characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 5 } });
     renderCreate();
     await selectClass('Fighter');
     fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Bralin' } });
-    // Hill Dwarf: base +2 CON → keep CON=10 so finalCon=12, mod=+1; Hill Dwarf also grants
-    // Dwarven Toughness (+1 HP per level). At L1 → Fighter d10 + 1 CON + 1 trait = 12.
+    // Hill Dwarf: base +2 CON → keep CON=10 so finalCon=12, mod=+1. Dwarven Toughness (+1 HP per
+    // level) is DISPLAY-ONLY: stored hp_max = d10 + 1 CON = 11; the review shows the effective 12.
     fireEvent.click(screen.getByTestId('race-card-Dwarf'));
     await waitFor(() => expect(screen.getByTestId('subrace-card-Hill Dwarf')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('subrace-card-Hill Dwarf'));
@@ -741,11 +765,13 @@ describe('CharacterCreate', () => {
     await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('details-next'));
     await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    // Review shows the effective HP breakdown including the +1 display-only bonus.
+    expect(screen.getByText(/d10 \+ 1 CON \+ 1 bonus/)).toBeInTheDocument();
     fireEvent.click(screen.getByText('Create Character'));
     await waitFor(() => {
       expect(characterService.createCharacter).toHaveBeenCalledWith(
         expect.objectContaining({
-          character_data: expect.objectContaining({ hp_max: 12 }),
+          character_data: expect.objectContaining({ hp_max: 11 }), // die+CON only, no passive bonus
         })
       );
     });
@@ -1390,6 +1416,31 @@ describe('CharacterCreate', () => {
     });
   });
 
+  it('labels Variant Human ability bonuses by source (Human vs feat) in the ability-scores preview', async () => {
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Brawler' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-variant-asi-strength'));
+    fireEvent.click(screen.getByTestId('human-variant-asi-constitution'));
+    fireEvent.click(screen.getByTestId('human-variant-skill-Arcana'));
+    await chooseFeat(6); // Tavern Brawler — half-feat, choose STR so STR gets two sources
+    fireEvent.click(screen.getByTestId('human-feat-ability-strength'));
+
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+
+    // STR gets +1 from the Human selection AND +1 from the Tavern Brawler half-feat.
+    expect(screen.getByTestId('asi-source-strength-0')).toHaveTextContent('Human');
+    expect(screen.getByTestId('asi-source-strength-1')).toHaveTextContent('Tavern Brawler');
+    // CON only gets the Human +1.
+    expect(screen.getByTestId('asi-source-constitution-0')).toHaveTextContent('Human');
+    expect(screen.queryByTestId('asi-source-constitution-1')).not.toBeInTheDocument();
+  });
+
   it('Variant Human count-choice feat (Linguist) prompts language picks and stores them', async () => {
     characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 41 } });
     renderCreate();
@@ -1425,6 +1476,117 @@ describe('CharacterCreate', () => {
     await waitFor(() => {
       const call = characterService.createCharacter.mock.calls[0][0];
       expect(call.character_data.feat_languages).toEqual(expect.arrayContaining(['Draconic', 'Giant', 'Goblin']));
+    });
+  });
+
+  it('factors the Tough feat (+2 HP) into the Variant Human creation HP (display-only, not stored)', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 50 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Bruiser' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-variant-asi-strength'));
+    fireEvent.click(screen.getByTestId('human-variant-asi-constitution'));
+    fireEvent.click(screen.getByTestId('human-variant-skill-Arcana'));
+    await chooseFeat(9); // Tough — no ability/prof picks needed
+    expect(screen.getByTestId('identity-next')).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread(); // CON 10 + variant +1 = 11 → mod 0; Fighter d10
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    // Review shows the +2 Tough bonus folded into the effective starting HP.
+    expect(screen.getByText(/\+ 2 bonus/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Create Character'));
+    await waitFor(() => {
+      const call = characterService.createCharacter.mock.calls[0][0];
+      expect(call.character_data.hp_max).toBe(10); // d10 + 0 CON; Tough is display-only, not stored
+      expect(call.character_data.feats).toEqual([{ id: 9, name: 'Tough', level: 1 }]);
+    });
+  });
+
+  it('Variant Human Skill Expert grants a skill and offers Expertise from proficient skills', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 51 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Expert' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-variant-asi-strength'));
+    fireEvent.click(screen.getByTestId('human-variant-asi-constitution'));
+    fireEvent.click(screen.getByTestId('human-variant-skill-Arcana'));
+    await chooseFeat(8); // Skill Expert — grants 1 skill + 1 expertise
+
+    // Skill grant blocks Next; pick a skill, which then populates the Expertise pool.
+    expect(screen.getByTestId('identity-next')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('human-feat-prof-opt-skill-Stealth'));
+    // Expertise pool now includes the proficient skills (the variant skill + the just-granted one).
+    expect(screen.getByTestId('human-feat-prof-opt-expertise-Stealth')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-next')).toBeDisabled(); // expertise still unpicked
+    fireEvent.click(screen.getByTestId('human-feat-prof-opt-expertise-Arcana'));
+    expect(screen.getByTestId('identity-next')).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+
+    await waitFor(() => {
+      const call = characterService.createCharacter.mock.calls[0][0];
+      expect(call.character_data.skill_proficiencies).toEqual(expect.arrayContaining(['Arcana', 'Stealth']));
+      expect(call.character_data.expertise_skills).toEqual(['Arcana']);
+    });
+  });
+
+  it('Variant Human spell-grant feat (Magic Initiate) blocks Next until spells chosen, then stores them', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 52 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Mageling' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-variant-asi-strength'));
+    fireEvent.click(screen.getByTestId('human-variant-asi-constitution'));
+    fireEvent.click(screen.getByTestId('human-variant-skill-Arcana'));
+    await chooseFeat(10); // Magic Initiate
+
+    // The spell-grant picker appears and blocks Next until filled.
+    expect(screen.getByTestId('spell-grant-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-next')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('spell-grant-fill'));
+    expect(screen.getByTestId('identity-next')).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Create Character'));
+
+    await waitFor(() => {
+      const call = characterService.createCharacter.mock.calls[0][0];
+      expect(call.character_data.feats).toEqual([
+        expect.objectContaining({
+          id: 10, name: 'Magic Initiate', level: 1,
+          choices: expect.objectContaining({ spell_grant: expect.objectContaining({ source: 'Wizard', free_casts: ['Mage Armor'] }) }),
+        }),
+      ]);
     });
   });
 
@@ -1479,20 +1641,40 @@ describe('CharacterCreate', () => {
     await chooseFeat(featId);
   }
 
-  it('blocks Identity → Features when a non-caster picks a spellcasting feat, with a note', async () => {
+  // Opens the Variant Human feat picker dialog (without selecting a feat).
+  async function openVariantHumanFeatPicker(cls) {
+    await selectClass(cls);
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Varis' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-feat-select'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-option-1')).toBeInTheDocument());
+  }
+
+  it('locks a spellcasting feat in the picker for a non-caster (cannot be selected)', async () => {
     renderCreate();
-    await variantHumanWithFeat('Fighter', 4); // War Caster — requires spellcasting
-    expect(screen.getByTestId('identity-next')).toBeDisabled();
-    const note = screen.getByTestId('feat-prereq-identity-note');
-    expect(note).toHaveTextContent('War Caster');
-    expect(note).toHaveTextContent(/cast a spell/);
+    await openVariantHumanFeatPicker('Fighter'); // War Caster (id 4) requires spellcasting
+    expect(screen.getByTestId('human-feat-option-4')).toBeDisabled();
+    expect(screen.getByTestId('human-feat-locked-4')).toHaveTextContent(/cast a spell/);
+    // Clicking the locked feat does not select it.
+    fireEvent.click(screen.getByTestId('human-feat-option-4'));
+    expect(screen.queryByTestId('human-feat-detail')).not.toBeInTheDocument();
   });
 
-  it('blocks Identity → Features when the class lacks the required armor proficiency', async () => {
+  it('locks an armor-prerequisite feat in the picker when the class lacks the proficiency', async () => {
     renderCreate();
-    await variantHumanWithFeat('Wizard', 5); // Heavily Armored — requires medium armor (Wizard has none)
-    expect(screen.getByTestId('identity-next')).toBeDisabled();
-    expect(screen.getByTestId('feat-prereq-identity-note')).toHaveTextContent(/medium armor/);
+    await openVariantHumanFeatPicker('Wizard'); // Heavily Armored (id 5) requires medium armor; Wizard has none
+    expect(screen.getByTestId('human-feat-option-5')).toBeDisabled();
+    expect(screen.getByTestId('human-feat-locked-5')).toHaveTextContent(/medium armor/);
+  });
+
+  it('does NOT lock a spellcasting feat in the picker for a caster', async () => {
+    renderCreate();
+    await openVariantHumanFeatPicker('Wizard'); // Wizard is a caster → War Caster is selectable
+    expect(screen.getByTestId('human-feat-option-4')).not.toBeDisabled();
+    expect(screen.queryByTestId('human-feat-locked-4')).not.toBeInTheDocument();
   });
 
   it('does NOT block Identity for an ability-score prerequisite (checked later at Features)', async () => {

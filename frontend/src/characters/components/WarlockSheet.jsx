@@ -15,6 +15,7 @@ import SubclassPickerWithDetail from './SubclassPickerWithDetail';
 import SubclassDetails from './SubclassDetails';
 import { WARLOCK_SUBCLASSES_5E, PACT_BOONS_5E } from './classChoicesData';
 import HitDiceTracker from './HitDiceTracker';
+import { eldritchInvocationsKnownAtLevel } from './levelChoicesData';
 
 // Pact Magic slot table: [slot_count, slot_level]
 const PACT_SLOTS = {
@@ -29,15 +30,9 @@ function pactSlotsForLevel(level) {
   return PACT_SLOTS[Math.min(Math.max(level, 1), 20)];
 }
 
-function invocationCount(level) {
-  if (level >= 15) return 8;
-  if (level >= 12) return 7;
-  if (level >= 9)  return 6;
-  if (level >= 7)  return 5;
-  if (level >= 5)  return 4;
-  if (level >= 3)  return 3;
-  return 2;
-}
+// Shared with the LevelUpWizard's Eldritch Invocations level-choice step (so the in-sheet
+// free-text fallback and the wizard agree on the max). 5e: none until L2.
+const invocationCount = (level) => eldritchInvocationsKnownAtLevel(level, '5e');
 
 const ASI_LEVELS = [4, 8, 12, 16, 19];
 

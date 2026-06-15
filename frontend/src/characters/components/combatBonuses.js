@@ -19,9 +19,28 @@ export function isDraconicSorcerer(charClass, subclass) {
   return subclass === 'Draconic Bloodline' || subclass === 'Draconic Sorcery';
 }
 
-/** True when the character has the Tough feat (feats may be strings or {name}). */
+/** True when the character has a feat with the given name (feats may be strings or {name}). */
+export function hasFeat(feats = [], name) {
+  return (feats ?? []).some(f => (typeof f === 'string' ? f : f?.name) === name);
+}
+
+/** True when the character has the Tough feat (+2 HP per level). */
 export function hasToughFeat(feats = []) {
-  return (feats ?? []).some(f => (typeof f === 'string' ? f : f?.name) === 'Tough');
+  return hasFeat(feats, 'Tough');
+}
+
+/** True when the character has the Durable feat (Hit Die healing floored at 2× CON mod, min 2). */
+export function hasDurableFeat(feats = []) {
+  return hasFeat(feats, 'Durable');
+}
+
+/**
+ * Minimum HP regained per Hit Die spent. Durable sets it to twice the CON modifier
+ * (minimum 2); without Durable there's no floor beyond the normal 0. Returns 0 when
+ * Durable isn't present so callers can use it as a plain lower bound.
+ */
+export function durableHitDieMin(conMod = 0, hasDurable = false) {
+  return hasDurable ? Math.max(2, 2 * conMod) : 0;
 }
 
 /**

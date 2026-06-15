@@ -11,6 +11,7 @@ import SubclassDetails from '../SubclassDetails';
 import { WARLOCK_SUBCLASSES_2024 as SUBCLASSES, PACT_BOONS_2024 as PACT_BOONS } from '../classChoicesData';
 import HitDiceTracker from '../HitDiceTracker';
 import { CLASS_FEATURES_2024 } from '../classFeatures2024';
+import { eldritchInvocationsKnownAtLevel } from '../levelChoicesData';
 
 const PACT_SLOTS = {
   1:  [1, 1], 2:  [2, 1], 3:  [2, 2], 4:  [2, 2],
@@ -78,16 +79,8 @@ function SpellPickerCreation({ label, limit, options, selected, onChange, raceGr
   );
 }
 
-function invocationCount(level) {
-  if (level >= 15) return 8;
-  if (level >= 12) return 7;
-  if (level >= 9)  return 6;
-  if (level >= 7)  return 5;
-  if (level >= 5)  return 4;
-  if (level >= 3)  return 3;
-  if (level >= 2)  return 2;
-  return 1;
-}
+// Shared with the LevelUpWizard's Eldritch Invocations level-choice step. 2024: 1 from L1.
+const invocationCount = (level) => eldritchInvocationsKnownAtLevel(level, '5.5e');
 
 function SkillPicker({ value, onChange, max, backgroundSkills = [], raceSkills = [] }) {
   const ALLOWED = ['Arcana', 'Deception', 'History', 'Intimidation', 'Investigation', 'Nature', 'Religion'];

@@ -55,6 +55,25 @@ vi.mock('./FeatPicker', () => ({
   ),
 }));
 
+// FeatSpellGrantPicker is unit-tested on its own; mock it here so the wizard integration test
+// can fill a complete value without the spell catalogue. spellGrantComplete keeps the real shape.
+vi.mock('./FeatSpellGrantPicker', () => ({
+  default: ({ onChange }) => (
+    <div data-testid="spell-grant-picker">
+      <button
+        type="button"
+        data-testid="spell-grant-fill"
+        onClick={() => onChange({ source: 'Wizard', ability: 'intelligence', cantrips: ['Fire Bolt', 'Light'], leveled: [{ name: 'Mage Armor', level: 1 }], free_cast: 'Mage Armor' })}
+      >Fill spells</button>
+    </div>
+  ),
+  spellGrantComplete: (spec, v) => !!(v && v.source && (v.cantrips?.length || 0) === (spec?.cantrips || 0) && (v.leveled?.length || 0) === (spec?.leveled?.length || 0)),
+  resolveSpellGrantValue: (spec, v) => ({
+    ...(v || {}), fixed: spec?.fixed || [],
+    free_casts: spec?.free_cast ? [...(spec.fixed || []).filter((s) => (s.level ?? 0) >= 1).map((s) => s.name), ...((v?.leveled) || []).map((s) => s.name)] : [],
+  }),
+}));
+
 // featService.getFeats is fetched on mount for ASI-feat levels.
 vi.mock('../../encyclopedia/featService', () => ({
   default: { getFeats: vi.fn().mockResolvedValue([]) },
@@ -566,6 +585,9 @@ describe('LevelUpWizard', () => {
       ] },
       { id: 17, name: 'Heavy Armor Master', prerequisites: { text: 'Proficiency with heavy armor' }, repeatable: false, description: 'Tank.' },
       { id: 18, name: 'Moderately Armored', prerequisites: { text: 'Proficiency with light armor' }, repeatable: false, description: 'Armored.' },
+      { id: 19, name: 'Magic Initiate', prerequisites: {}, repeatable: true, description: 'Learn spells.', effects: [
+        { kind: 'spell_grant', source_kind: 'class', cantrips: 2, leveled: [{ level: 1, count: 1 }], free_cast: 'long_rest', ability: 'class', label: 'Magic Initiate' },
+      ] },
     ];
 
     function toChoiceStep(character = FIGHTER_L3, campaign = CAMPAIGN_ASI_OR_FEAT, onComplete = vi.fn()) {
@@ -726,6 +748,28 @@ describe('LevelUpWizard', () => {
         4,
         expect.objectContaining({ feat_languages: expect.arrayContaining(['Draconic', 'Giant', 'Goblin']) }),
         expect.objectContaining({ intelligence: 11 }), // Linguist's fixed +1 INT (10 → 11)
+      ));
+    });
+
+    it('spell-grant feat (Magic Initiate) blocks Next until spells are chosen, then saves them on the feat', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT, onComplete);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      fireEvent.click(await screen.findByTestId('pick-feat-19')); // Magic Initiate
+      expect(screen.getByTestId('spell-grant-picker')).toBeInTheDocument();
+      expect(screen.getByTestId('wizard-next')).toBeDisabled(); // spells not chosen yet
+      fireEvent.click(screen.getByTestId('spell-grant-fill'));
+      expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('wizard-next')); // feat → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4,
+        expect.objectContaining({ feats: expect.arrayContaining([expect.objectContaining({
+          name: 'Magic Initiate', level: 4,
+          choices: expect.objectContaining({ spell_grant: expect.objectContaining({ source: 'Wizard', free_casts: ['Mage Armor'] }) }),
+        })]) }),
       ));
     });
 
@@ -892,6 +936,35 @@ describe('LevelUpWizard', () => {
       await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
         10,
         expect.objectContaining({ metamagic: ['Quickened Spell', 'Subtle Spell', 'Twinned Spell'] }),
+      ));
+    });
+  });
+
+  describe('level choices — Warlock Eldritch Invocations', () => {
+    // Warlock L1→2 learns its first 2 invocations (5e: none before L2). Known caster + L1 subclass.
+    const WARLOCK_L1 = {
+      id: 31, name: 'Fox', char_class: 'Warlock', level: 1, constitution: 12,
+      character_data: { hp_max: 9, subclass: 'The Fiend', cantrips: ['Eldritch Blast'], known_spells: ['Hex'] },
+    };
+
+    it('prompts the invocation delta at L2, level-gates the pool, and appends on confirm', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={WARLOCK_L1} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      chooseTakeAverage();                                 // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next'));  // features → spells
+      fireEvent.click(screen.getByTestId('wizard-next'));  // spells → level-choices
+      expect(screen.getByTestId('level-choice-count-eldritch_invocations')).toHaveTextContent('0/2');
+      // a level-5 invocation is not offered at level 2
+      expect(screen.queryByTestId('level-choice-eldritch_invocations-Thirsting Blade')).not.toBeInTheDocument();
+      expect(screen.getByTestId('wizard-next')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('level-choice-eldritch_invocations-Agonizing Blast'));
+      fireEvent.click(screen.getByTestId('level-choice-eldritch_invocations-Armor of Shadows'));
+      expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('wizard-next'));  // level-choices → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        2,
+        expect.objectContaining({ eldritch_invocations: ['Agonizing Blast', 'Armor of Shadows'] }),
       ));
     });
   });

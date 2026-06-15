@@ -26,6 +26,8 @@ class Feat(Base):
     #   {"kind": "attack_mod", "target": "unarmed", "dice": "1d4"}
     #   {"kind": "action", "name": "...", "economy": "bonus", "description": "...", "trigger": "..."}
     #   {"kind": "ability_score", "ability": "strength", "amount": 1}                  (fixed)
+    #   {"kind": "spell_grant", "source_kind": "class", "cantrips": 2,                 (Magic Initiate)
+    #        "leveled": [{"level": 1, "count": 1}], "free_cast": "long_rest", "ability": "class"}
     #   {"kind": "note", "text": "..."}                                               (display-only)
     # NULL/empty = no structured effects yet (prose-only); surfaced by the coverage report.
     effects = Column(JSON, nullable=True)

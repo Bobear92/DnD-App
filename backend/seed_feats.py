@@ -42,6 +42,36 @@ def _note(text):
 def _action(name, economy, trigger, description):
     return {"kind": "action", "name": name, "economy": economy, "trigger": trigger, "description": description}
 
+def _spell_grant(source_kind, cantrips=0, leveled=None, fixed=None,
+                 free_cast=None, ability="choice", label=None):
+    """A feat that grants spells the player picks at acquisition (Magic Initiate, etc.).
+
+    source_kind: 'class' (pick bard/cleric/druid/sorcerer/warlock/wizard) | 'group'
+                 (pick Arcane/Divine/Primal — 2024) | 'school' (chosen spell filtered by
+                 school, no class list) | 'fixed' (only always-granted spells, no choice).
+    cantrips:    number of cantrips to choose from the chosen list.
+    leveled:     [{"level": 1, "count": 1, "school": ["Divination","Enchantment"]}] leveled
+                 spells to choose; `school` (optional) filters by school instead of a class list;
+                 `ritual: True` (Ritual Caster) filters to ritual spells + marks a growable
+                 ritual book (stored as `ritual_book:[names]`, cast as rituals only, no free cast).
+    fixed:       [{"name": "Misty Step", "level": 2}] always-granted spells (no choice).
+    free_cast:   'long_rest' = EVERY leveled granted spell (fixed level≥1 + chosen leveled) is
+                 castable once per long rest for free (or with a slot); None = no free casts.
+                 (Cantrips are at-will, never free casts.)
+    ability:     'class' (use the chosen class's spellcasting ability) | 'choice' (player
+                 picks INT/WIS/CHA) | 'none' (the feat's ASI already sets the ability).
+    """
+    return {
+        "kind": "spell_grant",
+        "source_kind": source_kind,
+        "cantrips": cantrips,
+        "leveled": leveled or [],
+        "fixed": fixed or [],
+        "free_cast": free_cast,
+        "ability": ability,
+        "label": label or "Spell grant",
+    }
+
 _ALL_ABILITIES = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
 
 FEAT_EFFECTS_5E = {
@@ -137,7 +167,9 @@ FEAT_EFFECTS_5E = {
         _note("Impose disadvantage on concentration saves you cause; advantage on saves vs spells cast by creatures within 5 ft."),
     ],
     "Magic Initiate": [
-        _note("Learn two cantrips and one 1st-level spell from a chosen class, castable once per long rest (or with slots). Repeatable."),
+        _spell_grant("class", cantrips=2, leveled=[{"level": 1, "count": 1}],
+                     free_cast="long_rest", ability="class", label="Magic Initiate"),
+        _note("The 1st-level spell is castable once per long rest for free (or with a spell slot). Repeatable for a different class."),
     ],
     "Martial Adept": [
         {"kind": "resource", "key": "martial_adept_superiority", "label": "Superiority Die (d6)", "total": 1, "recharge": "short"},
@@ -175,7 +207,9 @@ FEAT_EFFECTS_5E = {
         _note("Gain saving-throw proficiency in the chosen ability. Repeatable for a different ability."),
     ],
     "Ritual Caster": [
-        _note("Gain a ritual book with two 1st-level ritual spells from a chosen class; add more ritual spells you find."),
+        _spell_grant("class", leveled=[{"level": 1, "count": 2, "ritual": True}],
+                     free_cast=None, ability="class", label="Ritual Caster"),
+        _note("Cast these as rituals only (10 minutes longer, no spell slot). You can add more ritual spells you find to the book."),
     ],
     "Savage Attacker": [
         _note("Once per turn, reroll a melee weapon's damage dice and use either total."),
@@ -203,7 +237,8 @@ FEAT_EFFECTS_5E = {
         _note("Hide when lightly obscured; missing a ranged attack doesn't reveal you; dim light doesn't impose disadvantage on sight Perception."),
     ],
     "Spell Sniper": [
-        _note("Double the range of attack-roll spells; spell attacks ignore half and three-quarters cover; learn one attack cantrip."),
+        _spell_grant("class", cantrips=1, ability="class", label="Spell Sniper"),
+        _note("Double the range of attack-roll spells; spell attacks ignore half and three-quarters cover. Choose a cantrip that requires an attack roll."),
     ],
     "Tough": [
         _note("Your hit point maximum increases by 2 per level (applied automatically on the sheet)."),
@@ -242,7 +277,11 @@ FEAT_EFFECTS_2024 = {
         {"kind": "resource", "key": "luck_points", "total": "pb", "recharge": "long", "label": "Luck Points"},
         _note("Spend a Luck Point for Advantage on a d20 Test, or to impose Disadvantage on an attack roll against you."),
     ],
-    "Magic Initiate": [_note("Learn two cantrips and a 1st-level spell from a chosen list (Arcane/Divine/Primal), castable once per long rest for free. Repeatable.")],
+    "Magic Initiate": [
+        _spell_grant("group", cantrips=2, leveled=[{"level": 1, "count": 1}],
+                     free_cast="long_rest", ability="choice", label="Magic Initiate"),
+        _note("Choose Arcane, Divine, or Primal and a spellcasting ability. The 1st-level spell is castable once per long rest for free (or with a slot). Repeatable."),
+    ],
     "Musician": [_note("Proficiency with three Musical Instruments; after a rest, grant Heroic Inspiration to allies who hear you (up to your proficiency bonus).")],
     "Savage Attacker": [_note("Once per turn, roll a weapon's damage dice twice and use either roll.")],
     "Skilled": [
@@ -271,7 +310,12 @@ FEAT_EFFECTS_2024 = {
     "Dual Wielder": [_abil_choice(["strength", "dexterity"]), {"kind": "ac_mod", "amount": 1, "condition": "two_melee_weapons", "label": "+1 AC (dual-wielding)"}, _note("Two-weapon fighting with non-Light weapons; draw/stow two weapons at once.")],
     "Durable": [_abil("constitution"), _note("Spend Hit Dice to heal during any rest; regain at least twice your CON modifier when you roll Hit Dice.")],
     "Elemental Adept": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Choose a damage type: your spells ignore resistance to it and treat 1s on its damage dice as 2s. Repeatable.")],
-    "Fey Touched": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Learn Misty Step and one 1st-level Divination or Enchantment spell, castable once per long rest for free.")],
+    "Fey Touched": [
+        _abil_choice(["intelligence", "wisdom", "charisma"]),
+        _spell_grant("school", leveled=[{"level": 1, "count": 1, "school": ["Divination", "Enchantment"]}],
+                     fixed=[{"name": "Misty Step", "level": 2}], free_cast="long_rest", ability="none", label="Fey Touched"),
+        _note("Misty Step and the chosen spell are each castable once per long rest for free, or with a spell slot."),
+    ],
     "Grappler": [_abil_choice(["strength", "dexterity"]), _note("Advantage on attacks vs creatures you're Grappling; move a grappled creature with you; a free Unarmed Strike to grapple after an attack.")],
     "Great Weapon Master": [
         _abil("strength"),
@@ -306,13 +350,23 @@ FEAT_EFFECTS_2024 = {
                 "Make a bonus-action attack with the opposite end (1d4 bludgeoning)."),
         _note("Creatures provoke an opportunity attack when they enter your reach.")],
     "Resilient": [_abil_choice(_ALL_ABILITIES), {"kind": "proficiency", "prof_type": "saving_throw", "from_ability_choice": True}, _note("Gain saving-throw proficiency in the chosen ability. Repeatable.")],
-    "Ritual Caster": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Gain a ritual book with two 1st-level ritual spells; add more ritual spells you find.")],
+    "Ritual Caster": [
+        _abil_choice(["intelligence", "wisdom", "charisma"]),
+        _spell_grant("class", leveled=[{"level": 1, "count": 2, "ritual": True}],
+                     free_cast=None, ability="none", label="Ritual Caster"),
+        _note("Cast these as rituals only (10 minutes longer, no spell slot). You can add more ritual spells you find to the book."),
+    ],
     "Sentinel": [
         _abil_choice(["strength", "dexterity"]),
         _action("Sentinel Strike", "reaction", "When a creature within 5 ft attacks a target other than you",
                 "Make a melee weapon attack against the attacker."),
         _note("Opportunity-attack hits reduce speed to 0; creatures provoke even when they Disengage.")],
-    "Shadow Touched": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Learn Invisibility and one 1st-level Illusion or Necromancy spell, castable once per long rest for free.")],
+    "Shadow Touched": [
+        _abil_choice(["intelligence", "wisdom", "charisma"]),
+        _spell_grant("school", leveled=[{"level": 1, "count": 1, "school": ["Illusion", "Necromancy"]}],
+                     fixed=[{"name": "Invisibility", "level": 2}], free_cast="long_rest", ability="none", label="Shadow Touched"),
+        _note("Invisibility and the chosen spell are each castable once per long rest for free, or with a spell slot."),
+    ],
     "Sharpshooter": [_abil("dexterity"), _note("Long range imposes no disadvantage; ignore half and three-quarters cover; add your proficiency bonus to a ranged weapon's damage on the Attack action.")],
     "Shield Master": [
         _abil("strength"),
@@ -326,9 +380,25 @@ FEAT_EFFECTS_2024 = {
     "Skulker": [_abil("dexterity"), _note("Hide as a Bonus Action while lightly obscured; missing a ranged attack doesn't reveal you; Blindsight 10 ft in darkness.")],
     "Slasher": [_abil_choice(["strength", "dexterity"]), _note("Once per turn, reduce a creature's speed by 10 ft on slashing damage; a slashing crit gives it disadvantage on attacks.")],
     "Speedy": [_abil_choice(["strength", "dexterity"]), {"kind": "stat_mod", "stat": "speed", "amount": 10, "label": "+10 speed"}, _note("Dashing ignores difficult terrain; no opportunity attacks from creatures you've damaged this turn.")],
-    "Spell Sniper": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Spell attacks ignore half and three-quarters cover; learn one attack cantrip.")],
-    "Telekinetic": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Learn Mage Hand (cast without components); shove a creature 5 ft as a Bonus Action.")],
-    "Telepathic": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Speak telepathically to creatures within 60 ft; cast Detect Thoughts once per long rest for free.")],
+    "Spell Sniper": [
+        _abil_choice(["intelligence", "wisdom", "charisma"]),
+        # ability='none': the +1 above already sets the casting ability, so the picker doesn't re-ask.
+        _spell_grant("group", cantrips=1, ability="none", label="Spell Sniper"),
+        _note("Spell attacks ignore half and three-quarters cover. Choose a cantrip that requires an attack roll, cast with the ability you increased."),
+    ],
+    "Telekinetic": [
+        _abil_choice(["intelligence", "wisdom", "charisma"]),
+        _spell_grant("fixed", fixed=[{"name": "Mage Hand", "level": 0}], ability="none", label="Telekinetic"),
+        _action("Telekinetic Shove", "bonus", "Telekinetic",
+                "Shove one creature you can see within 30 ft 5 feet toward or away from you (Strength save vs your spell save DC)."),
+        _note("You can cast Mage Hand without components, and its spectral hand is invisible."),
+    ],
+    "Telepathic": [
+        _abil_choice(["intelligence", "wisdom", "charisma"]),
+        _spell_grant("fixed", fixed=[{"name": "Detect Thoughts", "level": 2}],
+                     free_cast="long_rest", ability="none", label="Telepathic"),
+        _note("Speak telepathically to any creature you can see within 60 ft."),
+    ],
     "War Caster": [
         _abil_choice(["intelligence", "wisdom", "charisma"]),
         _action("War Caster Spell (Reaction)", "reaction", "When a creature provokes an opportunity attack from you",

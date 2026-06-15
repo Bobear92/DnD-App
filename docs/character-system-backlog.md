@@ -55,6 +55,18 @@ Surge / Indomitable converted to use-button + confirm via `useRestResource` (bac
 **Next:** migrate the remaining 22 classes to configs via **`/class-config`** (each becomes a config
 object, not a 24× edit), then Epics 1–3 are single changes to the shared hooks.
 
+### TODO when migrating the other classes (everything below comes "for free" via the shared `CombatBlock`/`HitDiceTracker` — non-migrated classes are missing it)
+
+- [ ] **Hit-Dice roll-to-heal dialog** — only the data-driven sheets (Fighter + Wizard via `CombatBlock`'s
+      heal mode) get the "Use" → Spend-Hit-Dice dialog (`onHeal`). The 22 hand-written sheets still use the
+      legacy +/− `hit_dice_used` stepper with no actual roll. Migrating a class to a config wires `CombatBlock`,
+      so the roll dialog appears automatically.
+- [ ] **Durable feat** — the Hit-Die heal floor (regain ≥ 2×CON mod, min 2) + the pre-roll minimum notation
+      (`hit-dice-durable-min` / `hit-dice-durable-applied`) live in `HitDiceTracker`'s heal mode and are wired
+      by `CombatBlock` (`durable={hasDurableFeat(data.feats)}`). So **Durable currently only works on Fighter +
+      Wizard**; a Durable Barbarian/Cleric/etc. won't see it until that class is migrated. (Helpers ready:
+      `hasDurableFeat` / `durableHitDieMin` in `combatBonuses.js`.) No per-class work needed beyond the migration.
+
 ---
 
 ## Epic 1 — Lock permanent choices; only edit at creation or level up

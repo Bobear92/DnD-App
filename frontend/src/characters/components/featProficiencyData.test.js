@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice,
-  existingFeatProfNames, FEAT_SKILL_OPTIONS, FEAT_LANGUAGE_OPTIONS, FEAT_WEAPON_OPTIONS,
+  existingFeatProfNames, groupFeatProfOptions, getFeatGrantedSkills,
+  FEAT_SKILL_OPTIONS, FEAT_LANGUAGE_OPTIONS, FEAT_WEAPON_OPTIONS,
 } from './featProficiencyData';
 
 const LINGUIST = { name: 'Linguist', effects: [
@@ -73,6 +74,44 @@ describe('featProficiencyData', () => {
     expect(exp).toMatchObject({ count: 1, options: ['Stealth', 'Arcana'] });
     // No proficient skills passed → empty pool (so the picker can be skipped / auto-complete)
     expect(getFeatProficiencyChoices(skillExpert).find((c) => c.prof_type === 'expertise').options).toEqual([]);
+  });
+
+  it('groupFeatProfOptions splits a Skilled (skill_or_tool) grant into categories', () => {
+    const opts = getFeatProficiencyChoices(SKILLED)[0].options;
+    const groups = groupFeatProfOptions('skill_or_tool', opts);
+    const cats = groups.map((g) => g.category);
+    // Categories appear in display order, only non-empty ones.
+    expect(cats).toEqual(['Skills', "Artisan's Tools", 'Gaming Sets', 'Musical Instruments', 'Tools & Kits']);
+    const byCat = Object.fromEntries(groups.map((g) => [g.category, g.options]));
+    expect(byCat.Skills).toContain('Acrobatics');
+    expect(byCat["Artisan's Tools"]).toContain("Smith's Tools");
+    expect(byCat['Musical Instruments']).toContain('Lute');
+    expect(byCat['Gaming Sets']).toContain('Dice Set');
+    expect(byCat['Tools & Kits']).toContain("Thieves' Tools");
+    // No option is lost or duplicated across groups.
+    const flat = groups.flatMap((g) => g.options);
+    expect(flat.length).toBe(opts.length);
+    expect(new Set(flat).size).toBe(opts.length);
+  });
+
+  it('groupFeatProfOptions leaves non-skill/tool grants as a single uncategorized group', () => {
+    expect(groupFeatProfOptions('language', FEAT_LANGUAGE_OPTIONS)).toEqual([
+      { category: null, options: FEAT_LANGUAGE_OPTIONS },
+    ]);
+    expect(groupFeatProfOptions('weapon', FEAT_WEAPON_OPTIONS)[0].category).toBeNull();
+    expect(groupFeatProfOptions('language', [])).toEqual([]);
+  });
+
+  it('getFeatGrantedSkills collects skills recorded on feat instances', () => {
+    const feats = [
+      { id: 1, name: 'Alert' }, // no choices
+      { id: 2, name: 'Skilled', choices: { skills: ['Arcana', 'Stealth'] } },
+      { id: 3, name: 'Skill Expert', choices: { ability: 'wisdom', skills: ['Arcana', 'Insight'] } },
+    ];
+    expect(getFeatGrantedSkills(feats)).toEqual(['Arcana', 'Stealth', 'Insight']); // deduped
+    expect(getFeatGrantedSkills([])).toEqual([]);
+    expect(getFeatGrantedSkills()).toEqual([]);
+    expect(getFeatGrantedSkills([{ name: 'Tough', choices: { ability: 'constitution' } }])).toEqual([]);
   });
 
   it('routes Expertise to expertise_skills and tracks already-held', () => {

@@ -15,7 +15,7 @@ import characterService from '../characterService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
 import { getRacialRestResources } from '../components/racialRestResources';
-import { getFeatResources } from '../components/featEffects';
+import { getFeatResources, getFeatGrantedSpells } from '../components/featEffects';
 import { isDivination } from '../components/PortentTracker';
 import { cn } from '@/lib/utils';
 
@@ -89,6 +89,8 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
   racial.forEach(r => items.push(r.label));
   // Feat resources (long rest recovers all)
   featResources.forEach(r => items.push(r.label));
+  // Feat spell-grant free casts (Magic Initiate, etc.) — 1/long rest
+  getFeatGrantedSpells(characterData?.feats ?? []).freeCasts.forEach(fc => items.push(`${fc.name} (feat free cast)`));
   // Divination Wizard: Portent dice cleared (re-roll after the rest)
   if (cls === 'Wizard' && isDivination(characterData?.subclass)) items.push('Portent dice cleared (re-roll)');
   return items;
