@@ -139,4 +139,10 @@ describe('applyLevelChoice', () => {
     const choice = getLevelChoices('Sorcerer', '5e', 2, 3)[0];
     expect(applyLevelChoice(choice, ['Twinned Spell'], {})).toEqual({ metamagic: ['Twinned Spell'] });
   });
+
+  it('swaps out a replaced option before adding the new picks (replace-on-level-up)', () => {
+    const choice = getLevelChoices('Sorcerer', '5e', 9, 10)[0]; // learns 1 metamagic at L10
+    const patch = applyLevelChoice(choice, ['Heightened Spell'], { metamagic: ['Quickened Spell', 'Subtle Spell'] }, 'Subtle Spell');
+    expect(patch.metamagic).toEqual(['Quickened Spell', 'Heightened Spell']); // Subtle Spell removed, Heightened added
+  });
 });

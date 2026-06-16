@@ -184,9 +184,14 @@ export function availablePoolOptions(choice, characterData = {}, level = null) {
   );
 }
 
-/** character_data patch merging the chosen NAMES into the choice's storeField. */
-export function applyLevelChoice(choice, chosen, characterData = {}) {
+/**
+ * character_data patch merging the chosen NAMES into the choice's storeField. `replace` (optional)
+ * is one currently-known option to swap out first (RAW replace-on-level-up — e.g. a Warlock may
+ * replace one Eldritch Invocation when they level up); it's removed before the new picks are added.
+ */
+export function applyLevelChoice(choice, chosen, characterData = {}, replace = null) {
+  const existing = (characterData[choice.storeField] || []).filter((x) => !replace || x !== replace);
   return {
-    [choice.storeField]: dedup([...(characterData[choice.storeField] || []), ...(chosen || [])]),
+    [choice.storeField]: dedup([...existing, ...(chosen || [])]),
   };
 }

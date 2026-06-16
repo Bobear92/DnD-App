@@ -12,7 +12,12 @@ const TEST_FEATS = [
   { id: 2, name: 'Lucky', edition: '5e', description: 'Reroll a d20.', prerequisites: {}, source: 'PHB 2014', repeatable: false },
   { id: 3, name: 'Inspiring Leader', edition: '5e', description: 'Grant temp HP.', prerequisites: { text: 'Charisma 13 or higher' }, source: 'PHB 2014', repeatable: false },
   { id: 4, name: 'War Caster', edition: '5e', description: 'Advantage on concentration.', prerequisites: { text: 'The ability to cast at least one spell' }, source: 'PHB 2014', repeatable: false },
-  { id: 5, name: 'Heavily Armored', edition: '5e', description: 'Heavy armor proficiency.', prerequisites: { text: 'Proficiency with medium armor' }, source: 'PHB 2014', repeatable: false },
+  { id: 5, name: 'Heavily Armored', edition: '5e', description: 'Heavy armor proficiency.', prerequisites: { text: 'Proficiency with medium armor' }, source: 'PHB 2014', repeatable: false,
+    effects: [{ kind: 'ability_score', ability: 'strength', amount: 1 }, { kind: 'proficiency', prof_type: 'armor', items: ['Heavy'] }] },
+  { id: 12, name: 'Weapon Master', edition: '5e', description: 'Four weapon proficiencies.', prerequisites: {}, source: 'PHB 2014', repeatable: false,
+    effects: [{ kind: 'ability_choice', abilities: ['strength', 'dexterity'], amount: 1 }, { kind: 'proficiency', prof_type: 'weapon', count: 4 }] },
+  { id: 13, name: 'Resilient', edition: '5e', description: 'Save proficiency.', prerequisites: {}, source: 'PHB 2014', repeatable: true,
+    effects: [{ kind: 'ability_choice', abilities: ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'], amount: 1 }, { kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true }] },
   { id: 6, name: 'Tavern Brawler', edition: '5e', description: 'Brawl.', prerequisites: {}, source: 'PHB 2014', repeatable: false,
     effects: [{ kind: 'ability_choice', abilities: ['strength', 'constitution'], amount: 1 }] },
   { id: 7, name: 'Linguist', edition: '5e', description: 'Languages.', prerequisites: {}, source: 'PHB 2014', repeatable: false,
@@ -1550,6 +1555,39 @@ describe('CharacterCreate', () => {
     });
   });
 
+  it('does not let a feat-granted skill be re-picked as a class skill (no double-dip) and shows it at review', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 53 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'NoDip' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-variant-asi-strength'));
+    fireEvent.click(screen.getByTestId('human-variant-asi-constitution'));
+    fireEvent.click(screen.getByTestId('human-variant-skill-Arcana'));
+    await chooseFeat(8); // Skill Expert
+    fireEvent.click(screen.getByTestId('human-feat-prof-opt-skill-Insight')); // a Fighter-allowed skill
+    fireEvent.click(screen.getByTestId('human-feat-prof-opt-expertise-Insight'));
+    expect(screen.getByTestId('identity-next')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    // The class skill picker flags the feat-granted skill as already granted (non-clickable).
+    expect(screen.getByRole('button', { name: 'Insight' })).toHaveClass('cursor-not-allowed');
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter'); // picks Athletics + History (Insight is locked)
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    expect(screen.getByTestId('review-feat-choices')).toHaveTextContent('Insight');
+    fireEvent.click(screen.getByText('Create Character'));
+    await waitFor(() => {
+      const skills = characterService.createCharacter.mock.calls[0][0].character_data.skill_proficiencies;
+      expect(skills.filter(s => s === 'Insight')).toHaveLength(1); // exactly once — no double count
+    });
+  });
+
   it('Variant Human spell-grant feat (Magic Initiate) blocks Next until spells chosen, then stores them', async () => {
     characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 52 } });
     renderCreate();
@@ -1577,6 +1615,11 @@ describe('CharacterCreate', () => {
     await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('details-next'));
     await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    // The review surfaces the feat's chosen spells so nothing is lost.
+    const featSpells = screen.getByTestId('review-feat-spells');
+    expect(featSpells).toHaveTextContent('Fire Bolt (cantrip)');
+    expect(featSpells).toHaveTextContent('Light (cantrip)');
+    expect(featSpells).toHaveTextContent('Mage Armor');
     fireEvent.click(screen.getByText('Create Character'));
 
     await waitFor(() => {
@@ -1670,6 +1713,33 @@ describe('CharacterCreate', () => {
     expect(screen.getByTestId('human-feat-locked-5')).toHaveTextContent(/medium armor/);
   });
 
+  it('locks redundant half-feats whose proficiency a Fighter already has (Weapon Master / Heavily Armored)', async () => {
+    renderCreate();
+    await openVariantHumanFeatPicker('Fighter'); // Fighter — all weapons + all armor
+    // Weapon Master (id 12) → nothing new to grant.
+    expect(screen.getByTestId('human-feat-option-12')).toBeDisabled();
+    expect(screen.getByTestId('human-feat-locked-12')).toHaveTextContent(/all weapon proficiencies/i);
+    // Heavily Armored (id 5) → Fighter already has heavy armor.
+    expect(screen.getByTestId('human-feat-option-5')).toBeDisabled();
+    expect(screen.getByTestId('human-feat-locked-5')).toHaveTextContent(/already proficient with heavy armor/i);
+  });
+
+  it('Resilient offers only abilities whose save the class lacks (Variant Human)', async () => {
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Save' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    await chooseFeat(13); // Resilient
+    // Fighter has STR + CON saves → those abilities aren't offered; the other four are.
+    expect(screen.queryByTestId('human-feat-ability-strength')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('human-feat-ability-constitution')).not.toBeInTheDocument();
+    expect(screen.getByTestId('human-feat-ability-dexterity')).toBeInTheDocument();
+    expect(screen.getByTestId('human-feat-ability-charisma')).toBeInTheDocument();
+  });
+
   it('does NOT lock a spellcasting feat in the picker for a caster', async () => {
     renderCreate();
     await openVariantHumanFeatPicker('Wizard'); // Wizard is a caster → War Caster is selectable
@@ -1731,12 +1801,13 @@ describe('CharacterCreate', () => {
 
   it('shows the feat prerequisite on the review page when the feat has one', async () => {
     renderCreate();
-    // Heavily Armored requires medium armor; a Fighter has it, so the prereq is met and we reach review.
-    await variantHumanWithFeat('Fighter', 5);
+    // Heavily Armored requires medium armor; a Barbarian has medium (not heavy), so the prereq is
+    // met AND it still grants something new (heavy) — selectable, and we reach review.
+    await variantHumanWithFeat('Barbarian', 5);
     fireEvent.click(screen.getByTestId('identity-next'));
-    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Barbarian Features')).toBeInTheDocument());
     await assignStandardSpread();
-    await selectRequiredSkills('Fighter');
+    await selectRequiredSkills('Barbarian');
     await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('details-next'));
     await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());

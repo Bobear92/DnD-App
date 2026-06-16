@@ -584,7 +584,18 @@ describe('LevelUpWizard', () => {
         { kind: 'expertise', count: 1, label: '1 skill for Expertise' },
       ] },
       { id: 17, name: 'Heavy Armor Master', prerequisites: { text: 'Proficiency with heavy armor' }, repeatable: false, description: 'Tank.' },
-      { id: 18, name: 'Moderately Armored', prerequisites: { text: 'Proficiency with light armor' }, repeatable: false, description: 'Armored.' },
+      { id: 18, name: 'Moderately Armored', prerequisites: { text: 'Proficiency with light armor' }, repeatable: false, description: 'Armored.', effects: [
+        { kind: 'ability_choice', abilities: ['strength', 'dexterity'], amount: 1 },
+        { kind: 'proficiency', prof_type: 'armor', items: ['Medium', 'Shields'] },
+      ] },
+      { id: 20, name: 'Weapon Master', prerequisites: {}, repeatable: false, description: 'Weapons.', effects: [
+        { kind: 'ability_choice', abilities: ['strength', 'dexterity'], amount: 1 },
+        { kind: 'proficiency', prof_type: 'weapon', count: 4, label: '4 weapons' },
+      ] },
+      { id: 21, name: 'Resilient', prerequisites: {}, repeatable: true, description: 'Save proficiency.', effects: [
+        { kind: 'ability_choice', abilities: ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'], amount: 1 },
+        { kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true },
+      ] },
       { id: 19, name: 'Magic Initiate', prerequisites: {}, repeatable: true, description: 'Learn spells.', effects: [
         { kind: 'spell_grant', source_kind: 'class', cantrips: 2, leveled: [{ level: 1, count: 1 }], free_cast: 'long_rest', ability: 'class', label: 'Magic Initiate' },
       ] },
@@ -683,6 +694,32 @@ describe('LevelUpWizard', () => {
       expect(gwm).toBeDisabled();
       expect(gwm).toHaveAttribute('data-locked', 'true');
       expect(screen.getByTestId('pick-feat-11')).not.toBeDisabled(); // Grappler — STR 13, met (15)
+    });
+
+    it('locks redundant half-feats whose proficiency the class already has', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT); // Fighter — all armor + all weapons
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      const weaponMaster = await screen.findByTestId('pick-feat-20');
+      expect(weaponMaster).toBeDisabled();
+      expect(weaponMaster).toHaveTextContent(/all weapon proficiencies/i);
+      const modArmored = screen.getByTestId('pick-feat-18'); // Moderately Armored — grants medium
+      expect(modArmored).toBeDisabled();
+      expect(modArmored).toHaveTextContent(/already proficient with medium armor/i);
+    });
+
+    it('Resilient only offers abilities whose save the class lacks', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT); // Fighter — STR + CON saves
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      fireEvent.click(await screen.findByTestId('pick-feat-21')); // Resilient
+      // Held saves (STR, CON) are not offered; the other four are.
+      expect(screen.queryByTestId('feat-ability-strength')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('feat-ability-constitution')).not.toBeInTheDocument();
+      expect(screen.getByTestId('feat-ability-dexterity')).toBeInTheDocument();
+      expect(screen.getByTestId('feat-ability-wisdom')).toBeInTheDocument();
     });
 
     it('locks a "cast a spell" feat for a non-caster (Battle Master Fighter)', async () => {
@@ -879,6 +916,28 @@ describe('LevelUpWizard', () => {
         expect.objectContaining({ maneuvers: ['Trip Attack', 'Riposte', 'Parry', 'Precision Attack', 'Menacing Attack'] })
       ));
     });
+
+    it('lets a Battle Master replace one known maneuver when learning new ones (swap-on-level-up)', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={BM_L6} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → maneuvers
+      // Swap out Trip Attack → the pick target rises to 3 (2 new + 1 to fill the freed slot).
+      fireEvent.change(screen.getByTestId('maneuver-replace'), { target: { value: 'Trip Attack' } });
+      expect(screen.getByTestId('maneuvers-picked')).toHaveTextContent('0/3');
+      fireEvent.click(screen.getByTestId('lvl-maneuver-Precision Attack'));
+      fireEvent.click(screen.getByTestId('lvl-maneuver-Menacing Attack'));
+      fireEvent.click(screen.getByTestId('lvl-maneuver-Disarming Attack'));
+      expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('wizard-next')); // maneuvers → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        7,
+        // Trip Attack swapped out; the other two kept + three picked = 5 known at L7.
+        expect.objectContaining({ maneuvers: ['Riposte', 'Parry', 'Precision Attack', 'Menacing Attack', 'Disarming Attack'] })
+      ));
+    });
   });
 
   describe('level choices — Sorcerer Metamagic', () => {
@@ -936,6 +995,26 @@ describe('LevelUpWizard', () => {
       await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
         10,
         expect.objectContaining({ metamagic: ['Quickened Spell', 'Subtle Spell', 'Twinned Spell'] }),
+      ));
+    });
+
+    it('lets the player replace one known option when learning a new one (swap-on-level-up)', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={SORCERER_L9} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      chooseTakeAverage();                                 // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next'));  // features → spells
+      fireEvent.click(screen.getByTestId('wizard-next'));  // spells → level-choices
+      // Swap out Subtle Spell → required rises to 2 (the 1 new + 1 to replace it).
+      fireEvent.change(screen.getByTestId('level-choice-replace-metamagic'), { target: { value: 'Subtle Spell' } });
+      expect(screen.getByTestId('level-choice-count-metamagic')).toHaveTextContent('0/2');
+      fireEvent.click(screen.getByTestId('level-choice-metamagic-Twinned Spell'));
+      fireEvent.click(screen.getByTestId('level-choice-metamagic-Heightened Spell'));
+      fireEvent.click(screen.getByTestId('wizard-next'));  // level-choices → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        10,
+        // Subtle Spell swapped out; Quickened kept + two picked = 3 known at L10.
+        expect.objectContaining({ metamagic: ['Quickened Spell', 'Twinned Spell', 'Heightened Spell'] }),
       ));
     });
   });

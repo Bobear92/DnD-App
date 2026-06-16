@@ -15,7 +15,7 @@ import classService from '../classService';
 import ClassOverview from '../components/ClassOverview';
 import FeatPicker from '../components/FeatPicker';
 import { checkFeatPrerequisite } from '../components/featPrerequisites';
-import { featAbilityChoices, featFixedAbilityScores, getSpellGrantSpecs } from '../components/featEffects';
+import { featAbilityChoices, featFixedAbilityScores, getSpellGrantSpecs, getFeatGrantedSpells, featGrantRedundant, featAbilityChoiceOptions } from '../components/featEffects';
 import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from '../components/FeatSpellGrantPicker';
 import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, groupFeatProfOptions, FEAT_SKILL_OPTIONS } from '../components/featProficiencyData';
 
@@ -691,7 +691,7 @@ function BgDetail({ bg }) {
   );
 }
 
-function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [], backgroundGrants = null, backgroundSkills = [], feats = [], featDisabledReason = null, proficientSkills = [], campaignId = null }) {
+function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [], backgroundGrants = null, backgroundSkills = [], feats = [], featDisabledReason = null, proficientSkills = [], featProfCharacterData = {}, charClass = null, campaignId = null }) {
   const isDragonborn = race?.name === 'Dragonborn';
   const isHighElf    = subrace?.name === 'High Elf';
   const isHalfElf    = race?.name === 'Half-Elf';
@@ -1032,11 +1032,14 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
             const picked = feats.find(f => f.id === choices.human_feat?.id);
             const ac = featAbilityChoices(picked)[0];
             if (!ac) return null;
+            // Resilient: only offer abilities whose saving throw the class doesn't already grant.
+            const classSaves = (CLASS_PROFICIENCIES_5E[charClass]?.saving_throws ?? []).map(s => s.toLowerCase());
+            const abilityOptions = featAbilityChoiceOptions(picked, ac, { saveProficiencies: classSaves });
             return (
               <div className="space-y-1.5 rounded-md border bg-muted/30 p-2" data-testid="human-feat-ability-choice">
                 <p className="text-xs font-medium">This feat increases an ability score by {ac.amount}. Choose one:</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {ac.abilities.map(ab => (
+                  {abilityOptions.map(ab => (
                     <button
                       key={ab}
                       type="button"
@@ -1069,7 +1072,7 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
             };
             return grants.map(g => {
               const chosen = profChoices[g.prof_type] || [];
-              const opts = availableFeatOptions(g, { characterData: {} });
+              const opts = availableFeatOptions(g, { charClass, characterData: featProfCharacterData });
               if (opts.length === 0) return null; // nothing pickable (e.g. Expertise pre-skills)
               return (
                 <div key={g.key} className="space-y-1.5 rounded-md border bg-muted/30 p-2" data-testid={`human-feat-prof-grant-${g.prof_type}`}>
@@ -1477,10 +1480,27 @@ export default function CharacterCreate() {
     ...humanFeatOwnSkills,
   ])];
   const humanFeatProfGrants = getFeatProficiencyChoices(humanFeatObj, { proficientSkills: humanProficientSkills });
+  // The proficiencies the character already has from race/background/class choices at the Identity
+  // step — passed to the feat proficiency picker (via availableFeatOptions) so a feat (Skilled,
+  // Linguist, …) can't re-grant a skill / tool / language already chosen elsewhere (no double-dip).
+  const featProfCharacterData = {
+    skill_proficiencies: [...new Set([...backgroundSkills, ...raceGrantedSkillsAll])],
+    race_languages: [
+      ...(selectedRaceObj?.languages ?? []), ...(selectedSubraceObj?.languages ?? []),
+      ...(raceChoices.high_elf_language ? [raceChoices.high_elf_language] : []),
+      ...(raceChoices.human_language ? [raceChoices.human_language] : []),
+      ...(raceChoices.half_elf_language ? [raceChoices.half_elf_language] : []),
+    ],
+    background_languages: (bgChoices.language_choices ?? []).filter(Boolean),
+    race_tool_proficiency: raceChoices.dwarf_tool || null,
+    race_tool_proficiencies: raceTools,
+    background_tool_choice: bgChoices.tool_choice || null,
+    tool_choice: classData.tool_choice || null,
+  };
   // required = min(count, available) so a grant with no pickable options (e.g. Expertise with no
   // proficient skills assembled yet at creation) auto-completes instead of blocking Next.
   const humanFeatProfComplete = humanFeatProfGrants.every(
-    g => (raceChoices.human_feat_prof?.[g.prof_type]?.length || 0) >= Math.min(g.count, availableFeatOptions(g, { characterData: {} }).length),
+    g => (raceChoices.human_feat_prof?.[g.prof_type]?.length || 0) >= Math.min(g.count, availableFeatOptions(g, { charClass: selectedClass, characterData: featProfCharacterData }).length),
   );
   // Spell-grant spec (Magic Initiate) the chosen Variant Human feat asks the player to fulfil.
   const humanFeatSpellSpec = getSpellGrantSpecs(humanFeatObj)[0] || null;
@@ -1530,6 +1550,17 @@ export default function CharacterCreate() {
     return patch;
   })();
   const { skill_proficiencies: humanFeatSkillPicks = [], ...humanFeatProfRest } = humanFeatProfPatch;
+
+  // Skills the class picker must treat as already-granted (non-clickable) so a Variant Human's
+  // feat skills (Skilled / Skill Expert) can't be double-dipped as class skill proficiencies.
+  // Merged into the race-granted set passed to every class sheet (one place, no 24-sheet fan-out).
+  const grantedSkillsForPicker = [...new Set([...raceGrantedSkillsAll, ...humanFeatSkillPicks])];
+
+  // Spells the chosen Variant Human feat grants (Magic Initiate / Fey Touched / Ritual Caster /
+  // …), resolved for the review display so the player sees every spell they picked.
+  const humanFeatGrantedSpells = (isVariantHuman && humanFeatSpellSpec)
+    ? getFeatGrantedSpells([{ name: humanFeatObj?.name, choices: { spell_grant: resolveSpellGrantValue(humanFeatSpellSpec, raceChoices.human_feat_spell) } }])
+    : { cantrips: [], leveled: [], freeCasts: [], ritualBooks: [] };
 
   // Race/subrace passive HP bonuses (e.g. Hill Dwarf "Dwarven Toughness", Draconic Resilience)
   // folded into starting HP — mirrors the CharacterDetail Stats-tab MaxHpValue. Level is 1 at creation.
@@ -1584,7 +1615,7 @@ export default function CharacterCreate() {
   // class choices (fighting style, spells, ability scores) are left untouched. Switching CLASS
   // already resets classData entirely in handleClassSelect, so it needs no handling here.
   useEffect(() => {
-    const grantedSkills = new Set([...raceGrantedSkillsAll, ...backgroundSkills]);
+    const grantedSkills = new Set([...grantedSkillsForPicker, ...backgroundSkills]);
     const grantedCantrips = new Set(raceGrantedCantrips);
     setClassData(prev => {
       const curSkills = prev.skill_proficiencies ?? [];
@@ -1596,7 +1627,7 @@ export default function CharacterCreate() {
     });
     // Keyed on the grant *sources* (stable primitives), not the derived arrays.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRaceObj?.name, selectedSubraceObj?.name, selectedBgObj?.name, raceChoices.high_elf_cantrip, (raceChoices.half_elf_skills ?? []).join('|'), raceChoices.human_variant_skill]);
+  }, [selectedRaceObj?.name, selectedSubraceObj?.name, selectedBgObj?.name, raceChoices.high_elf_cantrip, (raceChoices.half_elf_skills ?? []).join('|'), raceChoices.human_variant_skill, humanFeatSkillPicks.join('|')]);
 
   const handleClassSelect = async (cls) => {
     setSelectedClass(cls);
@@ -1823,13 +1854,20 @@ export default function CharacterCreate() {
   // LevelUpWizard feat step). Uses the identity context — class/level/armor/spellcasting are
   // knowable here; ability-score prerequisites are NOT (scores aren't assigned yet), so feats
   // gated only on a score stay selectable and are caught by the Features-step note instead.
+  // The simple/martial weapon proficiencies the class confers — drives the redundancy lock for
+  // Weapon Master (needs all) and Martial Weapon Training (needs martial).
+  const featClassWeapons = (CLASS_PROFICIENCIES_5E[selectedClass]?.weapons || '').toLowerCase();
+  const featWeaponProfs = { simple: featClassWeapons.includes('simple'), martial: featClassWeapons.includes('martial') };
+
   const featDisabledReason = (f) => {
     const { met, unmet } = checkFeatPrerequisite(f, {
       level: 1, className: selectedClass,
       scores: null, abilityScoresKnown: false,
       spellcaster: featSpellcaster, armorProficiencies: featArmorProfs,
     });
-    return met ? null : unmet.map(u => u.reason).join('; ');
+    if (!met) return unmet.map(u => u.reason).join('; ');
+    // Prereq met — but a half-feat whose proficiency the character already has is a trap pick.
+    return featGrantRedundant(f, { armorProficiencies: featArmorProfs, weapons: featWeaponProfs });
   };
 
   const identityNextBlocked = !form.name.trim() ||
@@ -2092,6 +2130,8 @@ export default function CharacterCreate() {
                 feats={apiFeats}
                 featDisabledReason={featDisabledReason}
                 proficientSkills={humanProficientSkills}
+                featProfCharacterData={featProfCharacterData}
+                charClass={selectedClass}
                 campaignId={campaignId}
               />
 
@@ -2328,7 +2368,7 @@ export default function CharacterCreate() {
                   creation={true}
                   scores={form}
                   backgroundSkills={backgroundSkills}
-                  raceSkills={raceGrantedSkillsAll}
+                  raceSkills={grantedSkillsForPicker}
                   raceGrantedCantrips={raceGrantedCantrips}
                 />
               </section>
@@ -2571,6 +2611,40 @@ export default function CharacterCreate() {
                           {selectedFeatObj.description}
                         </div>
                       )}
+                      {/* Everything the player picked AS PART OF the feat — surfaced so nothing is lost at review */}
+                      {(() => {
+                        const rows = [
+                          ['Skills', humanFeatSkillPicks],
+                          ['Expertise', humanFeatProfRest.expertise_skills],
+                          ['Tools', humanFeatProfRest.feat_tool_proficiencies],
+                          ['Languages', humanFeatProfRest.feat_languages],
+                          ['Weapons', humanFeatProfRest.feat_weapon_proficiencies],
+                        ].filter(([, items]) => (items?.length ?? 0) > 0);
+                        const fg = humanFeatGrantedSpells;
+                        const spellNames = [
+                          ...fg.cantrips.map(s => `${s.name} (cantrip)`),
+                          ...fg.leveled.map(s => s.name),
+                          ...fg.ritualBooks.flatMap(b => b.spells),
+                        ];
+                        if (rows.length === 0 && spellNames.length === 0) return null;
+                        return (
+                          <div className="mt-2 space-y-1" data-testid="review-feat-choices">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Feat Choices</div>
+                            {rows.map(([label, items]) => (
+                              <div key={label} className="text-xs flex flex-wrap items-center gap-1">
+                                <span className="text-muted-foreground">{label}:</span>
+                                {items.map(it => <Badge key={it} variant="secondary" className="text-xs">{it}</Badge>)}
+                              </div>
+                            ))}
+                            {spellNames.length > 0 && (
+                              <div className="text-xs flex flex-wrap items-center gap-1" data-testid="review-feat-spells">
+                                <span className="text-muted-foreground">Spells:</span>
+                                {spellNames.map(n => <Badge key={n} variant="secondary" className="text-xs">{n}</Badge>)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                   {raceSkillSources.length > 0 && (
@@ -2761,7 +2835,7 @@ export default function CharacterCreate() {
                   <ClassSheet
                     data={{
                       ...classData,
-                      skill_proficiencies: [...new Set([...(classData.skill_proficiencies ?? []), ...backgroundSkills, ...raceGrantedSkillsAll])],
+                      skill_proficiencies: [...new Set([...(classData.skill_proficiencies ?? []), ...backgroundSkills, ...grantedSkillsForPicker])],
                     }}
                     onChange={() => {}}
                     readOnly={true}
@@ -2769,7 +2843,7 @@ export default function CharacterCreate() {
                     creation={true}
                     scores={finalScores}
                     backgroundSkills={backgroundSkills}
-                    raceSkills={raceGrantedSkillsAll}
+                    raceSkills={grantedSkillsForPicker}
                     raceGrantedCantrips={raceGrantedCantrips}
                   />
                 </section>

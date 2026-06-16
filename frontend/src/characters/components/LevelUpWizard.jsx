@@ -25,7 +25,7 @@ import { getLevelChoices, availablePoolOptions, applyLevelChoice } from './level
 import FeatPicker from './FeatPicker';
 import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from './FeatSpellGrantPicker';
 import { checkFeatPrerequisite } from './featPrerequisites';
-import { featAbilityChoices, featFixedAbilityScores, getFeatProficiencyGrants, getSpellGrantSpecs } from './featEffects';
+import { featAbilityChoices, featFixedAbilityScores, getFeatProficiencyGrants, getSpellGrantSpecs, featGrantRedundant, featAbilityChoiceOptions, getFeatSaveProficiencies } from './featEffects';
 import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, groupFeatProfOptions, FEAT_SKILL_OPTIONS } from './featProficiencyData';
 import { CLASS_PROFICIENCIES_5E } from './classProficienciesData';
 import featService from '../../encyclopedia/featService';
@@ -61,6 +61,34 @@ function progressionValue(progression, key, lvl) {
   if (colIdx < 0) return null;
   const row = progression.data[Math.min(Math.max(lvl, 1), 20) - 1];
   return row ? row[colIdx] : null;
+}
+
+/**
+ * Optional "replace one of your known X" control shown in level-up steps for features that allow
+ * a swap-on-level-up (Battle Master maneuvers, Eldritch Invocations, Metamagic). Picking one to
+ * swap out frees a slot so the player chooses one extra new option to fill it.
+ */
+function ReplaceOneSelect({ label, options = [], value = '', onChange, testId }) {
+  if (options.length === 0) return null; // nothing known yet to replace
+  return (
+    <div className="rounded-md border bg-muted/30 p-2.5 space-y-1">
+      <label className="text-xs font-medium">Replace one {label}? <span className="font-normal text-muted-foreground">(optional)</span></label>
+      <select
+        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+        value={value || '__none__'}
+        onChange={(e) => onChange(e.target.value === '__none__' ? '' : e.target.value)}
+        data-testid={testId}
+      >
+        <option value="__none__">Keep all — just add new</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+      {value && (
+        <p className="text-xs text-muted-foreground">
+          Choose one extra below to replace <span className="font-medium">{value}</span>.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function LevelUpWizard({ character, campaign, onComplete, onClose }) {
@@ -121,7 +149,9 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const [profChoices, setProfChoices] = useState({}); // { [grant.key]: [chosen names] }
   const [asiAlloc, setAsiAlloc] = useState({}); // { [abilityKey]: 0|1|2 } — points added this ASI
   const [maneuverPicks, setManeuverPicks] = useState([]); // new maneuvers chosen this level-up
+  const [maneuverReplace, setManeuverReplace] = useState(''); // a known maneuver to swap out (optional)
   const [levelChoicePicks, setLevelChoicePicks] = useState({}); // { [choice.key]: [chosen names] }
+  const [levelChoiceReplace, setLevelChoiceReplace] = useState({}); // { [choice.key]: a known option to swap out }
   const [asiChoice, setAsiChoice] = useState(''); // 'asi' | 'feat' — only in asi_or_feat mode
   const [featPick, setFeatPick] = useState(null); // { id, name } chosen this level-up
   const [featAbilityPick, setFeatAbilityPick] = useState(''); // half-feat ability choice (e.g. Tavern Brawler)
@@ -152,6 +182,9 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     ? Math.max(0, maneuversKnownAtLevel(newLevel) - maneuversKnownAtLevel(character.level ?? 1))
     : 0;
   const needsManeuvers = maneuverDelta > 0;
+  // Battle Masters may also REPLACE one known maneuver when they learn new ones (RAW). Swapping
+  // one out frees a slot, so the player picks one extra new maneuver to fill it.
+  const maneuverTarget = maneuverDelta + (maneuverReplace ? 1 : 0);
 
   // Class-wide pool selections gained this level (Metamagic, etc.) — data-driven via
   // levelChoicesData. Each carries a resolved `count` = the per-level delta to pick.
@@ -267,6 +300,11 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     return [...cats];
   })();
 
+  // The simple/martial weapon proficiencies the class confers — drives the redundancy lock for
+  // Weapon Master (needs all) and Martial Weapon Training (needs martial).
+  const classWeapons = (CLASS_PROFICIENCIES_5E[character.char_class]?.weapons || '').toLowerCase();
+  const weaponProfs = { simple: classWeapons.includes('simple'), martial: classWeapons.includes('martial') };
+
   const featDisabledReason = (f) => {
     const { met, unmet } = checkFeatPrerequisite(f, {
       level: newLevel,
@@ -276,12 +314,26 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       spellcaster: isSpellcaster,
       armorProficiencies,
     });
-    return met ? null : unmet.map((u) => u.reason).join('; ');
+    if (!met) return unmet.map((u) => u.reason).join('; ');
+    // Prereq met — but a half-feat whose proficiency the character already has is a trap pick.
+    return featGrantRedundant(f, { armorProficiencies, weapons: weaponProfs });
   };
 
   // The full picked feat (with effects) + any ability-score choice it demands (half-feats).
   const pickedFeat = featPick ? visibleFeats.find((f) => f.id === featPick.id) : null;
   const featAbilityChoice = pickedFeat ? (featAbilityChoices(pickedFeat)[0] || null) : null; // slice: one choice
+  // Saving-throw proficiencies the character already has (class defaults overridden by any stored
+  // toggle, plus feat-granted saves) — used to filter Resilient's ability chooser.
+  const _ABILITIES = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+  const classSaves = (CLASS_PROFICIENCIES_5E[character.char_class]?.saving_throws ?? []).map((s) => s.toLowerCase());
+  const saveProficiencies = [
+    // CharacterDetail stores save toggles under abbreviated keys (str/dex/con/int/wis/cha + _save_prof);
+    // fall back to the class default when no toggle is stored.
+    ..._ABILITIES.filter((a) => (cd[`${a.slice(0, 3)}_save_prof`] ?? classSaves.includes(a))),
+    ...getFeatSaveProficiencies(cd.feats || []),
+  ];
+  // The abilities offerable for a half-feat's ability choice (Resilient hides saves already held).
+  const featAbilityOptions = featAbilityChoiceOptions(pickedFeat, featAbilityChoice, { saveProficiencies });
   // Count-choice proficiency grants the picked feat demands (Skilled / Linguist / Weapon Master),
   // plus Expertise grants (Skill Expert) whose pool is the character's proficient skills — including
   // a skill picked from this same feat (so you can expertise what you just gained).
@@ -333,15 +385,19 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const toggleManeuver = (name) => {
     setManeuverPicks((prev) => {
       if (prev.includes(name)) return prev.filter((n) => n !== name);
-      if (prev.length >= maneuverDelta) return prev; // at this level's pick limit
+      if (prev.length >= maneuverTarget) return prev; // at this level's pick limit (+1 if replacing)
       return [...prev, name];
     });
   };
 
   // Pool-choice picks (Metamagic, etc.). Required count is capped by what's still available
   // (so a near-exhausted pool doesn't block Next), mirroring the feat count-choice grants.
-  const levelChoiceRequired = (c) =>
-    Math.min(c.count, availablePoolOptions(c, character.character_data ?? {}, newLevel).length);
+  const levelChoiceRequired = (c) => {
+    const avail = availablePoolOptions(c, character.character_data ?? {}, newLevel).length;
+    const base = Math.min(c.count, avail);
+    // Replacing one frees a slot → pick one extra new option (capped by what the pool still offers).
+    return levelChoiceReplace[c.key] ? Math.min(base + 1, avail) : base;
+  };
   const toggleLevelChoice = (choiceKey, name, max) => {
     setLevelChoicePicks((prev) => {
       const cur = prev[choiceKey] || [];
@@ -418,7 +474,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     if (STEPS[step] === 'asi') return asiTotal === ASI_POINTS;
     if (STEPS[step] === 'asi_choice') return asiChoice === 'asi' || asiChoice === 'feat';
     if (STEPS[step] === 'feat') return !!featPick && (!featAbilityChoice || !!featAbilityPick) && featProfComplete && featSpellComplete;
-    if (STEPS[step] === 'maneuvers') return maneuverPicks.length === maneuverDelta;
+    if (STEPS[step] === 'maneuvers') return maneuverPicks.length === maneuverTarget;
     if (STEPS[step] === 'level-choices') {
       return levelChoices.every((c) => (levelChoicePicks[c.key]?.length || 0) >= levelChoiceRequired(c));
     }
@@ -466,12 +522,13 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
         }]
       : null;
 
-    // Class-wide pool selections (Metamagic, etc.) merge into their character_data field.
+    // Class-wide pool selections (Metamagic, Eldritch Invocations, …) merge into their
+    // character_data field; an optional swapped-out option is removed first (replace-on-level-up).
     let levelChoicePatch = {};
     for (const c of levelChoices) {
       levelChoicePatch = {
         ...levelChoicePatch,
-        ...applyLevelChoice(c, levelChoicePicks[c.key] || [], { ...(character.character_data ?? {}), ...levelChoicePatch }),
+        ...applyLevelChoice(c, levelChoicePicks[c.key] || [], { ...(character.character_data ?? {}), ...levelChoicePatch }, levelChoiceReplace[c.key] || null),
       };
     }
 
@@ -482,7 +539,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       ...(isKnownCaster ? { cantrips, known_spells: knownSpells } : {}),
       ...profPatch,
       ...featProfPatch,
-      ...(needsManeuvers ? { maneuvers: [...knownManeuvers, ...maneuverPicks] } : {}),
+      ...(needsManeuvers ? { maneuvers: [...knownManeuvers.filter((m) => m !== maneuverReplace), ...maneuverPicks] } : {}),
       ...levelChoicePatch,
       ...(featAddition ? { feats: featAddition } : {}),
     };
@@ -840,7 +897,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                   This feat increases an ability score by {featAbilityChoice.amount}. Choose one:
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {featAbilityChoice.abilities.map((ab) => (
+                  {featAbilityOptions.map((ab) => (
                     <button
                       key={ab}
                       type="button"
@@ -929,6 +986,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                 <><span className="font-medium text-foreground">{cantripsTarget}</span> cantrips and </>
               )}
               <span className="font-medium text-foreground">{knownTarget ?? '—'}</span> spells.
+              {' '}You may also <span className="font-medium text-foreground">replace</span> one spell you already know — remove it and add another.
             </p>
 
             {cantripsTarget != null && (
@@ -1025,21 +1083,28 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
                 Your Battle Master learns <span className="font-medium text-foreground">{maneuverDelta}</span> new
-                maneuver{maneuverDelta === 1 ? '' : 's'}. Choose below — these are locked in once you level up.
+                maneuver{maneuverDelta === 1 ? '' : 's'}{maneuverReplace ? ' (+1 to replace one)' : ''}. Choose below — locked in once you level up.
               </p>
               <span
-                className={cn('text-xs shrink-0 ml-2', maneuverPicks.length === maneuverDelta ? 'text-muted-foreground' : 'text-amber-600')}
+                className={cn('text-xs shrink-0 ml-2', maneuverPicks.length === maneuverTarget ? 'text-muted-foreground' : 'text-amber-600')}
                 data-testid="maneuvers-picked"
               >
-                {maneuverPicks.length}/{maneuverDelta}
+                {maneuverPicks.length}/{maneuverTarget}
               </span>
             </div>
+            <ReplaceOneSelect
+              label="maneuver"
+              options={knownManeuvers}
+              value={maneuverReplace}
+              onChange={(v) => { setManeuverReplace(v); setManeuverPicks([]); }}
+              testId="maneuver-replace"
+            />
             <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
               {getManeuvers(edition)
                 .filter((m) => !knownManeuvers.includes(m.name))
                 .map((m) => {
                   const sel = maneuverPicks.includes(m.name);
-                  const atLimit = !sel && maneuverPicks.length >= maneuverDelta;
+                  const atLimit = !sel && maneuverPicks.length >= maneuverTarget;
                   return (
                     <button
                       key={m.name}
@@ -1084,6 +1149,16 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                       {chosen.length}/{required}
                     </span>
                   </div>
+                  <ReplaceOneSelect
+                    label={c.label}
+                    options={character.character_data?.[c.storeField] ?? []}
+                    value={levelChoiceReplace[c.key] || ''}
+                    onChange={(v) => {
+                      setLevelChoiceReplace((prev) => ({ ...prev, [c.key]: v }));
+                      setLevelChoicePicks((prev) => ({ ...prev, [c.key]: [] }));
+                    }}
+                    testId={`level-choice-replace-${c.key}`}
+                  />
                   <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1" data-testid={`level-choice-${c.key}`}>
                     {opts.map((o) => {
                       const sel = chosen.includes(o.name);

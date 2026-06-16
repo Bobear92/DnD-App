@@ -116,6 +116,28 @@ export function featAbilityChoices(feat) {
     .map((e) => ({ abilities: e.abilities, amount: Number(e.amount) || 1 }));
 }
 
+/** True when the feat's ability_choice also confers a saving-throw proficiency in the chosen
+ *  ability (Resilient) — i.e. the choice picks WHICH save you gain, not just a +1 stat. */
+export function abilityChoiceGrantsSave(feat) {
+  return !!feat && Array.isArray(feat.effects) && feat.effects.some(
+    (e) => e.kind === 'proficiency' && e.prof_type === 'saving_throw' && e.from_ability_choice,
+  );
+}
+
+/**
+ * The selectable abilities for a feat's half-feat ability choice, with options the character
+ * can't benefit from removed. For a save-granting choice (Resilient), excludes abilities whose
+ * saving throw the character already has — picking one would waste the proficiency. Non-save
+ * choices (Tavern Brawler, etc.) return the full list unchanged. Pass the feat, its ability
+ * choice (from featAbilityChoices), and the character's existing save-proficient ability keys.
+ */
+export function featAbilityChoiceOptions(feat, choice, { saveProficiencies = [] } = {}) {
+  if (!choice) return [];
+  if (!abilityChoiceGrantsSave(feat)) return choice.abilities;
+  const held = new Set((saveProficiencies || []).map((s) => String(s).toLowerCase()));
+  return choice.abilities.filter((a) => !held.has(String(a).toLowerCase()));
+}
+
 /**
  * Fixed proficiency grants from feats (those with an `items` list — no acquisition choice),
  * bucketed for the Items-tab proficiency banners + equip checks. Returns
@@ -132,6 +154,55 @@ export function getFeatProficiencyGrants(feats = []) {
   }
   for (const k of Object.keys(out)) out[k] = [...new Set(out[k])];
   return out;
+}
+
+const _ARMOR_CATS = ['light', 'medium', 'heavy'];
+
+/**
+ * Reason a feat's proficiency grant is REDUNDANT for this character (so the picker can lock it),
+ * or null if it still grants something new. These feats (Lightly/Moderately/Heavily Armored,
+ * Weapon Master) are half-feats whose value is the proficiency — if the character already has it,
+ * the feat only gives its +1 ability bump, strictly worse than a normal ASI, so it's a trap pick.
+ * Pass a single feat object (the one being considered).
+ *   ctx.armorProficiencies — the light/medium/heavy categories the character already has.
+ *   ctx.hasAllWeapons      — true when the character is proficient with all simple + martial weapons.
+ * Redundant only when EVERY proficiency grant on the feat is already covered (a grant that adds
+ * anything new returns null). Non-proficiency effects (the +1 ASI) are ignored here.
+ */
+export function featGrantRedundant(feat, { armorProficiencies = [], weapons = {} } = {}) {
+  if (!feat || !Array.isArray(feat.effects)) return null;
+  const held = new Set(armorProficiencies.map((a) => String(a).toLowerCase()));
+  const hasSimple = !!weapons.simple;
+  const hasMartial = !!weapons.martial;
+  const hasAllWeapons = hasSimple && hasMartial;
+  const reasons = [];
+  let sawProfGrant = false;
+  for (const e of feat.effects) {
+    if (e.kind !== 'proficiency') continue;
+    if (e.prof_type === 'armor' && Array.isArray(e.items)) {
+      sawProfGrant = true;
+      const cats = e.items.map((i) => String(i).toLowerCase()).filter((i) => _ARMOR_CATS.includes(i));
+      if (cats.length > 0 && cats.every((c) => held.has(c))) reasons.push(`already proficient with ${cats.join(' and ')} armor`);
+      else return null; // grants armor the character lacks → not redundant
+    } else if (e.prof_type === 'weapon' && e.count > 0 && !Array.isArray(e.items)) {
+      // Count-choice weapon grant (Weapon Master) — pick any simple/martial, redundant only if ALL held.
+      sawProfGrant = true;
+      if (hasAllWeapons) reasons.push('already has all weapon proficiencies (simple and martial)');
+      else return null;
+    } else if (e.prof_type === 'weapon' && Array.isArray(e.items)) {
+      // Fixed weapon-category grant (Martial Weapon Training → 'Martial weapons').
+      sawProfGrant = true;
+      const allHeld = e.items.every((it) => {
+        const l = String(it).toLowerCase();
+        if (l.includes('martial')) return hasMartial;
+        if (l.includes('simple')) return hasSimple;
+        return false; // a specific named weapon — can't tell it's held → not redundant
+      });
+      if (allHeld) reasons.push('already proficient with martial weapons');
+      else return null;
+    }
+  }
+  return sawProfGrant && reasons.length ? reasons.join('; ') : null;
 }
 
 /**

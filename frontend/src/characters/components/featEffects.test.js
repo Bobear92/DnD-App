@@ -3,7 +3,8 @@ import {
   allFeatEffects, getFeatStatMods, getFeatStatModSources, getFeatActions,
   getFeatUnarmedDice, featAbilityChoices, featFixedAbilityScores, isMechanized,
   getFeatResources, getFeatProficiencyGrants, getFeatSaveProficiencies, getFeatAcMods,
-  getSpellGrantSpecs, getFeatGrantedSpells, featFreeCastUsedKey,
+  getSpellGrantSpecs, getFeatGrantedSpells, featFreeCastUsedKey, featGrantRedundant,
+  featAbilityChoiceOptions, abilityChoiceGrantsSave,
 } from './featEffects';
 
 const MAGIC_INITIATE = {
@@ -115,6 +116,57 @@ describe('featEffects resolver', () => {
     const grants = getFeatProficiencyGrants([heavy, skilled]);
     expect(grants.armor).toEqual(['Heavy']);
     expect(grants.weapons).toEqual([]); // count-choice (Skilled) not included
+  });
+
+  it('featGrantRedundant locks half-feats whose proficiency the character already has', () => {
+    const heavilyArmored = { name: 'Heavily Armored', effects: [
+      { kind: 'ability_score', ability: 'strength', amount: 1 },
+      { kind: 'proficiency', prof_type: 'armor', items: ['Heavy'] },
+    ] };
+    const modArmored = { name: 'Moderately Armored', effects: [
+      { kind: 'proficiency', prof_type: 'armor', items: ['Medium', 'Shields'] },
+    ] };
+    const weaponMaster = { name: 'Weapon Master', effects: [
+      { kind: 'ability_choice', abilities: ['strength', 'dexterity'], amount: 1 },
+      { kind: 'proficiency', prof_type: 'weapon', count: 4 },
+    ] };
+    const martialTraining = { name: 'Martial Weapon Training', effects: [
+      { kind: 'ability_choice', abilities: ['strength', 'dexterity'], amount: 1 },
+      { kind: 'proficiency', prof_type: 'weapon', items: ['Martial weapons'] },
+    ] };
+    const ALL = { simple: true, martial: true };
+    // Armor already held → redundant (the +1 ASI is ignored).
+    expect(featGrantRedundant(heavilyArmored, { armorProficiencies: ['light', 'medium', 'heavy'] })).toMatch(/already proficient with heavy armor/);
+    // Lacks heavy → grants something new → selectable.
+    expect(featGrantRedundant(heavilyArmored, { armorProficiencies: ['light', 'medium'] })).toBeNull();
+    // Moderately Armored locks on medium (shields ignored per the medium-armor rule).
+    expect(featGrantRedundant(modArmored, { armorProficiencies: ['light', 'medium'] })).toMatch(/already proficient with medium armor/);
+    // Weapon Master (count, any weapon): all weapons → redundant; missing a category → selectable.
+    expect(featGrantRedundant(weaponMaster, { weapons: ALL })).toMatch(/all weapon proficiencies/);
+    expect(featGrantRedundant(weaponMaster, { weapons: { simple: true, martial: false } })).toBeNull();
+    // Martial Weapon Training (fixed martial grant): locked when the class has martial weapons.
+    expect(featGrantRedundant(martialTraining, { weapons: { simple: true, martial: true } })).toMatch(/already proficient with martial weapons/);
+    expect(featGrantRedundant(martialTraining, { weapons: { simple: true, martial: false } })).toBeNull(); // Cleric → grants martial (new)
+    // Feats without an armor/weapon grant are never flagged.
+    expect(featGrantRedundant(ALERT, { armorProficiencies: ['light', 'medium', 'heavy'], weapons: ALL })).toBeNull();
+    expect(featGrantRedundant(NO_EFFECTS)).toBeNull();
+  });
+
+  it('featAbilityChoiceOptions filters a save-granting choice (Resilient) to abilities not already proficient', () => {
+    const resilient = { name: 'Resilient', effects: [
+      { kind: 'ability_choice', abilities: ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'], amount: 1 },
+      { kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true },
+    ] };
+    const tavernBrawler = { name: 'Tavern Brawler', effects: [{ kind: 'ability_choice', abilities: ['strength', 'constitution'], amount: 1 }] };
+    expect(abilityChoiceGrantsSave(resilient)).toBe(true);
+    expect(abilityChoiceGrantsSave(tavernBrawler)).toBe(false);
+    const choice = featAbilityChoices(resilient)[0];
+    // Fighter has STR + CON saves → those are removed from Resilient's chooser.
+    expect(featAbilityChoiceOptions(resilient, choice, { saveProficiencies: ['strength', 'constitution'] }))
+      .toEqual(['dexterity', 'intelligence', 'wisdom', 'charisma']);
+    // A non-save half-feat is never filtered (the choice is just a +1 stat).
+    expect(featAbilityChoiceOptions(tavernBrawler, featAbilityChoices(tavernBrawler)[0], { saveProficiencies: ['strength'] }))
+      .toEqual(['strength', 'constitution']);
   });
 
   it('getFeatSaveProficiencies resolves from_ability_choice via the feat choice', () => {
