@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import FeatPicker from './FeatPicker';
 import featService from '../../encyclopedia/featService';
-import { getFeatResources } from './featEffects';
+import { getFeatResources, getFeatManeuvers } from './featEffects';
+import { getManeuvers } from './maneuversData';
 import { RestResourceControl } from './classSheet/RestResourceTracker';
 
 function prereqText(feat) {
@@ -44,6 +45,10 @@ function effectChipLabel(e, feat) {
       }
       if (e.count) return `${e.count} ${String(e.prof_type).replace(/_/g, ' ')}`;
       return e.label || String(e.prof_type);
+    case 'maneuver_grant':
+      return feat?.choices?.maneuvers?.length
+        ? feat.choices.maneuvers.join(', ')
+        : (e.label || `${e.count || 0} maneuvers`);
     case 'expertise': return e.label || `Expertise ×${e.count || 1}`;
     case 'ac_mod': return e.label || (e.amount ? `+${e.amount} AC` : 'AC');
     default: return null; // note
@@ -81,9 +86,22 @@ export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', ca
   const ownedNames = new Set(resolved.map((f) => f.name));
   const addable = catalogue.filter((c) => c.repeatable || !ownedNames.has(c.name));
 
+  // A Battle Master folds the Martial Adept feat's die + maneuvers into their Combat Superiority
+  // pool (BattleMasterPanel), so its standalone d6 tracker + maneuver list are suppressed here.
+  const isBattleMaster = characterData?.subclass === 'Battle Master';
+
   // Rest-rechargeable resource pools from feats (Lucky, Martial Adept). The expended count
   // lives in character_data as `${key}_used`; RestResourceControl persists it via onChange.
-  const featResources = getFeatResources(resolved, { pb });
+  // Hide the Martial Adept superiority die for a Battle Master (folded into their shared pool).
+  const featResources = getFeatResources(resolved, { pb })
+    .filter((r) => !(isBattleMaster && r.key === 'martial_adept_superiority'));
+
+  // Battle Master maneuvers a feat (Martial Adept) granted. For a non-Battle-Master these are
+  // shown here with full descriptions + a d6 die (tracked via featResources above). For a Battle
+  // Master they're part of the known list in the BattleMasterPanel, so just note that.
+  const featManeuvers = getFeatManeuvers(resolved);
+  const maneuverDescs = getManeuvers(edition);
+  const maneuverDesc = (name) => maneuverDescs.find((m) => m.name === name)?.description || '';
   const resourceRow = (r) => {
     const used = characterData?.[r.usedKey] || 0;
     return {
@@ -119,6 +137,37 @@ export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', ca
               </div>
             );
           })}
+        </div>
+      )}
+      {featManeuvers.length > 0 && (
+        <div className="rounded-md border p-3 space-y-2" data-testid="feat-maneuvers">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">Maneuvers (Martial Adept)</span>
+            <Badge variant="outline" className="text-[10px]">
+              {isBattleMaster ? 'folded into Battle Master' : `d6 · ${featManeuvers.length} known`}
+            </Badge>
+          </div>
+          {isBattleMaster ? (
+            <p className="text-xs text-muted-foreground" data-testid="feat-maneuvers-bm-note">
+              Your Martial Adept maneuvers and extra superiority die are part of your Combat Superiority
+              pool — see the Battle Master panel in the Class Features tab.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Fueled by one d6 superiority die (tracked above; regained on a short or long rest).
+              Maneuver save DC = 8 + proficiency bonus + Strength or Dexterity modifier.
+            </p>
+          )}
+          <div className="space-y-1.5">
+            {featManeuvers.map((m) => (
+              <div key={m.name} className="rounded-md border p-2.5" data-testid={`feat-maneuver-${m.name}`}>
+                <span className="font-medium text-sm">{m.name}</span>
+                {maneuverDesc(m.name) && (
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{maneuverDesc(m.name)}</p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {resolved.length === 0 ? (

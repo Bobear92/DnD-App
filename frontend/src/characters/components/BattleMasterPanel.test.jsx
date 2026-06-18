@@ -58,4 +58,20 @@ describe('BattleMasterPanel', () => {
     expect(screen.queryByTestId('maneuver-Trip Attack')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Use Superiority Dice/i })).not.toBeInTheDocument();
   });
+
+  it('folds a Martial Adept feat into the pool: +1 die and +N maneuver slots', () => {
+    const feats = [{ name: 'Martial Adept', effects: [{ kind: 'maneuver_grant', count: 2, die: 'd6' }], choices: { maneuvers: ['Lunging Attack', 'Parry'] } }];
+    render(<BattleMasterPanel data={{ maneuvers: ['Trip Attack', 'Riposte', 'Parry', 'Lunging Attack'], feats }} level={3} onChange={vi.fn()} />);
+    // Level 3 grants 4 dice + 1 from the feat = 5
+    expect(screen.getByTestId('superiority-dice')).toHaveTextContent('5 / 5 remaining');
+    // Known limit is 3 (level) + 2 (feat) = 5, so 4 chosen is still under limit (not over)
+    expect(screen.getByTestId('maneuvers-count')).toHaveTextContent('4/5 chosen');
+    expect(screen.getByTestId('battle-master-feat-note')).toHaveTextContent(/\+1 superiority die and \+2 maneuvers/);
+  });
+
+  it('shows no feat note without a maneuver-grant feat', () => {
+    render(<BattleMasterPanel data={{ maneuvers: [] }} level={3} onChange={vi.fn()} />);
+    expect(screen.queryByTestId('battle-master-feat-note')).not.toBeInTheDocument();
+    expect(screen.getByTestId('superiority-dice')).toHaveTextContent('4 / 4 remaining');
+  });
 });

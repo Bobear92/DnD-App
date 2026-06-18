@@ -11,9 +11,10 @@
 //   { kind: 'attack_mod',     target:'unarmed', dice }         changes an attack (e.g. unarmed strike die)
 //   { kind: 'action',         name, economy, description, trigger }  an Action Economy entry
 //   { kind: 'spell_grant',    source_kind, cantrips, leveled, fixed, free_cast, ability }  grants spells (Magic Initiate)
+//   { kind: 'maneuver_grant', count, die }                     player picks N Battle Master maneuvers + a die (Martial Adept)
 //   { kind: 'note',           text }                           display-only rider (explicitly not a mechanic)
 
-export const FEAT_EFFECT_KINDS = ['stat_mod', 'ability_score', 'ability_choice', 'attack_mod', 'action', 'spell_grant', 'note'];
+export const FEAT_EFFECT_KINDS = ['stat_mod', 'ability_score', 'ability_choice', 'attack_mod', 'action', 'spell_grant', 'maneuver_grant', 'note'];
 
 /** All effect objects across a character's feats (each feat instance may carry a snapshot). */
 export function allFeatEffects(feats = []) {
@@ -293,6 +294,58 @@ export function getFeatGrantedSpells(feats = []) {
 export function featFreeCastUsedKey(name) {
   const slug = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return `feat_freecast_${slug}_used`;
+}
+
+/**
+ * Maneuver-grant spec a feat asks the player to fulfil at acquisition (Martial Adept).
+ * Pass a single feat object (the one being picked). Returns { count, die, label } or null.
+ */
+export function getManeuverGrantSpec(feat) {
+  if (!feat || !Array.isArray(feat.effects)) return null;
+  const e = feat.effects.find((x) => x.kind === 'maneuver_grant');
+  return e ? { count: Number(e.count) || 0, die: e.die || 'd6', label: e.label || feat.name } : null;
+}
+
+/** True when a maneuver_grant spec is satisfied (exactly `count` maneuvers chosen). */
+export function maneuverGrantComplete(spec, chosen = []) {
+  if (!spec) return true;
+  return (chosen?.length || 0) === spec.count;
+}
+
+/**
+ * Maneuvers a character has gained from feats — read from each feat instance's
+ * `choices.maneuvers` snapshot (recorded by the acquisition picker). Returns
+ * [{ name, die, source }]. The Feats sub-tab consumes this for a non-Battle-Master
+ * (a Battle Master folds these into the shared Combat Superiority pool instead).
+ */
+export function getFeatManeuvers(feats = []) {
+  const out = [];
+  for (const f of feats ?? []) {
+    const names = f?.choices?.maneuvers;
+    if (!Array.isArray(names)) continue;
+    const spec = getManeuverGrantSpec(f);
+    for (const name of names) out.push({ name, die: spec?.die || 'd6', source: f.name });
+  }
+  return out;
+}
+
+/**
+ * Extra superiority dice a Battle Master gains from maneuver-grant feats (Martial Adept → +1
+ * die at the Battle Master's own die size, RAW). One per maneuver-grant feat instance.
+ */
+export function martialAdeptDieCount(feats = []) {
+  return (feats ?? []).reduce((n, f) => n + (getManeuverGrantSpec(f) ? 1 : 0), 0);
+}
+
+/**
+ * Extra known-maneuver slots a Battle Master gains from feats (sum of each maneuver_grant
+ * `count`) — so the panel's known-maneuver limit makes room for the feat's picks.
+ */
+export function martialAdeptManeuverCount(feats = []) {
+  return (feats ?? []).reduce((n, f) => {
+    const spec = getManeuverGrantSpec(f);
+    return n + (spec ? spec.count : 0);
+  }, 0);
 }
 
 /** Fixed ability increases a feat grants (no choice needed), e.g. [{ ability, amount }]. */

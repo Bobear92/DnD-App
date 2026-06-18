@@ -599,6 +599,10 @@ describe('LevelUpWizard', () => {
       { id: 19, name: 'Magic Initiate', prerequisites: {}, repeatable: true, description: 'Learn spells.', effects: [
         { kind: 'spell_grant', source_kind: 'class', cantrips: 2, leveled: [{ level: 1, count: 1 }], free_cast: 'long_rest', ability: 'class', label: 'Magic Initiate' },
       ] },
+      { id: 22, name: 'Martial Adept', prerequisites: {}, repeatable: true, description: 'Maneuvers.', effects: [
+        { kind: 'maneuver_grant', count: 2, die: 'd6', label: '2 maneuvers' },
+        { kind: 'resource', key: 'martial_adept_superiority', label: 'Superiority Die (d6)', total: 1, recharge: 'short' },
+      ] },
     ];
 
     function toChoiceStep(character = FIGHTER_L3, campaign = CAMPAIGN_ASI_OR_FEAT, onComplete = vi.fn()) {
@@ -875,6 +879,65 @@ describe('LevelUpWizard', () => {
       fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
       await screen.findByTestId('pick-feat-11');
       expect(screen.queryByTestId('pick-feat-10')).not.toBeInTheDocument();
+    });
+
+    it('maneuver-grant feat (Martial Adept): blocks Next until 2 maneuvers chosen, saves them on the feat', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT, onComplete);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // choice → feat
+      fireEvent.click(await screen.findByTestId('pick-feat-22')); // Martial Adept
+      expect(screen.getByTestId('lvl-feat-maneuver-picker')).toBeInTheDocument();
+      expect(screen.getByTestId('wizard-next')).toBeDisabled(); // no maneuvers yet
+      fireEvent.click(screen.getByTestId('lvl-feat-maneuver-Trip Attack'));
+      expect(screen.getByTestId('wizard-next')).toBeDisabled(); // only 1 of 2
+      fireEvent.click(screen.getByTestId('lvl-feat-maneuver-Riposte'));
+      expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+      fireEvent.click(screen.getByTestId('wizard-next')); // feat → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4,
+        expect.objectContaining({ feats: expect.arrayContaining([expect.objectContaining({
+          name: 'Martial Adept', level: 4,
+          choices: expect.objectContaining({ maneuvers: ['Trip Attack', 'Riposte'] }),
+        })]) }),
+      ));
+    });
+
+    it('a non-Battle-Master does NOT merge feat maneuvers into character_data.maneuvers', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toChoiceStep(FIGHTER_L3, CAMPAIGN_ASI_OR_FEAT, onComplete);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      fireEvent.click(await screen.findByTestId('pick-feat-22'));
+      fireEvent.click(screen.getByTestId('lvl-feat-maneuver-Trip Attack'));
+      fireEvent.click(screen.getByTestId('lvl-feat-maneuver-Riposte'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalled());
+      const cd = onComplete.mock.calls[0][1];
+      expect(cd.maneuvers).toBeUndefined(); // not a Battle Master → maneuvers live on the feat only
+    });
+
+    it('a Battle Master taking Martial Adept merges the picks into character_data.maneuvers and excludes known ones', async () => {
+      featService.getFeats.mockResolvedValueOnce(FEATS);
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      const bmFighter = { ...FIGHTER_L3, character_data: { hp_max: 26, subclass: 'Battle Master', maneuvers: ['Trip Attack'] } };
+      toChoiceStep(bmFighter, CAMPAIGN_ASI_OR_FEAT, onComplete);
+      fireEvent.click(screen.getByTestId('asi-choice-feat'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      fireEvent.click(await screen.findByTestId('pick-feat-22'));
+      // Trip Attack is already known → not offered by the picker.
+      expect(screen.queryByTestId('lvl-feat-maneuver-Trip Attack')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('lvl-feat-maneuver-Riposte'));
+      fireEvent.click(screen.getByTestId('lvl-feat-maneuver-Parry'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalled());
+      const cd = onComplete.mock.calls[0][1];
+      expect(cd.maneuvers).toEqual(['Trip Attack', 'Riposte', 'Parry']); // existing + 2 feat picks
     });
   });
 

@@ -24,8 +24,9 @@ import { getManeuvers, maneuversKnownAtLevel } from './maneuversData';
 import { getLevelChoices, availablePoolOptions, applyLevelChoice } from './levelChoicesData';
 import FeatPicker from './FeatPicker';
 import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from './FeatSpellGrantPicker';
+import FeatManeuverPicker from './FeatManeuverPicker';
 import { checkFeatPrerequisite } from './featPrerequisites';
-import { featAbilityChoices, featFixedAbilityScores, getFeatProficiencyGrants, getSpellGrantSpecs, featGrantRedundant, featAbilityChoiceOptions, getFeatSaveProficiencies } from './featEffects';
+import { featAbilityChoices, featFixedAbilityScores, getFeatProficiencyGrants, getSpellGrantSpecs, featGrantRedundant, featAbilityChoiceOptions, getFeatSaveProficiencies, getManeuverGrantSpec, maneuverGrantComplete } from './featEffects';
 import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, groupFeatProfOptions, FEAT_SKILL_OPTIONS } from './featProficiencyData';
 import { CLASS_PROFICIENCIES_5E } from './classProficienciesData';
 import featService from '../../encyclopedia/featService';
@@ -157,6 +158,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const [featAbilityPick, setFeatAbilityPick] = useState(''); // half-feat ability choice (e.g. Tavern Brawler)
   const [featProfChoices, setFeatProfChoices] = useState({}); // { [prof_type]: [chosen] } — Skilled/Linguist/Weapon Master
   const [featSpellGrant, setFeatSpellGrant] = useState(null); // spell_grant picks (Magic Initiate): { source, ability, cantrips, leveled }
+  const [featManeuverPicks, setFeatManeuverPicks] = useState([]); // maneuver_grant picks (Martial Adept): [name]
   const [allFeats, setAllFeats] = useState([]); // edition-filtered feat catalogue
   const [saving, setSaving] = useState(false);
 
@@ -355,7 +357,10 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // Spell-grant spec (Magic Initiate) the picked feat asks the player to fulfil.
   const featSpellSpec = pickedFeat ? (getSpellGrantSpecs(pickedFeat)[0] || null) : null;
   const featSpellComplete = !featSpellSpec || spellGrantComplete(featSpellSpec, featSpellGrant);
-  const selectFeat = (f) => { setFeatPick(f); setFeatAbilityPick(''); setFeatProfChoices({}); setFeatSpellGrant(null); };
+  // Maneuver-grant spec (Martial Adept): pick N Battle Master maneuvers, excluding any already known.
+  const featManeuverSpec = pickedFeat ? getManeuverGrantSpec(pickedFeat) : null;
+  const featManeuverComplete = maneuverGrantComplete(featManeuverSpec, featManeuverPicks);
+  const selectFeat = (f) => { setFeatPick(f); setFeatAbilityPick(''); setFeatProfChoices({}); setFeatSpellGrant(null); setFeatManeuverPicks([]); };
   const toggleFeatProf = (profType, name, max) => {
     setFeatProfChoices((prev) => {
       const cur = prev[profType] || [];
@@ -473,7 +478,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     }
     if (STEPS[step] === 'asi') return asiTotal === ASI_POINTS;
     if (STEPS[step] === 'asi_choice') return asiChoice === 'asi' || asiChoice === 'feat';
-    if (STEPS[step] === 'feat') return !!featPick && (!featAbilityChoice || !!featAbilityPick) && featProfComplete && featSpellComplete;
+    if (STEPS[step] === 'feat') return !!featPick && (!featAbilityChoice || !!featAbilityPick) && featProfComplete && featSpellComplete && featManeuverComplete;
     if (STEPS[step] === 'maneuvers') return maneuverPicks.length === maneuverTarget;
     if (STEPS[step] === 'level-choices') {
       return levelChoices.every((c) => (levelChoicePicks[c.key]?.length || 0) >= levelChoiceRequired(c));
@@ -511,6 +516,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       ...(featAbilityChoice && featAbilityPick ? { ability: featAbilityPick } : {}),
       ...(featSkillPicks.length ? { skills: featSkillPicks } : {}),
       ...(featSpellSpec ? { spell_grant: resolveSpellGrantValue(featSpellSpec, featSpellGrant) } : {}),
+      ...(featManeuverSpec ? { maneuvers: featManeuverPicks } : {}),
     };
     const featAddition = (wantsFeatStep && featPick)
       ? [...existingFeats, {
@@ -532,6 +538,20 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       };
     }
 
+    // Maneuvers known after this level-up: the maneuver STEP's result (Battle Master learn
+    // levels) plus any maneuvers a maneuver-grant feat (Martial Adept) added — but those merge
+    // into the shared list ONLY for a Battle Master (a non-Battle-Master's feat maneuvers live on
+    // the feat instance, shown in the Feats tab + fueled by the feat's own d6).
+    const featGrantedManeuvers = (wantsFeatStep && featManeuverSpec) ? featManeuverPicks : [];
+    const isBattleMaster = (subclassChoice || character.character_data?.subclass) === 'Battle Master';
+    const stepManeuvers = needsManeuvers
+      ? [...knownManeuvers.filter((m) => m !== maneuverReplace), ...maneuverPicks]
+      : knownManeuvers;
+    const mergedManeuvers = (isBattleMaster && featGrantedManeuvers.length)
+      ? [...new Set([...stepManeuvers, ...featGrantedManeuvers])]
+      : stepManeuvers;
+    const maneuversChanged = needsManeuvers || (isBattleMaster && featGrantedManeuvers.length > 0);
+
     const newCharacterData = {
       ...(character.character_data ?? {}),
       ...(newStoredHpMax != null ? { hp_max: newStoredHpMax } : {}),
@@ -539,7 +559,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       ...(isKnownCaster ? { cantrips, known_spells: knownSpells } : {}),
       ...profPatch,
       ...featProfPatch,
-      ...(needsManeuvers ? { maneuvers: [...knownManeuvers.filter((m) => m !== maneuverReplace), ...maneuverPicks] } : {}),
+      ...(maneuversChanged ? { maneuvers: mergedManeuvers } : {}),
       ...levelChoicePatch,
       ...(featAddition ? { feats: featAddition } : {}),
     };
@@ -971,6 +991,18 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                 onChange={setFeatSpellGrant}
                 campaignId={campaign?.id}
                 testIdPrefix="lvl-feat-spell"
+              />
+            )}
+
+            {/* Maneuver-grant picker (Martial Adept): pick N maneuvers, excluding any already known */}
+            {featManeuverSpec && (
+              <FeatManeuverPicker
+                spec={featManeuverSpec}
+                value={featManeuverPicks}
+                onChange={setFeatManeuverPicks}
+                edition={edition}
+                knownManeuvers={knownManeuvers}
+                testIdPrefix="lvl-feat-maneuver"
               />
             )}
           </div>

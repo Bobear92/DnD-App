@@ -15,8 +15,9 @@ import classService from '../classService';
 import ClassOverview from '../components/ClassOverview';
 import FeatPicker from '../components/FeatPicker';
 import { checkFeatPrerequisite } from '../components/featPrerequisites';
-import { featAbilityChoices, featFixedAbilityScores, getSpellGrantSpecs, getFeatGrantedSpells, featGrantRedundant, featAbilityChoiceOptions } from '../components/featEffects';
+import { featAbilityChoices, featFixedAbilityScores, getSpellGrantSpecs, getFeatGrantedSpells, featGrantRedundant, featAbilityChoiceOptions, getManeuverGrantSpec, maneuverGrantComplete } from '../components/featEffects';
 import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from '../components/FeatSpellGrantPicker';
+import FeatManeuverPicker from '../components/FeatManeuverPicker';
 import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, groupFeatProfOptions, FEAT_SKILL_OPTIONS } from '../components/featProficiencyData';
 
 const FEAT_SKILL_NAME_SET = new Set(FEAT_SKILL_OPTIONS.map(s => s.toLowerCase()));
@@ -691,7 +692,7 @@ function BgDetail({ bg }) {
   );
 }
 
-function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [], backgroundGrants = null, backgroundSkills = [], feats = [], featDisabledReason = null, proficientSkills = [], featProfCharacterData = {}, charClass = null, campaignId = null }) {
+function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [], backgroundGrants = null, backgroundSkills = [], feats = [], featDisabledReason = null, proficientSkills = [], featProfCharacterData = {}, charClass = null, campaignId = null, edition = '5e' }) {
   const isDragonborn = race?.name === 'Dragonborn';
   const isHighElf    = subrace?.name === 'High Elf';
   const isHalfElf    = race?.name === 'Half-Elf';
@@ -906,7 +907,7 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
                     ...choices,
                     human_variant: opt.variant,
                     // Clear variant-only picks when switching back to standard
-                    ...(opt.variant ? {} : { human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '', human_feat_prof: {}, human_feat_spell: null }),
+                    ...(opt.variant ? {} : { human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '', human_feat_prof: {}, human_feat_spell: null, human_feat_maneuvers: [] }),
                   })}
                   className={cn(
                     'rounded-lg border-2 p-2.5 text-left transition-all',
@@ -1022,7 +1023,7 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
             <FeatPicker
               feats={feats}
               value={choices.human_feat}
-              onChange={feat => onChange({ ...choices, human_feat: feat, human_feat_ability: '', human_feat_prof: {}, human_feat_spell: null })}
+              onChange={feat => onChange({ ...choices, human_feat: feat, human_feat_ability: '', human_feat_prof: {}, human_feat_spell: null, human_feat_maneuvers: [] })}
               testIdPrefix="human-feat"
               getDisabledReason={featDisabledReason}
             />
@@ -1127,6 +1128,21 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
                 onChange={v => onChange({ ...choices, human_feat_spell: v })}
                 campaignId={campaignId}
                 testIdPrefix="human-feat-spell"
+              />
+            );
+          })()}
+          {/* Maneuver-grant picker (Martial Adept): choose 2 Battle Master maneuvers + a d6 die */}
+          {(() => {
+            const picked = feats.find(f => f.id === choices.human_feat?.id);
+            const spec = getManeuverGrantSpec(picked);
+            if (!spec) return null;
+            return (
+              <FeatManeuverPicker
+                spec={spec}
+                value={choices.human_feat_maneuvers}
+                onChange={v => onChange({ ...choices, human_feat_maneuvers: v })}
+                edition={edition}
+                testIdPrefix="human-feat-maneuver"
               />
             );
           })()}
@@ -1365,7 +1381,7 @@ export default function CharacterCreate() {
 
   const [raceSearch, setRaceSearch] = useState('');
 
-  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], half_elf_language: '', human_language: '', dwarf_tool: '', human_variant: false, human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '', human_feat_prof: {}, human_feat_spell: null };
+  const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], half_elf_language: '', human_language: '', dwarf_tool: '', human_variant: false, human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '', human_feat_prof: {}, human_feat_spell: null, human_feat_maneuvers: [] };
   const EMPTY_BG_CHOICES   = { tool_choice: '', language_choices: [] };
   const [raceChoices, setRaceChoices] = useState(EMPTY_RACE_CHOICES);
   const [bgChoices,   setBgChoices]   = useState(EMPTY_BG_CHOICES);
@@ -1505,6 +1521,9 @@ export default function CharacterCreate() {
   // Spell-grant spec (Magic Initiate) the chosen Variant Human feat asks the player to fulfil.
   const humanFeatSpellSpec = getSpellGrantSpecs(humanFeatObj)[0] || null;
   const humanFeatSpellComplete = !humanFeatSpellSpec || spellGrantComplete(humanFeatSpellSpec, raceChoices.human_feat_spell);
+  // Maneuver-grant spec (Martial Adept) the chosen Variant Human feat asks the player to fulfil.
+  const humanFeatManeuverSpec = getManeuverGrantSpec(humanFeatObj);
+  const humanFeatManeuverComplete = maneuverGrantComplete(humanFeatManeuverSpec, raceChoices.human_feat_maneuvers);
   const humanFeatAsi = (() => {
     if (!humanFeatObj) return {};
     const out = {};
@@ -1756,6 +1775,7 @@ export default function CharacterCreate() {
                 ...(humanFeatAbilityChoice && raceChoices.human_feat_ability ? { ability: raceChoices.human_feat_ability } : {}),
                 ...(humanFeatSkillPicks.length ? { skills: humanFeatSkillPicks } : {}),
                 ...(humanFeatSpellSpec ? { spell_grant: resolveSpellGrantValue(humanFeatSpellSpec, raceChoices.human_feat_spell) } : {}),
+                ...(humanFeatManeuverSpec ? { maneuvers: raceChoices.human_feat_maneuvers || [] } : {}),
               };
               return Object.keys(c).length ? { choices: c } : {};
             })(),
@@ -1880,6 +1900,7 @@ export default function CharacterCreate() {
     (isVariantHuman && humanFeatAbilityChoice && !raceChoices.human_feat_ability) ||
     (isVariantHuman && !humanFeatProfComplete) ||
     (isVariantHuman && !humanFeatSpellComplete) ||
+    (isVariantHuman && !humanFeatManeuverComplete) ||
     (selectedRaceObj?.name === 'Dwarf' && !raceChoices.dwarf_tool) ||
     (!!bgSpec?.tool && !bgChoices.tool_choice) ||
     (!!bgSpec?.languages && bgLanguagesChosen < bgSpec.languages) ||
@@ -2133,6 +2154,7 @@ export default function CharacterCreate() {
                 featProfCharacterData={featProfCharacterData}
                 charClass={selectedClass}
                 campaignId={campaignId}
+                edition={edition}
               />
 
 
@@ -2619,6 +2641,7 @@ export default function CharacterCreate() {
                           ['Tools', humanFeatProfRest.feat_tool_proficiencies],
                           ['Languages', humanFeatProfRest.feat_languages],
                           ['Weapons', humanFeatProfRest.feat_weapon_proficiencies],
+                          ['Maneuvers', humanFeatManeuverSpec ? raceChoices.human_feat_maneuvers : []],
                         ].filter(([, items]) => (items?.length ?? 0) > 0);
                         const fg = humanFeatGrantedSpells;
                         const spellNames = [

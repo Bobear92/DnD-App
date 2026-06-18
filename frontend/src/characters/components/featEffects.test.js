@@ -5,7 +5,19 @@ import {
   getFeatResources, getFeatProficiencyGrants, getFeatSaveProficiencies, getFeatAcMods,
   getSpellGrantSpecs, getFeatGrantedSpells, featFreeCastUsedKey, featGrantRedundant,
   featAbilityChoiceOptions, abilityChoiceGrantsSave,
+  getManeuverGrantSpec, maneuverGrantComplete, getFeatManeuvers,
+  martialAdeptDieCount, martialAdeptManeuverCount,
 } from './featEffects';
+
+const MARTIAL_ADEPT = {
+  id: 20, name: 'Martial Adept', level: 4,
+  effects: [
+    { kind: 'maneuver_grant', count: 2, die: 'd6', label: '2 maneuvers' },
+    { kind: 'resource', key: 'martial_adept_superiority', label: 'Superiority Die (d6)', total: 1, recharge: 'short' },
+    { kind: 'note', text: 'If already a Battle Master…' },
+  ],
+  choices: { maneuvers: ['Trip Attack', 'Riposte'] },
+};
 
 const MAGIC_INITIATE = {
   id: 9, name: 'Magic Initiate', level: 4,
@@ -245,5 +257,46 @@ describe('featEffects resolver', () => {
     expect(featFreeCastUsedKey('Mage Armor')).toBe('feat_freecast_mage_armor_used');
     expect(featFreeCastUsedKey("Tasha's Hideous Laughter")).toBe('feat_freecast_tasha_s_hideous_laughter_used');
     expect(featFreeCastUsedKey('')).toBe('feat_freecast__used');
+  });
+
+  it('getManeuverGrantSpec extracts the maneuver_grant clause (Martial Adept)', () => {
+    expect(getManeuverGrantSpec(MARTIAL_ADEPT)).toEqual({ count: 2, die: 'd6', label: '2 maneuvers' });
+    expect(getManeuverGrantSpec(ALERT)).toBeNull();
+    expect(getManeuverGrantSpec(null)).toBeNull();
+  });
+
+  it('maneuverGrantComplete gates on exactly count picks', () => {
+    const spec = getManeuverGrantSpec(MARTIAL_ADEPT);
+    expect(maneuverGrantComplete(spec, [])).toBe(false);
+    expect(maneuverGrantComplete(spec, ['Trip Attack'])).toBe(false);
+    expect(maneuverGrantComplete(spec, ['Trip Attack', 'Riposte'])).toBe(true);
+    expect(maneuverGrantComplete(null, [])).toBe(true); // no spec → nothing to satisfy
+  });
+
+  it('getFeatManeuvers reads choices.maneuvers from each feat instance', () => {
+    expect(getFeatManeuvers([MARTIAL_ADEPT])).toEqual([
+      { name: 'Trip Attack', die: 'd6', source: 'Martial Adept' },
+      { name: 'Riposte', die: 'd6', source: 'Martial Adept' },
+    ]);
+    expect(getFeatManeuvers([ALERT])).toEqual([]); // no maneuvers chosen
+    expect(getFeatManeuvers([{ name: 'Martial Adept', effects: MARTIAL_ADEPT.effects }])).toEqual([]); // no choices snapshot
+  });
+
+  it('martialAdeptDieCount / martialAdeptManeuverCount sum the Battle Master boosts', () => {
+    expect(martialAdeptDieCount([MARTIAL_ADEPT])).toBe(1);
+    expect(martialAdeptManeuverCount([MARTIAL_ADEPT])).toBe(2);
+    expect(martialAdeptDieCount([ALERT, TAVERN_BRAWLER])).toBe(0);
+    expect(martialAdeptManeuverCount([])).toBe(0);
+  });
+
+  it('isMechanized counts a maneuver_grant feat', () => {
+    expect(isMechanized(MARTIAL_ADEPT)).toBe(true);
+  });
+
+  it('getFeatResources still surfaces the Martial Adept d6 (consumer suppresses it for a Battle Master)', () => {
+    const res = getFeatResources([MARTIAL_ADEPT]);
+    expect(res).toEqual([
+      { key: 'martial_adept_superiority', usedKey: 'martial_adept_superiority_used', label: 'Superiority Die (d6)', total: 1, recharge: 'short', source: 'Martial Adept' },
+    ]);
   });
 });

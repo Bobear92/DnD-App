@@ -172,8 +172,9 @@ FEAT_EFFECTS_5E = {
         _note("The 1st-level spell is castable once per long rest for free (or with a spell slot). Repeatable for a different class."),
     ],
     "Martial Adept": [
+        {"kind": "maneuver_grant", "count": 2, "die": "d6", "label": "2 maneuvers"},
         {"kind": "resource", "key": "martial_adept_superiority", "label": "Superiority Die (d6)", "total": 1, "recharge": "short"},
-        _note("Learn two Battle Master maneuvers fueled by the superiority die."),
+        _note("If you're already a Battle Master, you instead gain one additional superiority die and add these maneuvers to your known list."),
     ],
     "Medium Armor Master": [
         {"kind": "ac_mod", "condition": "medium_armor_dex_cap", "dex_cap": 3, "label": "+3 DEX cap (medium armor)"},

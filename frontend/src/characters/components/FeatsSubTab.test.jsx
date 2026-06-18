@@ -127,4 +127,40 @@ describe('FeatsSubTab', () => {
     fireEvent.click(await screen.findByTestId('feat-remove-Grappler'));
     expect(onChange).toHaveBeenCalledWith({ feats: [{ id: 12, name: 'Tough' }] });
   });
+
+  // ── Martial Adept (maneuver_grant) ──
+  const MARTIAL_ADEPT_INSTANCE = {
+    id: 40, name: 'Martial Adept',
+    effects: [
+      { kind: 'maneuver_grant', count: 2, die: 'd6', label: '2 maneuvers' },
+      { kind: 'resource', key: 'martial_adept_superiority', label: 'Superiority Die (d6)', total: 1, recharge: 'short' },
+    ],
+    choices: { maneuvers: ['Trip Attack', 'Riposte'] },
+  };
+
+  it('shows a non-Battle-Master the chosen maneuvers + the d6 superiority die tracker', async () => {
+    featService.getFeats.mockResolvedValue([]);
+    render(<FeatsSubTab feats={[MARTIAL_ADEPT_INSTANCE]} campaignId={1} edition="5e" characterData={{}} />);
+    const panel = await screen.findByTestId('feat-maneuvers');
+    expect(within(panel).getByTestId('feat-maneuver-Trip Attack')).toHaveTextContent(/knock the target down/i);
+    expect(within(panel).getByTestId('feat-maneuver-Riposte')).toBeInTheDocument();
+    // d6 die tracker is still shown for a non-Battle-Master
+    expect(screen.getByTestId('feat-resource-martial_adept_superiority')).toBeInTheDocument();
+    expect(screen.queryByTestId('feat-maneuvers-bm-note')).not.toBeInTheDocument();
+  });
+
+  it('a Battle Master sees the folded note and no standalone d6 tracker', async () => {
+    featService.getFeats.mockResolvedValue([]);
+    render(<FeatsSubTab feats={[MARTIAL_ADEPT_INSTANCE]} campaignId={1} edition="5e" characterData={{ subclass: 'Battle Master' }} />);
+    await screen.findByTestId('feat-maneuvers');
+    expect(screen.getByTestId('feat-maneuvers-bm-note')).toBeInTheDocument();
+    expect(screen.queryByTestId('feat-resource-martial_adept_superiority')).not.toBeInTheDocument();
+  });
+
+  it('shows the chosen maneuvers as the feat-row effect chip', async () => {
+    featService.getFeats.mockResolvedValue([]);
+    render(<FeatsSubTab feats={[MARTIAL_ADEPT_INSTANCE]} campaignId={1} edition="5e" characterData={{}} />);
+    const chips = await screen.findByTestId('feat-effects-Martial Adept');
+    expect(chips).toHaveTextContent('Trip Attack, Riposte');
+  });
 });

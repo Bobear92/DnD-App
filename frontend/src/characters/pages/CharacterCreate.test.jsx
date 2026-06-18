@@ -27,6 +27,8 @@ const TEST_FEATS = [
   { id: 9, name: 'Tough', edition: '5e', description: '+2 HP per level.', prerequisites: {}, source: 'PHB 2014', repeatable: false },
   { id: 10, name: 'Magic Initiate', edition: '5e', description: 'Learn spells.', prerequisites: {}, source: 'PHB 2014', repeatable: true,
     effects: [{ kind: 'spell_grant', source_kind: 'class', cantrips: 2, leveled: [{ level: 1, count: 1 }], free_cast: 'long_rest', ability: 'class', label: 'Magic Initiate' }] },
+  { id: 14, name: 'Martial Adept', edition: '5e', description: 'Two Battle Master maneuvers + a d6 die.', prerequisites: {}, source: 'PHB 2014', repeatable: true,
+    effects: [{ kind: 'maneuver_grant', count: 2, die: 'd6', label: '2 maneuvers' }, { kind: 'resource', key: 'martial_adept_superiority', label: 'Superiority Die (d6)', total: 1, recharge: 'short' }] },
 ];
 
 vi.mock('../characterService', () => ({
@@ -1628,6 +1630,51 @@ describe('CharacterCreate', () => {
         expect.objectContaining({
           id: 10, name: 'Magic Initiate', level: 1,
           choices: expect.objectContaining({ spell_grant: expect.objectContaining({ source: 'Wizard', free_casts: ['Mage Armor'] }) }),
+        }),
+      ]);
+    });
+  });
+
+  it('Variant Human maneuver-grant feat (Martial Adept) blocks Next until 2 maneuvers chosen, then stores them', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 53 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Duelist' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-variant-asi-strength'));
+    fireEvent.click(screen.getByTestId('human-variant-asi-constitution'));
+    fireEvent.click(screen.getByTestId('human-variant-skill-Arcana'));
+    await chooseFeat(14); // Martial Adept
+
+    // The maneuver picker appears and blocks Next until 2 are chosen.
+    expect(screen.getByTestId('human-feat-maneuver-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-next')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('human-feat-maneuver-Trip Attack'));
+    expect(screen.getByTestId('identity-next')).toBeDisabled(); // only 1 of 2
+    fireEvent.click(screen.getByTestId('human-feat-maneuver-Riposte'));
+    expect(screen.getByTestId('identity-next')).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+    // The review surfaces the chosen maneuvers so nothing is lost.
+    expect(screen.getByTestId('review-feat-choices')).toHaveTextContent('Trip Attack');
+    expect(screen.getByTestId('review-feat-choices')).toHaveTextContent('Riposte');
+    fireEvent.click(screen.getByText('Create Character'));
+
+    await waitFor(() => {
+      const call = characterService.createCharacter.mock.calls[0][0];
+      expect(call.character_data.feats).toEqual([
+        expect.objectContaining({
+          id: 14, name: 'Martial Adept', level: 1,
+          choices: expect.objectContaining({ maneuvers: ['Trip Attack', 'Riposte'] }),
         }),
       ]);
     });

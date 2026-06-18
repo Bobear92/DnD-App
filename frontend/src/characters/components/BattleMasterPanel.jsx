@@ -2,6 +2,7 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getManeuvers, maneuversKnownAtLevel, superiorityDie, superiorityDiceCount } from './maneuversData';
+import { martialAdeptDieCount, martialAdeptManeuverCount } from './featEffects';
 import { RestResourceControl } from './classSheet/RestResourceTracker';
 
 /**
@@ -18,9 +19,14 @@ import { RestResourceControl } from './classSheet/RestResourceTracker';
 export default function BattleMasterPanel({ data = {}, onChange, level = 1, readOnly = false, edition = '5e', gmEdit = false }) {
   const allManeuvers = getManeuvers(edition);
   const known = data.maneuvers || [];
-  const limit = maneuversKnownAtLevel(level);
+  // The Martial Adept feat grants a Battle Master +1 superiority die (at the BM die size) and
+  // additional known maneuvers — folded into the shared pool here rather than a separate tracker.
+  const feats = data.feats || [];
+  const featDice = martialAdeptDieCount(feats);
+  const featManeuvers = martialAdeptManeuverCount(feats);
+  const limit = maneuversKnownAtLevel(level) + featManeuvers;
   const die = superiorityDie(level);
-  const total = superiorityDiceCount(level);
+  const total = superiorityDiceCount(level) + featDice;
   const used = data.superiority_dice_used || 0;
 
   // Can add when there's an owed slot (or GM Edit); can only remove via GM Edit.
@@ -64,6 +70,11 @@ export default function BattleMasterPanel({ data = {}, onChange, level = 1, read
         <p className="text-xs text-muted-foreground">
           Maneuver save DC = 8 + your proficiency bonus + your Strength or Dexterity modifier.
         </p>
+        {(featDice > 0 || featManeuvers > 0) && (
+          <p className="text-xs text-emerald-600" data-testid="battle-master-feat-note">
+            Includes +{featDice} superiority die and +{featManeuvers} maneuver{featManeuvers === 1 ? '' : 's'} from the Martial Adept feat.
+          </p>
+        )}
       </div>
 
       {/* Maneuvers */}
