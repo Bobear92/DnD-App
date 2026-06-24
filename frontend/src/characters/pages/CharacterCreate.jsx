@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Check, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { StandardSpreadAssignment, PointBuyAssignment, DiceRollAssignment } from '../components/AbilityScoreAssignment';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import classService from '../classService';
 import ClassOverview from '../components/ClassOverview';
 import FeatPicker from '../components/FeatPicker';
 import { checkFeatPrerequisite } from '../components/featPrerequisites';
-import { featAbilityChoices, featFixedAbilityScores, getSpellGrantSpecs, getFeatGrantedSpells, featGrantRedundant, featAbilityChoiceOptions, getManeuverGrantSpec, maneuverGrantComplete } from '../components/featEffects';
+import { featAbilityChoices, featFixedAbilityScores, getSpellGrantSpecs, getFeatGrantedSpells, featGrantRedundant, featAbilityChoiceOptions, getManeuverGrantSpec, maneuverGrantComplete, getFeatStatMods, getFeatStatModSources } from '../components/featEffects';
 import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from '../components/FeatSpellGrantPicker';
 import FeatManeuverPicker from '../components/FeatManeuverPicker';
 import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, groupFeatProfOptions, FEAT_SKILL_OPTIONS } from '../components/featProficiencyData';
@@ -1379,7 +1379,6 @@ export default function CharacterCreate() {
   const [selectedSubraceObj, setSelectedSubraceObj] = useState(null);
   const [selectedBgObj, setSelectedBgObj] = useState(null);
 
-  const [raceSearch, setRaceSearch] = useState('');
 
   const EMPTY_RACE_CHOICES = { draconic_ancestry: null, high_elf_cantrip: '', high_elf_language: '', half_elf_asi_stats: [], half_elf_skills: [], half_elf_language: '', human_language: '', dwarf_tool: '', human_variant: false, human_variant_asi: [], human_variant_skill: '', human_feat: null, human_feat_ability: '', human_feat_prof: {}, human_feat_spell: null, human_feat_maneuvers: [] };
   const EMPTY_BG_CHOICES   = { tool_choice: '', language_choices: [] };
@@ -1433,9 +1432,6 @@ export default function CharacterCreate() {
 
   // Races to display: API races if available, else hardcoded
   const baseRaces = apiRaces.length > 0 ? apiRaces : RACES_5E;
-  const displayedRaces = raceSearch.trim()
-    ? baseRaces.filter(r => r.name.toLowerCase().includes(raceSearch.toLowerCase()))
-    : baseRaces;
 
   // Backgrounds to display: hardcoded always + any extra API ones not in hardcoded list
   const extraApiBgs = apiBackgrounds.filter(b => !BACKGROUNDS_5E.find(h => h.name === b.name));
@@ -1655,7 +1651,6 @@ export default function CharacterCreate() {
     setSelectedRaceObj(null);
     setSelectedSubraceObj(null);
     setSelectedBgObj(null);
-    setRaceSearch('');
     setDiceRolls([null, null, null, null, null, null]);
     setDiceAssignment(EMPTY_DICE_ASSIGNMENT);
     setRaceChoices(EMPTY_RACE_CHOICES);
@@ -1749,6 +1744,7 @@ export default function CharacterCreate() {
           : { ...EMPTY_WALLET, gp: startingGold + (equipmentResult.bonusGold || 0) },
         inventory: startingEquipmentMode === 'none' ? [] : (equipmentResult.inventory || []),
         subrace: selectedSubraceObj?.name ?? null,
+        size: selectedRaceObj?.size ?? 'Medium',
         race_traits: allRaceTraits,
         race_languages: allRaceLanguages,
         draconic_ancestry: raceChoices.draconic_ancestry ?? null,
@@ -2050,21 +2046,9 @@ export default function CharacterCreate() {
                 <p className="text-xs text-muted-foreground mt-0.5">Click a race to learn more</p>
               </div>
 
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  className="pl-8"
-                  placeholder="Search races…"
-                  value={raceSearch}
-                  onChange={e => setRaceSearch(e.target.value)}
-                  data-testid="race-search"
-                />
-              </div>
-
               {/* Race card grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {displayedRaces.map(race => (
+                {baseRaces.map(race => (
                   <RaceCard
                     key={race.name}
                     race={race}
@@ -2072,9 +2056,6 @@ export default function CharacterCreate() {
                     onSelect={handleRaceSelect}
                   />
                 ))}
-                {displayedRaces.length === 0 && (
-                  <p className="col-span-3 text-sm text-muted-foreground italic py-4 text-center">No races match your search.</p>
-                )}
               </div>
 
               {/* Selected race detail */}
@@ -2457,6 +2438,12 @@ export default function CharacterCreate() {
                 backgroundToolChoice={bgChoices.tool_choice}
                 campaignId={campaignId}
                 mode={startingEquipmentMode}
+                size={selectedRaceObj?.size ?? 'Medium'}
+                edition={edition}
+                scores={{
+                  strength: form.strength + (combinedRaceAsi.strength ?? 0),
+                  dexterity: form.dexterity + (combinedRaceAsi.dexterity ?? 0),
+                }}
                 onResult={setEquipmentResult}
               />
             </div>
@@ -2482,7 +2469,16 @@ export default function CharacterCreate() {
           };
           const dexMod = Math.floor((finalScores.dexterity - 10) / 2);
           const wisMod = Math.floor((finalScores.wisdom - 10) / 2);
-          const passivePerception = 10 + wisMod;
+          // Feats acquired at creation (Variant Human's free feat) contribute stat_mod bonuses
+          // — Alert → +5 initiative, Observant → +5 passive perception — matching CharacterDetail.
+          const creationFeats = humanFeatObj ? [humanFeatObj] : [];
+          const creationPb = 2; // proficiency bonus at level 1 (for PB-scaled 2024 feats)
+          const initiativeBonus = getFeatStatMods(creationFeats, 'initiative', { pb: creationPb });
+          const initiativeTotal = dexMod + initiativeBonus;
+          const initiativeSources = getFeatStatModSources(creationFeats, 'initiative', { pb: creationPb });
+          const passivePerceptionBonus = getFeatStatMods(creationFeats, 'passive_perception', { pb: creationPb });
+          const passivePerception = 10 + wisMod + passivePerceptionBonus;
+          const passivePerceptionSources = getFeatStatModSources(creationFeats, 'passive_perception', { pb: creationPb });
           const abilityKeys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 
           return (
@@ -2788,11 +2784,21 @@ export default function CharacterCreate() {
                   </div>
                   <div className="rounded-lg border bg-muted/30 p-3">
                     <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Initiative</div>
-                    <div className="text-2xl font-bold">{dexMod >= 0 ? `+${dexMod}` : `${dexMod}`}</div>
+                    <div className="text-2xl font-bold" data-testid="review-initiative">{initiativeTotal >= 0 ? `+${initiativeTotal}` : `${initiativeTotal}`}</div>
+                    {initiativeSources.length > 0 && (
+                      <div className="text-[10px] leading-tight text-emerald-600 dark:text-emerald-400" data-testid="review-initiative-feat-note">
+                        {initiativeSources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
+                      </div>
+                    )}
                   </div>
                   <div className="rounded-lg border bg-muted/30 p-3">
                     <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Passive Perc.</div>
-                    <div className="text-2xl font-bold">{passivePerception}</div>
+                    <div className="text-2xl font-bold" data-testid="review-passive-perception">{passivePerception}</div>
+                    {passivePerceptionSources.length > 0 && (
+                      <div className="text-[10px] leading-tight text-emerald-600 dark:text-emerald-400" data-testid="review-passive-perception-feat-note">
+                        {passivePerceptionSources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
+                      </div>
+                    )}
                   </div>
                   <div className="rounded-lg border bg-muted/30 p-3" data-testid="review-speed">
                     <div className="text-xs text-muted-foreground uppercase font-medium mb-1">Speed</div>

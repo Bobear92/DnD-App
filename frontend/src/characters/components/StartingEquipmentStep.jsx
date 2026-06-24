@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Coins, Package } from 'lucide-react';
+import { Coins, Package, Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import itemService from '../../encyclopedia/itemService';
 import WeaponPropertyBadges from './WeaponPropertyBadges';
-import { weaponBadges } from './weaponPropertyData';
+import {
+  weaponBadges, weaponFacets, sortWeaponFacets, weaponMatchesFilters, weaponPropertyDescription,
+} from './weaponPropertyData';
 import {
   classStartingEquipment, backgroundStartingEquipment, classStartingWealth,
 } from './startingEquipmentData';
@@ -11,12 +13,13 @@ import {
   buildItemIndex, weaponNamesOfCategory, defaultSelectedOptions,
   enumerateChooseSlots, buildStartingInventory,
 } from './startingEquipmentResolver';
+import { weaponAttackWarning } from './inventoryData';
 
 // A selectable weapon card showing the full stat block, used by the "choose a weapon"
 // slots so players can compare weapons in full instead of picking blind from a dropdown.
 // A <div> (not <button>) so the property badges inside can themselves be clickable for
 // their explanations; clicking the card anywhere else selects the weapon.
-function WeaponCard({ weapon, selected, onSelect, testId }) {
+function WeaponCard({ weapon, selected, onSelect, testId, warning, warningTestId }) {
   const dmg = [weapon.damage, weapon.damage_type].filter(Boolean).join(' ');
   const physical = [weapon.weight ? `${weapon.weight} lb` : null, weapon.cost].filter(Boolean).join(' · ');
   return (
@@ -34,11 +37,80 @@ function WeaponCard({ weapon, selected, onSelect, testId }) {
         {dmg && <span className="text-xs font-semibold whitespace-nowrap">{dmg}</span>}
       </div>
       <WeaponPropertyBadges badges={weaponBadges(weapon)} stop className="mt-1.5" />
+      {warning && (
+        <div className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-300" data-testid={warningTestId}>
+          ⚠ {warning}
+        </div>
+      )}
       {(weapon.range || physical || weapon.description) && (
         <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5">
           {weapon.range && <div>Range: {weapon.range}</div>}
           {physical && <div>{physical}</div>}
           {weapon.description && <div className="italic leading-relaxed">{weapon.description}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Filter chips for the weapon-choice cards (Two-handed, Versatile, Finesse, etc.).
+// Each chip toggles a facet filter; its ⓘ button explains what that property means,
+// so a new player can both narrow the list and learn the rules in one place.
+function WeaponFilterBar({ options, active, onToggle, onClear }) {
+  const [explain, setExplain] = useState(null);
+  if (!options.length) return null;
+  const desc = explain ? weaponPropertyDescription(explain) : null;
+  return (
+    <div className="space-y-1.5" data-testid="weapon-filter-bar">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs font-medium text-muted-foreground">Filter:</span>
+        {options.map((label) => {
+          const isActive = active.includes(label);
+          const hasDesc = !!weaponPropertyDescription(label);
+          return (
+            <span
+              key={label}
+              className={cn('inline-flex items-center rounded-full border text-[11px] transition-colors',
+                isActive ? 'border-primary bg-primary/10 text-primary' : 'hover:bg-muted/50')}
+            >
+              <button
+                type="button"
+                onClick={() => onToggle(label)}
+                className="pl-2 pr-1 py-0.5"
+                aria-pressed={isActive}
+                data-testid={`weapon-filter-${label}`}
+              >
+                {label}
+              </button>
+              {hasDesc && (
+                <button
+                  type="button"
+                  onClick={() => setExplain((s) => (s === label ? null : label))}
+                  className="pr-1.5 pl-0.5 py-0.5 opacity-60 hover:opacity-100"
+                  aria-label={`What does ${label} mean?`}
+                  data-testid={`weapon-filter-info-${label}`}
+                >
+                  <Info className="h-3 w-3" />
+                </button>
+              )}
+            </span>
+          );
+        })}
+        {active.length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50"
+            data-testid="weapon-filter-clear"
+          >
+            <X className="h-3 w-3" /> Clear
+          </button>
+        )}
+      </div>
+      {desc && (
+        <div className="rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs" data-testid="weapon-filter-description">
+          <span className="font-semibold text-foreground">{explain}:</span>{' '}
+          <span className="text-muted-foreground leading-relaxed">{desc}</span>
         </div>
       )}
     </div>
@@ -56,7 +128,7 @@ function WeaponCard({ weapon, selected, onSelect, testId }) {
  * starting wealth when "take gold" is chosen, else 0. (Background gold is handled
  * separately by CharacterCreate.)
  */
-export default function StartingEquipmentStep({ charClass, backgroundName, backgroundToolChoice = '', campaignId, mode = 'equipment', onResult }) {
+export default function StartingEquipmentStep({ charClass, backgroundName, backgroundToolChoice = '', campaignId, mode = 'equipment', size = 'Medium', edition = '5e', scores = {}, onResult }) {
   const classEquip = classStartingEquipment(charClass);
   const bgEquip = backgroundStartingEquipment(backgroundName);
   const wealth = classStartingWealth(charClass);
@@ -67,6 +139,7 @@ export default function StartingEquipmentStep({ charClass, backgroundName, backg
   const [selectedOptions, setSelectedOptions] = useState(() => defaultSelectedOptions(classEquip));
   const [picks, setPicks] = useState({});
   const [takeGold, setTakeGold] = useState(false);
+  const [weaponFilters, setWeaponFilters] = useState([]); // active facet filters (AND)
 
   // Load the encyclopedia items the resolver needs (weapons / armor / gear).
   useEffect(() => {
@@ -91,6 +164,31 @@ export default function StartingEquipmentStep({ charClass, backgroundName, backg
     for (const w of weapons) m[(w.name || '').toLowerCase()] = w;
     return m;
   }, [weapons]);
+
+  // The facet filter chips offered — the union of facets across every weapon that
+  // appears in any choose-a-weapon slot, so we only show filters that match something.
+  const filterOptions = useMemo(() => {
+    const facets = [];
+    const seen = new Set();
+    for (const slot of slots) {
+      for (const n of weaponNamesOfCategory(weapons, slot.filter)) {
+        const key = n.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const w = weaponByName[key];
+        if (w) facets.push(...weaponFacets(w));
+      }
+    }
+    return sortWeaponFacets(facets);
+  }, [slots, weapons, weaponByName]);
+
+  // Drop any active filter no longer offered (e.g. after switching option a/b).
+  useEffect(() => {
+    setWeaponFilters((f) => f.filter((x) => filterOptions.includes(x)));
+  }, [filterOptions]);
+
+  const toggleWeaponFilter = (label) =>
+    setWeaponFilters((f) => (f.includes(label) ? f.filter((x) => x !== label) : [...f, label]));
 
   // Contents of any equipment packs in an option (from the seeded pack description),
   // so players can compare what's inside before choosing.
@@ -186,14 +284,24 @@ export default function StartingEquipmentStep({ charClass, backgroundName, backg
           {/* Weapon-choice cards for the selected options — full stats per weapon */}
           {slots.length > 0 && (
             <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              <WeaponFilterBar
+                options={filterOptions}
+                active={weaponFilters}
+                onToggle={toggleWeaponFilter}
+                onClear={() => setWeaponFilters([])}
+              />
               {slots.map((slot) => {
                 const names = weaponNamesOfCategory(weapons, slot.filter);
                 const selected = (picks[slot.slotKey] ?? '').toLowerCase();
+                const shown = names.filter((n) => {
+                  const w = weaponByName[n.toLowerCase()];
+                  return weaponMatchesFilters(w ?? { name: n }, weaponFilters);
+                });
                 return (
                   <div key={slot.slotKey} className="space-y-1.5" data-testid={`equip-pick-${slot.slotKey}`}>
                     <div className="text-xs font-medium text-muted-foreground capitalize">{slot.label}</div>
                     <div className="grid sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
-                      {names.map((n) => {
+                      {shown.map((n) => {
                         const w = weaponByName[n.toLowerCase()];
                         return (
                           <WeaponCard
@@ -202,9 +310,16 @@ export default function StartingEquipmentStep({ charClass, backgroundName, backg
                             selected={selected === n.toLowerCase()}
                             onSelect={() => setPicks((p) => ({ ...p, [slot.slotKey]: n }))}
                             testId={`equip-weapon-${slot.slotKey}-${n}`}
+                            warning={weaponAttackWarning(w ?? { name: n }, { size, scores, edition })}
+                            warningTestId={`equip-weapon-warning-${slot.slotKey}-${n}`}
                           />
                         );
                       })}
+                      {shown.length === 0 && (
+                        <p className="col-span-full text-xs text-muted-foreground italic py-2" data-testid={`equip-pick-empty-${slot.slotKey}`}>
+                          No weapons match the selected filters.
+                        </p>
+                      )}
                     </div>
                   </div>
                 );

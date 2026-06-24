@@ -8,7 +8,8 @@ import classService from '../classService';
 import featService from '../../encyclopedia/featService';
 
 const TEST_FEATS = [
-  { id: 1, name: 'Alert', edition: '5e', description: '+5 to initiative.', prerequisites: {}, source: 'PHB 2014', repeatable: false },
+  { id: 1, name: 'Alert', edition: '5e', description: '+5 to initiative.', prerequisites: {}, source: 'PHB 2014', repeatable: false,
+    effects: [{ kind: 'stat_mod', stat: 'initiative', amount: 5, label: '+5 initiative' }] },
   { id: 2, name: 'Lucky', edition: '5e', description: 'Reroll a d20.', prerequisites: {}, source: 'PHB 2014', repeatable: false },
   { id: 3, name: 'Inspiring Leader', edition: '5e', description: 'Grant temp HP.', prerequisites: { text: 'Charisma 13 or higher' }, source: 'PHB 2014', repeatable: false },
   { id: 4, name: 'War Caster', edition: '5e', description: 'Advantage on concentration.', prerequisites: { text: 'The ability to cast at least one spell' }, source: 'PHB 2014', repeatable: false },
@@ -376,17 +377,6 @@ describe('CharacterCreate', () => {
     await waitFor(() => expect(screen.queryByText('Starting Equipment', { exact: false })).not.toBeInTheDocument());
   });
 
-
-  it('race search filters displayed race cards', async () => {
-    renderCreate();
-    await selectClass('Monk');
-    fireEvent.change(screen.getByTestId('race-search'), { target: { value: 'half' } });
-    await waitFor(() => {
-      expect(screen.getByTestId('race-card-Half-Elf')).toBeInTheDocument();
-      expect(screen.getByTestId('race-card-Half-Orc')).toBeInTheDocument();
-      expect(screen.queryByTestId('race-card-Human')).not.toBeInTheDocument();
-    });
-  });
 
   it('Next button is disabled when name is empty', async () => {
     renderCreate();
@@ -1378,9 +1368,36 @@ describe('CharacterCreate', () => {
       expect(call.constitution).toBe(11);
       expect(call.dexterity).toBe(14); // unchanged — no longer +1 from standard human
       expect(call.character_data.human_variant).toBe(true);
-      expect(call.character_data.feats).toEqual([{ id: 1, name: 'Alert', level: 1 }]); // Variant Human feat gained at level 1
+      expect(call.character_data.feats).toEqual([{ id: 1, name: 'Alert', level: 1, effects: [{ kind: 'stat_mod', stat: 'initiative', amount: 5, label: '+5 initiative' }] }]); // Variant Human feat gained at level 1 (effects snapshotted)
       expect(call.character_data.skill_proficiencies).toContain('Arcana');
     });
+  });
+
+  it('Variant Human + Alert folds the feat bonus into the review-page Initiative', async () => {
+    characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 31 } });
+    renderCreate();
+    await selectClass('Fighter');
+    fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Swift' } });
+    fireEvent.click(screen.getByTestId('race-card-Human'));
+    await waitFor(() => expect(screen.getByTestId('human-type-variant')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-type-variant'));
+    await waitFor(() => expect(screen.getByTestId('human-feat-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('human-variant-asi-strength'));
+    fireEvent.click(screen.getByTestId('human-variant-asi-constitution'));
+    fireEvent.click(screen.getByTestId('human-variant-skill-Arcana'));
+    await chooseFeat(1); // Alert (+5 initiative)
+
+    fireEvent.click(screen.getByTestId('identity-next'));
+    await waitFor(() => expect(screen.getByText('Fighter Features')).toBeInTheDocument());
+    await assignStandardSpread();
+    await selectRequiredSkills('Fighter');
+    await waitFor(() => expect(screen.getByTestId('details-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('details-next'));
+    await waitFor(() => expect(screen.getByText('Character Summary')).toBeInTheDocument());
+
+    // Standard spread leaves DEX 14 (+2 mod) → +2 + Alert's +5 = +7, with a feat note.
+    expect(screen.getByTestId('review-initiative')).toHaveTextContent('+7');
+    expect(screen.getByTestId('review-initiative-feat-note')).toHaveTextContent('+5 Alert');
   });
 
   it('Variant Human half-feat (Tavern Brawler) prompts an ability choice and applies it', async () => {

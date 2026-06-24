@@ -245,22 +245,65 @@ export function weaponAbility(weapon, scores = {}) {
   return { ability: 'strength', mod: str };
 }
 
-/** Attack row for one weapon: { name, toHit, damage, ability, proficient }. */
-export function computeAttack(weapon, { scores = {}, level = 1, proficient = false } = {}) {
+/** Does this weapon have the Heavy property? */
+export function isHeavyWeapon(weapon = {}) {
+  return /heavy/i.test(weapon.properties || '');
+}
+
+// Races whose default size is Small (used as a fallback when character_data.size is absent).
+const SMALL_RACES = ['halfling', 'gnome'];
+
+/**
+ * A character's creature size — prefers the stored `character_data.size`, else derives
+ * it from the race name (Halfling / Gnome → Small, everything else → Medium).
+ */
+export function creatureSize(characterData = {}, race = '') {
+  if (characterData?.size) return characterData.size;
+  const r = (race || '').toLowerCase();
+  return SMALL_RACES.some((s) => r.includes(s)) ? 'Small' : 'Medium';
+}
+
+/**
+ * Reason a weapon imposes disadvantage on this character's attack rolls, or null.
+ *   5e (2014):  a Small creature has disadvantage with Heavy weapons.
+ *   2024 (5.5e): the size rule was removed — a Heavy weapon instead needs Strength 13
+ *               (melee) or Dexterity 13 (ranged), else attacks are at disadvantage.
+ */
+export function weaponAttackWarning(weapon, { size = 'Medium', scores = {}, edition = '5e' } = {}) {
+  if (!isHeavyWeapon(weapon)) return null;
+  if (edition === '5.5e' || edition === '2024') {
+    const ranged = (weapon.weapon_type || '').toLowerCase() === 'ranged';
+    if (ranged) {
+      const dex = Number(scores.dexterity) || 10;
+      if (dex < 13) return `Heavy weapon — needs Dexterity 13 (you have ${dex}); attacks at disadvantage.`;
+    } else {
+      const str = Number(scores.strength) || 10;
+      if (str < 13) return `Heavy weapon — needs Strength 13 (you have ${str}); attacks at disadvantage.`;
+    }
+    return null;
+  }
+  // 5e (2014)
+  if (size === 'Small') return 'Heavy weapon — Small creatures attack with it at disadvantage.';
+  return null;
+}
+
+/** Attack row for one weapon: { name, toHit, damage, ability, proficient, disadvantage, warning }. */
+export function computeAttack(weapon, { scores = {}, level = 1, proficient = false, size = 'Medium', edition = '5e' } = {}) {
   const { ability, mod } = weaponAbility(weapon, scores);
   const toHit = formatSigned(mod + (proficient ? profBonus(level) : 0));
   const dmgBonus = mod === 0 ? '' : ` ${mod > 0 ? '+' : '-'} ${Math.abs(mod)}`;
   const dmgType = weapon.damage_type ? ` ${weapon.damage_type}` : '';
   const damage = `${weapon.damage || '—'}${dmgBonus}${dmgType}`;
-  return { name: weapon.name, toHit, damage, ability, proficient };
+  const warning = weaponAttackWarning(weapon, { size, scores, edition });
+  return { name: weapon.name, toHit, damage, ability, proficient, disadvantage: !!warning, warning };
 }
 
 /** Attack rows for every equipped weapon in the inventory. */
-export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [] } = {}) {
+export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e' } = {}) {
   return (inventory || [])
     .filter((e) => e.category === 'weapons' && e.equipped)
     .map((w) => ({
       uid: w.uid,
-      ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }) }),
+      ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }), size, edition }),
     }));
 }

@@ -94,6 +94,14 @@ describe('buildActionEconomy — Fighter', () => {
     expect(ec.attacksPerAction).toBe(2);
   });
 
+  it('flags a disadvantaged weapon attack in its detail', () => {
+    const args = fighterArgs(5, '5e');
+    args.attacks = [{ uid: 'gs1', name: 'Greatsword', toHit: '+5', damage: '2d6 + 3 slashing', proficient: true, disadvantage: true, warning: 'Heavy weapon — Small creatures attack with it at disadvantage.' }];
+    const ec = buildActionEconomy(args);
+    const gs = ec.action.find((e) => e.name === 'Greatsword');
+    expect(gs.detail).toMatch(/disadvantage/);
+  });
+
   it('puts Second Wind under Bonus and Action Surge under No Action (5e)', () => {
     const ec = buildActionEconomy(fighterArgs(3, '5e'));
     expect(ec.bonus.map((e) => e.name)).toContain('Second Wind');

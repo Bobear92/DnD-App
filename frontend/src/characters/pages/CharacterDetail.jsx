@@ -1529,6 +1529,7 @@ export default function CharacterDetail() {
                   subrace={character?.character_data?.subrace}
                   campaignId={campaignId}
                   characterData={classSection.draft}
+                  edition={edition}
                   readOnly={!showEditable}
                   onChange={autoSaveClassPatch}
                 />

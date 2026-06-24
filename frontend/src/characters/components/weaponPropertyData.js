@@ -69,3 +69,41 @@ export function weaponBadges(weapon = {}) {
   for (const p of others) badges.push({ label: p, variant: 'secondary' });
   return badges;
 }
+
+/**
+ * The filterable "facets" of a weapon — its category, handedness, and properties as
+ * plain base names (e.g. ["Martial", "Versatile", "Finesse", "Thrown"]). Built from
+ * weaponBadges so filtering and the displayed badges always agree.
+ */
+export function weaponFacets(weapon = {}) {
+  return weaponBadges(weapon).map((b) => weaponPropertyBaseName(b.label));
+}
+
+// Preferred display order for facet filter chips: category, then handedness, then
+// the combat-relevant properties. Anything unlisted sorts to the end alphabetically.
+const FACET_ORDER = [
+  'Simple', 'Martial',
+  'One-handed', 'Two-handed', 'Versatile',
+  'Light', 'Heavy', 'Finesse', 'Thrown', 'Reach',
+  'Ammunition', 'Loading', 'Range', 'Special',
+];
+
+/** De-duplicate + order a list of facet labels for the filter bar. */
+export function sortWeaponFacets(facets = []) {
+  const uniq = [...new Set(facets)];
+  return uniq.sort((a, b) => {
+    const ia = FACET_ORDER.indexOf(a);
+    const ib = FACET_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
+
+/** Does a weapon match every active facet filter? (AND semantics; empty = match all.) */
+export function weaponMatchesFilters(weapon, activeFilters = []) {
+  if (!activeFilters.length) return true;
+  const facets = new Set(weaponFacets(weapon));
+  return activeFilters.every((f) => facets.has(f));
+}

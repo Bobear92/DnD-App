@@ -4,7 +4,7 @@ import {
   toggleEquipped, toggleAttuned, attunedCount,
   equippedBodyArmor, equippedShield, computeArmorClass,
   isWeaponProficient, isArmorProficient, weaponAbility, computeAttack, getAttacks,
-  abilityMod, profBonus,
+  abilityMod, profBonus, isHeavyWeapon, creatureSize, weaponAttackWarning,
 } from './inventoryData';
 
 const armor = (over) => ({ uid: Math.random().toString(), category: 'armor', equipped: false, ...over });
@@ -225,6 +225,48 @@ describe('attack math', () => {
     expect(atks).toHaveLength(1);
     expect(atks[0].name).toBe('Longsword');
     expect(atks[0].proficient).toBe(true);
+  });
+});
+
+describe('heavy weapon / size warnings', () => {
+  const greatsword = { name: 'Greatsword', damage: '2d6', properties: '["Two-Handed", "Heavy"]', weapon_category: 'Martial' };
+  const heavyXbow = { name: 'Heavy Crossbow', damage: '1d10', properties: '["Heavy", "Loading"]', weapon_type: 'Ranged' };
+  const longsword = { name: 'Longsword', damage: '1d8', properties: '["Versatile"]' };
+
+  it('isHeavyWeapon detects the Heavy property', () => {
+    expect(isHeavyWeapon(greatsword)).toBe(true);
+    expect(isHeavyWeapon(longsword)).toBe(false);
+    expect(isHeavyWeapon({})).toBe(false);
+  });
+
+  it('creatureSize prefers stored size, else derives from race', () => {
+    expect(creatureSize({ size: 'Small' }, 'Human')).toBe('Small');
+    expect(creatureSize({}, 'Halfling')).toBe('Small');
+    expect(creatureSize({}, 'Rock Gnome')).toBe('Small');
+    expect(creatureSize({}, 'Human')).toBe('Medium');
+    expect(creatureSize({}, '')).toBe('Medium');
+  });
+
+  it('5e: Small creature warns on Heavy weapons, Medium does not', () => {
+    expect(weaponAttackWarning(greatsword, { size: 'Small', edition: '5e' })).toMatch(/Small creatures/i);
+    expect(weaponAttackWarning(greatsword, { size: 'Medium', edition: '5e' })).toBeNull();
+    expect(weaponAttackWarning(longsword, { size: 'Small', edition: '5e' })).toBeNull();
+  });
+
+  it('2024: Heavy needs STR 13 (melee) / DEX 13 (ranged), size irrelevant', () => {
+    expect(weaponAttackWarning(greatsword, { size: 'Small', scores: { strength: 16 }, edition: '5.5e' })).toBeNull();
+    expect(weaponAttackWarning(greatsword, { size: 'Medium', scores: { strength: 10 }, edition: '5.5e' })).toMatch(/Strength 13/i);
+    expect(weaponAttackWarning(heavyXbow, { scores: { dexterity: 10 }, edition: '5.5e' })).toMatch(/Dexterity 13/i);
+    expect(weaponAttackWarning(heavyXbow, { scores: { dexterity: 14 }, edition: '5.5e' })).toBeNull();
+  });
+
+  it('computeAttack / getAttacks carry the disadvantage flag + warning', () => {
+    const atk = computeAttack(greatsword, { scores: { strength: 16 }, level: 1, proficient: true, size: 'Small', edition: '5e' });
+    expect(atk.disadvantage).toBe(true);
+    expect(atk.warning).toMatch(/Small creatures/i);
+    const inv = [weapon({ uid: 'g1', equipped: true, ...greatsword })];
+    const rows = getAttacks({ inventory: inv, scores: { strength: 16 }, level: 1, weaponProfText: 'martial weapons', size: 'Small', edition: '5e' });
+    expect(rows[0].disadvantage).toBe(true);
   });
 });
 

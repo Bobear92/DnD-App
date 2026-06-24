@@ -18,6 +18,10 @@ const longswordEntry = {
   uid: 'w1', category: 'weapons', equipped: true, name: 'Longsword',
   weapon_category: 'Martial', weapon_type: 'Melee', damage: '1d8', damage_type: 'Slashing', properties: '["Versatile"]',
 };
+const greatswordEntry = {
+  uid: 'gs1', category: 'weapons', equipped: true, name: 'Greatsword',
+  weapon_category: 'Martial', weapon_type: 'Melee', damage: '2d6', damage_type: 'Slashing', properties: '["Two-Handed", "Heavy"]',
+};
 
 function renderTab(props = {}) {
   return render(
@@ -95,6 +99,16 @@ describe('ActionEconomyTab', () => {
     expect(screen.getByText('Longsword')).toBeInTheDocument();
     expect(screen.getByText('Attack')).toBeInTheDocument();
     expect(screen.getByTestId('ae-universal')).toBeInTheDocument();
+  });
+
+  it('flags disadvantage on a Heavy weapon for a Small (5e) character', () => {
+    renderTab({ inventory: [greatswordEntry], race: 'Halfling' });
+    expect(screen.getByText('Greatsword')).toBeInTheDocument();
+    // The weapon's own detail line carries the disadvantage flag (scoped to avoid the
+    // universal Dodge action, whose description also mentions "disadvantage").
+    expect(screen.getByText(/2d6.*·\s*disadvantage/i)).toBeInTheDocument();
+    // …and the full amber warning message is shown under the entry.
+    expect(screen.getByText(/Small creatures attack with it at disadvantage/i)).toBeInTheDocument();
   });
 
   it('shows the Extra Attack note for a level 5 Fighter', () => {

@@ -33,6 +33,9 @@ function renderStep(props = {}) {
       backgroundName={props.backgroundName ?? 'Soldier'}
       campaignId="1"
       mode={props.mode ?? 'equipment'}
+      size={props.size ?? 'Medium'}
+      edition={props.edition ?? '5e'}
+      scores={props.scores ?? { strength: 15, dexterity: 14 }}
       onResult={props.onResult ?? vi.fn()}
     />
   );
@@ -85,6 +88,51 @@ describe('StartingEquipmentStep', () => {
     const card = await screen.findByTestId('equip-weapon-f2:a:0-Greatsword');
     fireEvent.click(within(card).getByTestId('weapon-prop-Heavy'));
     expect(within(card).getByTestId('weapon-prop-description')).toHaveTextContent(/disadvantage/i);
+  });
+
+  it('5e: warns a Small creature on a Heavy weapon card', async () => {
+    renderStep({ size: 'Small', edition: '5e' });
+    await screen.findByTestId('equip-weapon-f2:a:0-Greatsword');
+    expect(screen.getByTestId('equip-weapon-warning-f2:a:0-Greatsword')).toHaveTextContent(/Small creatures/i);
+    // Non-heavy Longsword gets no warning
+    expect(screen.queryByTestId('equip-weapon-warning-f2:a:0-Longsword')).not.toBeInTheDocument();
+  });
+
+  it('5e: no Heavy warning for a Medium creature', async () => {
+    renderStep({ size: 'Medium', edition: '5e' });
+    await screen.findByTestId('equip-weapon-f2:a:0-Greatsword');
+    expect(screen.queryByTestId('equip-weapon-warning-f2:a:0-Greatsword')).not.toBeInTheDocument();
+  });
+
+  it('offers weapon facet filters drawn from the choosable weapons', async () => {
+    renderStep();
+    expect(await screen.findByTestId('weapon-filter-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('weapon-filter-Martial')).toBeInTheDocument();
+    expect(screen.getByTestId('weapon-filter-Two-handed')).toBeInTheDocument();
+    expect(screen.getByTestId('weapon-filter-Heavy')).toBeInTheDocument();
+    expect(screen.getByTestId('weapon-filter-Versatile')).toBeInTheDocument();
+  });
+
+  it('filtering by Two-handed hides non-matching weapon cards', async () => {
+    renderStep();
+    await screen.findByTestId('equip-weapon-f2:a:0-Longsword');
+    fireEvent.click(screen.getByTestId('weapon-filter-Two-handed'));
+    expect(screen.getByTestId('equip-weapon-f2:a:0-Greatsword')).toBeInTheDocument();
+    expect(screen.queryByTestId('equip-weapon-f2:a:0-Longsword')).not.toBeInTheDocument();
+  });
+
+  it('explains a filter when its ⓘ button is clicked', async () => {
+    renderStep();
+    fireEvent.click(await screen.findByTestId('weapon-filter-info-Two-handed'));
+    expect(screen.getByTestId('weapon-filter-description')).toHaveTextContent(/both hands/i);
+  });
+
+  it('clears active filters via the Clear button', async () => {
+    renderStep();
+    fireEvent.click(await screen.findByTestId('weapon-filter-Two-handed'));
+    expect(screen.queryByTestId('equip-weapon-f2:a:0-Longsword')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('weapon-filter-clear'));
+    expect(screen.getByTestId('equip-weapon-f2:a:0-Longsword')).toBeInTheDocument();
   });
 
   it('switching to option b changes the resolved items', async () => {

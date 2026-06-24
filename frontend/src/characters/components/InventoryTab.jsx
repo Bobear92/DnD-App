@@ -8,11 +8,13 @@ import { CLASS_PROFICIENCIES_5E } from './classProficienciesData';
 import { getRaceGrantedWeapons, getRaceGrantedArmor } from './raceProficienciesData';
 import { gatherProficiencies } from './inventoryProficiencies';
 import { isToolEntry } from './toolsData';
+import WeaponPropertyBadges from './WeaponPropertyBadges';
+import { weaponBadges } from './weaponPropertyData';
 import ItemPickerDialog from './ItemPickerDialog';
 import {
   addEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons,
   toggleEquipped, toggleAttuned, attunedCount, computeArmorClass, getAttacks,
-  isWeaponProficient, isArmorProficient,
+  isWeaponProficient, isArmorProficient, creatureSize, weaponAttackWarning,
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
 } from './inventoryData';
 
@@ -59,7 +61,7 @@ function ProficiencyBanner({ label, text, grants }) {
  */
 export default function InventoryTab({
   inventory: inventoryProp = [], scores = {}, level = 1, charClass, subclass,
-  race, subrace, campaignId, characterData = {}, readOnly = false, onChange,
+  race, subrace, campaignId, characterData = {}, edition = '5e', readOnly = false, onChange,
 }) {
   const [activeId, setActiveId] = useState(CATEGORIES[0].id);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -75,8 +77,9 @@ export default function InventoryTab({
   const raceArmor = getRaceGrantedArmor(race, subrace) || [];
   const proficiencies = gatherProficiencies({ charClass, characterData });
 
+  const size = creatureSize(characterData, race);
   const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats });
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition });
   const attuned = attunedCount(inventory);
 
   // Tools tab gathers tool entries from anywhere; the Gear tab excludes them.
@@ -133,12 +136,18 @@ export default function InventoryTab({
           ) : (
             <div className="space-y-1">
               {attacks.map((a) => (
-                <div key={a.uid} className="flex items-center justify-between text-sm" data-testid={`attack-${a.uid}`}>
-                  <span className="font-medium flex items-center gap-1.5">
-                    {a.name}
-                    {!a.proficient && <span className="text-xs text-amber-600">(not proficient)</span>}
-                  </span>
-                  <span className="text-muted-foreground tabular-nums">{a.toHit} · {a.damage}</span>
+                <div key={a.uid} className="flex flex-col" data-testid={`attack-${a.uid}`}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium flex items-center gap-1.5">
+                      {a.name}
+                      {!a.proficient && <span className="text-xs text-amber-600">(not proficient)</span>}
+                      {a.disadvantage && <span className="text-xs text-amber-600">(disadvantage)</span>}
+                    </span>
+                    <span className="text-muted-foreground tabular-nums">{a.toHit} · {a.damage}</span>
+                  </div>
+                  {a.warning && (
+                    <span className="text-[11px] text-amber-600 leading-tight" data-testid={`attack-warning-${a.uid}`}>{a.warning}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -196,6 +205,9 @@ export default function InventoryTab({
               const canEquip = EQUIPPABLE_CATEGORIES.has(e.category);
               const canAttune = ATTUNABLE_CATEGORIES.has(e.category);
               const proficient = entryProficient(e);
+              const attackWarning = e.category === 'weapons'
+                ? weaponAttackWarning(e, { size, scores, edition })
+                : null;
               return (
                 <div key={e.uid} className="flex items-center gap-3 px-3 py-2" data-testid={`inv-row-${e.uid}`}>
                   <div className={cn('w-1.5 h-9 rounded-full shrink-0', activeCategory.accent)} />
@@ -208,7 +220,13 @@ export default function InventoryTab({
                         <span className="text-xs text-amber-600">Not proficient</span>
                       )}
                     </div>
+                    {attackWarning && (
+                      <div className="text-[11px] text-amber-600 leading-tight" data-testid={`inv-warning-${e.uid}`}>{attackWarning}</div>
+                    )}
                     <div className="text-xs text-muted-foreground truncate">{activeCategory.subtitle(e)}</div>
+                    {e.category === 'weapons' && (
+                      <WeaponPropertyBadges badges={weaponBadges(e)} className="mt-1" />
+                    )}
                   </div>
 
                   {/* Quantity — hidden for weapons (each weapon is an individual item) */}

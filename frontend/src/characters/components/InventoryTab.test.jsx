@@ -11,6 +11,7 @@ import itemService from '../../encyclopedia/itemService';
 const chainMail = { uid: 'arm1', category: 'armor', name: 'Chain Mail', armor_type: 'Heavy', armor_class: 16, equipped: true, quantity: 1 };
 const leather = { uid: 'arm2', category: 'armor', name: 'Leather', armor_type: 'Light', armor_class: 11, equipped: false, quantity: 1 };
 const longsword = { uid: 'w1', category: 'weapons', name: 'Longsword', weapon_category: 'Martial', weapon_type: 'Melee', damage: '1d8', damage_type: 'Slashing', equipped: true, quantity: 1 };
+const greatsword = { uid: 'gs1', category: 'weapons', name: 'Greatsword', weapon_category: 'Martial', weapon_type: 'Melee', damage: '2d6', damage_type: 'Slashing', properties: '["Two-Handed", "Heavy"]', equipped: true, quantity: 1 };
 
 function renderTab(props = {}) {
   return render(
@@ -23,6 +24,7 @@ function renderTab(props = {}) {
       race={props.race ?? 'Human'}
       campaignId="1"
       characterData={props.characterData ?? {}}
+      edition={props.edition ?? '5e'}
       readOnly={props.readOnly ?? false}
       onChange={props.onChange ?? vi.fn()}
     />
@@ -98,6 +100,36 @@ describe('InventoryTab', () => {
     expect(atk).toHaveTextContent('Longsword');
     expect(atk).toHaveTextContent('+5'); // +3 STR + 2 PB
     expect(atk).toHaveTextContent('1d8 + 3 Slashing');
+  });
+
+  it('5e: warns a Small creature about an equipped Heavy weapon (row + attack)', () => {
+    renderTab({ inventory: [greatsword], race: 'Halfling', edition: '5e', charClass: 'Fighter' });
+    expect(screen.getByTestId('attack-gs1')).toHaveTextContent('disadvantage');
+    expect(screen.getByTestId('attack-warning-gs1')).toHaveTextContent(/Small creatures/i);
+    expect(screen.getByTestId('inv-warning-gs1')).toHaveTextContent(/Small creatures/i);
+  });
+
+  it('5e: does not warn a Medium creature about a Heavy weapon', () => {
+    renderTab({ inventory: [greatsword], race: 'Human', edition: '5e', charClass: 'Fighter' });
+    expect(screen.queryByTestId('attack-warning-gs1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('inv-warning-gs1')).not.toBeInTheDocument();
+  });
+
+  it('2024: warns about a Heavy weapon when Strength < 13, regardless of size', () => {
+    renderTab({ inventory: [greatsword], race: 'Human', edition: '5.5e', scores: { strength: 10 }, charClass: 'Fighter' });
+    expect(screen.getByTestId('attack-warning-gs1')).toHaveTextContent(/Strength 13/i);
+  });
+
+  it('5e: warns about an UNEQUIPPED Heavy weapon on its row (not just equipped)', () => {
+    renderTab({ inventory: [{ ...greatsword, equipped: false }], race: 'Halfling', edition: '5e', charClass: 'Fighter' });
+    expect(screen.getByTestId('inv-warning-gs1')).toHaveTextContent(/Small creatures/i);
+  });
+
+  it('renders weapon property badges (Heavy/Two-handed) on a weapon row', () => {
+    renderTab({ inventory: [greatsword], race: 'Human', charClass: 'Fighter' });
+    const row = screen.getByTestId('inv-row-gs1');
+    expect(row).toHaveTextContent('Heavy');
+    expect(row).toHaveTextContent('Two-handed');
   });
 
   it('shows an empty state for a category with no items', () => {

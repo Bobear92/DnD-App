@@ -204,12 +204,14 @@ export function buildActionEconomy({
   if (unarmedDice || weaponRows.length === 0) weaponRows.push(unarmedAttack(scores, level, unarmedDice));
   weaponRows.forEach((atk, i) => {
     const flag = atk.proficient === false ? ' · not proficient' : '';
+    const disadv = atk.disadvantage ? ' · disadvantage' : '';
     push('action', {
       key: `weapon:${atk.uid || atk.name}:${i}`,
       name: atk.name,
       source: 'Weapon',
       cost: 'action',
-      detail: `${atk.toHit} to hit · ${atk.damage}${flag}`,
+      detail: `${atk.toHit} to hit · ${atk.damage}${flag}${disadv}`,
+      warning: atk.warning || null,
     });
   });
 

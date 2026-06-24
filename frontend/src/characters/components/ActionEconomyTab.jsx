@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
 import { CLASS_PROFICIENCIES_5E } from './classProficienciesData';
 import { getRaceGrantedWeapons } from './raceProficienciesData';
-import { getAttacks } from './inventoryData';
+import { getAttacks, creatureSize } from './inventoryData';
 import {
   buildActionEconomy, characterSpellNames, TABS, TAB_LABELS, SOURCE_ORDER,
 } from './actionEconomyData';
@@ -35,6 +35,9 @@ function ItemRow({ entry, resource, onChange, readOnly }) {
           <Badge variant="outline" className="text-[10px] uppercase tracking-wide shrink-0">{entry.cost}</Badge>
         </div>
         {entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>}
+        {entry.warning && (
+          <p className="text-[11px] text-amber-600 leading-tight mt-0.5" data-testid={`ae-warning-${entry.key}`}>⚠ {entry.warning}</p>
+        )}
       </div>
       {/* Rest-rechargeable features get the same Use button as the Features tab. */}
       {resource && (
@@ -82,7 +85,8 @@ export default function ActionEconomyTab({
 
   const weaponProfText = (CLASS_PROFICIENCIES_5E[charClass] || {}).weapons || '';
   const raceWeapons = getRaceGrantedWeapons(race, subrace) || [];
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons });
+  const size = creatureSize(characterData, race);
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition });
 
   const economy = useMemo(
     () => buildActionEconomy({ charClass, subclass, level, edition, characterData, inventory, attacks, scores, spellIndex }),

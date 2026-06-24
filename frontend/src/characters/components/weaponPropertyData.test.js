@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   weaponPropertyDescription, weaponPropertyBaseName, parseWeaponProperties,
-  weaponHandedness, weaponBadges,
+  weaponHandedness, weaponBadges, weaponFacets, sortWeaponFacets, weaponMatchesFilters,
 } from './weaponPropertyData';
 
 describe('weaponPropertyBaseName', () => {
@@ -52,5 +52,34 @@ describe('weaponBadges', () => {
   it('keeps non-handedness properties for a one-handed finesse weapon', () => {
     const b = weaponBadges({ weapon_category: 'Simple', properties: 'Finesse, Light, Thrown' });
     expect(b.map((x) => x.label)).toEqual(['Simple', 'One-handed', 'Finesse', 'Light', 'Thrown']);
+  });
+});
+
+describe('weaponFacets', () => {
+  it('returns base-name facets (category + handedness + properties)', () => {
+    const f = weaponFacets({ weapon_category: 'Martial', properties: '["Versatile (1d10)", "Finesse"]' });
+    expect(f).toEqual(['Martial', 'Versatile', 'Finesse']);
+  });
+});
+
+describe('sortWeaponFacets', () => {
+  it('de-dupes and orders by category → handedness → properties, unknown last', () => {
+    expect(sortWeaponFacets(['Finesse', 'Martial', 'Two-handed', 'Simple', 'Finesse']))
+      .toEqual(['Simple', 'Martial', 'Two-handed', 'Finesse']);
+    expect(sortWeaponFacets(['Zonk', 'Light'])).toEqual(['Light', 'Zonk']);
+  });
+});
+
+describe('weaponMatchesFilters', () => {
+  const longsword = { weapon_category: 'Martial', properties: '["Versatile (1d10)"]' };
+  const dagger = { weapon_category: 'Simple', properties: 'Finesse, Light, Thrown' };
+  it('matches all when no filters are active', () => {
+    expect(weaponMatchesFilters(longsword, [])).toBe(true);
+  });
+  it('ANDs the active facet filters', () => {
+    expect(weaponMatchesFilters(dagger, ['Finesse'])).toBe(true);
+    expect(weaponMatchesFilters(dagger, ['Finesse', 'Light'])).toBe(true);
+    expect(weaponMatchesFilters(dagger, ['Finesse', 'Heavy'])).toBe(false);
+    expect(weaponMatchesFilters(longsword, ['Finesse'])).toBe(false);
   });
 });
