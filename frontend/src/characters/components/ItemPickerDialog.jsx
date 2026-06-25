@@ -9,7 +9,7 @@ import itemService from '../../encyclopedia/itemService';
  * Picks an encyclopedia item (system + campaign) for a single category and hands
  * the chosen item to onAdd. Used by the CharacterDetail Items tab to add inventory.
  */
-export default function ItemPickerDialog({ category, campaignId, open, onClose, onAdd }) {
+export default function ItemPickerDialog({ category, campaignId, open, onClose, onAdd, filter }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -24,9 +24,12 @@ export default function ItemPickerDialog({ category, campaignId, open, onClose, 
     });
   }, [open, category.id, campaignId]);
 
+  // Optional `filter` restricts the fetched catalog (e.g. the gear catalog → only
+  // ammunition) before the search box narrows it further.
+  const base = filter ? items.filter(filter) : items;
   const filtered = search
-    ? items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
-    : items;
+    ? base.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
+    : base;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>

@@ -217,4 +217,85 @@ describe('InventoryTab', () => {
     fireEvent.click(screen.getByTestId('inv-category-magic-items'));
     expect(screen.getByTestId('attune-btn-m4')).toBeDisabled(); // 3 already attuned
   });
+
+  // ─── Ammunition ──────────────────────────────────────────────────────────────
+  const longbow = { uid: 'lb1', category: 'weapons', name: 'Longbow', weapon_category: 'Martial', weapon_type: 'ranged', damage: '1d8', damage_type: 'Piercing', properties: '["Ammunition", "Heavy", "Two-handed"]', quantity: 1 };
+  const arrows = { uid: 'am1', category: 'adventuring-gear', name: 'Arrows', item_category: 'Ammunition', quantity: 20, description: 'Ammunition for a bow.' };
+  const bolts = { uid: 'am2', category: 'adventuring-gear', name: 'Crossbow Bolts', item_category: 'Ammunition', quantity: 20 };
+
+  it('shows ammunition under the Weapons tab (not the Gear tab)', () => {
+    renderTab({ inventory: [arrows] });
+    // Weapons tab is the default — Ammunition section + row present
+    expect(screen.getByTestId('ammunition-section')).toBeInTheDocument();
+    expect(screen.getByTestId('ammo-row-am1')).toHaveTextContent('Arrows');
+    // Gear tab excludes it
+    fireEvent.click(screen.getByTestId('inv-category-adventuring-gear'));
+    expect(screen.queryByTestId('inv-row-am1')).not.toBeInTheDocument();
+  });
+
+  it('shows an ammo count + Use button under a ranged weapon with the Ammunition property', () => {
+    renderTab({ inventory: [longbow, arrows] });
+    expect(screen.getByTestId('weapon-ammo-lb1')).toBeInTheDocument();
+    expect(screen.getByTestId('ammo-count-lb1')).toHaveTextContent('Arrows');
+    expect(screen.getByTestId('ammo-count-lb1')).toHaveTextContent('20');
+    expect(screen.getByTestId('use-ammo-lb1')).toBeInTheDocument();
+  });
+
+  it('does not show an ammo control for a melee weapon', () => {
+    renderTab({ inventory: [longsword] });
+    expect(screen.queryByTestId('weapon-ammo-w1')).not.toBeInTheDocument();
+  });
+
+  it('Use Ammunition decrements the matched stack via onChange', () => {
+    const onChange = vi.fn();
+    renderTab({ inventory: [longbow, arrows], onChange });
+    fireEvent.click(screen.getByTestId('use-ammo-lb1'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      inventory: expect.arrayContaining([expect.objectContaining({ uid: 'am1', quantity: 19 })]),
+    }));
+  });
+
+  it('disables Use Ammunition at 0 and notes no matching ammunition', () => {
+    renderTab({ inventory: [longbow, { ...arrows, quantity: 0 }] });
+    expect(screen.getByTestId('use-ammo-lb1')).toBeDisabled();
+    // a weapon with no matching ammo stack at all
+    renderTab({ inventory: [{ ...longbow, uid: 'lb2' }, bolts] });
+    expect(screen.getByTestId('weapon-ammo-lb2')).toHaveTextContent(/No matching ammunition/i);
+  });
+
+  it('offers a chooser when multiple matching stacks exist and selecting persists ammo_uid', () => {
+    const onChange = vi.fn();
+    const silvered = { uid: 'am3', category: 'adventuring-gear', name: 'Silvered Arrows', item_category: 'Ammunition', quantity: 10 };
+    renderTab({ inventory: [longbow, arrows, silvered], onChange });
+    const select = screen.getByTestId('ammo-select-lb1');
+    fireEvent.change(select, { target: { value: 'am3' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      inventory: expect.arrayContaining([expect.objectContaining({ uid: 'lb1', ammo_uid: 'am3' })]),
+    }));
+  });
+
+  it('Add Ammunition opens the picker filtered to ammunition and defaults to the bundle quantity', async () => {
+    const onChange = vi.fn();
+    itemService.getItems.mockResolvedValue([
+      { id: 50, name: 'Arrows', category: 'Ammunition', quantity: '20', owner_type: 'system' },
+      { id: 51, name: 'Backpack', category: 'Standard Gear', owner_type: 'system' },
+    ]);
+    renderTab({ onChange });
+    fireEvent.click(screen.getByTestId('add-ammo-btn'));
+    await waitFor(() => expect(screen.getByTestId('item-picker-option-50')).toBeInTheDocument());
+    // non-ammo gear filtered out of the ammunition picker
+    expect(screen.queryByTestId('item-picker-option-51')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('item-picker-option-50'));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      inventory: expect.arrayContaining([expect.objectContaining({ name: 'Arrows', category: 'adventuring-gear', quantity: 20 })]),
+    })));
+  });
+
+  it('hides ammo Use/Add controls when readOnly', () => {
+    renderTab({ inventory: [longbow, arrows], readOnly: true });
+    expect(screen.queryByTestId('use-ammo-lb1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('add-ammo-btn')).not.toBeInTheDocument();
+    // count is still shown read-only
+    expect(screen.getByTestId('ammo-count-lb1')).toHaveTextContent('20');
+  });
 });
