@@ -38,6 +38,21 @@ When unsure whether a tripwire applies, raise it anyway — a 10-second flag is 
 
 ---
 
+## Development Workflow (Git)
+
+**Short-lived feature branches, merged to `main` on every ship.** `main` is the deployable trunk and should never lag far behind.
+
+1. **Start a feature** — branch from an up-to-date `main`:
+   `git checkout main && git pull --ff-only && git checkout -b feature/<short-name>`
+   Never accumulate unrelated work on one long-lived branch (a 10-commit / 100-file branch means `main` was stale for too long).
+2. **Develop on the branch** — commit as you go; write tests alongside each change (see Post-Turn Requirements). Commit/push only when the user asks.
+3. **Ship (`/ship`)** — run the full test suite → audit CLAUDE.md → commit on the feature branch → **fast-forward `main` to the branch (`git merge --ff-only`) and push `main`** → delete the feature branch (local + remote). The `/ship` skill automates this final step (branch-aware).
+4. **Next feature** starts from a fresh branch off the new `main`.
+
+Commit messages end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`. Keep merges fast-forward (no merge commits); if `--ff-only` fails because `main` moved, rebase the feature branch on `main`, re-run tests, then merge.
+
+---
+
 ## What This Is
 A full-stack D&D campaign organizer and compendium. Users create campaigns, invite players, and manage all campaign content — with a customizable ruleset layered on top of the official D&D base compendium.
 
