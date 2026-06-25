@@ -244,5 +244,5 @@ Always:
    - If adding a new SQLAlchemy Enum column, manually add `op.execute("CREATE TYPE ...")` before the column
 4. Write tests in `backend/tests/test_<module>.py` — tests ship with the feature, never deferred
 5. Update `CLAUDE.md`: schema table count, backend structure tree, API endpoints table, test file listing
-6. **Always remind the user to restart the backend server** after any backend change (new models, schema edits, new routes, migrations). The running uvicorn process caches the old code and will not pick up changes until restarted:
-   > "**Restart the backend server** (`uvicorn main:app --reload` from `backend/`) so the running process picks up the new code."
+6. **Restart the backend server yourself** after any backend change (new models, schema edits, new routes, migrations) — do not ask the user. The running uvicorn process caches the old code and will not pick up changes until restarted. Use the kill-first script (it terminates the stale python/uvicorn instance before starting a fresh one):
+   > `bash scripts/restart-backend.sh`

@@ -1569,16 +1569,25 @@ vi.mock('../../campaigns/CampaignContext', () => ({
 
 ## Development Commands
 
-```bash
-# Backend
-cd backend
-source venv/Scripts/activate     # Windows (bash)
-uvicorn main:app --reload         # Dev server at http://localhost:8000
+**Always start servers with the kill-first restart scripts** — never run a bare
+`npm run dev` / `uvicorn` on top of a possibly-running instance. Multiple
+instances were causing the frontend to drift off port 5173 (Vite silently
+increments to 5174+) and stale uvicorn workers to serve cached modules. Each
+script terminates any existing instance before starting, and Vite is pinned to
+5173 with `strictPort` so it fails loudly instead of drifting.
 
-# Frontend
-cd frontend
-npm run dev                       # Dev server at http://localhost:5173
-npm test                          # run frontend tests
+```bash
+# Frontend — ensures the backend is up first (starts it if :8000 is dead; the
+# frontend can't function without it), kills any dev server on 5173-5176, then
+# starts Vite on 5173
+bash scripts/restart-frontend.sh
+
+# Backend — kills all python* (uvicorn reloader + worker), then starts uvicorn.
+# The backend MAY run on its own; the frontend may not.
+bash scripts/restart-backend.sh
+
+# Frontend tests
+cd frontend && npm test
 
 # Database
 psql -U postgres -d dnd_app_dev
@@ -1590,15 +1599,12 @@ alembic upgrade head
 
 **The user cannot see or access the terminal Claude uses to run the server. Claude must restart the server itself** after every backend change — do not ask the user to do it.
 
-After any change to backend code — models, schemas, routes, service logic, or migrations — kill the running process and start a fresh one:
+After any change to backend code — models, schemas, routes, service logic, or migrations — restart with the kill-first script (it terminates the existing python/uvicorn instance before starting a fresh one):
 
-```powershell
-# 1. Kill existing server (PowerShell)
-Get-Process -Name python* -ErrorAction SilentlyContinue | Stop-Process -Force
-```
 ```bash
-# 2. Start fresh (Bash, run_in_background=false to confirm startup)
-cd "c:/Users/rober/Documents/Projects/dnd-app/backend" && source venv/Scripts/activate && uvicorn main:app --reload &
+# Restart (run_in_background=true), then confirm startup
+bash scripts/restart-backend.sh
+# in a separate call:
 sleep 4 && curl -s http://localhost:8000/docs > /dev/null && echo "Server up"
 ```
 
