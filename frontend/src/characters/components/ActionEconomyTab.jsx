@@ -34,6 +34,25 @@ function ItemRow({ entry, resource, onChange, readOnly }) {
           <span className="font-medium text-sm">{entry.name}</span>
           <Badge variant="outline" className="text-[10px] uppercase tracking-wide shrink-0">{entry.cost}</Badge>
         </div>
+        {/* Per-weapon attack rows (e.g. Two-Weapon Fighting main hand / off hand). */}
+        {entry.subAttacks && entry.subAttacks.length > 0 && (
+          <div className="mt-1 space-y-0.5">
+            {entry.subAttacks.map((sa) => (
+              <div
+                key={sa.label}
+                className="flex flex-wrap items-baseline gap-x-2 text-xs"
+                data-testid={`ae-twf-${sa.label.toLowerCase().replace(/\s+/g, '-')}`}
+              >
+                <span className="w-16 shrink-0 text-muted-foreground">{sa.label}</span>
+                <span className="font-medium">{sa.name}</span>
+                <span className="text-muted-foreground">
+                  {sa.toHit ? `${sa.toHit} to hit · ` : ''}{sa.damage}
+                  {sa.warning ? ' · disadvantage' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>}
         {entry.warning && (
           <p className="text-[11px] text-amber-600 leading-tight mt-0.5" data-testid={`ae-warning-${entry.key}`}>⚠ {entry.warning}</p>

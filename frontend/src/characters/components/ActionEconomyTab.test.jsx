@@ -149,11 +149,13 @@ describe('ActionEconomyTab', () => {
     expect(screen.getByText('Shield')).toBeInTheDocument();
   });
 
-  it('shows Two-Weapon Fighting on the Action+Bonus tab with two light weapons', () => {
-    const light = (uid) => ({ uid, category: 'weapons', equipped: true, name: 'Shortsword', weapon_type: 'Melee', weapon_category: 'Martial', damage: '1d6', properties: '["Finesse", "Light"]' });
-    renderTab({ inventory: [light('a'), light('b')] });
+  it('shows Two-Weapon Fighting with main-hand/off-hand weapon rows on the Action+Bonus tab', () => {
+    const light = (uid, name) => ({ uid, category: 'weapons', equipped: true, name, weapon_type: 'Melee', weapon_category: 'Martial', damage: '1d6', damage_type: 'piercing', properties: '["Finesse", "Light"]' });
+    renderTab({ inventory: [light('a', 'Shortsword'), light('b', 'Dagger')] });
     fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
     expect(screen.getByText('Two-Weapon Fighting')).toBeInTheDocument();
+    expect(screen.getByTestId('ae-twf-main-hand')).toHaveTextContent('Shortsword');
+    expect(screen.getByTestId('ae-twf-off-hand')).toHaveTextContent('Dagger');
   });
 
   it('shows the empty note on Action+Bonus without two light weapons', () => {

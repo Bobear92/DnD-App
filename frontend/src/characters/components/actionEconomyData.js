@@ -22,6 +22,7 @@ import { abilityMod, profBonus, formatSigned } from './inventoryData';
 import { CLASS_FEATURES_5E } from './classFeatures5e';
 import { CLASS_FEATURES_2024 } from './classFeatures2024';
 import { getFeatActions, getFeatUnarmedDice } from './featEffects';
+import { hasFeat } from './combatBonuses';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
 const ECONOMY_COST_LABEL = {
@@ -149,14 +150,31 @@ export function attacksPerAction(charClass, level = 1) {
   return n;
 }
 
-const isLightMelee = (e) =>
-  e.category === 'weapons' &&
-  (e.weapon_type || '').toLowerCase() === 'melee' &&
-  (e.properties || '').toLowerCase().includes('light');
+const isMelee = (e) =>
+  e.category === 'weapons' && (e.weapon_type || '').toLowerCase() === 'melee';
 
-/** Two or more equipped light melee weapons enable Two-Weapon Fighting. */
-export function canTwoWeaponFight(inventory = []) {
-  return (inventory || []).filter((e) => e.equipped && isLightMelee(e)).length >= 2;
+const isLightMelee = (e) =>
+  isMelee(e) && (e.properties || '').toLowerCase().includes('light');
+
+/** A one-handed (i.e. not two-handed) melee weapon — the Dual Wielder TWF condition. */
+const isOneHandedMelee = (e) =>
+  isMelee(e) && !(e.properties || '').toLowerCase().includes('two-handed');
+
+/**
+ * The equipped weapons that qualify for Two-Weapon Fighting — light melee weapons, or
+ * (with the Dual Wielder feat) any one-handed/non-two-handed melee weapons.
+ */
+export function twoWeaponFightingWeapons(inventory = [], feats = []) {
+  const predicate = hasFeat(feats, 'Dual Wielder') ? isOneHandedMelee : isLightMelee;
+  return (inventory || []).filter((e) => e.equipped && predicate(e));
+}
+
+/**
+ * Two or more equipped light melee weapons enable Two-Weapon Fighting. The Dual Wielder
+ * feat lifts the "light" requirement, allowing any one-handed (non-two-handed) melee weapons.
+ */
+export function canTwoWeaponFight(inventory = [], feats = []) {
+  return twoWeaponFightingWeapons(inventory, feats).length >= 2;
 }
 
 function unarmedAttack(scores = {}, level = 1, dice = null) {
@@ -215,14 +233,46 @@ export function buildActionEconomy({
     });
   });
 
-  // Two-Weapon Fighting (Action + Bonus Action).
-  if (canTwoWeaponFight(inventory)) {
+  // Two-Weapon Fighting (Action + Bonus Action). Surface the two weapons being wielded as
+  // explicit main-hand / off-hand attack rows. The off-hand bonus attack adds no ability
+  // modifier to its damage unless the Two-Weapon Fighting fighting style grants it.
+  const twfWeapons = twoWeaponFightingWeapons(inventory, feats);
+  if (twfWeapons.length >= 2) {
+    const dualWielder = hasFeat(feats, 'Dual Wielder');
+    const twfStyle = (characterData.fighting_style || '') === 'Two-Weapon Fighting';
+    const attackByUid = new Map(weaponRows.filter((a) => a.uid).map((a) => [a.uid, a]));
+    const baseDamage = (w) => `${w.damage || '—'}${w.damage_type ? ` ${w.damage_type}` : ''}`;
+    const [main, off] = twfWeapons;
+    const mainRow = attackByUid.get(main.uid);
+    const offRow = attackByUid.get(off.uid);
+    const subAttacks = [
+      {
+        label: 'Main hand',
+        name: main.name,
+        toHit: mainRow?.toHit ?? null,
+        damage: mainRow?.damage ?? baseDamage(main),
+        warning: mainRow?.warning ?? null,
+      },
+      {
+        label: 'Off hand',
+        name: off.name,
+        toHit: offRow?.toHit ?? null,
+        // Strip the ability modifier from the off-hand damage unless the TWF style restores it.
+        damage: twfStyle ? (offRow?.damage ?? baseDamage(off)) : baseDamage(off),
+        warning: offRow?.warning ?? null,
+      },
+    ];
+    const dualNote = dualWielder ? ' Dual Wielder lets these be any one-handed melee weapons, not just light ones.' : '';
+    const offNote = twfStyle
+      ? 'your Two-Weapon Fighting style adds your ability modifier to its damage'
+      : 'it adds no ability modifier to its damage unless a feature grants it';
     push('action+bonus', {
       key: 'twf',
       name: 'Two-Weapon Fighting',
       source: 'Weapon',
       cost: 'action + bonus action',
-      detail: 'Take the Attack action with a light melee weapon, then use your bonus action to attack with a different light melee weapon in your other hand (no ability bonus to that damage unless a feature grants it).',
+      subAttacks,
+      detail: `Attack with your main-hand weapon (Action), then attack with your off-hand weapon (Bonus Action) — ${offNote}.${dualNote}`,
     });
   }
 

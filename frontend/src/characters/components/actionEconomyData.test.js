@@ -53,9 +53,34 @@ describe('canTwoWeaponFight', () => {
   it('false with only one equipped', () => {
     expect(canTwoWeaponFight([light('a', true), light('b', false)])).toBe(false);
   });
-  it('false for a non-light or ranged weapon', () => {
+  it('false when the second weapon is non-light (Heavy)', () => {
     const heavy = { uid: 'c', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Heavy"]' };
     expect(canTwoWeaponFight([light('a', true), heavy])).toBe(false);
+  });
+
+  const oneHanded = (uid) => ({ uid, category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile (1d10)"]' });
+  const ranged = (uid) => ({ uid, category: 'weapons', equipped: true, weapon_type: 'Ranged', properties: '["Light", "Ammunition"]' });
+  const dualWielder = [{ name: 'Dual Wielder', effects: [{ kind: 'ac_mod', amount: 1, condition: 'two_melee_weapons' }] }];
+
+  it('false when one equipped weapon is ranged (even if light)', () => {
+    expect(canTwoWeaponFight([light('a', true), ranged('b')])).toBe(false);
+  });
+  it('false when both equipped weapons are ranged', () => {
+    expect(canTwoWeaponFight([ranged('a'), ranged('b')])).toBe(false);
+  });
+  it('false for a ranged weapon even with Dual Wielder', () => {
+    expect(canTwoWeaponFight([oneHanded('a'), ranged('b')], dualWielder)).toBe(false);
+  });
+
+  it('false for two non-light one-handed melee weapons without Dual Wielder', () => {
+    expect(canTwoWeaponFight([oneHanded('a'), oneHanded('b')])).toBe(false);
+  });
+  it('true for two non-light one-handed melee weapons with Dual Wielder', () => {
+    expect(canTwoWeaponFight([oneHanded('a'), oneHanded('b')], dualWielder)).toBe(true);
+  });
+  it('still false with Dual Wielder if one weapon is two-handed', () => {
+    const twoHanded = { uid: 'c', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Two-Handed", "Heavy"]' };
+    expect(canTwoWeaponFight([oneHanded('a'), twoHanded], dualWielder)).toBe(false);
   });
 });
 
@@ -172,13 +197,64 @@ describe('buildActionEconomy — Fighter', () => {
     expect(unarmed.detail).toMatch(/bludgeoning/);
   });
 
-  it('adds Two-Weapon Fighting to Action+Bonus with two light melee weapons', () => {
+  it('adds Two-Weapon Fighting with main-hand/off-hand rows for two light melee weapons', () => {
+    const args = fighterArgs(5, '5e');
+    args.scores = { strength: 16 };
+    args.inventory = [
+      { uid: 'a', name: 'Shortsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Light"]', damage: '1d6', damage_type: 'piercing' },
+      { uid: 'b', name: 'Dagger', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Light", "Finesse"]', damage: '1d4', damage_type: 'piercing' },
+    ];
+    args.attacks = [
+      { uid: 'a', name: 'Shortsword', toHit: '+6', damage: '1d6 + 3 piercing', proficient: true },
+      { uid: 'b', name: 'Dagger', toHit: '+6', damage: '1d4 + 3 piercing', proficient: true },
+    ];
+    const twf = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Two-Weapon Fighting');
+    expect(twf).toBeTruthy();
+    expect(twf.subAttacks).toHaveLength(2);
+    const [mh, oh] = twf.subAttacks;
+    expect(mh).toMatchObject({ label: 'Main hand', name: 'Shortsword', toHit: '+6', damage: '1d6 + 3 piercing' });
+    // Off-hand drops the ability modifier from its damage (no TWF fighting style here).
+    expect(oh).toMatchObject({ label: 'Off hand', name: 'Dagger', toHit: '+6', damage: '1d4 piercing' });
+  });
+
+  it('off-hand retains the ability modifier when the character has the Two-Weapon Fighting style', () => {
+    const args = fighterArgs(5, '5e');
+    args.characterData = { ...args.characterData, fighting_style: 'Two-Weapon Fighting' };
+    args.inventory = [
+      { uid: 'a', name: 'Shortsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Light"]', damage: '1d6', damage_type: 'piercing' },
+      { uid: 'b', name: 'Dagger', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Light"]', damage: '1d4', damage_type: 'piercing' },
+    ];
+    args.attacks = [
+      { uid: 'a', name: 'Shortsword', toHit: '+6', damage: '1d6 + 3 piercing', proficient: true },
+      { uid: 'b', name: 'Dagger', toHit: '+6', damage: '1d4 + 3 piercing', proficient: true },
+    ];
+    const twf = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Two-Weapon Fighting');
+    expect(twf.subAttacks[1].damage).toBe('1d4 + 3 piercing');
+  });
+
+  it('adds Two-Weapon Fighting with two non-light one-handed weapons when the character has Dual Wielder', () => {
+    const args = fighterArgs(5, '5e');
+    args.characterData = {
+      ...args.characterData,
+      feats: [{ name: 'Dual Wielder', effects: [{ kind: 'ac_mod', amount: 1, condition: 'two_melee_weapons' }] }],
+    };
+    args.inventory = [
+      { uid: 'a', name: 'Longsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile (1d10)"]', damage: '1d8', damage_type: 'slashing' },
+      { uid: 'b', name: 'Rapier', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Finesse"]', damage: '1d8', damage_type: 'piercing' },
+    ];
+    const twf = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Two-Weapon Fighting');
+    expect(twf).toBeTruthy();
+    expect(twf.detail).toMatch(/Dual Wielder/);
+    expect(twf.subAttacks.map((s) => s.name)).toEqual(['Longsword', 'Rapier']);
+  });
+
+  it('does NOT add Two-Weapon Fighting with two non-light weapons without Dual Wielder', () => {
     const args = fighterArgs(5, '5e');
     args.inventory = [
-      { uid: 'a', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Light"]' },
-      { uid: 'b', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Light"]' },
+      { uid: 'a', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile (1d10)"]' },
+      { uid: 'b', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile (1d10)"]' },
     ];
-    expect(buildActionEconomy(args)['action+bonus'].map((e) => e.name)).toContain('Two-Weapon Fighting');
+    expect(buildActionEconomy(args)['action+bonus'].map((e) => e.name)).not.toContain('Two-Weapon Fighting');
   });
 
   it('surfaces a Dragonborn Breath Weapon as an Action', () => {
