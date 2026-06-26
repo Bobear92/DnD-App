@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import {
   ChevronLeft, Eye, EyeOff, Trash2, Save, RotateCcw, TrendingUp, Star, Plus, Wand2, Shield,
-  Sword, Swords, Zap, BookOpen, Music, User, X, Upload, Clock,
+  Sword, Swords, Zap, BookOpen, Music, User, X, Upload, Clock, ArrowUpRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,7 @@ import { getRaceGrantedSkillsFromTraits } from '../components/raceProficienciesD
 import { getBackgroundSkills } from '../components/backgroundSkillsData';
 import { getFeatGrantedSkills } from '../components/featProficiencyData';
 import RacialResourceTracker from '../components/RacialResourceTracker';
+import JumpCard from '../components/JumpCard';
 import WalletCard from '../components/WalletCard';
 import InventoryTab from '../components/InventoryTab';
 import ActionEconomyTab from '../components/ActionEconomyTab';
@@ -1403,8 +1404,23 @@ export default function CharacterDetail() {
                       />
                     }
                   />
+                  <div className="flex justify-end mt-1">
+                    <Link
+                      to={`/campaigns/${campaignId}/encyclopedia/mechanics/hit-dice`}
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      data-testid="hit-dice-learn-more"
+                    >
+                      How Hit Dice work <ArrowUpRight className="w-3 h-3" />
+                    </Link>
+                  </div>
                 </SectionCard>
               )}
+
+              {/* Jumping — computed long/high jump distances (display-only); links to the mechanics page */}
+              <JumpCard
+                strength={identity.draft?.strength ?? character.strength}
+                feats={character?.character_data?.feats ?? []}
+              />
 
               {/* Racial Features — all rest-rechargeable racial traits (incl. Dragonborn Breath Weapon) */}
               {classSection.draft !== null && getRacialRestResources(

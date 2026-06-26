@@ -10,6 +10,7 @@ import SpellsTab from './SpellsTab';
 import CampaignSpellsTab from './CampaignSpellsTab';
 import SkillsTab from './SkillsTab';
 import FeatsTab from './FeatsTab';
+import MechanicsTab from './MechanicsTab';
 import ItemsTab from './ItemsTab';
 import CampaignItemsTab from './CampaignItemsTab';
 import { ITEM_CATEGORIES } from '../data/itemCategories';
@@ -36,6 +37,7 @@ const TABS = [
   { id: 'spells', label: 'Spells' },
   { id: 'items', label: 'Items' },
   { id: 'feats', label: 'Feats' },
+  { id: 'mechanics', label: 'Mechanics' },
 ];
 
 // Tabs whose content is edition-aware (the edition toggle is shown for these).
@@ -293,6 +295,9 @@ export default function EncyclopediaPage() {
         {activeTab === 'feats' && (
           <FeatsTab campaignId={campaignId} edition={edition} />
         )}
+
+        {/* Mechanics tab */}
+        {activeTab === 'mechanics' && <MechanicsTab />}
       </div>
     </div>
   );

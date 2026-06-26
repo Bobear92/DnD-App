@@ -1,5 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import InventoryTab from './InventoryTab';
 
 vi.mock('../../encyclopedia/itemService', () => ({
@@ -15,6 +16,7 @@ const greatsword = { uid: 'gs1', category: 'weapons', name: 'Greatsword', weapon
 
 function renderTab(props = {}) {
   return render(
+    <MemoryRouter>
     <InventoryTab
       inventory={props.inventory ?? []}
       scores={props.scores ?? { strength: 16, dexterity: 10, constitution: 14 }}
@@ -28,6 +30,7 @@ function renderTab(props = {}) {
       readOnly={props.readOnly ?? false}
       onChange={props.onChange ?? vi.fn()}
     />
+    </MemoryRouter>
   );
 }
 
@@ -92,6 +95,14 @@ describe('InventoryTab', () => {
   it('computes AC from equipped armor', () => {
     renderTab({ inventory: [chainMail], scores: { dexterity: 16 } });
     expect(screen.getByTestId('inventory-ac')).toHaveTextContent('16'); // heavy, no DEX
+  });
+
+  it('links the AC summary to the armor-class mechanics page', () => {
+    renderTab();
+    expect(screen.getByTestId('armor-class-learn-more')).toHaveAttribute(
+      'href',
+      '/campaigns/1/encyclopedia/mechanics/armor-class'
+    );
   });
 
   it('shows attacks for equipped weapons with proficiency in to-hit', () => {

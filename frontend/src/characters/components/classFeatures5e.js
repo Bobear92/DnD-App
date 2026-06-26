@@ -388,7 +388,7 @@ export const CLASS_FEATURES_5E = {
       { name: 'Martial Arts', description: 'Your practice of martial arts gives you mastery of combat styles that use unarmed strikes and monk weapons. You gain the following benefits: use Dexterity instead of Strength for attacks, use the Martial Arts die instead of normal damage (d4 at 1st, d6 at 5th, d8 at 11th, d10 at 17th), and make one unarmed strike as a bonus action when you take the Attack action.' },
     ],
     2: [
-      { name: 'Ki', description: 'Your training allows you to harness the mystic energy of ki. Your ki points equal your monk level. Regain all ki on a short or long rest. Use ki to fuel: Flurry of Blows (2 ki: two bonus unarmed strikes), Patient Defense (1 ki: Dodge as bonus action), Step of the Wind (1 ki: Dash/Disengage as bonus action).' },
+      { name: 'Ki', description: 'Your training allows you to harness the mystic energy of ki. Your ki points equal your monk level. Regain all ki on a short or long rest. Use ki to fuel: Flurry of Blows (2 ki: two bonus unarmed strikes), Patient Defense (1 ki: Dodge as bonus action), Step of the Wind (1 ki: Dash/Disengage as bonus action; jump distance doubled).' },
       { name: 'Unarmored Movement', description: 'Your speed increases by 10 feet while you are not wearing armor or wielding a shield. This bonus increases at higher levels.' },
     ],
     3: [

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Plus, Trash2, Shield, Swords, Minus, Wrench, Target } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, Trash2, Shield, Swords, Minus, Wrench, Target, ArrowUpRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -195,6 +196,13 @@ export default function InventoryTab({
         <div className="rounded-lg border bg-card p-4">
           <div className="flex items-center gap-2 text-sm font-semibold mb-2">
             <Shield className="h-4 w-4 text-muted-foreground" /> Armor Class
+            <Link
+              to={`/campaigns/${campaignId}/encyclopedia/mechanics/armor-class`}
+              className="ml-auto inline-flex items-center gap-1 text-xs font-normal text-primary hover:underline"
+              data-testid="armor-class-learn-more"
+            >
+              Learn more <ArrowUpRight className="w-3 h-3" />
+            </Link>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold" data-testid="inventory-ac">{ac.value}</span>

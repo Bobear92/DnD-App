@@ -1,4 +1,3 @@
-import math
 import re
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile, status
@@ -528,7 +527,9 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
         patch['temp_hp'] = 0
 
         hit_dice_used = cd.get('hit_dice_used', 0)
-        recovered_hd = math.ceil(level / 2)
+        # RAW: a long rest recovers spent Hit Dice equal to half your total, rounded
+        # down (minimum 1) — NOT ceil, which over-recovers by one at odd levels.
+        recovered_hd = max(1, level // 2)
         patch['hit_dice_used'] = max(0, hit_dice_used - recovered_hd)
         if hit_dice_used > 0:
             changes.append(f'Hit dice recovered (up to {recovered_hd})')

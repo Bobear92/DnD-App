@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import ActionEconomyTab from './ActionEconomyTab';
 
 vi.mock('@/encyclopedia/encyclopediaService', () => ({
@@ -25,22 +26,32 @@ const greatswordEntry = {
 
 function renderTab(props = {}) {
   return render(
-    <ActionEconomyTab
-      charClass="Fighter"
-      level={5}
-      edition="5e"
-      characterData={{}}
-      inventory={[longswordEntry]}
-      scores={{ strength: 16, dexterity: 12 }}
-      campaignId={1}
-      {...props}
-    />
+    <MemoryRouter>
+      <ActionEconomyTab
+        charClass="Fighter"
+        level={5}
+        edition="5e"
+        characterData={{}}
+        inventory={[longswordEntry]}
+        scores={{ strength: 16, dexterity: 12 }}
+        campaignId={1}
+        {...props}
+      />
+    </MemoryRouter>
   );
 }
 
 describe('ActionEconomyTab', () => {
   beforeEach(() => {
     encyclopediaService.getSpells.mockClear();
+  });
+
+  it('links to the action-economy mechanics page', () => {
+    renderTab();
+    expect(screen.getByTestId('action-economy-learn-more')).toHaveAttribute(
+      'href',
+      '/campaigns/1/encyclopedia/mechanics/action-economy'
+    );
   });
 
   it('renders the five sub-tabs, with No Action first', () => {

@@ -901,6 +901,15 @@ describe('CharacterDetail', () => {
       expect(screen.getByText('Hit Dice')).toBeInTheDocument();
     });
 
+    it('links the Hit Points & Movement card to the hit-dice mechanics page', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('hit-dice-learn-more')).toHaveAttribute(
+        'href',
+        expect.stringContaining('/encyclopedia/mechanics/hit-dice')
+      );
+    });
+
     it('shows die type for Fighter (d10)', async () => {
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());

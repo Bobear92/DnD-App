@@ -727,8 +727,27 @@ class TestApplyRest:
         )
 
         updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
-        # Level 10 → recover ceil(10/2) = 5 hit dice; 8 used - 5 = 3 remaining
+        # Level 10 → recover 10//2 = 5 hit dice; 8 used - 5 = 3 remaining
         assert updated["character_data"]["hit_dice_used"] == 3
+
+    def test_long_rest_recovers_half_rounded_down_at_odd_level(self, client):
+        # RAW: half your total rounded down (min 1) — level 9 recovers 4, not 5 (ceil).
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id,
+            level=9,
+            character_data={"hit_dice_used": 8},
+        )
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        # Level 9 → recover 9//2 = 4 hit dice; 8 used - 4 = 4 remaining
+        assert updated["character_data"]["hit_dice_used"] == 4
 
     def test_response_includes_changes_list(self, client):
         h_gm, _, campaign_id = self._setup(client)

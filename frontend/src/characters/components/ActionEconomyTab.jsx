@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Swords, Zap, Repeat, ShieldAlert, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Swords, Zap, Repeat, ShieldAlert, Sparkles, ArrowUpRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
@@ -133,6 +134,16 @@ export default function ActionEconomyTab({
 
   return (
     <div className="space-y-4" data-testid="action-economy-tab">
+      <div className="flex justify-end -mb-2">
+        <Link
+          to={`/campaigns/${campaignId}/encyclopedia/mechanics/action-economy`}
+          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          data-testid="action-economy-learn-more"
+        >
+          Learn more <ArrowUpRight className="w-3 h-3" />
+        </Link>
+      </div>
+
       {/* Sub-tab selector */}
       <div className="flex flex-wrap gap-1 border-b border-border pb-2">
         {TABS.map((tab) => {
