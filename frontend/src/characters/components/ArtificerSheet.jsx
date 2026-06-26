@@ -243,13 +243,7 @@ export default function ArtificerSheet({
         <HitDiceTracker hitDie={8} level={level} used={data.hit_dice_used} onChange={v => set('hit_dice_used', v)} readOnly={readOnly} creation={creation} />
       )}
 
-      {showCombat && (
-        <Field label="Armor Class">
-          <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
-        </Field>
-      )}
 
-      {showCombat && acExtra}
 
       {showCombat && (
         <div className="grid grid-cols-3 gap-3">

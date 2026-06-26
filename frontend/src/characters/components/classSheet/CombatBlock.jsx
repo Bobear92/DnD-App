@@ -48,11 +48,6 @@ export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, 
         durable={hasDurableFeat(data.feats)}
       />
 
-      <Field label="Armor Class">
-        <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
-      </Field>
-
-      {acExtra}
 
       {(() => {
         // Feat speed bonuses (e.g. Mobile +10) fold into Total Speed here — the shared speed

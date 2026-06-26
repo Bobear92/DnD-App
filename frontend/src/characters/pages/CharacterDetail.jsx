@@ -31,7 +31,7 @@ import ActionEconomyTab from '../components/ActionEconomyTab';
 import FeatsSubTab from '../components/FeatsSubTab';
 import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '../components/featEffects';
 import { getClassConfig } from '../components/classSheet/configs';
-import { MaxHpValue, AcOptionsLine } from '../components/CombatBonusInline';
+import { MaxHpValue } from '../components/CombatBonusInline';
 import { totalHpBonus } from '../components/combatBonuses';
 import { draconicLabel } from '../components/draconicData';
 import SpellLevelTabs from '../components/SpellLevelTabs';
@@ -1400,13 +1400,6 @@ export default function CharacterDetail() {
                         feats={character?.character_data?.feats ?? []}
                         level={identity.draft?.level ?? character.level}
                         baseMaxHp={classSection.draft?.hp_max}
-                      />
-                    }
-                    acExtra={
-                      <AcOptionsLine
-                        charClass={character.char_class}
-                        subclass={classSection.draft?.subclass}
-                        scores={identity.draft ?? {}}
                       />
                     }
                   />

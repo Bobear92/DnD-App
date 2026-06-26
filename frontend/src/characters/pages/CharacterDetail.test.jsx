@@ -1345,14 +1345,15 @@ describe('CharacterDetail', () => {
       expect(screen.queryByText('Effective Max HP')).not.toBeInTheDocument();
     });
 
-    it('shows the Armor Class Options under the AC field with 13 + DEX', async () => {
+    it('shows the Draconic 13 + DEX AC in the Items-tab summary (no longer in Stats)', async () => {
       characterService.getCharacterById.mockResolvedValue({ success: true, data: DRACONIC_SORCERER });
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
-      expect(screen.getByText('Armor Class Options')).toBeInTheDocument();
-      // Draconic Resilience formula shown (Stats AcOptionsLine + Items-tab AC summary both render it)
+      // AC lives only in the Items tab now — Stats no longer renders an AC field or options line
+      expect(screen.queryByText('Armor Class Options')).not.toBeInTheDocument();
+      // Items-tab AC summary still surfaces the Draconic Resilience formula (13 + DEX = 14)
+      expect(screen.getByTestId('inventory-ac')).toHaveTextContent('14');
       expect(screen.getAllByText(/13 \+ DEX/).length).toBeGreaterThan(0);
-      expect(screen.getAllByText('14').length).toBeGreaterThan(0);
     });
 
     it('shows the chosen dragon type as a Draconic Ancestry line', async () => {

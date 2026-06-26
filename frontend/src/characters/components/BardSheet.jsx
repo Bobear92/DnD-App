@@ -272,13 +272,7 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
       )}
 
       {/* AC — features only */}
-      {showCombat && (
-        <Field label="Armor Class">
-          <Input type="number" value={data.armor_class ?? ''} onChange={e => set('armor_class', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
-        </Field>
-      )}
 
-      {showCombat && acExtra}
 
       {/* Speed — features only */}
       {showCombat && (
