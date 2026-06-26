@@ -17,11 +17,10 @@ import SpellList from './SpellList';
 import { CLASS_PROGRESSION } from './classProgressionTables';
 import { getClassConfig } from './classSheet/configs';
 import { getHpBonusesPerLevel, totalHpBonus } from './combatBonuses';
-import {
-  getSubclassProficiencyGrants, availableOptions, applyProficiencyChoice,
-} from './subclassProficiencyData';
 import { getManeuvers, maneuversKnownAtLevel } from './maneuversData';
 import { getLevelChoices, availablePoolOptions, applyLevelChoice } from './levelChoicesData';
+import { getSubclassGrants, availableGrantOptions, applyGrant } from './subclassGrants';
+import OptionCardPicker from './OptionCardPicker';
 import FeatPicker from './FeatPicker';
 import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from './FeatSpellGrantPicker';
 import FeatManeuverPicker from './FeatManeuverPicker';
@@ -147,7 +146,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const [subclassChoice, setSubclassChoice] = useState('');
   const [cantrips, setCantrips] = useState(character.character_data?.cantrips ?? []);
   const [knownSpells, setKnownSpells] = useState(character.character_data?.known_spells ?? []);
-  const [profChoices, setProfChoices] = useState({}); // { [grant.key]: [chosen names] }
+  const [grantPicks, setGrantPicks] = useState({}); // { [grant.key]: [chosen value names] } — subclass grants
   const [asiAlloc, setAsiAlloc] = useState({}); // { [abilityKey]: 0|1|2 } — points added this ASI
   const [maneuverPicks, setManeuverPicks] = useState([]); // new maneuvers chosen this level-up
   const [maneuverReplace, setManeuverReplace] = useState(''); // a known maneuver to swap out (optional)
@@ -175,8 +174,12 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // Subclass proficiency grants gained at this level (uses the subclass chosen in this
   // wizard, or the existing one for grants at later levels). Drives the Proficiencies step.
   const effectiveSubclass = subclassChoice || character.character_data?.subclass;
-  const profGrants = getSubclassProficiencyGrants(character.char_class, edition, effectiveSubclass, newLevel);
-  const needsProficiencies = profGrants.length > 0;
+  // Subclass grants gained at this level — proficiency picks (Battle Master Student of War) or
+  // class-pool picks (Champion Additional Fighting Style), unified in subclassGrants.js. Drives
+  // the Subclass Grants step.
+  const subclassGrantList = getSubclassGrants(character.char_class, edition, effectiveSubclass, newLevel);
+  const needsSubclassGrants = subclassGrantList.length > 0;
+  const subclassGrantsLabel = subclassGrantList.length === 1 ? subclassGrantList[0].label : 'Subclass Choices';
 
   // Battle Master learns new maneuvers at certain levels (3/7/10/15) — choose the delta.
   const knownManeuvers = character.character_data?.maneuvers ?? [];
@@ -217,7 +220,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     ...(wantsAsiStep ? ['asi'] : []),
     ...(wantsFeatStep ? ['feat'] : []),
     ...(isKnownCaster ? ['spells'] : []),
-    ...(needsProficiencies ? ['proficiencies'] : []),
+    ...(needsSubclassGrants ? ['subclass-grants'] : []),
     ...(needsLevelChoices ? ['level-choices'] : []),
     ...(needsManeuvers ? ['maneuvers'] : []),
     'confirm',
@@ -230,14 +233,14 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     ...(wantsAsiStep ? ['Ability Scores'] : []),
     ...(wantsFeatStep ? ['Feat'] : []),
     ...(isKnownCaster ? ['New Spells'] : []),
-    ...(needsProficiencies ? ['Proficiencies'] : []),
+    ...(needsSubclassGrants ? [subclassGrantsLabel] : []),
     ...(needsLevelChoices ? [levelChoicesLabel] : []),
     ...(needsManeuvers ? ['Maneuvers'] : []),
     'Confirm',
   ];
 
-  const toggleProf = (grantKey, name, max) => {
-    setProfChoices((prev) => {
+  const toggleGrant = (grantKey, name, max) => {
+    setGrantPicks((prev) => {
       const cur = prev[grantKey] || [];
       if (cur.includes(name)) return { ...prev, [grantKey]: cur.filter((n) => n !== name) };
       if (cur.length >= max) return prev; // at the choose limit
@@ -473,8 +476,8 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const canAdvance = () => {
     if (STEPS[step] === 'hp') return hpDieResult != null;
     if (STEPS[step] === 'subclass') return !!subclassChoice;
-    if (STEPS[step] === 'proficiencies') {
-      return profGrants.every((g) => (profChoices[g.key]?.length || 0) === g.count);
+    if (STEPS[step] === 'subclass-grants') {
+      return subclassGrantList.every((g) => (grantPicks[g.key]?.length || 0) === g.count);
     }
     if (STEPS[step] === 'asi') return asiTotal === ASI_POINTS;
     if (STEPS[step] === 'asi_choice') return asiChoice === 'asi' || asiChoice === 'feat';
@@ -488,12 +491,12 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
 
   const handleConfirm = async () => {
     setSaving(true);
-    // Merge each subclass proficiency choice into the right character_data field.
-    let profPatch = {};
-    for (const g of profGrants) {
-      profPatch = {
-        ...profPatch,
-        ...applyProficiencyChoice(g.type, profChoices[g.key] || [], { ...(character.character_data ?? {}), ...profPatch }),
+    // Merge each subclass grant pick (proficiency or class-pool) into its character_data field.
+    let grantPatch = {};
+    for (const g of subclassGrantList) {
+      grantPatch = {
+        ...grantPatch,
+        ...applyGrant(g, grantPicks[g.key] || [], { ...(character.character_data ?? {}), ...grantPatch }),
       };
     }
     // Feat count-choice proficiency picks (Skilled / Linguist / Weapon Master) merge into
@@ -557,7 +560,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       ...(newStoredHpMax != null ? { hp_max: newStoredHpMax } : {}),
       ...(subclassChoice ? { subclass: subclassChoice } : {}),
       ...(isKnownCaster ? { cantrips, known_spells: knownSpells } : {}),
-      ...profPatch,
+      ...grantPatch,
       ...featProfPatch,
       ...(maneuversChanged ? { maneuvers: mergedManeuvers } : {}),
       ...levelChoicePatch,
@@ -1058,51 +1061,60 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
           </div>
         )}
 
-        {/* ── Step: Proficiencies (subclass grants) ── */}
-        {STEPS[step] === 'proficiencies' && (
+        {/* ── Step: Subclass Grants (proficiency picks + class-pool picks) ── */}
+        {STEPS[step] === 'subclass-grants' && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Your <span className="font-medium text-foreground">{effectiveSubclass}</span> subclass grants a new
-              proficiency. Choose below — options you already have are hidden so you can't double up.
+              Your <span className="font-medium text-foreground">{effectiveSubclass}</span> subclass lets you make a new
+              choice. Options you already have are hidden so you can't double up.
             </p>
-            {profGrants.map((g) => {
-              const opts = availableOptions(g, { charClass: character.char_class, characterData: character.character_data ?? {} });
-              const chosen = profChoices[g.key] || [];
+            {subclassGrantList.map((g) => {
+              const opts = availableGrantOptions(g, character.character_data ?? {}, { charClass: character.char_class });
+              const chosen = grantPicks[g.key] || [];
+              // Described options (fighting styles) → OptionCardPicker; plain options (artisan
+              // tools) → a compact toggle grid that supports count > 1.
+              const described = g.options.some((o) => o.description);
               return (
-                <div key={g.key} className="space-y-2">
+                <div key={g.key} className="space-y-2" data-testid={`subclass-grant-${g.key}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{g.label}</span>
                     <span className={cn('text-xs', chosen.length === g.count ? 'text-muted-foreground' : 'text-amber-600')}>
                       {chosen.length}/{g.count}
                     </span>
                   </div>
-                  <div className="max-h-72 overflow-y-auto pr-1 grid grid-cols-2 gap-1.5" data-testid={`prof-grant-${g.key}`}>
-                    {opts.map((o) => {
-                      const isSel = chosen.includes(o);
-                      const atLimit = chosen.length >= g.count && !isSel;
-                      return (
-                        <button
-                          key={o}
-                          type="button"
-                          disabled={atLimit}
-                          onClick={() => toggleProf(g.key, o, g.count)}
-                          data-testid={`prof-opt-${g.key}-${o}`}
-                          className={cn(
-                            'rounded-md border px-2 py-1.5 text-xs text-left transition-colors',
-                            isSel ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
-                            atLimit && 'opacity-40 cursor-not-allowed'
-                          )}
-                        >
-                          {o}
-                        </button>
-                      );
-                    })}
-                    {opts.length === 0 && (
-                      <span className="text-xs text-muted-foreground col-span-2">
-                        You already have all of these proficiencies.
-                      </span>
-                    )}
-                  </div>
+                  {described ? (
+                    <OptionCardPicker
+                      options={opts}
+                      value={chosen[0] ?? ''}
+                      onChange={(v) => setGrantPicks((prev) => ({ ...prev, [g.key]: v ? [v] : [] }))}
+                    />
+                  ) : (
+                    <div className="max-h-72 overflow-y-auto pr-1 grid grid-cols-2 gap-1.5">
+                      {opts.map((o) => {
+                        const isSel = chosen.includes(o.value);
+                        const atLimit = chosen.length >= g.count && !isSel;
+                        return (
+                          <button
+                            key={o.value}
+                            type="button"
+                            disabled={atLimit}
+                            onClick={() => toggleGrant(g.key, o.value, g.count)}
+                            data-testid={`subclass-grant-opt-${g.key}-${o.value}`}
+                            className={cn(
+                              'rounded-md border px-2 py-1.5 text-xs text-left transition-colors',
+                              isSel ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
+                              atLimit && 'opacity-40 cursor-not-allowed'
+                            )}
+                          >
+                            {o.value}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {opts.length === 0 && (
+                    <span className="text-xs text-muted-foreground">You already have every option in this pool.</span>
+                  )}
                 </div>
               );
             })}
@@ -1267,11 +1279,11 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                   <span className="text-muted-foreground">New features</span>
                   <span className="font-medium">{features.length === 0 ? 'None' : features.map(f => f.name).join(', ')}</span>
                 </div>
-                {needsProficiencies && (
+                {needsSubclassGrants && (
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">New proficiencies</span>
+                    <span className="text-muted-foreground">{subclassGrantsLabel}</span>
                     <span className="font-medium">
-                      {profGrants.flatMap(g => profChoices[g.key] || []).join(', ') || '—'}
+                      {subclassGrantList.flatMap(g => grantPicks[g.key] || []).join(', ') || '—'}
                     </span>
                   </div>
                 )}

@@ -1,5 +1,51 @@
 import { describe, it, expect } from 'vitest';
-import { isDraconicSorcerer, hasToughFeat, hasDurableFeat, durableHitDieMin, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, getAcOptions } from './combatBonuses';
+import { isDraconicSorcerer, hasToughFeat, hasDurableFeat, durableHitDieMin, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, getAcOptions, remarkableAthlete } from './combatBonuses';
+
+describe('remarkableAthlete', () => {
+  it('null for non-Champion / non-Fighter / missing args', () => {
+    expect(remarkableAthlete()).toBeNull();
+    expect(remarkableAthlete({ charClass: 'Fighter', subclass: 'Battle Master', level: 10 })).toBeNull();
+    expect(remarkableAthlete({ charClass: 'Rogue', subclass: 'Champion', level: 10 })).toBeNull();
+  });
+
+  describe('5e (2014)', () => {
+    it('null below level 7', () => {
+      expect(remarkableAthlete({ charClass: 'Fighter', subclass: 'Champion', level: 6, edition: '5e' })).toBeNull();
+    });
+    it('gives a ½-PB check bonus + jump bonus at L7+', () => {
+      const ra = remarkableAthlete({ charClass: 'Fighter', subclass: 'Champion', level: 7, edition: '5e', pb: 3 });
+      expect(ra).toMatchObject({
+        edition: '5e',
+        checkBonus: 2, // ⌈3/2⌉
+        checkBonusAbilities: ['strength', 'dexterity', 'constitution'],
+        jumpStrBonus: true,
+      });
+      expect(ra.advantageInitiative).toBeUndefined();
+    });
+    it('rounds the check bonus up (PB 5 → 3)', () => {
+      expect(remarkableAthlete({ charClass: 'Fighter', subclass: 'Champion', level: 13, edition: '5e', pb: 5 }).checkBonus).toBe(3);
+    });
+    it('defaults to 5e when no edition is given', () => {
+      expect(remarkableAthlete({ charClass: 'Fighter', subclass: 'Champion', level: 7, pb: 3 }).edition).toBe('5e');
+    });
+  });
+
+  describe('2024 (5.5e)', () => {
+    it('null below level 3', () => {
+      expect(remarkableAthlete({ charClass: 'Fighter', subclass: 'Champion', level: 2, edition: '5.5e' })).toBeNull();
+    });
+    it('gives advantage on Initiative + Athletics at L3+ (no check bonus, no jump bonus)', () => {
+      const ra = remarkableAthlete({ charClass: 'Fighter', subclass: 'Champion', level: 3, edition: '5.5e', pb: 2 });
+      expect(ra).toEqual({ edition: '5.5e', advantageInitiative: true, advantageSkills: ['Athletics'] });
+      expect(ra.checkBonus).toBeUndefined();
+      expect(ra.jumpStrBonus).toBeUndefined();
+    });
+    it('is active at L3 (earlier than the 5e L7 unlock)', () => {
+      expect(remarkableAthlete({ charClass: 'Fighter', subclass: 'Champion', level: 3, edition: '5e' })).toBeNull();
+      expect(remarkableAthlete({ charClass: 'Fighter', subclass: 'Champion', level: 3, edition: '5.5e' })).not.toBeNull();
+    });
+  });
+});
 
 describe('isDraconicSorcerer', () => {
   it('true for 5e Draconic Bloodline', () => {

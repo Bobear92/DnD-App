@@ -19,6 +19,40 @@ export function isDraconicSorcerer(charClass, subclass) {
   return subclass === 'Draconic Bloodline' || subclass === 'Draconic Sorcery';
 }
 
+/** Level at which the Champion Fighter gains Remarkable Athlete, by edition. */
+const REMARKABLE_ATHLETE_UNLOCK = { '5e': 7, '5.5e': 3 };
+
+/**
+ * Champion Fighter "Remarkable Athlete" — edition-aware effect descriptor, or
+ * null when the character doesn't have it. The two editions are genuinely
+ * different features:
+ *
+ *  - 5e (2014), Champion L7: add half proficiency bonus (rounded up) to any
+ *    STR/DEX/CON check that doesn't already use proficiency, and a running long
+ *    jump gains the Strength modifier in feet.
+ *      → { edition:'5e', checkBonusAbilities:['strength','dexterity','constitution'],
+ *          checkBonus, jumpStrBonus:true }
+ *  - 2024, Champion L3: advantage on Initiative rolls and Strength (Athletics)
+ *    checks (the post-Critical-Hit free move is descriptive only — not modeled).
+ *      → { edition:'5.5e', advantageInitiative:true, advantageSkills:['Athletics'] }
+ *
+ * @param {{ charClass, subclass, level?, edition?, pb? }} ctx
+ */
+export function remarkableAthlete({ charClass, subclass, level = 1, edition = '5e', pb = 0 } = {}) {
+  if (charClass !== 'Fighter' || subclass !== 'Champion') return null;
+  const ed = edition === '5.5e' ? '5.5e' : '5e';
+  if ((level ?? 1) < REMARKABLE_ATHLETE_UNLOCK[ed]) return null;
+  if (ed === '5.5e') {
+    return { edition: '5.5e', advantageInitiative: true, advantageSkills: ['Athletics'] };
+  }
+  return {
+    edition: '5e',
+    checkBonusAbilities: ['strength', 'dexterity', 'constitution'],
+    checkBonus: Math.ceil((pb ?? 0) / 2),
+    jumpStrBonus: true,
+  };
+}
+
 /** True when the character has a feat with the given name (feats may be strings or {name}). */
 export function hasFeat(feats = [], name) {
   return (feats ?? []).some(f => (typeof f === 'string' ? f : f?.name) === name);

@@ -53,25 +53,31 @@ export const JUMP_MULTIPLIER_SOURCES = [
  * Full jump readout for a character.
  *
  * @param {number} strength
- * @param {{ athlete?: boolean, multiplier?: number }} [opts]
+ * @param {{ athlete?: boolean, multiplier?: number, remarkableAthlete?: boolean }} [opts]
  *   - athlete: lowers the running-start requirement to 5 ft.
  *   - multiplier: a temporary jump multiplier (Jump spell ×3, Step of the Wind
  *     ×2, Boots/Potion ×3, …). Applied to all four distances; the standing base
  *     is halved first, then multiplied (RAW: halve, then the effect triples).
- * @returns {{ strength, strMod, athlete, multiplier, runStartFt,
+ *   - remarkableAthlete: Champion Fighter feature — a running long jump gains the
+ *     Strength modifier in feet (running long jump only; not standing or high).
+ * @returns {{ strength, strMod, athlete, multiplier, remarkableAthlete,
+ *             raLongJumpBonus, runStartFt,
  *             longRunning, longStanding, highRunning, highStanding }}
  */
-export function computeJump(strength, { athlete = false, multiplier = 1 } = {}) {
+export function computeJump(strength, { athlete = false, multiplier = 1, remarkableAthlete = false } = {}) {
   const long = longJump(strength);
   const high = highJump(strength);
+  const raLongJumpBonus = remarkableAthlete ? mod(strength) : 0;
   const scale = (v) => Math.floor(v * multiplier);
   return {
     strength: strength ?? 10,
     strMod: mod(strength),
     athlete,
     multiplier,
+    remarkableAthlete,
+    raLongJumpBonus,
     runStartFt: runningStartFeet(athlete),
-    longRunning: scale(long.running),
+    longRunning: scale(Math.max(0, long.running + raLongJumpBonus)),
     longStanding: scale(long.standing),
     highRunning: scale(high.running),
     highStanding: scale(high.standing),

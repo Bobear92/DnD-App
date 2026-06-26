@@ -1310,6 +1310,71 @@ describe('CharacterDetail', () => {
       expect(screen.queryByText(/Blue = from feat/)).not.toBeInTheDocument();
     });
 
+    it('shows the Remarkable Athlete legend + half-PB bonus on a non-proficient DEX skill for a Champion Fighter L7', async () => {
+      // Champion Fighter L7 (PB +3 → ½ rounded up = 2). DEX 12 (mod +1), not
+      // proficient in Acrobatics → +1 base + 2 RA = +3.
+      const champion = {
+        ...BASE_CHARACTER,
+        level: 7,
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          subclass: 'Champion',
+          skill_proficiencies: ['Athletics'],
+        },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: champion });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText(/Teal = ½ prof \(Remarkable Athlete\)/)).toBeInTheDocument();
+    });
+
+    it('does NOT show the Remarkable Athlete legend for a Champion below level 7', async () => {
+      const champion6 = {
+        ...BASE_CHARACTER,
+        level: 6,
+        character_data: { ...BASE_CHARACTER.character_data, subclass: 'Champion' },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: champion6 });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByText(/Remarkable Athlete/)).not.toBeInTheDocument();
+    });
+
+    it('a 2024 Champion (L3) gets advantage on Athletics + Initiative (not a ½-PB bonus)', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player', edition: '5.5e' } });
+      const champion2024 = {
+        ...BASE_CHARACTER,
+        level: 3,
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          subclass: 'Champion',
+          skill_proficiencies: ['Athletics'],
+        },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: champion2024 });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText(/Teal = advantage \(Remarkable Athlete\)/)).toBeInTheDocument();
+      expect(screen.getByTestId('skill-advantage-Athletics')).toHaveTextContent(/adv/i);
+      expect(screen.getByTestId('initiative-advantage-note')).toBeInTheDocument();
+      // 2024 version is advantage-only — no ½-PB legend
+      expect(screen.queryByText(/½ prof \(Remarkable Athlete\)/)).not.toBeInTheDocument();
+    });
+
+    it('does NOT show 2024 Remarkable Athlete advantage for a Champion below level 3', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player', edition: '5.5e' } });
+      const champion2 = {
+        ...BASE_CHARACTER,
+        level: 2,
+        character_data: { ...BASE_CHARACTER.character_data, subclass: 'Champion' },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: champion2 });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByText(/Remarkable Athlete/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('initiative-advantage-note')).not.toBeInTheDocument();
+    });
+
     it('does not double-count Perception when both race_traits AND skill_proficiencies include it', async () => {
       // New characters created post-feature have Perception in skill_proficiencies
       // AND Keen Senses in race_traits — the panel should still work correctly.

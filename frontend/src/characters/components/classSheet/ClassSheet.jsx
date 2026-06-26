@@ -26,6 +26,7 @@ import CasterSpellBlock from './CasterSpellBlock';
 import RestResourceTracker from './RestResourceTracker';
 import SkillProficiencyPicker from './SkillProficiencyPicker';
 import { useLockedChoice } from './hooks/useLockedChoice';
+import { getEarnedSubclassGrants, availableGrantOptions } from '../subclassGrants';
 
 function Field({ label, children }) {
   return (
@@ -229,6 +230,46 @@ export default function ClassSheet({
     <SubclassPanel data={data} onChange={onChange} level={level} readOnly={readOnly} edition={config.edition} gmEdit={gmEdit} />
   ) : null;
 
+  // Subclass grants surfaced on the sheet (class-pool picks like Champion's Additional Fighting
+  // Style — `surface !== 'banner'`; proficiency grants show in the Items-tab banners instead).
+  // Chosen at level-up via the LevelUpWizard and stored in character_data[storeField]; shown
+  // read-only here, with an owed slot (a character at/past the grant level with fewer picks than
+  // its count — e.g. one who leveled before this feature existed) fillable inline.
+  const subclassLevelChoiceBlock = !creation && data.subclass
+    ? getEarnedSubclassGrants(config.className, config.edition, data.subclass, level)
+        .filter((g) => g.surface !== 'banner')
+        .map((g) => {
+        const held = data[g.storeField] ?? [];
+        const owed = !readOnly && held.length < g.count;
+        const opts = availableGrantOptions(g, data, { charClass: config.className });
+        return (
+          <Field key={g.key} label={g.label}>
+            <div className="space-y-2" data-testid={`subclass-grant-${g.key}`}>
+              {held.map((name) => {
+                const opt = g.options.find((o) => o.value === name);
+                return (
+                  <div key={name} className="rounded-md border bg-muted/20 p-3 space-y-1">
+                    <div className="font-semibold text-sm">{name}</div>
+                    {opt?.description && (
+                      <div className="text-xs text-muted-foreground leading-relaxed">{opt.description}</div>
+                    )}
+                  </div>
+                );
+              })}
+              {held.length === 0 && !owed && <div className="text-sm py-2">—</div>}
+              {owed && (
+                <OptionCardPicker
+                  options={opts}
+                  value=""
+                  onChange={(v) => v && set(g.storeField, [...held, v])}
+                />
+              )}
+            </div>
+          </Field>
+        );
+      })
+    : null;
+
   const featuresListBlock = <FeaturesList features={config.features} level={level} creation={creation} />;
 
   const asiBlock = config.asiLevels?.some((l) => l <= level) ? (
@@ -278,6 +319,7 @@ export default function ClassSheet({
         </p>
       )}
       {subclassPanelBlock}
+      {subclassLevelChoiceBlock}
       {portentBlock}
     </>
   );
@@ -339,6 +381,7 @@ export default function ClassSheet({
       {showFeatures && notesBlock}
       {showFeatures && subclassFieldBlock}
       {showFeatures && subclassPanelBlock}
+      {showFeatures && subclassLevelChoiceBlock}
       {showFeatures && portentBlock}
 
       {/* Caster spell UI (creation pickers + play sub-tabs) */}

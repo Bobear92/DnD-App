@@ -150,3 +150,39 @@ describe('ClassSheet — 2024 Fighter extras', () => {
     expect(screen.getAllByText(/Tactical Mind/).length).toBeGreaterThan(0);
   });
 });
+
+describe('ClassSheet — Champion Additional Fighting Style (subclass level choice)', () => {
+  // The block lives in the subclass sub-tab of the Features section.
+  const openSubclassTab = () => fireEvent.click(screen.getByTestId('features-subtab-subclass'));
+
+  it('shows the chosen additional fighting style read-only at L10', () => {
+    render(<FighterSheet
+      data={{ ...FIGHTER_DATA, additional_fighting_styles: ['Archery'] }}
+      level={10} section="features" readOnly />);
+    openSubclassTab();
+    const block = screen.getByTestId('subclass-grant-additional_fighting_style');
+    expect(within(block).getByText('Archery')).toBeInTheDocument();
+  });
+
+  it('offers an owed-slot picker when nothing is chosen and editable', () => {
+    const onChange = vi.fn();
+    render(<FighterSheet data={FIGHTER_DATA} level={10} section="features" onChange={onChange} />);
+    openSubclassTab();
+    // Defense is the base style → excluded; Archery is offered.
+    fireEvent.click(screen.getByText('Archery'));
+    expect(onChange).toHaveBeenCalledWith({ additional_fighting_styles: ['Archery'] });
+  });
+
+  it('does not render the block before the grant level (L9)', () => {
+    render(<FighterSheet data={FIGHTER_DATA} level={9} section="features" />);
+    openSubclassTab();
+    expect(screen.queryByTestId('subclass-grant-additional_fighting_style')).not.toBeInTheDocument();
+  });
+
+  it('shows an em dash (no picker) when readOnly with no pick', () => {
+    render(<FighterSheet data={FIGHTER_DATA} level={10} section="features" readOnly />);
+    openSubclassTab();
+    const block = screen.getByTestId('subclass-grant-additional_fighting_style');
+    expect(within(block).getByText('—')).toBeInTheDocument();
+  });
+});

@@ -33,7 +33,7 @@ import FeatsSubTab from '../components/FeatsSubTab';
 import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '../components/featEffects';
 import { getClassConfig } from '../components/classSheet/configs';
 import { MaxHpValue } from '../components/CombatBonusInline';
-import { totalHpBonus } from '../components/combatBonuses';
+import { totalHpBonus, remarkableAthlete } from '../components/combatBonuses';
 import { draconicLabel } from '../components/draconicData';
 import SpellLevelTabs from '../components/SpellLevelTabs';
 import FeatSpellsSection from '../components/FeatSpellsSection';
@@ -1272,12 +1272,23 @@ export default function CharacterDetail() {
                         const bonus = getFeatStatMods(feats, 'initiative', { pb });
                         const total = mod(identity.draft.dexterity) + bonus;
                         const sources = getFeatStatModSources(feats, 'initiative', { pb });
+                        const ra = remarkableAthlete({
+                          charClass: character.char_class,
+                          subclass: classSection.draft?.subclass ?? character.character_data?.subclass,
+                          level: character.level,
+                          edition,
+                        });
                         return (
                           <>
                             <div className="font-bold" data-testid="initiative-value">{total >= 0 ? `+${total}` : total}</div>
                             {sources.length > 0 && (
                               <div className="text-[9px] text-emerald-600 leading-tight" data-testid="initiative-feat-note">
                                 {sources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
+                              </div>
+                            )}
+                            {ra?.advantageInitiative && (
+                              <div className="text-[9px] text-teal-600 leading-tight" data-testid="initiative-advantage-note">
+                                Advantage (Remarkable Athlete)
                               </div>
                             )}
                           </>
@@ -1358,6 +1369,9 @@ export default function CharacterDetail() {
                     identityDraft={identity.draft}
                     classData={classSection.draft}
                     pb={pb}
+                    charClass={character.char_class}
+                    level={character.level}
+                    edition={edition}
                     readOnly={displayAsPlayer || !canEdit}
                   />
                 </div>
@@ -1420,6 +1434,10 @@ export default function CharacterDetail() {
               <JumpCard
                 strength={identity.draft?.strength ?? character.strength}
                 feats={character?.character_data?.feats ?? []}
+                charClass={character.char_class}
+                subclass={classSection.draft?.subclass ?? character?.character_data?.subclass}
+                level={character.level}
+                edition={edition}
               />
 
               {/* Racial Features — all rest-rechargeable racial traits (incl. Dragonborn Breath Weapon) */}
@@ -1812,7 +1830,7 @@ function SectionCard({ title, subtitle, children, isDirty, onSave, onReset, canE
   );
 }
 
-function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
+function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition, readOnly }) {
   const storedProfs = classData?.skill_proficiencies ?? [];
   const expertiseSkills = classData?.expertise_skills ?? [];
   // Existing characters created before race-granted skills were saved into the
@@ -1826,6 +1844,14 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
   // Skills picked via a feat (Skilled / Skill Expert) — recorded on each feat instance.
   const featGranted = getFeatGrantedSkills(classData?.feats ?? []).filter((s) => skillProfs.includes(s));
 
+  // Remarkable Athlete (Champion Fighter). 5e (L7): ½ PB (rounded up) on STR/DEX/CON
+  // checks that don't already use proficiency. 2024 (L3): advantage on Athletics.
+  // Both only help checks that don't already use proficiency → non-proficient skills.
+  const ra = remarkableAthlete({ charClass, subclass: classData?.subclass, level, edition, pb });
+  const raBonus = ra?.checkBonus ?? 0; // 5e numeric bonus
+  const raBonusAbilities = ra?.checkBonusAbilities ?? [];
+  const raAdvSkills = ra?.advantageSkills ?? []; // 2024 advantage (e.g. Athletics)
+
   const hasExpertise = expertiseSkills.length > 0;
   const legendParts = [];
   if (hasExpertise) legendParts.push('Purple = expertise');
@@ -1833,6 +1859,8 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
   if (bgGranted.length > 0) legendParts.push('Amber = from background');
   if (raceGranted.length > 0) legendParts.push('Emerald = from race');
   if (featGranted.length > 0) legendParts.push('Blue = from feat');
+  if (raBonus > 0) legendParts.push('Teal = ½ prof (Remarkable Athlete)');
+  if (raAdvSkills.length > 0) legendParts.push('Teal = advantage (Remarkable Athlete)');
 
   return (
     <div>
@@ -1845,7 +1873,12 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
           const isFromBg = bgGranted.includes(skill);
           const isFromRace = raceGranted.includes(skill);
           const isFromFeat = featGranted.includes(skill);
-          const bonus = base + (isExpert ? pb * 2 : isProf ? pb : 0);
+          // Remarkable Athlete only helps checks that don't already use PB → non-proficient skills.
+          // 5e: ½-PB numeric on STR/DEX/CON skills. 2024: advantage on Athletics.
+          const raNumeric = raBonus > 0 && !isProf && !isExpert && raBonusAbilities.includes(ability);
+          const raAdvantage = !isExpert && raAdvSkills.includes(skill);
+          const isFromRA = raNumeric || raAdvantage;
+          const bonus = base + (isExpert ? pb * 2 : isProf ? pb : raNumeric ? raBonus : 0);
           return (
             <div key={skill} className="flex items-center gap-2 text-xs py-0.5">
               <div className={cn(
@@ -1860,9 +1893,14 @@ function SkillsDisplay({ identityDraft, classData, pb, readOnly }) {
                           : isFromFeat
                             ? 'bg-sky-500 border-sky-500'
                             : 'bg-primary border-primary')
-                    : 'bg-muted border-border'
+                    : isFromRA
+                      ? 'bg-teal-400 border-teal-400'
+                      : 'bg-muted border-border'
               )} />
               <span className="flex-1 truncate">{skill}</span>
+              {raAdvantage && (
+                <span className="text-[9px] font-semibold text-teal-600 uppercase" data-testid={`skill-advantage-${skill}`}>adv</span>
+              )}
               <span className="font-medium tabular-nums text-muted-foreground">
                 {bonus >= 0 ? `+${bonus}` : bonus}
               </span>

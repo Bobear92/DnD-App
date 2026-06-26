@@ -65,7 +65,7 @@ Each effect is `{ kind, …, label? }`. `label` is the chip text in the Feats su
    - derived stat → `CharacterDetail.jsx` (initiative is the template).
    - action → already generic in `actionEconomyData.buildActionEconomy`.
    - resource → `RestResourceTracker` block + **backend** `_compute_rest_patch` reset + `getRestSummary`.
-   - proficiency/expertise → `inventoryProficiencies.js` banners / `SkillsDisplay`; a *choice* grant also needs an acquisition step (LevelUpWizard + Variant Human), mirroring `subclassProficiencyData`.
+   - proficiency/expertise → `inventoryProficiencies.js` banners / `SkillsDisplay`; a *choice* grant also needs an acquisition step (LevelUpWizard + Variant Human), mirroring `subclassGrants`.
 3. Test the consumer (component test) + keep `CharacterDetail.test.jsx` green.
 
 ## Workflow C — 2024 + homebrew

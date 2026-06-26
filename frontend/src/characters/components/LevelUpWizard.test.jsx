@@ -476,12 +476,12 @@ describe('LevelUpWizard', () => {
       toSubclassStep(FIGHTER_L2, onComplete);
       fireEvent.click(screen.getByText('Battle Master'));
       fireEvent.click(screen.getByTestId('wizard-next')); // subclass → features
-      fireEvent.click(screen.getByTestId('wizard-next')); // features → proficiencies
-      expect(screen.getByText(/Student of War/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → subclass-grants
+      expect(screen.getByTestId('subclass-grant-student_of_war')).toBeInTheDocument();
       // Next blocked until a tool is picked
       expect(screen.getByTestId('wizard-next')).toBeDisabled();
-      fireEvent.click(screen.getByTestId("prof-opt-student_of_war-Smith's Tools"));
-      fireEvent.click(screen.getByTestId('wizard-next')); // proficiencies → maneuvers (Battle Master learns 3 at L3)
+      fireEvent.click(screen.getByTestId("subclass-grant-opt-student_of_war-Smith's Tools"));
+      fireEvent.click(screen.getByTestId('wizard-next')); // subclass-grants → maneuvers (Battle Master learns 3 at L3)
       fireEvent.click(screen.getByTestId('lvl-maneuver-Trip Attack'));
       fireEvent.click(screen.getByTestId('lvl-maneuver-Riposte'));
       fireEvent.click(screen.getByTestId('lvl-maneuver-Parry'));
@@ -494,11 +494,11 @@ describe('LevelUpWizard', () => {
       })));
     });
 
-    it('does not add a Proficiencies step for a subclass without a choice grant (Champion)', () => {
+    it('does not add a subclass-grants step for a subclass without a grant at this level (Champion L3)', () => {
       toSubclassStep();
       fireEvent.click(screen.getByText('Champion'));
       fireEvent.click(screen.getByRole('button', { name: /Next/i })); // subclass → features
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → confirm (no proficiencies)
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → confirm (no subclass-grants at L3)
       expect(screen.getByRole('button', { name: /Confirm Level Up/i })).toBeInTheDocument();
       expect(screen.queryByText(/Student of War/i)).not.toBeInTheDocument();
     });
@@ -507,9 +507,66 @@ describe('LevelUpWizard', () => {
       toSubclassStep({ ...FIGHTER_L2, character_data: { hp_max: 26, background_tool_choice: "Smith's Tools" } });
       fireEvent.click(screen.getByText('Battle Master'));
       fireEvent.click(screen.getByRole('button', { name: /Next/i })); // → features
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // → proficiencies
-      expect(screen.queryByTestId("prof-opt-student_of_war-Smith's Tools")).not.toBeInTheDocument();
-      expect(screen.getByTestId("prof-opt-student_of_war-Brewer's Supplies")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // → subclass-grants
+      expect(screen.queryByTestId("subclass-grant-opt-student_of_war-Smith's Tools")).not.toBeInTheDocument();
+      expect(screen.getByTestId("subclass-grant-opt-student_of_war-Brewer's Supplies")).toBeInTheDocument();
+    });
+  });
+
+  describe('subclass choices step (Champion — Additional Fighting Style)', () => {
+    // Champion Fighter leveling 9 → 10 (the 5e Additional Fighting Style level). No subclass
+    // step (already chosen), no ASI step (L10 isn't a Fighter ASI level): hp → features →
+    // subclass-grants → confirm.
+    const CHAMPION_L9 = {
+      ...FIGHTER_L2, level: 9,
+      character_data: { hp_max: 80, subclass: 'Champion', fighting_style: 'Defense' },
+    };
+
+    function toSubclassChoicesStep(character = CHAMPION_L9, onComplete = vi.fn(), campaign = CAMPAIGN_5E) {
+      render(<LevelUpWizard character={character} campaign={campaign} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → subclass-grants
+    }
+
+    it('adds an Additional Fighting Style step at L10 and saves the pick', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toSubclassChoicesStep(CHAMPION_L9, onComplete);
+      expect(screen.getByTestId('subclass-grant-additional_fighting_style')).toBeInTheDocument();
+      // Next blocked until a style is chosen
+      expect(screen.getByTestId('wizard-next')).toBeDisabled();
+      fireEvent.click(screen.getByText('Archery'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // subclass-grants → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(10, expect.objectContaining({
+        additional_fighting_styles: ['Archery'],
+      })));
+    });
+
+    it('excludes the fighting style the character already has', () => {
+      toSubclassChoicesStep();
+      // Base fighting style is Defense → not offered as the second pick
+      expect(screen.queryByText('Archery')).toBeInTheDocument();
+      expect(screen.queryByText('Defense')).not.toBeInTheDocument();
+    });
+
+    it('does not add the step for a Champion at a non-grant level (9 → 10 only)', () => {
+      // Leveling 8 → 9: not the Additional Fighting Style level.
+      render(<LevelUpWizard character={{ ...CHAMPION_L9, level: 8 }} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → confirm (no subclass-grants)
+      expect(screen.getByRole('button', { name: /Confirm Level Up/i })).toBeInTheDocument();
+      expect(screen.queryByTestId('subclass-grant-additional_fighting_style')).not.toBeInTheDocument();
+    });
+
+    it('fires at L7 for a 2024 Champion', () => {
+      const champ2024 = { ...CHAMPION_L9, level: 6, character_data: { hp_max: 60, subclass: 'Champion', fighting_style: 'Defense' } };
+      render(<LevelUpWizard character={champ2024} campaign={CAMPAIGN_2024} onComplete={vi.fn()} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → subclass-grants
+      expect(screen.getByTestId('subclass-grant-additional_fighting_style')).toBeInTheDocument();
     });
   });
 

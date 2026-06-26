@@ -51,6 +51,28 @@ describe('JumpCard', () => {
     expect(note).toHaveTextContent('5 ft');
   });
 
+  it('applies Remarkable Athlete (+STR mod) to the running long jump for a Champion Fighter L7', () => {
+    renderCard({ strength: 16, charClass: 'Fighter', subclass: 'Champion', level: 7 }); // mod +3
+    expect(screen.getByTestId('jump-long-running')).toHaveTextContent('19 ft'); // 16 + 3
+    expect(screen.getByTestId('jump-long-standing')).toHaveTextContent('8 ft'); // standing unchanged
+    expect(screen.getByTestId('jump-high-running')).toHaveTextContent('6 ft'); // high unchanged
+    const note = screen.getByTestId('jump-remarkable-athlete-note');
+    expect(note).toHaveTextContent('Remarkable Athlete');
+    expect(note).toHaveTextContent('+3 ft');
+  });
+
+  it('does not apply Remarkable Athlete below level 7 or for other subclasses', () => {
+    renderCard({ strength: 16, charClass: 'Fighter', subclass: 'Champion', level: 6 });
+    expect(screen.getByTestId('jump-long-running')).toHaveTextContent('16 ft');
+    expect(screen.queryByTestId('jump-remarkable-athlete-note')).not.toBeInTheDocument();
+  });
+
+  it('does not add a jump bonus for a 2024 Champion (that version grants advantage, not a jump bonus)', () => {
+    renderCard({ strength: 16, charClass: 'Fighter', subclass: 'Champion', level: 7, edition: '5.5e' });
+    expect(screen.getByTestId('jump-long-running')).toHaveTextContent('16 ft');
+    expect(screen.queryByTestId('jump-remarkable-athlete-note')).not.toBeInTheDocument();
+  });
+
   it('renders no calculation details (those live on the mechanics page)', () => {
     renderCard({ strength: 12 });
     expect(screen.queryByTestId('jump-details-toggle')).not.toBeInTheDocument();

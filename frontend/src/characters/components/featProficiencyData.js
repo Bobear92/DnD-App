@@ -1,7 +1,7 @@
 /**
  * Feat proficiency CHOICES — count-choice proficiency grants a feat makes the player pick
  * at acquisition (Skilled = 3 skills/tools, Linguist = 3 languages, Weapon Master = 4
- * weapons). Mirrors subclassProficiencyData's grant shape so the acquisition UI is the same
+ * weapons). Mirrors subclassGrants' grant shape so the acquisition UI is the same
  * count-limited toggle picker, but kept separate so the feat and subclass flows don't couple.
  *
  * A feat's `proficiency` effect is a CHOICE when it has a `count` and no `items`

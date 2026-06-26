@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { computeJump } from './jumpData';
-import { hasFeat } from './combatBonuses';
+import { hasFeat, remarkableAthlete } from './combatBonuses';
 
 /**
  * Small dedicated "Jumping" card for the CharacterDetail Stats tab.
@@ -11,11 +11,13 @@ import { hasFeat } from './combatBonuses';
  * examples — no need to repeat them here). Display-only (no save) — derived from
  * the character's Strength + Athlete feat.
  */
-export default function JumpCard({ strength, feats = [] }) {
+export default function JumpCard({ strength, feats = [], charClass, subclass, level, edition }) {
   const { campaignId } = useParams();
 
   const athlete = hasFeat(feats, 'Athlete');
-  const j = computeJump(strength, { athlete });
+  // Only 5e's Remarkable Athlete adds a jump bonus; the 2024 version grants advantage instead.
+  const raJump = !!remarkableAthlete({ charClass, subclass, level, edition })?.jumpStrBonus;
+  const j = computeJump(strength, { athlete, remarkableAthlete: raJump });
 
   const Stat = ({ label, value, testid }) => (
     <div className="rounded-md border py-2 text-center">
@@ -47,6 +49,11 @@ export default function JumpCard({ strength, feats = [] }) {
       {athlete && (
         <p className="mt-2 text-xs text-emerald-600 leading-snug" data-testid="jump-feat-note">
           Athlete: running start of only {j.runStartFt} ft (normally 10 ft).
+        </p>
+      )}
+      {raJump && j.raLongJumpBonus > 0 && (
+        <p className="mt-2 text-xs text-teal-600 leading-snug" data-testid="jump-remarkable-athlete-note">
+          Remarkable Athlete: running long jump +{j.raLongJumpBonus} ft (your Strength modifier).
         </p>
       )}
     </div>

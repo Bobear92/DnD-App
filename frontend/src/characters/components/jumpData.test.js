@@ -39,6 +39,8 @@ describe('computeJump', () => {
       strMod: 3,
       athlete: true,
       multiplier: 1,
+      remarkableAthlete: false,
+      raLongJumpBonus: 0,
       runStartFt: 5,
       longRunning: 16,
       longStanding: 8,
@@ -68,6 +70,22 @@ describe('computeJump', () => {
     expect(j.runStartFt).toBe(5);
     expect(j.longRunning).toBe(32); // 16 × 2
     expect(j.highRunning).toBe(12); // 6 × 2
+  });
+
+  it('Remarkable Athlete adds the STR modifier to the running long jump only', () => {
+    const j = computeJump(16, { remarkableAthlete: true }); // STR 16 → mod +3
+    expect(j.remarkableAthlete).toBe(true);
+    expect(j.raLongJumpBonus).toBe(3);
+    expect(j.longRunning).toBe(19); // 16 + 3
+    expect(j.longStanding).toBe(8); // standing unchanged
+    expect(j.highRunning).toBe(6); // high jump unchanged
+  });
+
+  it('does not apply Remarkable Athlete when the flag is off', () => {
+    const j = computeJump(16);
+    expect(j.remarkableAthlete).toBe(false);
+    expect(j.raLongJumpBonus).toBe(0);
+    expect(j.longRunning).toBe(16);
   });
 });
 

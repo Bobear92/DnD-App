@@ -117,11 +117,12 @@ export const FIGHTER = {
     'Champion': {
       flavorText: 'The Champion focuses on the development of raw physical power honed to deadly perfection. The 2024 rules refine the Champion\'s critical hit range improvements and add the Heroic Warrior feature to give the archetype more active battlefield presence.',
       features: [
-        { level: 3, name: 'Improved Critical', description: 'Your weapon attacks score a critical hit on a roll of 19 or 20.' },
-        { level: 7, name: 'Remarkable Athlete', description: 'Add half your proficiency bonus to any Strength, Dexterity, or Constitution check that doesn\'t already use your proficiency bonus. Running long jump distance increases by STR modifier in feet.' },
-        { level: 10, name: 'Additional Fighting Style', description: 'Choose a second Fighting Style option.' },
-        { level: 15, name: 'Superior Critical', description: 'Your weapon attacks score a critical hit on a roll of 18–20.' },
-        { level: 18, name: 'Survivor', description: 'At the start of each turn, if you have no more than half your maximum HP, regain HP equal to 5 + your CON modifier.' },
+        { level: 3, name: 'Improved Critical', description: 'Your attack rolls with weapons and Unarmed Strikes can score a Critical Hit on a roll of 19 or 20.' },
+        { level: 3, name: 'Remarkable Athlete', description: 'You have Advantage on Initiative rolls and Strength (Athletics) checks. In addition, immediately after you score a Critical Hit, you can move up to half your Speed without provoking Opportunity Attacks.' },
+        { level: 7, name: 'Additional Fighting Style', description: 'You gain another Fighting Style feat of your choice.' },
+        { level: 10, name: 'Heroic Warrior', description: 'During combat, you can give yourself Heroic Inspiration whenever you start your turn without it.' },
+        { level: 15, name: 'Superior Critical', description: 'Your attack rolls with weapons and Unarmed Strikes can now score a Critical Hit on a roll of 18–20.' },
+        { level: 18, name: 'Survivor', description: 'At the start of each of your turns, if you have at least 1 Hit Point but no more than half your Hit Point maximum, you regain Hit Points equal to 5 + your CON modifier. You also gain a +3 bonus to any death saving throw you make.' },
       ],
     },
     'Eldritch Knight': {

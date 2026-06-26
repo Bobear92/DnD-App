@@ -1,8 +1,8 @@
 /**
  * Level-up choices — class features that, at a given level, let the player CHOOSE a fixed
  * number of options from a named pool (Metamagic, Eldritch Invocations, Expertise, Fighting
- * Style for non-Fighters, …). This generalizes the proven subclassProficiencyData + Battle
- * Master maneuver pattern: the LevelUpWizard reads this table, and at any level where the
+ * Style for non-Fighters, …). Class-scoped sibling of subclassGrants (which is subclass-scoped):
+ * the LevelUpWizard reads this table, and at any level where the
  * cumulative "known" count rises, prompts the player to pick the delta — hiding options the
  * character already has so they can't double up.
  *
