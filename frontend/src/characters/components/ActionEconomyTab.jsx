@@ -24,7 +24,7 @@ const EMPTY_NOTES = {
   reaction: 'This character has no reactions available.',
 };
 
-function ItemRow({ entry, resource, onChange, readOnly }) {
+function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
   return (
     <div
       className="flex items-start justify-between gap-3 rounded-md border bg-card px-3 py-2"
@@ -57,6 +57,19 @@ function ItemRow({ entry, resource, onChange, readOnly }) {
         {entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>}
         {entry.warning && (
           <p className="text-[11px] text-amber-600 leading-tight mt-0.5" data-testid={`ae-warning-${entry.key}`}>⚠ {entry.warning}</p>
+        )}
+        {entry.loadingNote && (
+          <p
+            className={cn('text-[11px] leading-tight mt-0.5', /ignored/i.test(entry.loadingNote) ? 'text-emerald-600' : 'text-amber-600')}
+            data-testid={`ae-loading-${entry.key}`}
+          >
+            {entry.loadingNote}{' '}
+            <Link
+              to={`/campaigns/${campaignId}/encyclopedia/mechanics/loading`}
+              className="text-primary hover:underline"
+              data-testid={`loading-learn-more-${entry.key}`}
+            >How the Loading property works</Link>
+          </p>
         )}
       </div>
       {/* Rest-rechargeable features get the same Use button as the Features tab. */}
@@ -106,7 +119,12 @@ export default function ActionEconomyTab({
   const weaponProfText = (CLASS_PROFICIENCIES_5E[charClass] || {}).weapons || '';
   const raceWeapons = getRaceGrantedWeapons(race, subrace) || [];
   const size = creatureSize(characterData, race);
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats });
+
+  // A loading weapon caps the Attack action to one shot even with Extra Attack (unless a
+  // feat lifts it — Crossbow Expert sets loadingNote to "…ignored…"). Surface a caveat on
+  // the Extra Attack note when such a weapon is equipped.
+  const cappedLoadingWeapon = attacks.find((a) => a.loadingNote && !/ignored/i.test(a.loadingNote));
 
   const economy = useMemo(
     () => buildActionEconomy({ charClass, subclass, level, edition, characterData, inventory, attacks, scores, spellIndex }),
@@ -170,6 +188,11 @@ export default function ActionEconomyTab({
       {active === 'action' && economy.attacksPerAction > 1 && (
         <p className="text-xs text-muted-foreground" data-testid="ae-attacks-per-action">
           Extra Attack: you make {economy.attacksPerAction} attacks when you take the Attack action.
+          {cappedLoadingWeapon && (
+            <span className="text-amber-600" data-testid="ae-loading-caveat">
+              {' '}A loading weapon ({cappedLoadingWeapon.name}) can still be fired only once per action.
+            </span>
+          )}
         </p>
       )}
 
@@ -184,7 +207,7 @@ export default function ActionEconomyTab({
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{src === 'Weapon' ? 'Weapon Attacks' : src}</h3>
               <div className="space-y-2">
                 {list.map((e) => (
-                  <ItemRow key={e.key} entry={e} resource={resourceFor(e)} onChange={onChange} readOnly={readOnly} />
+                  <ItemRow key={e.key} entry={e} resource={resourceFor(e)} onChange={onChange} readOnly={readOnly} campaignId={campaignId} />
                 ))}
               </div>
             </div>

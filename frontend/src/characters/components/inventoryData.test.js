@@ -5,6 +5,7 @@ import {
   equippedBodyArmor, equippedShield, computeArmorClass,
   isWeaponProficient, isArmorProficient, weaponAbility, computeAttack, getAttacks,
   abilityMod, profBonus, isHeavyWeapon, creatureSize, weaponAttackWarning,
+  isLoadingWeapon, weaponLoadingNote,
 } from './inventoryData';
 
 const armor = (over) => ({ uid: Math.random().toString(), category: 'armor', equipped: false, ...over });
@@ -267,6 +268,49 @@ describe('heavy weapon / size warnings', () => {
     const inv = [weapon({ uid: 'g1', equipped: true, ...greatsword })];
     const rows = getAttacks({ inventory: inv, scores: { strength: 16 }, level: 1, weaponProfText: 'martial weapons', size: 'Small', edition: '5e' });
     expect(rows[0].disadvantage).toBe(true);
+  });
+});
+
+describe('Loading property', () => {
+  const lightXbow = { name: 'Crossbow, Light', damage: '1d8', properties: '["Ammunition", "Loading", "Two-Handed"]', weapon_type: 'Ranged' };
+  const handXbow = { name: 'Crossbow, Hand', damage: '1d6', properties: '["Ammunition", "Light", "Loading"]', weapon_type: 'Ranged', weapon_category: 'Martial' };
+  const blowgun = { name: 'Blowgun', damage: '1', properties: '["Ammunition", "Loading"]', weapon_type: 'Ranged' };
+  const longsword = { name: 'Longsword', damage: '1d8', properties: '["Versatile"]', weapon_type: 'Melee' };
+  const crossbowExpert = [{ name: 'Crossbow Expert' }];
+
+  it('isLoadingWeapon detects the Loading property', () => {
+    expect(isLoadingWeapon(lightXbow)).toBe(true);
+    expect(isLoadingWeapon(longsword)).toBe(false);
+    expect(isLoadingWeapon({})).toBe(false);
+  });
+
+  it('notes the one-attack cap on a loading weapon without the feat', () => {
+    expect(weaponLoadingNote(lightXbow, { proficient: true, edition: '5e' })).toMatch(/only one attack per action/i);
+  });
+
+  it('Crossbow Expert lifts the cap on a proficient crossbow', () => {
+    expect(weaponLoadingNote(lightXbow, { feats: crossbowExpert, proficient: true, edition: '5e' })).toMatch(/ignored \(Crossbow Expert\)/i);
+  });
+
+  it('Crossbow Expert does NOT help a blowgun (not a crossbow)', () => {
+    expect(weaponLoadingNote(blowgun, { feats: crossbowExpert, proficient: true, edition: '5e' })).toMatch(/only one attack per action/i);
+  });
+
+  it('the feat only lifts the cap when proficient with the crossbow', () => {
+    expect(weaponLoadingNote(handXbow, { feats: crossbowExpert, proficient: false, edition: '5e' })).toMatch(/only one attack per action/i);
+  });
+
+  it('no note for a non-loading weapon, or in 2024 (the property was removed)', () => {
+    expect(weaponLoadingNote(longsword, { proficient: true, edition: '5e' })).toBeNull();
+    expect(weaponLoadingNote(lightXbow, { proficient: true, edition: '5.5e' })).toBeNull();
+  });
+
+  it('computeAttack / getAttacks carry the loadingNote', () => {
+    const atk = computeAttack(lightXbow, { scores: { dexterity: 14 }, level: 5, proficient: true, edition: '5e' });
+    expect(atk.loadingNote).toMatch(/only one attack per action/i);
+    const inv = [weapon({ uid: 'x1', equipped: true, ...handXbow })];
+    const rows = getAttacks({ inventory: inv, scores: { dexterity: 14 }, level: 5, weaponProfText: 'simple weapons, martial weapons', feats: crossbowExpert, edition: '5e' });
+    expect(rows[0].loadingNote).toMatch(/ignored \(Crossbow Expert\)/i);
   });
 });
 

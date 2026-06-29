@@ -36,4 +36,10 @@ describe('MechanicsTab', () => {
     const ac = screen.getByTestId('mechanic-card-armor-class');
     expect(ac).toHaveAttribute('href', '/campaigns/3/encyclopedia/mechanics/armor-class');
   });
+
+  it('renders Loading as an available linking card', () => {
+    renderTab();
+    const loading = screen.getByTestId('mechanic-card-loading');
+    expect(loading).toHaveAttribute('href', '/campaigns/3/encyclopedia/mechanics/loading');
+  });
 });

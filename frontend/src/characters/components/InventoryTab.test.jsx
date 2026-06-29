@@ -136,6 +136,33 @@ describe('InventoryTab', () => {
     expect(screen.getByTestId('inv-warning-gs1')).toHaveTextContent(/Small creatures/i);
   });
 
+  const lightXbow = { uid: 'lx1', category: 'weapons', name: 'Crossbow, Light', weapon_category: 'Simple', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing', properties: '["Ammunition", "Loading", "Two-Handed"]', equipped: true, quantity: 1 };
+
+  it('5e: notes the Loading one-attack cap on a crossbow without Crossbow Expert', () => {
+    renderTab({ inventory: [lightXbow], race: 'Human', edition: '5e', charClass: 'Fighter' });
+    expect(screen.getByTestId('inv-loading-lx1')).toHaveTextContent(/only one attack per action/i);
+  });
+
+  it('5e: Crossbow Expert turns the note into "Loading ignored"', () => {
+    renderTab({ inventory: [lightXbow], race: 'Human', edition: '5e', charClass: 'Fighter', characterData: { feats: [{ name: 'Crossbow Expert' }] } });
+    expect(screen.getByTestId('inv-loading-lx1')).toHaveTextContent(/ignored \(Crossbow Expert\)/i);
+  });
+
+  it('2024: no Loading note (the property was removed)', () => {
+    renderTab({ inventory: [lightXbow], race: 'Human', edition: '5.5e', charClass: 'Fighter' });
+    expect(screen.queryByTestId('inv-loading-lx1')).not.toBeInTheDocument();
+  });
+
+  it('puts the "How the Loading property works" link inside the loading weapon row', () => {
+    renderTab({ inventory: [lightXbow], race: 'Human', edition: '5e', charClass: 'Fighter' });
+    expect(screen.getByTestId('loading-learn-more-lx1')).toHaveAttribute('href', '/campaigns/1/encyclopedia/mechanics/loading');
+  });
+
+  it('no Loading link on a non-loading weapon row', () => {
+    renderTab({ inventory: [longsword], race: 'Human', edition: '5e', charClass: 'Fighter' });
+    expect(screen.queryByTestId('loading-learn-more-w1')).not.toBeInTheDocument();
+  });
+
   it('renders weapon property badges (Heavy/Two-handed) on a weapon row', () => {
     renderTab({ inventory: [greatsword], race: 'Human', charClass: 'Fighter' });
     const row = screen.getByTestId('inv-row-gs1');

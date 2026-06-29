@@ -296,4 +296,86 @@ describe('buildActionEconomy — Fighter', () => {
       expect([...ec.action, ...ec.bonus].some((e) => e.source === 'Feat')).toBe(false);
     });
   });
+
+  describe('Crossbow Expert', () => {
+    const CROSSBOW_EXPERT = {
+      id: 99, name: 'Crossbow Expert', level: 4,
+      effects: [
+        {
+          kind: 'action', name: 'Hand Crossbow (Bonus Attack)', economy: 'bonus',
+          trigger: 'After you make a one-handed attack',
+          description: "Make an attack with a hand crossbow you're holding as a bonus action.",
+        },
+        { kind: 'note', text: 'Ignore the loading property of proficient crossbows.' },
+      ],
+    };
+    const scimitar = { uid: 's', name: 'Scimitar', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Finesse", "Light"]', damage: '1d6', damage_type: 'slashing' };
+    // 5e API comma-inverted name form — must still be detected as a hand crossbow.
+    const handCrossbow = { uid: 'hc', name: 'Crossbow, Hand', category: 'weapons', equipped: true, weapon_type: 'Ranged', properties: '["Light", "Ammunition", "Loading"]', damage: '1d6', damage_type: 'piercing' };
+    const attackRows = [
+      { uid: 's', name: 'Scimitar', toHit: '+5', damage: '1d6 + 3 slashing', proficient: true },
+      { uid: 'hc', name: 'Crossbow, Hand', toHit: '+5', damage: '1d6 + 3 piercing', proficient: true },
+    ];
+
+    it('presents the feat as an Action+Bonus combo (melee Action → hand crossbow Bonus) and drops the standalone bonus entry', () => {
+      const args = fighterArgs(5, '5e');
+      args.characterData = { feats: [CROSSBOW_EXPERT] };
+      args.inventory = [scimitar, handCrossbow];
+      args.attacks = attackRows;
+      const ec = buildActionEconomy(args);
+
+      const combo = ec['action+bonus'].find((e) => e.name === 'Crossbow Expert');
+      expect(combo).toBeTruthy();
+      expect(combo.source).toBe('Feat');
+      expect(combo.cost).toBe('action + bonus action');
+      expect(combo.subAttacks.map((s) => [s.label, s.name])).toEqual([
+        ['Action', 'Scimitar'],
+        ['Bonus', 'Crossbow, Hand'],
+      ]);
+      // The bonus hand-crossbow attack keeps its ability modifier on damage (unlike TWF off-hand).
+      expect(combo.subAttacks[1].damage).toBe('1d6 + 3 piercing');
+      expect(combo.detail).toMatch(/Scimitar/);
+      expect(combo.detail).toMatch(/Crossbow Expert/);
+
+      // The standalone bonus-action entry is suppressed (moved into the combo above).
+      expect(ec.bonus.find((e) => e.name === 'Hand Crossbow (Bonus Attack)')).toBeFalsy();
+    });
+
+    it('shows nothing for Crossbow Expert in any bucket when no hand crossbow is equipped', () => {
+      const args = fighterArgs(5, '5e');
+      args.characterData = { feats: [CROSSBOW_EXPERT] };
+      args.inventory = [scimitar];
+      args.attacks = [attackRows[0]];
+      const ec = buildActionEconomy(args);
+
+      // No combo, and the standalone bonus-action entry is gone too (no hand crossbow to fire).
+      expect(ec['action+bonus'].find((e) => e.name === 'Crossbow Expert')).toBeFalsy();
+      expect(ec.bonus.find((e) => e.name === 'Hand Crossbow (Bonus Attack)')).toBeFalsy();
+      expect([...ec.action, ...ec.bonus, ...ec['action+bonus']].some((e) => e.source === 'Feat')).toBe(false);
+    });
+
+    it('adds no combo without the Crossbow Expert feat, even with a hand crossbow equipped', () => {
+      const args = fighterArgs(5, '5e');
+      args.inventory = [scimitar, handCrossbow];
+      args.attacks = attackRows;
+      expect(buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Crossbow Expert')).toBeFalsy();
+    });
+
+    it('uses the hand crossbow itself as the Action weapon when no one-handed melee weapon is equipped', () => {
+      const args = fighterArgs(5, '5e');
+      args.characterData = { feats: [CROSSBOW_EXPERT] };
+      args.inventory = [handCrossbow];
+      args.attacks = [attackRows[1]];
+      const combo = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Crossbow Expert');
+      expect(combo).toBeTruthy();
+      expect(combo.subAttacks.map((s) => s.name)).toEqual(['Crossbow, Hand', 'Crossbow, Hand']);
+    });
+
+    it('carries a weapon attack row loadingNote onto its Action entry', () => {
+      const args = fighterArgs(5, '5e');
+      args.attacks = [{ uid: 'lx', name: 'Crossbow, Light', toHit: '+5', damage: '1d8 + 2 piercing', proficient: true, loadingNote: 'Loading: only one attack per action, even with Extra Attack.' }];
+      const entry = buildActionEconomy(args).action.find((e) => e.name === 'Crossbow, Light');
+      expect(entry.loadingNote).toMatch(/only one attack per action/i);
+    });
+  });
 });

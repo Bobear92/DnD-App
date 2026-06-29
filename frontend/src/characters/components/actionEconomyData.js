@@ -160,6 +160,11 @@ const isLightMelee = (e) =>
 const isOneHandedMelee = (e) =>
   isMelee(e) && !(e.properties || '').toLowerCase().includes('two-handed');
 
+/** A hand crossbow (the Crossbow Expert bonus-attack weapon). Matches the natural and the
+ *  5e API's comma-inverted name forms ("Hand Crossbow" / "Crossbow, Hand"). */
+const isHandCrossbow = (e) =>
+  e.category === 'weapons' && /hand\s*crossbow|crossbow,\s*hand/.test((e.name || '').toLowerCase());
+
 /**
  * The equipped weapons that qualify for Two-Weapon Fighting — light melee weapons, or
  * (with the Dual Wielder feat) any one-handed/non-two-handed melee weapons.
@@ -230,6 +235,7 @@ export function buildActionEconomy({
       cost: 'action',
       detail: `${atk.toHit} to hit · ${atk.damage}${flag}${disadv}`,
       warning: atk.warning || null,
+      loadingNote: atk.loadingNote || null,
     });
   });
 
@@ -276,6 +282,48 @@ export function buildActionEconomy({
     });
   }
 
+  // Crossbow Expert (feat) — present the bonus-action hand-crossbow attack as an
+  // Action + Bonus combo (like Two-Weapon Fighting): a one-handed Attack-action attack
+  // enables a bonus-action hand crossbow attack. Only shown when a hand crossbow is equipped
+  // (without one there's no bonus attack to make). Unlike TWF, this bonus attack keeps its
+  // ability modifier on damage, so its full attack row is used as-is.
+  const hasCrossbowExpert = hasFeat(feats, 'Crossbow Expert');
+  const equippedHandCrossbow = (inventory || []).find((e) => e.equipped && isHandCrossbow(e));
+  if (hasCrossbowExpert && equippedHandCrossbow) {
+    const attackByUid = new Map(weaponRows.filter((a) => a.uid).map((a) => [a.uid, a]));
+    const baseDamage = (w) => `${w.damage || '—'}${w.damage_type ? ` ${w.damage_type}` : ''}`;
+    // The triggering Action attack is a one-handed weapon — prefer an equipped one-handed
+    // melee weapon (e.g. the scimitar); otherwise the hand crossbow itself (fire, then re-fire).
+    const actionWeapon =
+      (inventory || []).find((e) => e.equipped && isOneHandedMelee(e)) || equippedHandCrossbow;
+    const actionRow = attackByUid.get(actionWeapon.uid);
+    const bonusRow = attackByUid.get(equippedHandCrossbow.uid);
+    const ceSubAttacks = [
+      {
+        label: 'Action',
+        name: actionWeapon.name,
+        toHit: actionRow?.toHit ?? null,
+        damage: actionRow?.damage ?? baseDamage(actionWeapon),
+        warning: actionRow?.warning ?? null,
+      },
+      {
+        label: 'Bonus',
+        name: equippedHandCrossbow.name,
+        toHit: bonusRow?.toHit ?? null,
+        damage: bonusRow?.damage ?? baseDamage(equippedHandCrossbow),
+        warning: bonusRow?.warning ?? null,
+      },
+    ];
+    push('action+bonus', {
+      key: 'crossbow-expert',
+      name: 'Crossbow Expert',
+      source: 'Feat',
+      cost: 'action + bonus action',
+      subAttacks: ceSubAttacks,
+      detail: `Make a one-handed attack with ${actionWeapon.name} (Action), then attack with ${equippedHandCrossbow.name} as a bonus action (Crossbow Expert).`,
+    });
+  }
+
   // Class / subclass features (curated, level-gated by the character's known features).
   const featureMap = is2024 ? CLASS_FEATURE_ACTIONS_2024 : CLASS_FEATURE_ACTIONS_5E;
   const classFeatures = featureMap[charClass] || {};
@@ -308,6 +356,10 @@ export function buildActionEconomy({
 
   // Feat actions (e.g. Tavern Brawler's bonus-action grapple), from snapshotted feat effects.
   for (const a of getFeatActions(feats)) {
+    // Crossbow Expert's hand-crossbow attack only makes sense paired with an equipped hand
+    // crossbow: it's shown as the Action+Bonus combo above when one is equipped, and not at
+    // all otherwise (no hand crossbow → no bonus attack to make). Never a standalone bonus.
+    if (hasCrossbowExpert && a.source === 'Crossbow Expert') continue;
     push(a.economy, {
       key: a.key,
       name: a.name,

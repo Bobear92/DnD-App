@@ -19,7 +19,7 @@ import ItemPickerDialog from './ItemPickerDialog';
 import {
   buildEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons,
   toggleEquipped, toggleAttuned, attunedCount, computeArmorClass, getAttacks,
-  isWeaponProficient, isArmorProficient, creatureSize, weaponAttackWarning,
+  isWeaponProficient, isArmorProficient, creatureSize, weaponAttackWarning, weaponLoadingNote,
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
 } from './inventoryData';
 
@@ -94,7 +94,7 @@ export default function InventoryTab({
 
   const size = creatureSize(characterData, race);
   const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats });
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats });
   const attuned = attunedCount(inventory);
 
   // Tools tab gathers tool entries from anywhere; the Gear tab excludes tools + ammo;
@@ -292,6 +292,10 @@ export default function InventoryTab({
               const attackWarning = e.category === 'weapons'
                 ? weaponAttackWarning(e, { size, scores, edition })
                 : null;
+              const loadingNote = e.category === 'weapons'
+                ? weaponLoadingNote(e, { feats: characterData?.feats, proficient, edition })
+                : null;
+              const loadingIgnored = loadingNote && /ignored/i.test(loadingNote);
               const showAmmo = e.category === 'weapons' && weaponNeedsAmmo(e);
               return (
                 <div key={e.uid} className="flex items-center gap-3 px-3 py-2" data-testid={`inv-row-${e.uid}`}>
@@ -307,6 +311,19 @@ export default function InventoryTab({
                     </div>
                     {attackWarning && (
                       <div className="text-[11px] text-amber-600 leading-tight" data-testid={`inv-warning-${e.uid}`}>{attackWarning}</div>
+                    )}
+                    {loadingNote && (
+                      <div
+                        className={cn('text-[11px] leading-tight', loadingIgnored ? 'text-emerald-600' : 'text-amber-600')}
+                        data-testid={`inv-loading-${e.uid}`}
+                      >
+                        {loadingNote}{' '}
+                        <Link
+                          to={`/campaigns/${campaignId}/encyclopedia/mechanics/loading`}
+                          className="text-primary hover:underline"
+                          data-testid={`loading-learn-more-${e.uid}`}
+                        >How the Loading property works</Link>
+                      </div>
                     )}
                     <div className="text-xs text-muted-foreground truncate">{activeCategory.subtitle(e)}</div>
                     {e.category === 'weapons' && (

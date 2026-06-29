@@ -9,7 +9,7 @@
  * All functions here are pure (return new arrays/objects) so the UI can persist
  * the result via the normal character_data save path.
  */
-import { getAcOptions } from './combatBonuses';
+import { getAcOptions, hasFeat } from './combatBonuses';
 import { getFeatAcMods } from './featEffects';
 
 /** Two or more equipped melee weapons (Dual Wielder's condition). */
@@ -287,23 +287,49 @@ export function weaponAttackWarning(weapon, { size = 'Medium', scores = {}, edit
   return null;
 }
 
-/** Attack row for one weapon: { name, toHit, damage, ability, proficient, disadvantage, warning }. */
-export function computeAttack(weapon, { scores = {}, level = 1, proficient = false, size = 'Medium', edition = '5e' } = {}) {
+/** True if the weapon has the Loading property (2014 only — 2024 removed it). */
+export function isLoadingWeapon(weapon = {}) {
+  return /loading/i.test(weapon.properties || '');
+}
+
+// A crossbow (light/hand/heavy) — the weapons Crossbow Expert removes Loading from.
+// A blowgun is also a Loading weapon but is NOT a crossbow, so the feat doesn't help it.
+const isCrossbow = (weapon = {}) => /crossbow/i.test(weapon.name || '');
+
+/**
+ * The Loading-property note for this character + weapon, or null.
+ *   2024 (5.5e): the Loading property was removed → always null.
+ *   Weapon has no Loading property → null.
+ *   Crossbow Expert + a proficient crossbow → the feat lifts the cap ("Loading ignored").
+ *   Otherwise → the one-attack-per-action cap (Extra Attack grants no extra shot here).
+ */
+export function weaponLoadingNote(weapon, { feats = [], proficient = false, edition = '5e' } = {}) {
+  if (edition === '5.5e' || edition === '2024') return null;
+  if (!isLoadingWeapon(weapon)) return null;
+  if (proficient && isCrossbow(weapon) && hasFeat(feats, 'Crossbow Expert')) {
+    return 'Loading ignored (Crossbow Expert).';
+  }
+  return 'Loading: only one attack per action, even with Extra Attack.';
+}
+
+/** Attack row for one weapon: { name, toHit, damage, ability, proficient, disadvantage, warning, loadingNote }. */
+export function computeAttack(weapon, { scores = {}, level = 1, proficient = false, size = 'Medium', edition = '5e', feats = [] } = {}) {
   const { ability, mod } = weaponAbility(weapon, scores);
   const toHit = formatSigned(mod + (proficient ? profBonus(level) : 0));
   const dmgBonus = mod === 0 ? '' : ` ${mod > 0 ? '+' : '-'} ${Math.abs(mod)}`;
   const dmgType = weapon.damage_type ? ` ${weapon.damage_type}` : '';
   const damage = `${weapon.damage || '—'}${dmgBonus}${dmgType}`;
   const warning = weaponAttackWarning(weapon, { size, scores, edition });
-  return { name: weapon.name, toHit, damage, ability, proficient, disadvantage: !!warning, warning };
+  const loadingNote = weaponLoadingNote(weapon, { feats, proficient, edition });
+  return { name: weapon.name, toHit, damage, ability, proficient, disadvantage: !!warning, warning, loadingNote };
 }
 
 /** Attack rows for every equipped weapon in the inventory. */
-export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e' } = {}) {
+export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [] } = {}) {
   return (inventory || [])
     .filter((e) => e.category === 'weapons' && e.equipped)
     .map((w) => ({
       uid: w.uid,
-      ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }), size, edition }),
+      ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }), size, edition, feats }),
     }));
 }

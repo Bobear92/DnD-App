@@ -127,6 +127,28 @@ describe('ActionEconomyTab', () => {
     expect(screen.getByTestId('ae-attacks-per-action')).toHaveTextContent('2 attacks');
   });
 
+  const lightXbowEntry = {
+    uid: 'lx1', category: 'weapons', equipped: true, name: 'Crossbow, Light',
+    weapon_category: 'Simple', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing', properties: '["Ammunition", "Loading", "Two-Handed"]',
+  };
+
+  it('notes the Loading one-attack cap on the weapon entry + the Extra Attack caveat (no feat)', () => {
+    renderTab({ inventory: [lightXbowEntry] });
+    expect(screen.getByTestId('ae-loading-weapon:lx1:0')).toHaveTextContent(/only one attack per action/i);
+    expect(screen.getByTestId('ae-loading-caveat')).toHaveTextContent(/fired only once per action/i);
+  });
+
+  it('Crossbow Expert lifts the cap: "ignored" note + no Extra Attack caveat', () => {
+    renderTab({ inventory: [lightXbowEntry], characterData: { feats: [{ name: 'Crossbow Expert' }] } });
+    expect(screen.getByTestId('ae-loading-weapon:lx1:0')).toHaveTextContent(/ignored \(Crossbow Expert\)/i);
+    expect(screen.queryByTestId('ae-loading-caveat')).not.toBeInTheDocument();
+  });
+
+  it('puts the Loading mechanics-page link inside the loading weapon entry', () => {
+    renderTab({ inventory: [lightXbowEntry] });
+    expect(screen.getByTestId('loading-learn-more-weapon:lx1:0')).toHaveAttribute('href', '/campaigns/1/encyclopedia/mechanics/loading');
+  });
+
   it('shows Second Wind under the Bonus Actions tab', () => {
     renderTab();
     fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
