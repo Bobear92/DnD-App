@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Award, RefreshCw, Trash2, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Award, RefreshCw, Trash2, Plus, ArrowUpRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import FeatPicker from './FeatPicker';
@@ -216,6 +217,16 @@ export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', ca
                 )}
                 {feat.description && (
                   <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap leading-relaxed">{feat.description}</p>
+                )}
+                {/* Dual Wielder (both editions) lets you "draw or stow two" weapons — link the rule. */}
+                {/draw or stow/i.test(feat.description || '') && (
+                  <Link
+                    to={`/campaigns/${campaignId}/encyclopedia/mechanics/object-interaction`}
+                    className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    data-testid={`feat-object-interaction-link-${feat.name}`}
+                  >
+                    How drawing &amp; stowing weapons works <ArrowUpRight className="w-3 h-3" />
+                  </Link>
                 )}
               </div>
             );

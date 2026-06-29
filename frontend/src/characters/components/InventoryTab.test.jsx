@@ -59,6 +59,12 @@ describe('InventoryTab', () => {
     expect(screen.getByTestId('proficiency-banner')).toHaveTextContent(/martial weapons/i);
   });
 
+  it('links the Weapons tab to the drawing & stowing mechanics page', () => {
+    renderTab();
+    expect(screen.getByTestId('object-interaction-learn-more')).toHaveAttribute(
+      'href', '/campaigns/1/encyclopedia/mechanics/object-interaction');
+  });
+
   it('shows armor proficiencies on the Armor tab', () => {
     renderTab({ charClass: 'Fighter' });
     fireEvent.click(screen.getByTestId('inv-category-armor'));

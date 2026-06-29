@@ -20,6 +20,8 @@ function FeatDetailDialog({ feat, onClose, campaignId }) {
   if (!feat) return null;
   const prereq = prereqText(feat);
   const grantsManeuvers = /maneuver/i.test(feat.description || '');
+  // Dual Wielder (both editions) lets you "draw or stow two" weapons — link the rule.
+  const affectsDrawStow = /draw or stow/i.test(feat.description || '');
 
   return (
     <Dialog open={!!feat} onOpenChange={(open) => !open && onClose()}>
@@ -54,6 +56,18 @@ function FeatDetailDialog({ feat, onClose, campaignId }) {
             >
               <Swords className="w-4 h-4 shrink-0" />
               View all Battle Master maneuvers
+              <ChevronRight className="w-4 h-4 ml-auto shrink-0" />
+            </Link>
+          )}
+
+          {affectsDrawStow && (
+            <Link
+              to={`/campaigns/${campaignId}/encyclopedia/mechanics/object-interaction`}
+              data-testid="feat-object-interaction-link"
+              className="flex items-center gap-2 rounded-lg border border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 p-3 text-sm font-medium text-sky-700 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-950/50 transition-colors"
+            >
+              <Swords className="w-4 h-4 shrink-0" />
+              How drawing &amp; stowing weapons works
               <ChevronRight className="w-4 h-4 ml-auto shrink-0" />
             </Link>
           )}

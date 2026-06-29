@@ -28,6 +28,7 @@ import ArmorClassPage from './encyclopedia/pages/ArmorClassPage';
 import ActionEconomyPage from './encyclopedia/pages/ActionEconomyPage';
 import HitDicePage from './encyclopedia/pages/HitDicePage';
 import LoadingPage from './encyclopedia/pages/LoadingPage';
+import ObjectInteractionPage from './encyclopedia/pages/ObjectInteractionPage';
 import MainLayout from './shared/components/layout/MainLayout';
 
 function App() {
@@ -60,6 +61,7 @@ function App() {
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/action-economy" element={<ProtectedRoute><MainLayout><ActionEconomyPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/hit-dice" element={<ProtectedRoute><MainLayout><HitDicePage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/loading" element={<ProtectedRoute><MainLayout><LoadingPage /></MainLayout></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/object-interaction" element={<ProtectedRoute><MainLayout><ObjectInteractionPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/spells/:spellId" element={<ProtectedRoute><MainLayout><SpellEditPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/items/:category/:itemId" element={<ProtectedRoute><MainLayout><ItemEditPage /></MainLayout></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/campaigns" replace />} />

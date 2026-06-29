@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import FeatsSubTab from './FeatsSubTab';
 
@@ -42,6 +43,21 @@ describe('FeatsSubTab', () => {
   it('fetches the catalogue with campaignId + edition', async () => {
     render(<FeatsSubTab feats={[]} campaignId={7} edition="5.5e" />);
     await waitFor(() => expect(featService.getFeats).toHaveBeenCalledWith(7, '5.5e'));
+  });
+
+  it('links a "draw or stow" feat (Dual Wielder) to the object-interaction page', async () => {
+    featService.getFeats.mockResolvedValue([
+      { id: 20, name: 'Dual Wielder', prerequisites: {}, repeatable: false,
+        description: 'You can draw or stow two one-handed weapons when you would normally draw or stow one.' },
+    ]);
+    // The feat row renders a <Link> for this feat, so a Router is required.
+    render(
+      <MemoryRouter>
+        <FeatsSubTab feats={[{ id: 20, name: 'Dual Wielder' }]} campaignId={4} edition="5e" />
+      </MemoryRouter>
+    );
+    const link = await screen.findByTestId('feat-object-interaction-link-Dual Wielder');
+    expect(link).toHaveAttribute('href', '/campaigns/4/encyclopedia/mechanics/object-interaction');
   });
 
   it('renders an owned feat with its resolved description and prerequisite', async () => {

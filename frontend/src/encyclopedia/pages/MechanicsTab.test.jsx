@@ -42,4 +42,11 @@ describe('MechanicsTab', () => {
     const loading = screen.getByTestId('mechanic-card-loading');
     expect(loading).toHaveAttribute('href', '/campaigns/3/encyclopedia/mechanics/loading');
   });
+
+  it('renders Drawing & Stowing Weapons as an available linking card', () => {
+    renderTab();
+    const obj = screen.getByTestId('mechanic-card-object-interaction');
+    expect(obj).toHaveTextContent('Drawing & Stowing Weapons');
+    expect(obj).toHaveAttribute('href', '/campaigns/3/encyclopedia/mechanics/object-interaction');
+  });
 });

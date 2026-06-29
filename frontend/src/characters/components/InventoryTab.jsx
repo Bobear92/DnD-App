@@ -264,7 +264,21 @@ export default function InventoryTab({
       </div>
 
       {/* Proficiency banner (weapons / armor / tools tabs) */}
-      {activeId === 'weapons' && <ProficiencyBanner label="Weapon" text={proficiencies.weapons.text} grants={proficiencies.weapons.grants} />}
+      {activeId === 'weapons' && (
+        <>
+          <ProficiencyBanner label="Weapon" text={proficiencies.weapons.text} grants={proficiencies.weapons.grants} />
+          <p className="text-xs text-muted-foreground -mt-2">
+            You can draw or stow one weapon free each turn (two with Dual Wielder).{' '}
+            <Link
+              to={`/campaigns/${campaignId}/encyclopedia/mechanics/object-interaction`}
+              className="text-primary hover:underline inline-flex items-center gap-0.5"
+              data-testid="object-interaction-learn-more"
+            >
+              How drawing &amp; stowing works <ArrowUpRight className="w-3 h-3" />
+            </Link>
+          </p>
+        </>
+      )}
       {activeId === 'armor' && <ProficiencyBanner label="Armor" text={proficiencies.armor.text} grants={proficiencies.armor.grants} />}
       {activeId === 'tools' && <ProficiencyBanner label="Tool" text={proficiencies.tools.text} grants={proficiencies.tools.grants} />}
 
