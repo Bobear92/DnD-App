@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { getManeuvers, maneuversKnownAtLevel, superiorityDie, superiorityDiceCount } from './maneuversData';
 import { martialAdeptDieCount, martialAdeptManeuverCount } from './featEffects';
 import { RestResourceControl } from './classSheet/RestResourceTracker';
+import { abilityMod, profBonus } from './inventoryData';
 
 /**
  * Battle Master subclass panel (rendered in the Features tab's subclass sub-tab):
@@ -16,7 +17,7 @@ import { RestResourceControl } from './classSheet/RestResourceTracker';
  *
  * Stores `character_data.maneuvers` (string[]) and `character_data.superiority_dice_used`.
  */
-export default function BattleMasterPanel({ data = {}, onChange, level = 1, readOnly = false, edition = '5e', gmEdit = false }) {
+export default function BattleMasterPanel({ data = {}, onChange, level = 1, readOnly = false, edition = '5e', gmEdit = false, scores = {} }) {
   const allManeuvers = getManeuvers(edition);
   const known = data.maneuvers || [];
   // The Martial Adept feat grants a Battle Master +1 superiority die (at the BM die size) and
@@ -28,6 +29,15 @@ export default function BattleMasterPanel({ data = {}, onChange, level = 1, read
   const die = superiorityDie(level);
   const total = superiorityDiceCount(level) + featDice;
   const used = data.superiority_dice_used || 0;
+
+  // Maneuver save DC = 8 + proficiency bonus + the BETTER of the STR or DEX modifier.
+  const pb = profBonus(level);
+  const strMod = abilityMod(scores.strength);
+  const dexMod = abilityMod(scores.dexterity);
+  const usesStr = strMod >= dexMod;
+  const bestMod = usesStr ? strMod : dexMod;
+  const saveDc = 8 + pb + bestMod;
+  const dcAbility = usesStr ? 'Strength' : 'Dexterity';
 
   // Can add when there's an owed slot (or GM Edit); can only remove via GM Edit.
   const owedSlots = known.length < limit;
@@ -67,9 +77,14 @@ export default function BattleMasterPanel({ data = {}, onChange, level = 1, read
           <span className="text-sm font-medium">Superiority Dice</span>
           <RestResourceControl row={diceRow} onChange={onChange} readOnly={readOnly} idPrefix="superiority" />
         </div>
-        <p className="text-xs text-muted-foreground">
-          Maneuver save DC = 8 + your proficiency bonus + your Strength or Dexterity modifier.
-        </p>
+        <div className="space-y-0.5">
+          <p className="text-sm" data-testid="maneuver-save-dc">
+            Maneuver save DC <span className="font-semibold">{saveDc}</span>
+          </p>
+          <p className="text-xs text-muted-foreground" data-testid="maneuver-save-dc-note">
+            8 + proficiency bonus ({pb}) + {dcAbility} modifier ({bestMod >= 0 ? `+${bestMod}` : bestMod}). Using {dcAbility} because it's your {strMod === dexMod ? 'tied-highest' : 'higher'} modifier.
+          </p>
+        </div>
         {(featDice > 0 || featManeuvers > 0) && (
           <p className="text-xs text-emerald-600" data-testid="battle-master-feat-note">
             Includes +{featDice} superiority die and +{featManeuvers} maneuver{featManeuvers === 1 ? '' : 's'} from the Martial Adept feat.

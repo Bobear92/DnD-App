@@ -227,7 +227,7 @@ export default function ClassSheet({
   // shown in the subclass features area once the subclass is chosen.
   const SubclassPanel = !creation && data.subclass ? config.subclassPanels?.[data.subclass] : null;
   const subclassPanelBlock = SubclassPanel ? (
-    <SubclassPanel data={data} onChange={onChange} level={level} readOnly={readOnly} edition={config.edition} gmEdit={gmEdit} />
+    <SubclassPanel data={data} onChange={onChange} level={level} readOnly={readOnly} edition={config.edition} gmEdit={gmEdit} scores={scores} />
   ) : null;
 
   // Subclass grants surfaced on the sheet (class-pool picks like Champion's Additional Fighting

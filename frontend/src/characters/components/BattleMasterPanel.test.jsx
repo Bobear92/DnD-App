@@ -74,4 +74,24 @@ describe('BattleMasterPanel', () => {
     expect(screen.queryByTestId('battle-master-feat-note')).not.toBeInTheDocument();
     expect(screen.getByTestId('superiority-dice')).toHaveTextContent('4 / 4 remaining');
   });
+
+  it('computes the maneuver save DC from the higher of STR/DEX (STR higher)', () => {
+    // Level 3 (PB +2), STR 18 (+4), DEX 12 (+1) → 8 + 2 + 4 = 14
+    render(<BattleMasterPanel data={{}} level={3} scores={{ strength: 18, dexterity: 12 }} onChange={vi.fn()} />);
+    expect(screen.getByTestId('maneuver-save-dc')).toHaveTextContent('14');
+    expect(screen.getByTestId('maneuver-save-dc-note')).toHaveTextContent('Strength');
+    expect(screen.getByTestId('maneuver-save-dc-note')).toHaveTextContent('higher');
+  });
+
+  it('uses Dexterity when it is the higher modifier', () => {
+    // Level 5 (PB +3), STR 10 (+0), DEX 18 (+4) → 8 + 3 + 4 = 15
+    render(<BattleMasterPanel data={{}} level={5} scores={{ strength: 10, dexterity: 18 }} onChange={vi.fn()} />);
+    expect(screen.getByTestId('maneuver-save-dc')).toHaveTextContent('15');
+    expect(screen.getByTestId('maneuver-save-dc-note')).toHaveTextContent('Dexterity');
+  });
+
+  it('notes a tie when STR and DEX modifiers are equal', () => {
+    render(<BattleMasterPanel data={{}} level={3} scores={{ strength: 16, dexterity: 16 }} onChange={vi.fn()} />);
+    expect(screen.getByTestId('maneuver-save-dc-note')).toHaveTextContent('tied-highest');
+  });
 });
