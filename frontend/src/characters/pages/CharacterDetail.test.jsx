@@ -775,6 +775,20 @@ describe('CharacterDetail', () => {
       expect(screen.getByTestId('feat-freecast-Mage Armor')).toBeInTheDocument();
     });
 
+    it('shows the Spells tab + ritual book for a Fighter with Ritual Caster (no cantrips/leveled)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, char_class: 'Fighter', character_data: { skill_proficiencies: [], feats: [
+          { id: 11, name: 'Ritual Caster', choices: { spell_grant: { ritual: true, ritual_book: ['Detect Magic', 'Identify'] } } },
+        ] } },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
+      expect(screen.getByText('Spells from Feats')).toBeInTheDocument();
+      expect(screen.getByTestId('ritual-book-Ritual Caster')).toBeInTheDocument();
+    });
+
     it('shows Class + Feats spell-source sub-tabs for a Wizard with Magic Initiate', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,

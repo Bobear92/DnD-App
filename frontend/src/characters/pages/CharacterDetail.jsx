@@ -528,7 +528,7 @@ export default function CharacterDetail() {
 
   const raceGrantedCantrips = computeRaceGrantedCantrips(character);
   const featGrantedSpells = getFeatGrantedSpells(character.character_data?.feats);
-  const hasFeatSpells = featGrantedSpells.cantrips.length + featGrantedSpells.leveled.length > 0;
+  const hasFeatSpells = featGrantedSpells.cantrips.length + featGrantedSpells.leveled.length + featGrantedSpells.ritualBooks.length > 0;
   const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || raceGrantedCantrips.length > 0 || hasFeatSpells;
   const tabCount = hasSpells ? 6 : 5;
 
@@ -1592,7 +1592,7 @@ export default function CharacterDetail() {
                   const isCaster = ClassSheet && classSection.draft !== null && SPELLCASTING_CLASSES.has(character.char_class);
                   const featData = classSection.draft?.feats ?? character.character_data?.feats ?? [];
                   const fg = getFeatGrantedSpells(featData);
-                  const hasFeat = fg.cantrips.length + fg.leveled.length > 0;
+                  const hasFeat = fg.cantrips.length + fg.leveled.length + fg.ritualBooks.length > 0;
                   const sources = [
                     isCaster && { key: 'class', label: 'Class' },
                     raceGrantedCantrips.length > 0 && { key: 'racial', label: 'Racial' },
