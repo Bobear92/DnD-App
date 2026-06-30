@@ -14,9 +14,9 @@ import MainLayout from '../../shared/components/layout/MainLayout';
 import characterService from '../characterService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
-import { getRacialRestResources } from '../components/racialRestResources';
-import { getFeatResources, getFeatGrantedSpells } from '../components/featEffects';
-import { isDivination } from '../components/PortentTracker';
+import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
+import { getFeatResources, getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
+import { isDivination } from '@/characters/components/subclass/PortentTracker';
 import { cn } from '@/lib/utils';
 
 const ABILITY_LABELS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];

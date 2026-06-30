@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Hourglass } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCampaign } from '../../campaigns/CampaignContext';
-import { weaponLoadingNote } from '../../characters/components/inventoryData';
+import { weaponLoadingNote } from '@/characters/components/inventory/inventoryData';
 
 /**
  * Static reference page for the weapon Loading property (Encyclopedia → Mechanics →

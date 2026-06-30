@@ -4,7 +4,7 @@ import { Swords, ChevronRight, Search, ArrowLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useCampaign } from '../../campaigns/CampaignContext';
-import { getManeuvers } from '../../characters/components/maneuversData';
+import { getManeuvers } from '@/characters/components/classData/maneuversData';
 
 export default function ManeuversPage() {
   const { campaignId } = useParams();

@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Shield } from 'lucide-react';
-import { computeArmorClass } from '../../characters/components/inventoryData';
-import { getAcOptions } from '../../characters/components/combatBonuses';
+import { computeArmorClass } from '@/characters/components/inventory/inventoryData';
+import { getAcOptions } from '@/characters/components/combat/combatBonuses';
 
 /**
  * Static reference page for Armor Class (Encyclopedia → Mechanics → Armor Class).

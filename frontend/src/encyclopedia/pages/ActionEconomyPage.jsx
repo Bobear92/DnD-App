@@ -7,7 +7,7 @@ import {
   TABS, TAB_LABELS,
   UNIVERSAL_ACTIONS_5E, UNIVERSAL_ACTIONS_2024,
   UNIVERSAL_REACTIONS_5E, UNIVERSAL_REACTIONS_2024,
-} from '../../characters/components/actionEconomyData';
+} from '@/characters/components/combat/actionEconomyData';
 
 /**
  * Static reference page for the action economy (Encyclopedia → Mechanics →

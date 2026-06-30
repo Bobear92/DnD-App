@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Dice5 } from 'lucide-react';
-import { durableHitDieMin } from '../../characters/components/combatBonuses';
+import { durableHitDieMin } from '@/characters/components/combat/combatBonuses';
 
 /**
  * Static reference page for Hit Dice (Encyclopedia → Mechanics → Hit Dice).

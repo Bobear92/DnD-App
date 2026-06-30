@@ -21,14 +21,14 @@
  *
  * Run: npm run report:class-coverage   (from frontend/)
  */
-import { CLASS_FEATURES_5E } from '../src/characters/components/classFeatures5e.js';
-import { CLASS_FEATURES_2024 } from '../src/characters/components/classFeatures2024.js';
-import { LEVEL_CHOICES } from '../src/characters/components/levelChoicesData.js';
+import { CLASS_FEATURES_5E } from '../src/characters/components/classData/classFeatures5e.js';
+import { CLASS_FEATURES_2024 } from '../src/characters/components/classData/classFeatures2024.js';
+import { LEVEL_CHOICES } from '../src/characters/components/classData/levelChoicesData.js';
 import {
   CLASS_FEATURE_ACTIONS_5E,
   CLASS_FEATURE_ACTIONS_2024,
   normalizeFeatureName,
-} from '../src/characters/components/actionEconomyData.js';
+} from '../src/characters/components/combat/actionEconomyData.js';
 
 const EDITIONS = [
   { id: '5e', features: CLASS_FEATURES_5E, actions: CLASS_FEATURE_ACTIONS_5E },

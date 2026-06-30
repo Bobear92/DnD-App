@@ -14,7 +14,7 @@ vi.mock('../../characters/classService', () => ({
 }));
 
 // ClassOverview is complex and has its own tests; mock it to keep these focused
-vi.mock('../../characters/components/ClassOverview', () => ({
+vi.mock('@/characters/components/classData/ClassOverview', () => ({
   default: ({ classData, loading }) => {
     if (loading) return <div>Loading class...</div>;
     if (!classData) return <div>Class details unavailable.</div>;

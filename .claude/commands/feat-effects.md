@@ -18,7 +18,7 @@ per their own rules — **don't copy 2014 effects to 2024** (Alert, Observant, O
 - **Authoring** `backend/seed_feats.py` → `FEAT_EFFECTS_5E` (and add `FEAT_EFFECTS_2024`) maps feat name →
   effects list. `_seed_list` backfills them idempotently. Run `python seed_feats.py` then
   `python report_feat_effects.py`.
-- **Resolver** `frontend/src/characters/components/featEffects.js` — one helper per kind
+- **Resolver** `frontend/src/characters/components/feats/featEffects.js` — one helper per kind
   (`getFeatStatMods`, `getFeatActions`, `getFeatUnarmedDice`, `featAbilityChoices`,
   `featFixedAbilityScores`, `isMechanized`). Add a helper here when you add a kind.
 - **Snapshot at acquisition** — `LevelUpWizard.jsx` and `CharacterCreate.jsx` (Variant Human) copy the

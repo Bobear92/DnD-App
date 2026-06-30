@@ -20,25 +20,25 @@ import {
 import MainLayout from '../../shared/components/layout/MainLayout';
 import MusicPlayer from '../../shared/components/MusicPlayer';
 import characterService, { mapCharacterImageUrl } from '../characterService';
-import TraitBadgeList from '../components/TraitBadge';
-import { getRaceGrantedSkillsFromTraits } from '../components/raceProficienciesData';
-import { getBackgroundSkills } from '../components/backgroundSkillsData';
-import { getFeatGrantedSkills } from '../components/featProficiencyData';
-import RacialResourceTracker from '../components/RacialResourceTracker';
-import JumpCard from '../components/JumpCard';
-import WalletCard from '../components/WalletCard';
-import InventoryTab from '../components/InventoryTab';
-import ActionEconomyTab from '../components/ActionEconomyTab';
-import FeatsSubTab from '../components/FeatsSubTab';
-import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '../components/featEffects';
-import { getClassConfig } from '../components/classSheet/configs';
-import { MaxHpValue } from '../components/CombatBonusInline';
-import { totalHpBonus, remarkableAthlete } from '../components/combatBonuses';
-import { draconicLabel } from '../components/draconicData';
-import SpellLevelTabs from '../components/SpellLevelTabs';
-import FeatSpellsSection from '../components/FeatSpellsSection';
-import { getFeatGrantedSpells } from '../components/featEffects';
-import { getRacialRestResources } from '../components/racialRestResources';
+import TraitBadgeList from '@/characters/components/race/TraitBadge';
+import { getRaceGrantedSkillsFromTraits } from '@/characters/components/race/raceProficienciesData';
+import { getBackgroundSkills } from '@/characters/components/race/backgroundSkillsData';
+import { getFeatGrantedSkills } from '@/characters/components/feats/featProficiencyData';
+import RacialResourceTracker from '@/characters/components/race/RacialResourceTracker';
+import JumpCard from '@/characters/components/combat/JumpCard';
+import WalletCard from '@/characters/components/inventory/WalletCard';
+import InventoryTab from '@/characters/components/inventory/InventoryTab';
+import ActionEconomyTab from '@/characters/components/combat/ActionEconomyTab';
+import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
+import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '@/characters/components/feats/featEffects';
+import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
+import { MaxHpValue } from '@/characters/components/combat/CombatBonusInline';
+import { totalHpBonus, remarkableAthlete } from '@/characters/components/combat/combatBonuses';
+import { draconicLabel } from '@/characters/components/subclass/draconicData';
+import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
+import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
+import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
+import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
 import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
@@ -47,7 +47,7 @@ import {
   BarbarianSheet, BardSheet, ClericSheet, DruidSheet,
   FighterSheet, MonkSheet, PaladinSheet, RangerSheet,
   RogueSheet, SorcererSheet, WarlockSheet, WizardSheet,
-} from '../components';
+} from '@/characters/components/sheets';
 import {
   BarbarianSheet as BarbarianSheet2024,
   BardSheet as BardSheet2024,
@@ -61,7 +61,7 @@ import {
   SorcererSheet as SorcererSheet2024,
   WarlockSheet as WarlockSheet2024,
   WizardSheet as WizardSheet2024,
-} from '../components/5e2024';
+} from '@/characters/components/sheets/2024';
 import { cn } from '@/lib/utils';
 
 const ABILITY_LABELS = [
@@ -1783,7 +1783,7 @@ function LevelingCard({ character, campaign, isGm, isOwner, displayAsPlayer, xpI
 function LevelUpWizard({ character, campaign, onComplete, onClose }) {
   const [LevelUpWizardComponent, setComponent] = React.useState(null);
   React.useEffect(() => {
-    import('../components/LevelUpWizard').then(m => setComponent(() => m.default)).catch(() => {});
+    import('@/characters/components/leveling/LevelUpWizard').then(m => setComponent(() => m.default)).catch(() => {});
   }, []);
   if (!LevelUpWizardComponent) return null;
   return <LevelUpWizardComponent character={character} campaign={campaign} onComplete={onComplete} onClose={onClose} />;

@@ -46,7 +46,7 @@ vi.mock('../../shared/components/layout/MainLayout', () => ({
 }));
 
 // FeatsSubTab fetches the feat catalogue — mock it to a marker that echoes its props.
-vi.mock('../components/FeatsSubTab', () => ({
+vi.mock('@/characters/components/feats/FeatsSubTab', () => ({
   default: ({ feats = [], canManage }) => (
     <div data-testid="feats-subtab-mock" data-can-manage={String(!!canManage)}>
       {feats.map((f, i) => <span key={i} data-testid="feat-name">{f.name ?? f}</span>)}

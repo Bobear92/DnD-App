@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import { StandardSpreadAssignment, PointBuyAssignment, DiceRollAssignment } from '../components/AbilityScoreAssignment';
+import { StandardSpreadAssignment, PointBuyAssignment, DiceRollAssignment } from '@/characters/components/shared/AbilityScoreAssignment';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,13 +12,13 @@ import characterService from '../characterService';
 import referenceService from '../referenceService';
 import featService from '../../encyclopedia/featService';
 import classService from '../classService';
-import ClassOverview from '../components/ClassOverview';
-import FeatPicker from '../components/FeatPicker';
-import { checkFeatPrerequisite } from '../components/featPrerequisites';
-import { featAbilityChoices, featFixedAbilityScores, getSpellGrantSpecs, getFeatGrantedSpells, featGrantRedundant, featAbilityChoiceOptions, getManeuverGrantSpec, maneuverGrantComplete, getFeatStatMods, getFeatStatModSources } from '../components/featEffects';
-import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from '../components/FeatSpellGrantPicker';
-import FeatManeuverPicker from '../components/FeatManeuverPicker';
-import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, groupFeatProfOptions, FEAT_SKILL_OPTIONS } from '../components/featProficiencyData';
+import ClassOverview from '@/characters/components/classData/ClassOverview';
+import FeatPicker from '@/characters/components/feats/FeatPicker';
+import { checkFeatPrerequisite } from '@/characters/components/feats/featPrerequisites';
+import { featAbilityChoices, featFixedAbilityScores, getSpellGrantSpecs, getFeatGrantedSpells, featGrantRedundant, featAbilityChoiceOptions, getManeuverGrantSpec, maneuverGrantComplete, getFeatStatMods, getFeatStatModSources } from '@/characters/components/feats/featEffects';
+import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from '@/characters/components/feats/FeatSpellGrantPicker';
+import FeatManeuverPicker from '@/characters/components/feats/FeatManeuverPicker';
+import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, groupFeatProfOptions, FEAT_SKILL_OPTIONS } from '@/characters/components/feats/featProficiencyData';
 
 const FEAT_SKILL_NAME_SET = new Set(FEAT_SKILL_OPTIONS.map(s => s.toLowerCase()));
 import { useCampaign } from '../../campaigns/CampaignContext';
@@ -28,8 +28,8 @@ import {
   FighterSheet, MonkSheet, PaladinSheet, RangerSheet,
   RogueSheet, SorcererSheet, WarlockSheet, WizardSheet,
   SUPPORTED_CLASSES_5E, CLASS_DESCRIPTIONS, CLASS_HIT_DICE,
-} from '../components';
-import { HIT_DICE_5E } from '../components/classFeatures5e';
+} from '@/characters/components/sheets';
+import { HIT_DICE_5E } from '@/characters/components/classData/classFeatures5e';
 import {
   BarbarianSheet as BarbarianSheet2024,
   BardSheet as BardSheet2024,
@@ -44,18 +44,18 @@ import {
   WarlockSheet as WarlockSheet2024,
   WizardSheet as WizardSheet2024,
   SUPPORTED_CLASSES_2024, CLASS_DESCRIPTIONS_2024, CLASS_HIT_DICE_2024,
-} from '../components/5e2024';
-import { HIT_DICE_2024 } from '../components/classFeatures2024';
+} from '@/characters/components/sheets/2024';
+import { HIT_DICE_2024 } from '@/characters/components/classData/classFeatures2024';
 import { cn } from '@/lib/utils';
-import TraitBadgeList from '../components/TraitBadge';
-import { getRaceGrantedSkills, getRaceSkillSources, getRaceGrantedTools, getRaceGrantedWeapons, getRaceGrantedArmor } from '../components/raceProficienciesData';
-import { totalHpBonus } from '../components/combatBonuses';
-import SpellList from '../components/SpellList';
-import { getClassConfig } from '../components/classSheet/configs';
-import { SUBCLASS_UNLOCK_LEVEL_5E, SUBCLASS_UNLOCK_LEVEL_2024 } from '../components/classChoicesData';
-import { startingGoldForBackground, EMPTY_WALLET } from '../components/currencyData';
-import { CLASS_PROFICIENCIES_5E } from '../components/classProficienciesData';
-import StartingEquipmentStep from '../components/StartingEquipmentStep';
+import TraitBadgeList from '@/characters/components/race/TraitBadge';
+import { getRaceGrantedSkills, getRaceSkillSources, getRaceGrantedTools, getRaceGrantedWeapons, getRaceGrantedArmor } from '@/characters/components/race/raceProficienciesData';
+import { totalHpBonus } from '@/characters/components/combat/combatBonuses';
+import SpellList from '@/characters/components/spells/SpellList';
+import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
+import { SUBCLASS_UNLOCK_LEVEL_5E, SUBCLASS_UNLOCK_LEVEL_2024 } from '@/characters/components/classData/classChoicesData';
+import { startingGoldForBackground, EMPTY_WALLET } from '@/characters/components/inventory/currencyData';
+import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
+import StartingEquipmentStep from '@/characters/components/inventory/StartingEquipmentStep';
 
 // ─── Ability score validation constants ──────────────────────────────────────
 

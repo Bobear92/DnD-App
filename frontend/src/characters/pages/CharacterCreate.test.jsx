@@ -46,7 +46,7 @@ vi.mock('../../encyclopedia/featService', () => ({
 
 // FeatSpellGrantPicker is unit-tested separately; mock it so the creation flow can fill a
 // complete spell-grant value without the spell catalogue.
-vi.mock('../components/FeatSpellGrantPicker', () => ({
+vi.mock('@/characters/components/feats/FeatSpellGrantPicker', () => ({
   default: ({ onChange }) => (
     <div data-testid="spell-grant-picker">
       <button

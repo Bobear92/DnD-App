@@ -191,7 +191,7 @@ When a change touches 3 or more files, produce a brief plan **before making any 
 Post this checklist first, then proceed. This prevents wrong-approach detours.
 
 ## Class Sheet Constraints (enforce always)
-When editing any class sheet in `characters/components/` or `characters/components/5e2024/`:
+When editing any class sheet in `characters/components/sheets/` or `characters/components/sheets/2024/`:
 - **Never apply "all 18 skills"** to any class — always validate the class's restricted list
 - Fighter skill picker: exactly 8 skills (Acrobatics, Animal Handling, Athletics, History, Insight, Intimidation, Perception, Survival)
 - Rogue skill proficiency: exactly 11 Rogue skills; Rogue Expertise picker uses all 18

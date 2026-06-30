@@ -7,10 +7,10 @@ shared hooks renders a class sheet — replacing the hand-written per-class shee
 of the change, or a class to add/migrate.
 
 **Status:** Fighter + Wizard (both editions) are config-driven. The other 22 classes still use hand-written
-sheets in `frontend/src/characters/components/` (5e) and `.../5e2024/` (2024) — migrating each one is the
+sheets in `frontend/src/characters/components/sheets/` (5e) and `.../sheets/2024/` (2024) — migrating each one is the
 ongoing work this skill covers.
 
-## Where things live (`frontend/src/characters/components/classSheet/`)
+## Where things live (`frontend/src/characters/components/sheets/classSheet/`)
 - `ClassSheet.jsx` — universal renderer. Reads `config` + the standard sheet props
   (`data, onChange, readOnly, level, creation, section, scores, abilityScores, backgroundSkills,
   raceSkills, raceGrantedCantrips, campaignId, isGm, acExtra, maxHpNode`) **plus `gmEdit`**.
@@ -72,7 +72,7 @@ ongoing work this skill covers.
    fork per-class JSX back into the config. Subclass/racial trackers stay as their own components
    (`PortentTracker`, `RacialResourceTracker`) and are wired through config flags.
 4. Register the class in `configs/index.jsx` (`CONFIGS` map + bound wrappers) and re-export the wrappers from
-   `components/index.js` (5e) and `components/5e2024/index.js` (2024) as `XxxSheet`. Delete the old
+   `components/sheets/index.js` (5e) and `components/sheets/2024/index.js` (2024) as `XxxSheet`. Delete the old
    `XxxSheet.jsx` files.
 5. If a known caster (Bard/Sorcerer/Warlock), confirm the `LevelUpWizard` New-Spells step still works.
 

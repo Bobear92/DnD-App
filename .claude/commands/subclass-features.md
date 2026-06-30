@@ -21,7 +21,7 @@ two mechanisms start looking near-identical, flag the consolidation **while few 
 that's exactly how `subclassProficiencyData` + `subclassLevelChoices` became `subclassGrants`.
 
 ## The input: where the feature text lives
-`frontend/src/characters/components/subclassData/<class>.js` →
+`frontend/src/characters/components/classData/subclassData/<class>.js` →
 `SUBCLASS_DATA[ClassName][edition][SubclassName] = { flavorText, features: [{level, name, description}] }`
 (edition keys: `'5e'` and `'5.5e'`). This is the source of truth for the audit. If the subclass name
 maps to more than one class, or you can't find it, ask the user which class. A subclass may exist in only

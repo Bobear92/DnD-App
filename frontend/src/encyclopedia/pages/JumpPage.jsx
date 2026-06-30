@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, PersonStanding } from 'lucide-react';
-import { computeJump, JUMP_MULTIPLIER_SOURCES } from '../../characters/components/jumpData';
+import { computeJump, JUMP_MULTIPLIER_SOURCES } from '@/characters/components/combat/jumpData';
 
 /**
  * Static reference page for jump mechanics (Encyclopedia → Mechanics → Jumping).

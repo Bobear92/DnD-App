@@ -9,8 +9,8 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import itemService from '../itemService';
-import WeaponPropertyBadges from '../../characters/components/WeaponPropertyBadges';
-import { weaponBadges } from '../../characters/components/weaponPropertyData';
+import WeaponPropertyBadges from '@/characters/components/inventory/WeaponPropertyBadges';
+import { weaponBadges } from '@/characters/components/inventory/weaponPropertyData';
 
 function distinct(items, key) {
   return [...new Set(items.map((it) => it[key]).filter((v) => v != null && v !== ''))].sort();

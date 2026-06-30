@@ -29,10 +29,11 @@ Action Economy. Suggested order: Armor Class → Hit Dice → Action Economy.
    page needs them.
 
 ## Where things live (jump is the template for every file)
-- **Helper (source of truth)** — `frontend/src/characters/components/<mechanic>Data.js` + `.test.js`.
+- **Helper (source of truth)** — `frontend/src/characters/components/combat/<mechanic>Data.js` + `.test.js`
+  (combat-adjacent mechanics live in `combat/`; jump/AC/hit-dice/action-economy are all there).
   Pure functions: the formulas, plus a `*_SOURCES` registry array for conditional modifiers
   (`JUMP_MULTIPLIER_SOURCES` is the model). **Flow B: reuse the existing helper** that already owns the
-  math (`inventoryData.js` for AC, `actionEconomyData.js` for action economy) — do not duplicate it.
+  math (`inventory/inventoryData.js` for AC, `combat/actionEconomyData.js` for action economy) — do not duplicate it.
 - **Static page** — `frontend/src/encyclopedia/pages/<Mechanic>Page.jsx` + `.test.jsx`. Template:
   `JumpPage.jsx` / `ManeuversPage.jsx` — header with back-link to `…/encyclopedia`, prose `Section`s,
   worked example, edge cases, an at-the-table example, and a registry-driven "What changes it" section.
@@ -41,9 +42,9 @@ Action Economy. Suggested order: Armor Class → Hit Dice → Action Economy.
 - **Route** — `frontend/src/App.jsx`, beside the jump route:
   `…/encyclopedia/mechanics/<slug>` → `<MechanicPage />`, wrapped `ProtectedRoute > MainLayout`.
 - **Computed surface (Flow A only)** — a small dedicated card
-  (`frontend/src/characters/components/<Mechanic>Card.jsx` + `.test.jsx`, template `JumpCard.jsx`) wired
+  (`frontend/src/characters/components/combat/<Mechanic>Card.jsx` + `.test.jsx`, template `JumpCard.jsx`) wired
   into the right tab in `CharacterDetail.jsx`. Existing surfaces for Flow B: AC summary in
-  `InventoryTab.jsx` (Items tab), `ActionEconomyTab.jsx`, the `HitDiceTracker` in the Stats combat block.
+  `inventory/InventoryTab.jsx` (Items tab), `combat/ActionEconomyTab.jsx`, the `combat/HitDiceTracker` in the Stats combat block.
 
 ## Non-negotiable rules (the lessons from the jump slice)
 - **Ground first.** Before writing a word, grep what the app actually models — `subclassData/`,
