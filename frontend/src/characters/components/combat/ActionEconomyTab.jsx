@@ -76,8 +76,9 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
                 <span className="w-16 shrink-0 text-muted-foreground">{sa.label}</span>
                 <span className="font-medium">{sa.name}</span>
                 <span className="text-muted-foreground">
-                  {sa.toHit ? `${sa.toHit} to hit · ` : ''}{sa.damage}
-                  {sa.warning ? ' · disadvantage' : ''}
+                  {sa.toHit || sa.damage
+                    ? `${sa.toHit ? `${sa.toHit} to hit · ` : ''}${sa.damage || ''}${sa.warning ? ' · disadvantage' : ''}`
+                    : (sa.detail || '')}
                 </span>
               </div>
             ))}

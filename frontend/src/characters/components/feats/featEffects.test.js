@@ -130,6 +130,14 @@ describe('featEffects resolver', () => {
     expect(grants.weapons).toEqual([]); // count-choice (Skilled) not included
   });
 
+  it('getFeatProficiencyGrants surfaces Tavern Brawler improvised-weapon proficiency', () => {
+    const tavernBrawler = { name: 'Tavern Brawler', effects: [
+      { kind: 'attack_mod', target: 'unarmed', dice: '1d4' },
+      { kind: 'proficiency', prof_type: 'weapon', items: ['Improvised weapons'] },
+    ] };
+    expect(getFeatProficiencyGrants([tavernBrawler]).weapons).toEqual(['Improvised weapons']);
+  });
+
   it('featGrantRedundant locks half-feats whose proficiency the character already has', () => {
     const heavilyArmored = { name: 'Heavily Armored', effects: [
       { kind: 'ability_score', ability: 'strength', amount: 1 },

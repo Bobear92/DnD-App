@@ -182,7 +182,31 @@ def seed_magic_items(db, client) -> tuple[int, int]:
     return created, skipped
 
 
-# Curated sets — the SRD API does not cleanly expose potions or food/drink.
+# Curated sets — the SRD API does not cleanly expose these.
+# "Improvised Weapon" is not a real SRD equipment entry but a rules concept: any object
+# wielded as a weapon deals 1d4 of an appropriate type (default bludgeoning). Seeding it as
+# a system weapon lets a character equip one — relevant to Tavern Brawler, which grants
+# proficiency with improvised weapons and pairs an improvised-weapon hit with a bonus grapple.
+WEAPONS_CURATED = [
+    {
+        "name": "Improvised Weapon",
+        "weapon_category": "Improvised",
+        "weapon_type": "Melee",
+        "damage": "1d4",
+        "damage_type": "Bludgeoning",
+        "properties": "Thrown (range 20/60)",
+        "cost": "—",
+        "weight": "—",
+        "description": (
+            "Any object you grab and use to attack — a chair leg, a tankard, a frying pan. "
+            "An improvised weapon deals 1d4 damage of a type appropriate to the object "
+            "(bludgeoning by default). If it resembles a real weapon, the GM may have it use "
+            "that weapon's statistics instead. You're normally not proficient with improvised "
+            "weapons (the Tavern Brawler feat grants that proficiency)."
+        ),
+    },
+]
+
 POTIONS = [
     {"name": "Potion of Healing", "rarity": "Common", "effect": "You regain 2d4 + 2 hit points when you drink this potion.", "duration": "Instantaneous", "cost": "50 gp", "weight": "0.5 lb."},
     {"name": "Potion of Greater Healing", "rarity": "Uncommon", "effect": "You regain 4d4 + 4 hit points when you drink this potion.", "duration": "Instantaneous", "cost": "150 gp", "weight": "0.5 lb."},
@@ -206,6 +230,12 @@ FOOD_DRINK = [
 
 def seed_curated(db) -> tuple[int, int]:
     created = skipped = 0
+    for w in WEAPONS_CURATED:
+        if _exists(db, Weapon, w["name"]):
+            skipped += 1
+            continue
+        db.add(Weapon(**w, owner_type=OwnerType.system))
+        created += 1
     for p in POTIONS:
         if _exists(db, Potion, p["name"]):
             skipped += 1
@@ -234,7 +264,7 @@ def main():
             mc, ms = seed_magic_items(db, client)
             print(f"  Magic items: {mc} created, {ms} skipped.\n")
 
-        print("Seeding curated potions + food/drink...")
+        print("Seeding curated weapons + potions + food/drink...")
         cc, cs = seed_curated(db)
         print(f"  Curated: {cc} created, {cs} skipped.\n")
 

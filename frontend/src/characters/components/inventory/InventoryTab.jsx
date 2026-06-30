@@ -25,6 +25,7 @@ import {
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
 } from '@/characters/components/inventory/inventoryData';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
+import { getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
 
 // Tools are stored as adventuring-gear entries but get their own sub-tab (inserted
 // right after Gear). It isn't a real encyclopedia category — the Add picker reuses
@@ -92,11 +93,13 @@ export default function InventoryTab({
   const inventory = useMemo(() => migrateHands(normalizeWeapons(inventoryProp)), [inventoryProp]);
 
   const profs = CLASS_PROFICIENCIES_5E[charClass] || {};
-  const weaponProfText = profs.weapons || '';
   const armorProfText = profs.armor || '';
-  const raceWeapons = getRaceGrantedWeapons(race, subrace) || [];
   const raceArmor = getRaceGrantedArmor(race, subrace) || [];
   const proficiencies = gatherProficiencies({ charClass, characterData });
+  // Fold feat- and race-granted weapon proficiencies (e.g. Tavern Brawler → "Improvised
+  // weapons") into the proficiency text + list so an equipped granted weapon reads as proficient.
+  const weaponProfText = [profs.weapons || '', ...proficiencies.weapons.grants].filter(Boolean).join(', ');
+  const raceWeapons = [...(getRaceGrantedWeapons(race, subrace) || []), ...proficiencies.weapons.grants];
 
   const size = creatureSize(characterData, race);
   const styles = gatherFightingStyles(characterData);
@@ -110,7 +113,11 @@ export default function InventoryTab({
   const oneHandItems = handItems.filter((e) => !isTwoHandedWeapon(e)); // off-hand can't hold a two-hander
   const strMod = abilityMod(scores.strength);
   const unarmedToHit = formatSigned(strMod + profBonus(level));
-  const unarmedDamage = `${Math.max(1, 1 + strMod)} bludgeoning`;
+  // A feat (e.g. Tavern Brawler) can replace the flat "1" unarmed damage with a die like 1d4 + STR.
+  const unarmedDice = getFeatUnarmedDice(characterData?.feats);
+  const unarmedDamage = unarmedDice
+    ? `${unarmedDice} ${formatSigned(strMod)} bludgeoning`
+    : `${Math.max(1, 1 + strMod)} bludgeoning`;
 
   // Tools tab gathers tool entries from anywhere; the Gear tab excludes tools + ammo;
   // ammo is shown in its own subsection of the Weapons tab.

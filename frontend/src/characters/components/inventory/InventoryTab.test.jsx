@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import InventoryTab from '@/characters/components/inventory/InventoryTab';
@@ -249,6 +249,19 @@ describe('InventoryTab', () => {
     expect(screen.getByTestId('attack-w1')).toHaveTextContent('not proficient');
   });
 
+  it("treats an equipped Improvised Weapon as proficient when Tavern Brawler grants it", () => {
+    const improvised = { uid: 'iw1', category: 'weapons', name: 'Improvised Weapon', weapon_category: 'Improvised', weapon_type: 'Melee', damage: '1d4', damage_type: 'Bludgeoning', equipped: true, quantity: 1 };
+    const tavernBrawler = { name: 'Tavern Brawler', effects: [{ kind: 'proficiency', prof_type: 'weapon', items: ['Improvised weapons'] }] };
+    // Without the feat: a Wizard isn't proficient with an improvised weapon.
+    renderTab({ inventory: [improvised], charClass: 'Wizard', scores: { strength: 16 } });
+    expect(screen.getByTestId('attack-iw1')).toHaveTextContent('not proficient');
+    cleanup();
+    // With Tavern Brawler: proficient, and the grant shows in the weapon banner.
+    renderTab({ inventory: [improvised], charClass: 'Wizard', scores: { strength: 16 }, characterData: { feats: [tavernBrawler] } });
+    expect(screen.getByTestId('attack-iw1')).not.toHaveTextContent('not proficient');
+    expect(screen.getByTestId('proficiency-banner')).toHaveTextContent(/improvised weapons/i);
+  });
+
   it('hides edit controls when readOnly', () => {
     renderTab({ inventory: [longsword], readOnly: true });
     expect(screen.queryByTestId('inv-add-btn')).not.toBeInTheDocument();
@@ -361,7 +374,14 @@ describe('InventoryTab — Hands', () => {
     renderTab({ inventory: [], scores: { strength: 16 } });
     const free = screen.getByTestId('hand-free-main');
     expect(free).toHaveTextContent('Unarmed Strike');
+    expect(free).toHaveTextContent('4 bludgeoning'); // base unarmed = 1 + STR mod (+3), no feat
     expect(free).toHaveTextContent('somatic');
+  });
+
+  it('reflects the Tavern Brawler unarmed die (1d4 + STR) in the free-hand note', () => {
+    const tavernBrawler = { name: 'Tavern Brawler', effects: [{ kind: 'attack_mod', target: 'unarmed', dice: '1d4' }] };
+    renderTab({ inventory: [], scores: { strength: 16 }, characterData: { feats: [tavernBrawler] } });
+    expect(screen.getByTestId('hand-free-main')).toHaveTextContent('1d4 +3 bludgeoning');
   });
 
   it('placing a weapon in the main hand persists hand + equipped', () => {

@@ -8,7 +8,7 @@ vi.mock('@/characters/components/feats/FeatPicker', () => ({
   default: ({ feats = [], onChange }) => (
     <div data-testid="feat-picker">
       {feats.map((f) => (
-        <button key={f.id} type="button" data-testid={`add-pick-${f.id}`} onClick={() => onChange({ id: f.id, name: f.name })}>
+        <button key={f.id} type="button" data-testid={`add-pick-${f.id}`} onClick={() => onChange(f)}>
           {f.name}
         </button>
       ))}
@@ -102,7 +102,21 @@ describe('FeatsSubTab', () => {
     // Grappler already owned → not offered; Alert + Tough are.
     expect(screen.queryByTestId('add-pick-11')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('add-pick-10'));
-    expect(onChange).toHaveBeenCalledWith({ feats: [{ id: 11, name: 'Grappler' }, { id: 10, name: 'Alert' }] });
+    // The added feat snapshots the catalogue feat's structured effects onto the instance.
+    expect(onChange).toHaveBeenCalledWith({
+      feats: [
+        { id: 11, name: 'Grappler' },
+        { id: 10, name: 'Alert', effects: CATALOGUE[0].effects },
+      ],
+    });
+  });
+
+  it('snapshots a feat without effects as just {id,name}', async () => {
+    const onChange = vi.fn();
+    render(<FeatsSubTab feats={[]} campaignId={1} edition="5e" canManage onChange={onChange} />);
+    fireEvent.click(await screen.findByTestId('feats-add-btn'));
+    fireEvent.click(screen.getByTestId('add-pick-12')); // Tough — no effects in the catalogue
+    expect(onChange).toHaveBeenCalledWith({ feats: [{ id: 12, name: 'Tough' }] });
   });
 
   it('renders a feat resource tracker and persists Use via onChange', async () => {

@@ -217,4 +217,19 @@ describe('ActionEconomyTab', () => {
     fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
     expect(screen.getByTestId('ae-empty')).toBeInTheDocument();
   });
+
+  it('shows the Tavern Brawler grapple combo (Unarmed Strike Action + Grapple Bonus) on Action+Bonus', () => {
+    const tavernBrawler = { id: 14, name: 'Tavern Brawler', effects: [
+      { kind: 'attack_mod', target: 'unarmed', dice: '1d4' },
+      { kind: 'action', name: 'Grapple (Tavern Brawler)', economy: 'bonus', trigger: 'After an unarmed hit', description: 'Grapple the target.' },
+    ] };
+    renderTab({ inventory: [], characterData: { feats: [tavernBrawler] } });
+    fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+    expect(screen.getByText('Tavern Brawler')).toBeInTheDocument();
+    expect(screen.getByTestId('ae-twf-action')).toHaveTextContent('Unarmed Strike');
+    expect(screen.getByTestId('ae-twf-action')).toHaveTextContent('1d4');
+    const bonus = screen.getByTestId('ae-twf-bonus');
+    expect(bonus).toHaveTextContent('Grapple');
+    expect(bonus).toHaveTextContent(/grapple the target/i); // detail-only sub-row renders its detail
+  });
 });

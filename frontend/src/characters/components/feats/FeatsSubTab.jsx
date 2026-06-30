@@ -117,7 +117,12 @@ export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', ca
 
   const addFeat = (feat) => {
     if (!feat) return;
-    onChange?.({ feats: [...feats, { id: feat.id, name: feat.name }] });
+    // Snapshot the feat's structured `effects` onto the instance (inventory-snapshot pattern) so
+    // the sheet's resolvers (unarmed die, proficiency banners, action economy) work without a
+    // re-fetch — matching how the LevelUpWizard / Variant Human acquisition paths store feats.
+    const entry = { id: feat.id, name: feat.name };
+    if (Array.isArray(feat.effects)) entry.effects = feat.effects;
+    onChange?.({ feats: [...feats, entry] });
     setAdding(false);
   };
 

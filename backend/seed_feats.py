@@ -81,11 +81,11 @@ FEAT_EFFECTS_5E = {
     ],
     "Tavern Brawler": [
         _abil_choice(["strength", "constitution"]),
+        {"kind": "proficiency", "prof_type": "weapon", "items": ["Improvised weapons"]},
         {"kind": "attack_mod", "target": "unarmed", "dice": "1d4", "label": "Unarmed strike deals 1d4"},
         _action("Grapple (Tavern Brawler)", "bonus",
                 "After you hit with an unarmed strike or improvised weapon",
                 "Use a bonus action to grapple the target (Athletics check vs. the target's Athletics/Acrobatics)."),
-        _note("Proficiency with improvised weapons."),
     ],
     "Actor": [
         _abil("charisma"),
@@ -290,8 +290,9 @@ FEAT_EFFECTS_2024 = {
         _note("Repeatable for three more skills or tools."),
     ],
     "Tavern Brawler": [
+        {"kind": "proficiency", "prof_type": "weapon", "items": ["Improvised weapons"]},
         {"kind": "attack_mod", "target": "unarmed", "dice": "1d4", "label": "Unarmed strike deals 1d4"},
-        _note("Improvised-weapon proficiency; reroll a 1 on the unarmed die; push a target 5 ft with an Unarmed Strike."),
+        _note("Reroll a 1 on the unarmed die; push a target 5 ft with an Unarmed Strike."),
     ],
     "Tough": [_note("Your hit point maximum increases by 2 per level (applied automatically on the sheet).")],
 

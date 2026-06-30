@@ -165,6 +165,13 @@ const isOneHandedMelee = (e) =>
 const isHandCrossbow = (e) =>
   e.category === 'weapons' && /hand\s*crossbow|crossbow,\s*hand/.test((e.name || '').toLowerCase());
 
+/** An improvised weapon — the seeded "Improvised Weapon" item or anything in the Improvised
+ *  weapon category. The Action half of the Tavern Brawler grapple combo when equipped. */
+const isImprovisedWeapon = (e) =>
+  e.category === 'weapons'
+  && ((e.weapon_category || '').toLowerCase() === 'improvised'
+      || /improvised weapon/.test((e.name || '').toLowerCase()));
+
 /**
  * The equipped weapons that qualify for Two-Weapon Fighting — light melee weapons, or
  * (with the Dual Wielder feat) any one-handed/non-two-handed melee weapons.
@@ -338,6 +345,45 @@ export function buildActionEconomy({
     });
   }
 
+  // Tavern Brawler (feat) — present the bonus-action grapple as an Action + Bonus combo
+  // (like Crossbow Expert): the feat lets you grapple as a bonus action after you hit with an
+  // Unarmed Strike or an improvised weapon, so the Action half is an equipped Improvised Weapon
+  // if you're wielding one, otherwise your (feat-upgraded) Unarmed Strike. The standalone bonus
+  // grapple feat action is suppressed below in favour of this combo.
+  const grappleAction = getFeatActions(feats).find(
+    (a) => a.source === 'Tavern Brawler' && /grapple/i.test(a.name),
+  );
+  if (grappleAction) {
+    const attackByUid = new Map(weaponRows.filter((a) => a.uid).map((a) => [a.uid, a]));
+    const baseDamage = (w) => `${w.damage || '—'}${w.damage_type ? ` ${w.damage_type}` : ''}`;
+    const equippedImprovised = (inventory || []).find((e) => e.equipped && isImprovisedWeapon(e));
+    let actionRow;
+    if (equippedImprovised) {
+      const row = attackByUid.get(equippedImprovised.uid);
+      actionRow = {
+        label: 'Action',
+        name: equippedImprovised.name,
+        toHit: row?.toHit ?? null,
+        damage: row?.damage ?? baseDamage(equippedImprovised),
+        warning: row?.warning ?? null,
+      };
+    } else {
+      const ua = unarmedAttack(scores, level, unarmedDice);
+      actionRow = { label: 'Action', name: ua.name, toHit: ua.toHit, damage: ua.damage };
+    }
+    push('action+bonus', {
+      key: 'tavern-brawler',
+      name: 'Tavern Brawler',
+      source: 'Feat',
+      cost: 'action + bonus action',
+      subAttacks: [
+        actionRow,
+        { label: 'Bonus', name: 'Grapple', detail: grappleAction.description },
+      ],
+      detail: `Hit with ${equippedImprovised ? equippedImprovised.name : 'an Unarmed Strike'} (Action), then use a bonus action to grapple the target (Tavern Brawler).`,
+    });
+  }
+
   // Class / subclass features (curated, level-gated by the character's known features).
   const featureMap = is2024 ? CLASS_FEATURE_ACTIONS_2024 : CLASS_FEATURE_ACTIONS_5E;
   const classFeatures = featureMap[charClass] || {};
@@ -374,6 +420,8 @@ export function buildActionEconomy({
     // crossbow: it's shown as the Action+Bonus combo above when one is equipped, and not at
     // all otherwise (no hand crossbow → no bonus attack to make). Never a standalone bonus.
     if (hasCrossbowExpert && a.source === 'Crossbow Expert') continue;
+    // Tavern Brawler's grapple is shown as the Action+Bonus combo above, never as a standalone bonus.
+    if (a.source === 'Tavern Brawler' && /grapple/i.test(a.name)) continue;
     push(a.economy, {
       key: a.key,
       name: a.name,

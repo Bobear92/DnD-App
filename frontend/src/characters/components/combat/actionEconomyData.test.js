@@ -297,14 +297,38 @@ describe('buildActionEconomy — Fighter', () => {
       ],
     };
 
-    it('adds a feat action (Tavern Brawler grapple) under Bonus with source Feat', () => {
+    it('presents the Tavern Brawler grapple as an Action+Bonus combo, not a standalone bonus', () => {
       const args = fighterArgs(5, '5e');
       args.characterData = { feats: [TAVERN_BRAWLER] };
-      const grapple = buildActionEconomy(args).bonus.find((e) => e.name === 'Grapple (Tavern Brawler)');
-      expect(grapple).toBeTruthy();
-      expect(grapple.source).toBe('Feat');
-      expect(grapple.cost).toBe('bonus action');
-      expect(grapple.detail).toMatch(/After an unarmed hit/);
+      const ec = buildActionEconomy(args);
+      // No standalone bonus grapple entry — it's folded into the combo.
+      expect(ec.bonus.find((e) => /grapple/i.test(e.name))).toBeFalsy();
+      const combo = ec['action+bonus'].find((e) => e.name === 'Tavern Brawler');
+      expect(combo).toBeTruthy();
+      expect(combo.source).toBe('Feat');
+      expect(combo.cost).toBe('action + bonus action');
+      // Action row = Unarmed Strike (no improvised weapon equipped); Bonus row = Grapple.
+      const labels = combo.subAttacks.map((s) => s.label);
+      expect(labels).toEqual(['Action', 'Bonus']);
+      expect(combo.subAttacks[0].name).toBe('Unarmed Strike');
+      expect(combo.subAttacks[0].damage).toMatch(/1d4/);
+      expect(combo.subAttacks[1].name).toBe('Grapple');
+      expect(combo.subAttacks[1].detail).toMatch(/grapple/i);
+    });
+
+    it('uses an equipped Improvised Weapon as the Action half of the grapple combo', () => {
+      const args = fighterArgs(5, '5e');
+      const improvised = {
+        uid: 'iw', name: 'Improvised Weapon', category: 'weapons', equipped: true,
+        weapon_category: 'Improvised', weapon_type: 'Melee', damage: '1d4', damage_type: 'bludgeoning',
+      };
+      args.inventory = [improvised];
+      args.attacks = [{ uid: 'iw', name: 'Improvised Weapon', toHit: '+6', damage: '1d4 + 3 bludgeoning', proficient: true }];
+      args.characterData = { feats: [TAVERN_BRAWLER] };
+      const combo = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Tavern Brawler');
+      expect(combo.subAttacks[0].name).toBe('Improvised Weapon');
+      expect(combo.subAttacks[0].toHit).toBe('+6');
+      expect(combo.subAttacks[1].name).toBe('Grapple');
     });
 
     it('shows the feat unarmed die (1d4) even with a weapon equipped', () => {
