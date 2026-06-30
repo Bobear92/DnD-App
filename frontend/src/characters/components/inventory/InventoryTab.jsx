@@ -17,9 +17,11 @@ import WeaponPropertyBadges from '@/characters/components/inventory/WeaponProper
 import { weaponBadges } from '@/characters/components/inventory/weaponPropertyData';
 import ItemPickerDialog from '@/characters/components/inventory/ItemPickerDialog';
 import {
-  buildEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons,
+  buildEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons, migrateHands,
   toggleEquipped, toggleAttuned, attunedCount, computeArmorClass, getAttacks,
   isWeaponProficient, isArmorProficient, creatureSize, weaponAttackWarning, weaponLoadingNote,
+  assignHand, handContents, isShieldEntry, isHandCapable, isTwoHandedWeapon, isVersatileWeapon,
+  abilityMod, profBonus, formatSigned,
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
 } from '@/characters/components/inventory/inventoryData';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
@@ -44,6 +46,8 @@ const AMMO_PICKER_CATEGORY = {
   id: 'adventuring-gear', label: 'Ammunition', singular: 'Ammunition',
   accent: 'bg-amber-600', subtitle: (it) => it.description || it.category || 'Ammunition',
 };
+
+const HAND_LABELS = { main: 'Main hand', off: 'Off hand', both: 'Both hands' };
 
 function ProficiencyBanner({ label, text, grants }) {
   const none = (!text || text === 'None') && grants.length === 0;
@@ -83,8 +87,9 @@ export default function InventoryTab({
   const [picker, setPicker] = useState(null);
 
   // Weapons are individual items (no stacking) — normalize so a "Handaxe ×2" stack shows
-  // as two separate, independently-equippable rows. Idempotent + deterministic uids.
-  const inventory = useMemo(() => normalizeWeapons(inventoryProp), [inventoryProp]);
+  // as two separate rows; then migrate any legacy `equipped` weapons/shields into hand
+  // slots. Both are idempotent + deterministic so it's safe to run every render.
+  const inventory = useMemo(() => migrateHands(normalizeWeapons(inventoryProp)), [inventoryProp]);
 
   const profs = CLASS_PROFICIENCIES_5E[charClass] || {};
   const weaponProfText = profs.weapons || '';
@@ -98,6 +103,14 @@ export default function InventoryTab({
   const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats, styles });
   const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles });
   const attuned = attunedCount(inventory);
+
+  // Hands: which weapon/shield is in each hand (a two-handed weapon fills both).
+  const hands = handContents(inventory);
+  const handItems = inventory.filter((e) => e.category === 'weapons' || isShieldEntry(e));
+  const oneHandItems = handItems.filter((e) => !isTwoHandedWeapon(e)); // off-hand can't hold a two-hander
+  const strMod = abilityMod(scores.strength);
+  const unarmedToHit = formatSigned(strMod + profBonus(level));
+  const unarmedDamage = `${Math.max(1, 1 + strMod)} bludgeoning`;
 
   // Tools tab gathers tool entries from anywhere; the Gear tab excludes tools + ammo;
   // ammo is shown in its own subsection of the Weapons tab.
@@ -138,10 +151,11 @@ export default function InventoryTab({
     push([...inventory, buildEntry(picker?.category?.id ?? activeId, item, qty)]);
     setPicker(null);
   };
-  const handleRemove = (entry) => push(removeEntry(inventory, entry.uid), entry.category === 'armor' && entry.equipped);
+  const handleRemove = (entry) => push(removeEntry(inventory, entry.uid), entry.equipped && isHandCapable(entry) || (entry.category === 'armor' && entry.equipped));
   const handleQty = (uid, q) => push(setQuantity(inventory, uid, q));
   const handleAmmoQty = (uid, q) => push(setAmmoQuantity(inventory, uid, q));
-  const handleEquip = (uid) => push(toggleEquipped(inventory, uid), true);
+  const handleEquip = (uid) => push(toggleEquipped(inventory, uid), true); // body armor only
+  const handleAssignHand = (slot, uid, twoHanded = false) => push(assignHand(inventory, slot, uid || null, twoHanded), true);
   const handleAttune = (uid) => push(toggleAttuned(inventory, uid));
   const handleSelectAmmo = (weaponUid, ammoUid) => push(setWeaponAmmo(inventory, weaponUid, ammoUid));
   const handleUseAmmo = (ammoUid) => push(decrementAmmo(inventory, ammoUid, 1));
@@ -186,6 +200,81 @@ export default function InventoryTab({
               </Button>
             )}
           </>
+        )}
+      </div>
+    );
+  };
+
+  // One hand slot (main / off): a select to choose the held weapon/shield (or free), and a
+  // status line — shield AC, the weapon's attack, or the free-hand unarmed-strike note.
+  const renderHandSlot = (slot) => {
+    const twoHanded = hands.twoHanded;
+    const held = slot === 'main' ? hands.main : hands.off;
+    const lockedByTwoHanded = twoHanded && slot === 'off';
+    const value = twoHanded ? (slot === 'main' ? twoHanded.uid : '') : (held?.uid ?? '');
+    const options = slot === 'main' ? handItems : oneHandItems;
+    const item = twoHanded || held;
+    // Versatile-grip toggle: a Versatile weapon (not inherently two-handed) can be gripped in
+    // both hands for its larger die. Shown on the slot that holds it one-handed; once gripped
+    // (hand 'both') the toggle to revert lives on the main slot.
+    const grippedVersatile = twoHanded && isVersatileWeapon(twoHanded) && !isTwoHandedWeapon(twoHanded);
+    let grip = null;
+    if (!readOnly) {
+      if (slot === 'main' && grippedVersatile) {
+        grip = { label: 'Use one hand', onClick: () => handleAssignHand('main', twoHanded.uid, false) };
+      } else if (!twoHanded && held && isVersatileWeapon(held) && !isTwoHandedWeapon(held)) {
+        grip = { label: 'Grip with two hands', onClick: () => handleAssignHand(slot, held.uid, true) };
+      }
+    }
+    return (
+      <div className="rounded-lg border bg-card p-3 space-y-2" data-testid={`hand-slot-${slot}`}>
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {slot === 'main' ? 'Main Hand' : 'Off Hand'}
+        </div>
+        {lockedByTwoHanded ? (
+          <div className="text-sm" data-testid={`hand-locked-${slot}`}>
+            <span className="font-medium">{twoHanded.name}</span>
+            <span className="text-muted-foreground"> — held in both hands</span>
+          </div>
+        ) : readOnly ? (
+          <div className="text-sm font-medium">
+            {item ? item.name : <span className="italic text-muted-foreground">Free hand</span>}
+          </div>
+        ) : (
+          <select
+            value={value}
+            onChange={(ev) => handleAssignHand(slot, ev.target.value)}
+            className="h-8 w-full rounded border bg-background px-2 text-sm"
+            data-testid={`hand-select-${slot}`}
+          >
+            <option value="">Free hand</option>
+            {options.map((it) => (
+              <option key={it.uid} value={it.uid}>
+                {it.name}{isTwoHandedWeapon(it) ? ' (two-handed)' : isShieldEntry(it) ? ' (shield)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
+        {lockedByTwoHanded ? null : item && isShieldEntry(item) ? (
+          <p className="text-xs text-muted-foreground">Shield — +2 AC.</p>
+        ) : item ? (
+          (() => {
+            const atk = attacks.find((a) => a.uid === item.uid);
+            return atk ? <p className="text-xs text-muted-foreground tabular-nums">{atk.toHit} · {atk.damage}</p> : null;
+          })()
+        ) : (
+          <p className="text-xs text-muted-foreground" data-testid={`hand-free-${slot}`}>
+            Free hand — <span className="text-foreground font-medium">Unarmed Strike</span>{' '}
+            <span className="tabular-nums">{unarmedToHit} · {unarmedDamage}</span>; free to cast spells (somatic).
+          </p>
+        )}
+        {grip && (
+          <Button
+            size="sm" variant="outline" className="h-7 w-full text-xs"
+            onClick={grip.onClick} data-testid={`hand-grip-${slot}`}
+          >
+            {grip.label}
+          </Button>
         )}
       </div>
     );
@@ -289,6 +378,19 @@ export default function InventoryTab({
       {activeId === 'armor' && <ProficiencyBanner label="Armor" text={proficiencies.armor.text} grants={proficiencies.armor.grants} />}
       {activeId === 'tools' && <ProficiencyBanner label="Tool" text={proficiencies.tools.text} grants={proficiencies.tools.grants} />}
 
+      {/* Hands — what's held in each hand (weapons + shields). A two-handed weapon fills both. */}
+      {activeId === 'weapons' && (
+        <div className="space-y-2" data-testid="hands-panel">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <Swords className="h-4 w-4 text-muted-foreground" /> Hands
+          </h3>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {renderHandSlot('main')}
+            {renderHandSlot('off')}
+          </div>
+        </div>
+      )}
+
       {/* Active category */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -324,7 +426,11 @@ export default function InventoryTab({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-medium text-sm">{e.name}</span>
-                      {e.equipped && <Badge className="text-xs bg-emerald-600 text-white">Equipped</Badge>}
+                      {isHandCapable(e) && e.hand ? (
+                        <Badge className="text-xs bg-emerald-600 text-white" data-testid={`hand-badge-${e.uid}`}>{HAND_LABELS[e.hand]}</Badge>
+                      ) : e.equipped ? (
+                        <Badge className="text-xs bg-emerald-600 text-white">Equipped</Badge>
+                      ) : null}
                       {e.attuned && <Badge className="text-xs bg-violet-600 text-white">Attuned</Badge>}
                       {canEquip && e.equipped && !proficient && (
                         <span className="text-xs text-amber-600">Not proficient</span>
@@ -373,12 +479,15 @@ export default function InventoryTab({
                     </div>
                   )}
 
-                  {/* Equip / Attune */}
-                  {!readOnly && canEquip && (
+                  {/* Equip (body armor only — weapons & shields are held via the Hands panel) */}
+                  {!readOnly && e.category === 'armor' && !isShieldEntry(e) && (
                     <Button size="sm" variant={e.equipped ? 'default' : 'outline'} className="h-7"
                       onClick={() => handleEquip(e.uid)} data-testid={`equip-btn-${e.uid}`}>
                       {e.equipped ? 'Unequip' : 'Equip'}
                     </Button>
+                  )}
+                  {isShieldEntry(e) && (
+                    <span className="text-[11px] text-muted-foreground shrink-0">Hold in <span className="font-medium">Weapons → Hands</span></span>
                   )}
                   {!readOnly && canAttune && (
                     <Button size="sm" variant={e.attuned ? 'default' : 'outline'} className="h-7"

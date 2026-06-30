@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import InventoryTab from '@/characters/components/inventory/InventoryTab';
@@ -231,14 +231,16 @@ describe('InventoryTab', () => {
     expect(row.querySelector('[aria-label="Increase quantity"]')).toBeNull();
   });
 
-  it('splits a stacked weapon into individual, separately-equippable rows', () => {
+  it('splits a stacked weapon into individual, separately-holdable rows', () => {
     const handaxes = { uid: 'h1', category: 'weapons', name: 'Handaxe', weapon_category: 'Simple', weapon_type: 'Melee', damage: '1d6', quantity: 2 };
     renderTab({ inventory: [handaxes] });
     expect(screen.getByTestId('inv-row-h1')).toBeInTheDocument();
     expect(screen.getByTestId('inv-row-h1-2')).toBeInTheDocument();
-    // each has its own Equip button
-    expect(screen.getByTestId('equip-btn-h1')).toBeInTheDocument();
-    expect(screen.getByTestId('equip-btn-h1-2')).toBeInTheDocument();
+    // weapons have no per-row equip button — they're held via the Hands panel
+    expect(screen.queryByTestId('equip-btn-h1')).not.toBeInTheDocument();
+    // both individual handaxes are offered as hand options
+    const mainSelect = screen.getByTestId('hand-select-main');
+    expect(within(mainSelect).getAllByRole('option', { name: 'Handaxe' })).toHaveLength(2);
   });
 
   it('flags an equipped weapon the character is not proficient with', () => {
@@ -341,5 +343,84 @@ describe('InventoryTab', () => {
     expect(screen.queryByTestId('add-ammo-btn')).not.toBeInTheDocument();
     // count is still shown read-only
     expect(screen.getByTestId('ammo-count-lb1')).toHaveTextContent('20');
+  });
+});
+
+describe('InventoryTab — Hands', () => {
+  const shield = { uid: 'sh1', category: 'armor', name: 'Shield', armor_type: 'Shield', armor_class: 2, quantity: 1 };
+  const dagger = { uid: 'd1', category: 'weapons', name: 'Dagger', weapon_category: 'Simple', weapon_type: 'Melee', damage: '1d4', properties: '["Light", "Finesse"]', quantity: 1 };
+
+  it('renders main + off hand slots on the Weapons tab', () => {
+    renderTab({ inventory: [] });
+    expect(screen.getByTestId('hands-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('hand-slot-main')).toBeInTheDocument();
+    expect(screen.getByTestId('hand-slot-off')).toBeInTheDocument();
+  });
+
+  it('shows the unarmed-strike / free-to-cast note for an empty hand', () => {
+    renderTab({ inventory: [], scores: { strength: 16 } });
+    const free = screen.getByTestId('hand-free-main');
+    expect(free).toHaveTextContent('Unarmed Strike');
+    expect(free).toHaveTextContent('somatic');
+  });
+
+  it('placing a weapon in the main hand persists hand + equipped', () => {
+    const onChange = vi.fn();
+    renderTab({ inventory: [{ ...dagger, quantity: 1 }], onChange });
+    fireEvent.change(screen.getByTestId('hand-select-main'), { target: { value: 'd1' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      inventory: expect.arrayContaining([expect.objectContaining({ uid: 'd1', hand: 'main', equipped: true })]),
+    }));
+  });
+
+  it('a two-handed weapon fills both hands and locks the off-hand slot', () => {
+    // greatsword is migrated from equipped:true → hand 'both'
+    renderTab({ inventory: [greatsword] });
+    expect(screen.getByTestId('hand-locked-off')).toHaveTextContent('both hands');
+    expect(screen.queryByTestId('hand-select-off')).not.toBeInTheDocument();
+  });
+
+  it('a held shield contributes +2 AC and appears in a hand slot', () => {
+    renderTab({ inventory: [chainMail, { ...shield, equipped: true }] });
+    // Chain Mail 16 + shield 2 = 18
+    expect(screen.getByTestId('inventory-ac')).toHaveTextContent('18');
+    // shield migrated into a hand → shown in the Hands panel (it's controlled there, not the Armor tab)
+    expect(screen.getByTestId('hands-panel')).toHaveTextContent('Shield');
+  });
+
+  it('weapons show a hand badge when held', () => {
+    renderTab({ inventory: [longsword] }); // equipped:true → migrated to main hand
+    expect(screen.getByTestId('hand-badge-w1')).toHaveTextContent('Main hand');
+  });
+
+  it('read-only view shows held items without selects', () => {
+    renderTab({ inventory: [longsword], readOnly: true });
+    expect(screen.queryByTestId('hand-select-main')).not.toBeInTheDocument();
+    expect(screen.getByTestId('hand-slot-main')).toHaveTextContent('Longsword');
+  });
+
+  // Real seeded format: just "Versatile" with no die — the two-handed die is derived from base damage.
+  const versatileSword = { uid: 'vl1', category: 'weapons', name: 'Longsword', weapon_category: 'Martial', weapon_type: 'Melee', damage: '1d8', properties: '["Versatile"]', quantity: 1 };
+
+  it('a one-handed versatile weapon offers a grip-two-handed button that fills both hands', () => {
+    const onChange = vi.fn();
+    renderTab({ inventory: [{ ...versatileSword, hand: 'main', equipped: true }], onChange });
+    fireEvent.click(screen.getByTestId('hand-grip-main'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      inventory: expect.arrayContaining([expect.objectContaining({ uid: 'vl1', hand: 'both' })]),
+    }));
+  });
+
+  it('a versatile weapon gripped two-handed shows the larger die and a revert button', () => {
+    renderTab({ inventory: [{ ...versatileSword, hand: 'both', equipped: true }], scores: { strength: 10 } });
+    expect(screen.getByTestId('hand-slot-main')).toHaveTextContent('1d10');
+    expect(screen.getByTestId('hand-grip-main')).toHaveTextContent('Use one hand');
+    // off hand is locked by the two-handed grip
+    expect(screen.getByTestId('hand-locked-off')).toBeInTheDocument();
+  });
+
+  it('does not offer a grip button for a non-versatile weapon', () => {
+    renderTab({ inventory: [longsword] }); // plain longsword fixture has no Versatile property
+    expect(screen.queryByTestId('hand-grip-main')).not.toBeInTheDocument();
   });
 });

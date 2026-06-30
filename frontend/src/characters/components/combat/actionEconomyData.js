@@ -171,7 +171,13 @@ const isHandCrossbow = (e) =>
  */
 export function twoWeaponFightingWeapons(inventory = [], feats = []) {
   const predicate = hasFeat(feats, 'Dual Wielder') ? isOneHandedMelee : isLightMelee;
-  return (inventory || []).filter((e) => e.equipped && predicate(e));
+  const qualifying = (inventory || []).filter((e) => e.equipped && predicate(e));
+  // Order main-hand first, off-hand second when hands are assigned (the off-hand weapon
+  // drives the bonus-action attack). Falls back to inventory order when hands are unset.
+  const main = qualifying.find((e) => e.hand === 'main');
+  const off = qualifying.find((e) => e.hand === 'off');
+  if (main && off) return [main, off];
+  return qualifying;
 }
 
 /**

@@ -226,7 +226,8 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
-      await waitFor(() => expect(screen.getByText('Greatsword')).toBeInTheDocument());
+      // 'Greatsword' now appears both in the inventory row and as a Hands-panel option.
+      await waitFor(() => expect(screen.getByTestId('inv-row-x1')).toHaveTextContent('Greatsword'));
     });
   });
 

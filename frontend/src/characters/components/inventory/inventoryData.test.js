@@ -6,6 +6,8 @@ import {
   isWeaponProficient, isArmorProficient, weaponAbility, computeAttack, getAttacks,
   abilityMod, profBonus, isHeavyWeapon, creatureSize, weaponAttackWarning,
   isLoadingWeapon, weaponLoadingNote,
+  assignHand, handContents, migrateHands, freeHandCount,
+  isTwoHandedWeapon, weaponVersatileDie, isVersatileWeapon, isShieldEntry,
 } from '@/characters/components/inventory/inventoryData';
 
 const armor = (over) => ({ uid: Math.random().toString(), category: 'armor', equipped: false, ...over });
@@ -393,5 +395,107 @@ describe('basic helpers', () => {
     expect(profBonus(1)).toBe(2);
     expect(profBonus(5)).toBe(3);
     expect(profBonus(20)).toBe(6);
+  });
+});
+
+describe('hands', () => {
+  const twoHander = weapon({ uid: 'gs', name: 'Greatsword', properties: '["Two-Handed", "Heavy"]' });
+  const sword = weapon({ uid: 'ls', name: 'Longsword', properties: '["Versatile (1d10)"]', damage: '1d8' });
+  const daggerA = weapon({ uid: 'da', name: 'Dagger', properties: '["Light"]' });
+  const daggerB = weapon({ uid: 'db', name: 'Dagger', properties: '["Light"]' });
+  const shield = armor({ uid: 'sh', name: 'Shield', armor_type: 'Shield', armor_class: 2 });
+
+  it('isTwoHandedWeapon / isShieldEntry classify entries', () => {
+    expect(isTwoHandedWeapon(twoHander)).toBe(true);
+    expect(isTwoHandedWeapon(sword)).toBe(false);
+    expect(isShieldEntry(shield)).toBe(true);
+    expect(isShieldEntry(sword)).toBe(false);
+  });
+
+  it('weaponVersatileDie uses an explicit parenthetical die when present', () => {
+    expect(weaponVersatileDie(sword)).toBe('1d10');
+    expect(isVersatileWeapon(sword)).toBe(true);
+    expect(weaponVersatileDie(daggerA)).toBeNull();
+  });
+
+  it('weaponVersatileDie derives the die from base damage for seeded "Versatile" (no parenthetical)', () => {
+    const spear = weapon({ name: 'Spear', damage: '1d6', properties: '["Thrown", "Versatile", "Monk"]' });
+    expect(isVersatileWeapon(spear)).toBe(true);
+    expect(weaponVersatileDie(spear)).toBe('1d8'); // 1d6 → one die up
+    const seededLongsword = weapon({ name: 'Longsword', damage: '1d8', properties: '["Versatile"]' });
+    expect(weaponVersatileDie(seededLongsword)).toBe('1d10');
+  });
+
+  it('assignHand places a one-handed weapon in a hand (equipped synced)', () => {
+    const out = assignHand([sword], 'main', 'ls');
+    expect(out.find((e) => e.uid === 'ls')).toMatchObject({ hand: 'main', equipped: true });
+  });
+
+  it('assignHand dual-wields two one-handed weapons without clobbering', () => {
+    let out = assignHand([daggerA, daggerB], 'main', 'da');
+    out = assignHand(out, 'off', 'db');
+    expect(handContents(out)).toMatchObject({ main: expect.objectContaining({ uid: 'da' }), off: expect.objectContaining({ uid: 'db' }) });
+  });
+
+  it('assignHand: a two-handed weapon takes both hands and clears everything else', () => {
+    let out = assignHand([daggerA, twoHander], 'main', 'da'); // dagger in main
+    out = assignHand(out, 'main', 'gs'); // now wield the greatsword
+    const hc = handContents(out);
+    expect(hc.twoHanded).toMatchObject({ uid: 'gs' });
+    expect(out.find((e) => e.uid === 'da').hand).toBeUndefined();
+    expect(out.find((e) => e.uid === 'da').equipped).toBe(false);
+  });
+
+  it('assignHand: a one-hander in main clears a two-hander spanning both', () => {
+    let out = assignHand([twoHander, sword], 'main', 'gs'); // greatsword both hands
+    out = assignHand(out, 'main', 'ls'); // swap to longsword in main
+    expect(out.find((e) => e.uid === 'gs').hand).toBeUndefined();
+    expect(handContents(out).main).toMatchObject({ uid: 'ls' });
+    expect(handContents(out).off).toBeNull();
+  });
+
+  it('assignHand with null frees the slot', () => {
+    let out = assignHand([sword], 'main', 'ls');
+    out = assignHand(out, 'main', null);
+    expect(out.find((e) => e.uid === 'ls').hand).toBeUndefined();
+    expect(freeHandCount(out)).toBe(2);
+  });
+
+  it('a held shield can share a hand with a one-handed weapon and counts toward freeHandCount', () => {
+    let out = assignHand([sword, shield], 'main', 'ls');
+    out = assignHand(out, 'off', 'sh');
+    expect(freeHandCount(out)).toBe(0);
+    expect(equippedShield(out)).toMatchObject({ uid: 'sh' });
+  });
+
+  it('migrateHands maps legacy equipped weapons to hands (idempotent)', () => {
+    const legacy = [{ ...daggerA, equipped: true }, { ...daggerB, equipped: true }];
+    const migrated = migrateHands(legacy);
+    expect(migrated.find((e) => e.uid === 'da').hand).toBe('main');
+    expect(migrated.find((e) => e.uid === 'db').hand).toBe('off');
+    // running again is a no-op (already has hands)
+    expect(migrateHands(migrated)).toEqual(migrated);
+  });
+
+  it('migrateHands gives a legacy two-handed weapon both hands and unequips the rest', () => {
+    const legacy = [{ ...twoHander, equipped: true }, { ...daggerA, equipped: true }];
+    const migrated = migrateHands(legacy);
+    expect(migrated.find((e) => e.uid === 'gs').hand).toBe('both');
+    expect(migrated.find((e) => e.uid === 'da').equipped).toBe(false);
+  });
+
+  it('assignHand can grip a versatile weapon in both hands and revert it', () => {
+    let out = assignHand([sword], 'main', 'ls', true);
+    expect(handContents(out).twoHanded).toMatchObject({ uid: 'ls' });
+    out = assignHand(out, 'main', 'ls', false);
+    expect(out.find((e) => e.uid === 'ls').hand).toBe('main');
+    expect(handContents(out).off).toBeNull();
+  });
+
+  it('getAttacks uses the versatile two-handed die only when gripped in both hands', () => {
+    const oneHanded = getAttacks({ inventory: [{ ...sword, hand: 'main', equipped: true }], scores: { strength: 10 } });
+    expect(oneHanded[0].damage).toContain('1d8'); // one-handed grip → base die
+    const twoHanded = getAttacks({ inventory: [{ ...sword, hand: 'both', equipped: true }], scores: { strength: 10 } });
+    expect(twoHanded[0].damage).toContain('1d10'); // two-handed grip → versatile die
   });
 });

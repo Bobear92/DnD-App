@@ -105,11 +105,12 @@ export function normalizeWeapons(inventory = []) {
 }
 
 const isShield = (e) => (e.armor_type || '').toLowerCase() === 'shield';
+export const isShieldEntry = isShield;
 
 /**
- * Toggle the equipped flag. Only one body armor and one shield may be equipped at
- * once — equipping a new one unequips the previous of that kind. Weapons are individual
- * items and can each be equipped independently (e.g. dual-wielding).
+ * Toggle the equipped flag for BODY ARMOR (the Armor tab Equip button). Only one body
+ * armor may be worn at once — equipping a new one unequips the previous. Weapons and
+ * shields are held in hands instead (see assignHand), not toggled here.
  */
 export function toggleEquipped(inventory = [], uid) {
   const target = (inventory || []).find((e) => e.uid === uid);
@@ -117,11 +118,122 @@ export function toggleEquipped(inventory = [], uid) {
   const turningOn = !target.equipped;
   return (inventory || []).map((e) => {
     if (e.uid === uid) return { ...e, equipped: turningOn };
-    // When equipping body armor or a shield, unequip the other of the same kind.
+    // When equipping body armor, unequip the other body armor.
     if (turningOn && target.category === 'armor' && e.category === 'armor' && e.equipped && isShield(e) === isShield(target)) {
       return { ...e, equipped: false };
     }
     return e;
+  });
+}
+
+// ─── Hands (main / off) ──────────────────────────────────────────────────────────
+//
+// Weapons and shields are held in hands rather than independently "equipped". Each entry
+// may carry a `hand` of 'main', 'off', or 'both' (a two-handed weapon occupies both). The
+// legacy `equipped` boolean is kept in sync (equipped === hand is set) so all downstream
+// AC / attack / action-economy code that reads `equipped` keeps working.
+
+const TWO_HANDED_RE = /two-handed/i;
+
+/** Only weapons and shields can be held in a hand. */
+export const isHandCapable = (e) => e?.category === 'weapons' || isShield(e);
+
+/** A two-handed weapon (occupies both hands when wielded). */
+export function isTwoHandedWeapon(e = {}) {
+  return e?.category === 'weapons' && TWO_HANDED_RE.test(e.properties || '');
+}
+
+/** Does the weapon have the Versatile property? */
+export const isVersatileWeapon = (w) => /versatile/i.test(String(w?.properties ?? ''));
+
+// RAW versatile die = the base die one size up (d4→d6→d8→d10→d12, capped).
+const DIE_STEP_UP = { 4: 6, 6: 8, 8: 10, 10: 12, 12: 12 };
+
+/**
+ * The two-handed damage die for a Versatile weapon, or null. Prefers an explicit die in the
+ * property text ("Versatile (1d10)" for homebrew/overrides); otherwise derives it from the
+ * base `damage` by stepping the die up one size (the seeded SRD data stores just "Versatile").
+ */
+export function weaponVersatileDie(weapon = {}) {
+  if (!isVersatileWeapon(weapon)) return null;
+  const explicit = /versatile\s*\(([^)]+)\)/i.exec(String(weapon.properties ?? ''));
+  if (explicit) return explicit[1].trim();
+  const m = /^\s*(\d*)d(\d+)/i.exec(String(weapon.damage ?? ''));
+  if (!m) return null;
+  const stepped = DIE_STEP_UP[Number(m[2])];
+  return stepped ? `${m[1] || '1'}d${stepped}` : null;
+}
+
+/** What's currently in each hand: { main, off, twoHanded }. A two-handed weapon fills both. */
+export function handContents(inventory = []) {
+  const list = inventory || [];
+  const both = list.find((e) => isHandCapable(e) && e.hand === 'both') || null;
+  if (both) return { main: both, off: both, twoHanded: both };
+  return {
+    main: list.find((e) => isHandCapable(e) && e.hand === 'main') || null,
+    off: list.find((e) => isHandCapable(e) && e.hand === 'off') || null,
+    twoHanded: null,
+  };
+}
+
+/** Number of empty hands (0–2) — drives the "free hand" / unarmed-strike display. */
+export function freeHandCount(inventory = []) {
+  const { main, off, twoHanded } = handContents(inventory);
+  if (twoHanded) return 0;
+  return (main ? 0 : 1) + (off ? 0 : 1);
+}
+
+const clearHand = (e) => (isHandCapable(e) && e.hand ? { ...e, hand: undefined, equipped: false } : e);
+
+/**
+ * Place an item into a hand slot, or free the slot. Pure.
+ *   slot:      'main' | 'off'
+ *   uid:       the entry to hold, or null/'' to free that hand
+ *   twoHanded: grip a Versatile weapon in both hands (its larger die); ignored for items
+ *              that aren't hand-capable. A weapon with the Two-Handed property always
+ *              takes both hands regardless.
+ * A two-handed grip clears everything else. A one-handed weapon or shield clears only
+ * whatever occupied the target slot (or a two-hander spanning it), leaving the other hand
+ * untouched (so you can dual-wield or hold a weapon + shield).
+ */
+export function assignHand(inventory = [], slot, uid, twoHanded = false) {
+  const list = inventory || [];
+  // Free the requested slot (and any two-hander spanning it).
+  let next = list.map((e) =>
+    isHandCapable(e) && (e.hand === slot || e.hand === 'both') ? clearHand(e) : e,
+  );
+  if (!uid) return next;
+  const target = next.find((e) => e.uid === uid);
+  if (!target || !isHandCapable(target)) return next;
+  if (isTwoHandedWeapon(target) || twoHanded) {
+    // Both hands: clear every hand, then take both.
+    next = next.map(clearHand);
+    return next.map((e) => (e.uid === uid ? { ...e, hand: 'both', equipped: true } : e));
+  }
+  return next.map((e) => (e.uid === uid ? { ...e, hand: slot, equipped: true } : e));
+}
+
+/**
+ * One-time migration of legacy `equipped` weapons/shields (no `hand`) to hand slots, so
+ * the hands UI reflects existing characters. Idempotent: returns the list unchanged once
+ * any held item already has a `hand`. A two-handed weapon claims both hands; otherwise the
+ * first two equipped items become main/off and any 3rd+ is unequipped (only two hands).
+ */
+export function migrateHands(inventory = []) {
+  const list = inventory || [];
+  const held = list.filter((e) => isHandCapable(e) && e.equipped);
+  if (held.length === 0 || held.some((e) => e.hand)) return list;
+  // Legacy held items have no `hand`, so unequip the non-assigned ones directly.
+  const unhold = (e) => (isHandCapable(e) && e.equipped ? { ...e, hand: undefined, equipped: false } : e);
+  const two = held.find(isTwoHandedWeapon);
+  if (two) {
+    return list.map((e) => (e.uid === two.uid ? { ...e, hand: 'both', equipped: true } : unhold(e)));
+  }
+  const [main, off] = held;
+  return list.map((e) => {
+    if (e.uid === main?.uid) return { ...e, hand: 'main', equipped: true };
+    if (e.uid === off?.uid) return { ...e, hand: 'off', equipped: true };
+    return unhold(e); // 3rd+ held item — only two hands
   });
 }
 
@@ -332,7 +444,7 @@ const ABILITY_ABBR = {
  * [{label, value}] making up the to-hit total (ability mod, proficiency, fighting styles)
  * so the UI can show "how the +N is calculated".
  */
-export function computeAttack(weapon, { scores = {}, level = 1, proficient = false, size = 'Medium', edition = '5e', feats = [], styles = [], soloWeapon = false } = {}) {
+export function computeAttack(weapon, { scores = {}, level = 1, proficient = false, size = 'Medium', edition = '5e', feats = [], styles = [], soloWeapon = false, versatileTwoHanded = false } = {}) {
   const { ability, mod } = weaponAbility(weapon, scores);
   const { bonus: toHitStyle, sources: toHitSources, parts: toHitParts } = styleToHitBonus(weapon, styles);
   const { bonus: dmgStyle, sources: dmgSources } = styleDamageBonus(weapon, styles, { soloWeapon });
@@ -343,7 +455,9 @@ export function computeAttack(weapon, { scores = {}, level = 1, proficient = fal
   const flat = mod + dmgStyle;
   const dmgBonus = flat === 0 ? '' : ` ${flat > 0 ? '+' : '-'} ${Math.abs(flat)}`;
   const dmgType = weapon.damage_type ? ` ${weapon.damage_type}` : '';
-  const damage = `${weapon.damage || '—'}${dmgBonus}${dmgType}`;
+  // A Versatile weapon uses its larger die when held two-handed (the other hand is free).
+  const versDie = versatileTwoHanded ? weaponVersatileDie(weapon) : null;
+  const damage = `${versDie || weapon.damage || '—'}${dmgBonus}${dmgType}`;
   const warning = weaponAttackWarning(weapon, { size, scores, edition });
   const loadingNote = weaponLoadingNote(weapon, { feats, proficient, edition });
   const styleNotes = [...new Set([...toHitSources, ...dmgSources])];
@@ -355,8 +469,12 @@ export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfT
   const equipped = (inventory || []).filter((e) => e.category === 'weapons' && e.equipped);
   // Dueling requires wielding a single weapon (a shield is fine, a second weapon is not).
   const soloWeapon = equipped.length === 1;
-  return equipped.map((w) => ({
-    uid: w.uid,
-    ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }), size, edition, feats, styles, soloWeapon }),
-  }));
+  return equipped.map((w) => {
+    // A Versatile weapon gripped in both hands (hand === 'both') uses its larger die.
+    const versatileTwoHanded = isVersatileWeapon(w) && w.hand === 'both';
+    return {
+      uid: w.uid,
+      ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }), size, edition, feats, styles, soloWeapon, versatileTwoHanded }),
+    };
+  });
 }
