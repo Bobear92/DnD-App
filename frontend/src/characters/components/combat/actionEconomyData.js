@@ -192,6 +192,10 @@ function unarmedAttack(scores = {}, level = 1, dice = null) {
   return {
     name: 'Unarmed Strike',
     toHit: formatSigned(str + profBonus(level)),
+    toHitBreakdown: [
+      { label: 'STR', value: str },
+      { label: 'Proficiency', value: profBonus(level) },
+    ],
     damage,
     proficient: true,
   };
@@ -234,6 +238,10 @@ export function buildActionEconomy({
       source: 'Weapon',
       cost: 'action',
       detail: `${atk.toHit} to hit · ${atk.damage}${flag}${disadv}`,
+      // Structured pieces so the UI can render the to-hit as a clickable breakdown.
+      toHit: atk.toHit,
+      toHitBreakdown: atk.toHitBreakdown || null,
+      detailRest: `to hit · ${atk.damage}${flag}${disadv}`,
       warning: atk.warning || null,
       loadingNote: atk.loadingNote || null,
     });

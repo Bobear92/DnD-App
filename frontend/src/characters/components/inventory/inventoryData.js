@@ -11,6 +11,7 @@
  */
 import { getAcOptions, hasFeat } from '@/characters/components/combat/combatBonuses';
 import { getFeatAcMods } from '@/characters/components/feats/featEffects';
+import { styleToHitBonus, styleDamageBonus, styleAcBonus } from '@/characters/components/combat/fightingStyles';
 
 /** Two or more equipped melee weapons (Dual Wielder's condition). */
 function twoMeleeWeaponsEquipped(inventory = []) {
@@ -150,7 +151,7 @@ export function equippedShield(inventory = []) {
  * Effective AC from equipped armor + shield, or the best unarmored formula when no
  * body armor is worn. Returns { value, source, parts:[string] }.
  */
-export function computeArmorClass({ inventory = [], scores = {}, charClass, subclass, feats = [] } = {}) {
+export function computeArmorClass({ inventory = [], scores = {}, charClass, subclass, feats = [], styles = [] } = {}) {
   const dex = abilityMod(scores.dexterity);
   const armor = equippedBodyArmor(inventory);
   const shield = equippedShield(inventory);
@@ -204,7 +205,11 @@ export function computeArmorClass({ inventory = [], scores = {}, charClass, subc
     if (applies && m.amount) { featBonus += m.amount; parts.push(`${formatSigned(m.amount)} ${m.source}`); }
   }
 
-  return { value: base + shieldBonus + featBonus, source, parts };
+  // Defense fighting style: +1 AC while wearing armor.
+  const { bonus: styleBonus, sources: styleSources } = styleAcBonus(styles, { armored: !!armor });
+  if (styleBonus) styleSources.forEach((s) => parts.push(`+1 ${s}`));
+
+  return { value: base + shieldBonus + featBonus + styleBonus, source, parts };
 }
 
 // ─── Proficiency ─────────────────────────────────────────────────────────────────
@@ -312,24 +317,46 @@ export function weaponLoadingNote(weapon, { feats = [], proficient = false, edit
   return 'Loading: only one attack per action, even with Extra Attack.';
 }
 
-/** Attack row for one weapon: { name, toHit, damage, ability, proficient, disadvantage, warning, loadingNote }. */
-export function computeAttack(weapon, { scores = {}, level = 1, proficient = false, size = 'Medium', edition = '5e', feats = [] } = {}) {
+// 3-letter labels for the ability that drives a weapon attack (shown in the to-hit breakdown).
+const ABILITY_ABBR = {
+  strength: 'STR', dexterity: 'DEX', constitution: 'CON',
+  intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA',
+};
+
+/**
+ * Attack row for one weapon:
+ *   { name, toHit, toHitBreakdown, damage, ability, proficient, disadvantage, warning, loadingNote, styleNotes }
+ * Fighting styles fold into the numbers: Archery (+2 ranged to-hit), Dueling (+2 one-handed
+ * melee damage when it's the only weapon — `soloWeapon`), Thrown Weapon Fighting (+2 thrown
+ * damage). `styleNotes` lists the styles that applied; `toHitBreakdown` is the per-source
+ * [{label, value}] making up the to-hit total (ability mod, proficiency, fighting styles)
+ * so the UI can show "how the +N is calculated".
+ */
+export function computeAttack(weapon, { scores = {}, level = 1, proficient = false, size = 'Medium', edition = '5e', feats = [], styles = [], soloWeapon = false } = {}) {
   const { ability, mod } = weaponAbility(weapon, scores);
-  const toHit = formatSigned(mod + (proficient ? profBonus(level) : 0));
-  const dmgBonus = mod === 0 ? '' : ` ${mod > 0 ? '+' : '-'} ${Math.abs(mod)}`;
+  const { bonus: toHitStyle, sources: toHitSources, parts: toHitParts } = styleToHitBonus(weapon, styles);
+  const { bonus: dmgStyle, sources: dmgSources } = styleDamageBonus(weapon, styles, { soloWeapon });
+  const toHit = formatSigned(mod + (proficient ? profBonus(level) : 0) + toHitStyle);
+  const toHitBreakdown = [{ label: ABILITY_ABBR[ability] || ability, value: mod }];
+  if (proficient) toHitBreakdown.push({ label: 'Proficiency', value: profBonus(level) });
+  for (const p of toHitParts) toHitBreakdown.push({ label: `${p.source} fighting style`, value: p.amount });
+  const flat = mod + dmgStyle;
+  const dmgBonus = flat === 0 ? '' : ` ${flat > 0 ? '+' : '-'} ${Math.abs(flat)}`;
   const dmgType = weapon.damage_type ? ` ${weapon.damage_type}` : '';
   const damage = `${weapon.damage || '—'}${dmgBonus}${dmgType}`;
   const warning = weaponAttackWarning(weapon, { size, scores, edition });
   const loadingNote = weaponLoadingNote(weapon, { feats, proficient, edition });
-  return { name: weapon.name, toHit, damage, ability, proficient, disadvantage: !!warning, warning, loadingNote };
+  const styleNotes = [...new Set([...toHitSources, ...dmgSources])];
+  return { name: weapon.name, toHit, toHitBreakdown, damage, ability, proficient, disadvantage: !!warning, warning, loadingNote, styleNotes };
 }
 
 /** Attack rows for every equipped weapon in the inventory. */
-export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [] } = {}) {
-  return (inventory || [])
-    .filter((e) => e.category === 'weapons' && e.equipped)
-    .map((w) => ({
-      uid: w.uid,
-      ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }), size, edition, feats }),
-    }));
+export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [] } = {}) {
+  const equipped = (inventory || []).filter((e) => e.category === 'weapons' && e.equipped);
+  // Dueling requires wielding a single weapon (a shield is fine, a second weapon is not).
+  const soloWeapon = equipped.length === 1;
+  return equipped.map((w) => ({
+    uid: w.uid,
+    ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }), size, edition, feats, styles, soloWeapon }),
+  }));
 }

@@ -127,6 +127,31 @@ describe('buildActionEconomy — Fighter', () => {
     expect(gs.detail).toMatch(/disadvantage/);
   });
 
+  it('carries the to-hit breakdown + detailRest onto the weapon entry', () => {
+    const args = fighterArgs(13, '5e');
+    args.attacks = [{
+      uid: 'lb1', name: 'Longbow', toHit: '+9', damage: '1d8 + 3 Piercing', proficient: true,
+      toHitBreakdown: [{ label: 'DEX', value: 3 }, { label: 'Proficiency', value: 4 }, { label: 'Archery fighting style', value: 2 }],
+    }];
+    const ec = buildActionEconomy(args);
+    const bow = ec.action.find((e) => e.name === 'Longbow');
+    expect(bow.toHit).toBe('+9');
+    expect(bow.toHitBreakdown).toHaveLength(3);
+    expect(bow.detailRest).toBe('to hit · 1d8 + 3 Piercing');
+  });
+
+  it('gives the unarmed strike a to-hit breakdown too', () => {
+    const args = fighterArgs(5, '5e');
+    args.attacks = [];
+    args.inventory = [];
+    const ec = buildActionEconomy(args);
+    const unarmed = ec.action.find((e) => e.name === 'Unarmed Strike');
+    expect(unarmed.toHitBreakdown).toEqual([
+      { label: 'STR', value: 3 },
+      { label: 'Proficiency', value: 3 },
+    ]);
+  });
+
   it('puts Second Wind under Bonus and Action Surge under No Action (5e)', () => {
     const ec = buildActionEconomy(fighterArgs(3, '5e'));
     expect(ec.bonus.map((e) => e.name)).toContain('Second Wind');

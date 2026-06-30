@@ -229,6 +229,77 @@ describe('attack math', () => {
   });
 });
 
+describe('fighting styles fold into attack/AC math', () => {
+  it('Archery adds +2 to ranged to-hit (not melee, not without the style)', () => {
+    const bow = { name: 'Longbow', damage: '1d8', damage_type: 'Piercing', weapon_type: 'ranged' };
+    // DEX 16 (+3), level 1 (PB +2), proficient → +5, plus Archery +2 = +7
+    expect(computeAttack(bow, { scores: { dexterity: 16 }, level: 1, proficient: true, styles: ['Archery'] }).toHit).toBe('+7');
+    expect(computeAttack(bow, { scores: { dexterity: 16 }, level: 1, proficient: true }).toHit).toBe('+5');
+    const sword = { name: 'Longsword', damage: '1d8', weapon_type: 'melee' };
+    expect(computeAttack(sword, { scores: { strength: 16 }, level: 1, proficient: true, styles: ['Archery'] }).toHit).toBe('+5');
+  });
+
+  it('Archery to-hit flows through getAttacks for an equipped ranged weapon', () => {
+    const inv = [weapon({ uid: 'b1', equipped: true, name: 'Longbow', damage: '1d8', weapon_type: 'ranged', weapon_category: 'Martial' })];
+    const rows = getAttacks({ inventory: inv, scores: { dexterity: 16 }, level: 1, weaponProfText: 'martial weapons', styles: ['Archery'] });
+    expect(rows[0].toHit).toBe('+7');
+    expect(rows[0].styleNotes).toContain('Archery');
+  });
+
+  it('computeAttack returns a to-hit breakdown of ability / proficiency / fighting style', () => {
+    const bow = { name: 'Longbow', damage: '1d8', weapon_type: 'ranged' };
+    // DEX 16 (+3), level 13 (PB +5), proficient, Archery +2 → +10
+    const atk = computeAttack(bow, { scores: { dexterity: 16 }, level: 13, proficient: true, styles: ['Archery'] });
+    expect(atk.toHit).toBe('+10');
+    expect(atk.toHitBreakdown).toEqual([
+      { label: 'DEX', value: 3 },
+      { label: 'Proficiency', value: 5 },
+      { label: 'Archery fighting style', value: 2 },
+    ]);
+    // Sum of the breakdown equals the total to-hit.
+    expect(atk.toHitBreakdown.reduce((s, p) => s + p.value, 0)).toBe(10);
+  });
+
+  it('to-hit breakdown drops proficiency when not proficient', () => {
+    const sword = { name: 'Longsword', damage: '1d8', weapon_type: 'melee' };
+    const atk = computeAttack(sword, { scores: { strength: 16 }, level: 5, proficient: false });
+    expect(atk.toHitBreakdown).toEqual([{ label: 'STR', value: 3 }]);
+  });
+
+  it('Dueling adds +2 damage to a solo one-handed melee weapon, but not when a second weapon is equipped', () => {
+    const solo = [weapon({ uid: 's1', equipped: true, name: 'Longsword', damage: '1d8', damage_type: 'Slashing', weapon_type: 'melee', weapon_category: 'Martial' })];
+    // STR 16 (+3) + Dueling +2 → 1d8 + 5
+    let rows = getAttacks({ inventory: solo, scores: { strength: 16 }, level: 1, weaponProfText: 'martial weapons', styles: ['Dueling'] });
+    expect(rows[0].damage).toBe('1d8 + 5 Slashing');
+    expect(rows[0].styleNotes).toContain('Dueling');
+    // Equip a second weapon → Dueling no longer applies to either.
+    const dual = [...solo, weapon({ uid: 's2', equipped: true, name: 'Shortsword', damage: '1d6', weapon_type: 'melee' })];
+    rows = getAttacks({ inventory: dual, scores: { strength: 16 }, level: 1, weaponProfText: 'martial weapons', styles: ['Dueling'] });
+    expect(rows.find((r) => r.uid === 's1').damage).toBe('1d8 + 3 Slashing');
+  });
+
+  it('Dueling does not apply to a two-handed weapon', () => {
+    const inv = [weapon({ uid: 'g1', equipped: true, name: 'Greatsword', damage: '2d6', damage_type: 'Slashing', weapon_type: 'melee', properties: 'Heavy, Two-handed', weapon_category: 'Martial' })];
+    const rows = getAttacks({ inventory: inv, scores: { strength: 16 }, level: 1, weaponProfText: 'martial weapons', styles: ['Dueling'] });
+    expect(rows[0].damage).toBe('2d6 + 3 Slashing');
+  });
+
+  it('Thrown Weapon Fighting adds +2 damage to a thrown weapon', () => {
+    const axe = { name: 'Handaxe', damage: '1d6', damage_type: 'Slashing', weapon_type: 'melee', properties: 'Light, Thrown' };
+    // STR 14 (+2) + Thrown +2 → 1d6 + 4
+    expect(computeAttack(axe, { scores: { strength: 14 }, level: 1, proficient: true, styles: ['Thrown Weapon Fighting'] }).damage)
+      .toBe('1d6 + 4 Slashing');
+  });
+
+  it('Defense fighting style adds +1 AC while armored (not unarmored)', () => {
+    const inv = [armor({ equipped: true, name: 'Leather', armor_type: 'light', armor_class: 11 })];
+    // 11 + DEX 14 (+2) + Defense +1 = 14
+    expect(computeArmorClass({ inventory: inv, scores: { dexterity: 14 }, styles: ['Defense'] }).value).toBe(14);
+    // No armor → no Defense bonus.
+    expect(computeArmorClass({ inventory: [], scores: { dexterity: 14 }, charClass: 'Fighter', styles: ['Defense'] }).value).toBe(12);
+  });
+});
+
 describe('heavy weapon / size warnings', () => {
   const greatsword = { name: 'Greatsword', damage: '2d6', properties: '["Two-Handed", "Heavy"]', weapon_category: 'Martial' };
   const heavyXbow = { name: 'Heavy Crossbow', damage: '1d10', properties: '["Heavy", "Loading"]', weapon_type: 'Ranged' };

@@ -22,6 +22,7 @@ import {
   isWeaponProficient, isArmorProficient, creatureSize, weaponAttackWarning, weaponLoadingNote,
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
 } from '@/characters/components/inventory/inventoryData';
+import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 
 // Tools are stored as adventuring-gear entries but get their own sub-tab (inserted
 // right after Gear). It isn't a real encyclopedia category — the Add picker reuses
@@ -93,8 +94,9 @@ export default function InventoryTab({
   const proficiencies = gatherProficiencies({ charClass, characterData });
 
   const size = creatureSize(characterData, race);
-  const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats });
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats });
+  const styles = gatherFightingStyles(characterData);
+  const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats, styles });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles });
   const attuned = attunedCount(inventory);
 
   // Tools tab gathers tool entries from anywhere; the Gear tab excludes tools + ammo;
@@ -113,7 +115,7 @@ export default function InventoryTab({
 
   const push = (next, syncAc = false) => {
     const patch = { inventory: next };
-    if (syncAc) patch.armor_class = computeArmorClass({ inventory: next, scores, charClass, subclass, feats: characterData?.feats }).value;
+    if (syncAc) patch.armor_class = computeArmorClass({ inventory: next, scores, charClass, subclass, feats: characterData?.feats, styles }).value;
     onChange?.(patch);
   };
 
@@ -231,6 +233,11 @@ export default function InventoryTab({
                   </div>
                   {a.warning && (
                     <span className="text-[11px] text-amber-600 leading-tight" data-testid={`attack-warning-${a.uid}`}>{a.warning}</span>
+                  )}
+                  {a.styleNotes?.length > 0 && (
+                    <span className="text-[11px] text-emerald-600 leading-tight" data-testid={`attack-style-${a.uid}`}>
+                      Includes {a.styleNotes.join(', ')} fighting style.
+                    </span>
                   )}
                 </div>
               ))}

@@ -112,6 +112,27 @@ describe('ActionEconomyTab', () => {
     expect(screen.getByTestId('ae-universal')).toBeInTheDocument();
   });
 
+  it('shows a clickable to-hit breakdown on a weapon attack (Archery longbow)', () => {
+    const longbow = {
+      uid: 'lb1', category: 'weapons', equipped: true, name: 'Longbow',
+      weapon_category: 'Martial', weapon_type: 'ranged', damage: '1d8', damage_type: 'Piercing', properties: '[]',
+    };
+    // DEX 16 (+3), level 5 (PB +3), proficient, Archery +2 → +8
+    renderTab({ inventory: [longbow], scores: { strength: 10, dexterity: 16 }, characterData: { fighting_style: 'Archery' } });
+    const btn = screen.getByTestId('ae-tohit-weapon:lb1:0');
+    expect(btn).toHaveTextContent('+8');
+    // Breakdown is hidden until the to-hit is clicked.
+    expect(screen.queryByTestId('ae-tohit-breakdown-weapon:lb1:0')).not.toBeInTheDocument();
+    fireEvent.click(btn);
+    const bd = screen.getByTestId('ae-tohit-breakdown-weapon:lb1:0');
+    expect(bd).toHaveTextContent('+3 DEX');
+    expect(bd).toHaveTextContent('+3 Proficiency');
+    expect(bd).toHaveTextContent('+2 Archery fighting style');
+    // Clicking again collapses it.
+    fireEvent.click(btn);
+    expect(screen.queryByTestId('ae-tohit-breakdown-weapon:lb1:0')).not.toBeInTheDocument();
+  });
+
   it('flags disadvantage on a Heavy weapon for a Small (5e) character', () => {
     renderTab({ inventory: [greatswordEntry], race: 'Halfling' });
     expect(screen.getByText('Greatsword')).toBeInTheDocument();

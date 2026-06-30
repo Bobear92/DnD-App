@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
 import { getRaceGrantedWeapons } from '@/characters/components/race/raceProficienciesData';
-import { getAttacks, creatureSize } from '@/characters/components/inventory/inventoryData';
+import { getAttacks, creatureSize, formatSigned } from '@/characters/components/inventory/inventoryData';
+import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import {
   buildActionEconomy, characterSpellNames, TABS, TAB_LABELS, SOURCE_ORDER,
 } from '@/characters/components/combat/actionEconomyData';
@@ -23,6 +24,34 @@ const EMPTY_NOTES = {
   'action+bonus': 'This character has nothing that combines an action and a bonus action (e.g. Two-Weapon Fighting).',
   reaction: 'This character has no reactions available.',
 };
+
+/**
+ * The weapon to-hit total as a clickable chip — tapping it toggles a breakdown of how
+ * the +N is calculated (ability mod, proficiency, fighting styles). Falls back to plain
+ * text when there's no breakdown to show.
+ */
+function ToHitBreakdown({ toHit, breakdown, entryKey }) {
+  const [open, setOpen] = useState(false);
+  if (!breakdown || breakdown.length === 0) return <span>{toHit}</span>;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="font-medium text-foreground underline decoration-dotted underline-offset-2 hover:text-primary"
+        aria-expanded={open}
+        data-testid={`ae-tohit-${entryKey}`}
+      >
+        {toHit}
+      </button>
+      {open && (
+        <span className="ml-1 text-muted-foreground" data-testid={`ae-tohit-breakdown-${entryKey}`}>
+          ({breakdown.map((p) => `${formatSigned(p.value)} ${p.label}`).join(', ')})
+        </span>
+      )}
+    </>
+  );
+}
 
 function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
   return (
@@ -54,7 +83,14 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
             ))}
           </div>
         )}
-        {entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>}
+        {entry.toHitBreakdown ? (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            <ToHitBreakdown toHit={entry.toHit} breakdown={entry.toHitBreakdown} entryKey={entry.key} />
+            {entry.detailRest ? ` ${entry.detailRest}` : ''}
+          </p>
+        ) : (
+          entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>
+        )}
         {entry.warning && (
           <p className="text-[11px] text-amber-600 leading-tight mt-0.5" data-testid={`ae-warning-${entry.key}`}>⚠ {entry.warning}</p>
         )}
@@ -119,7 +155,8 @@ export default function ActionEconomyTab({
   const weaponProfText = (CLASS_PROFICIENCIES_5E[charClass] || {}).weapons || '';
   const raceWeapons = getRaceGrantedWeapons(race, subrace) || [];
   const size = creatureSize(characterData, race);
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats });
+  const styles = gatherFightingStyles(characterData);
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles });
 
   // A loading weapon caps the Attack action to one shot even with Extra Attack (unless a
   // feat lifts it — Crossbow Expert sets loadingNote to "…ignored…"). Surface a caveat on
