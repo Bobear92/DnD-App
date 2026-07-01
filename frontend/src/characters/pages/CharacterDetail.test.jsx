@@ -723,6 +723,17 @@ describe('CharacterDetail', () => {
       expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
     });
 
+    it('links the Spells tab to the spacing mechanics page', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, char_class: 'Wizard', character_data: { skill_proficiencies: [] } },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('spacing-learn-more-spells').getAttribute('href'))
+        .toContain('/encyclopedia/mechanics/spacing');
+    });
+
     it('shows Spells tab for Tiefling Fighter (race-granted Thaumaturgy)', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,

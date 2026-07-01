@@ -170,6 +170,29 @@ describe('ActionEconomyTab', () => {
     expect(screen.getByTestId('loading-learn-more-weapon:lx1:0')).toHaveAttribute('href', '/campaigns/1/encyclopedia/mechanics/loading');
   });
 
+  it('notes the within-5-ft ranged disadvantage on a ranged weapon entry + links to the spacing page', () => {
+    renderTab({ inventory: [lightXbowEntry] });
+    expect(screen.getByTestId('ae-spacing-weapon:lx1:0')).toHaveTextContent(/disadvantage while an enemy is within 5 ft/i);
+    expect(screen.getByTestId('spacing-learn-more-weapon:lx1:0')).toHaveAttribute('href', '/campaigns/1/encyclopedia/mechanics/spacing');
+  });
+
+  it('Crossbow Expert flips the ranged spacing note to "no disadvantage"', () => {
+    renderTab({ inventory: [lightXbowEntry], characterData: { feats: [{ name: 'Crossbow Expert' }] } });
+    expect(screen.getByTestId('ae-spacing-weapon:lx1:0')).toHaveTextContent(/no disadvantage/i);
+  });
+
+  it('shows no spacing note on a melee-only weapon', () => {
+    renderTab({ inventory: [longswordEntry] });
+    expect(screen.queryByTestId('ae-spacing-weapon:w1:0')).not.toBeInTheDocument();
+  });
+
+  it('shows a ranged-spell spacing note under the Spell section', async () => {
+    renderTab({ characterData: { prepared_spells: ['Fireball'] } });
+    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
+    expect(screen.getByTestId('ae-spacing-spells')).toHaveTextContent(/ranged attack roll/i);
+    expect(screen.getByTestId('spacing-learn-more-spells')).toHaveAttribute('href', '/campaigns/1/encyclopedia/mechanics/spacing');
+  });
+
   it('shows Second Wind under the Bonus Actions tab', () => {
     renderTab();
     fireEvent.click(screen.getByTestId('ae-subtab-bonus'));

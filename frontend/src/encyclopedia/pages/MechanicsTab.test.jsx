@@ -49,4 +49,11 @@ describe('MechanicsTab', () => {
     expect(obj).toHaveTextContent('Drawing & Stowing Weapons');
     expect(obj).toHaveAttribute('href', '/campaigns/3/encyclopedia/mechanics/object-interaction');
   });
+
+  it('renders Spacing as an available linking card', () => {
+    renderTab();
+    const spacing = screen.getByTestId('mechanic-card-spacing');
+    expect(spacing).toHaveTextContent('Spacing');
+    expect(spacing).toHaveAttribute('href', '/campaigns/3/encyclopedia/mechanics/spacing');
+  });
 });

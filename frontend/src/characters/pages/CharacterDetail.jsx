@@ -1662,6 +1662,18 @@ export default function CharacterDetail() {
                           />
                         </div>
                       )}
+
+                      <p className="text-xs text-muted-foreground">
+                        A spell that requires a ranged attack roll (Fire Bolt, Eldritch Blast…) has disadvantage
+                        while an enemy is within 5 ft.{' '}
+                        <Link
+                          to={`/campaigns/${campaignId}/encyclopedia/mechanics/spacing`}
+                          className="text-primary hover:underline"
+                          data-testid="spacing-learn-more-spells"
+                        >
+                          How spacing works
+                        </Link>
+                      </p>
                     </>
                   );
                 })()}

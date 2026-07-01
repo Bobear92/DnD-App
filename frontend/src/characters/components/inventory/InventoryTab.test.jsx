@@ -169,6 +169,29 @@ describe('InventoryTab', () => {
     expect(screen.queryByTestId('loading-learn-more-w1')).not.toBeInTheDocument();
   });
 
+  it('flags the within-5-ft ranged disadvantage on a ranged weapon + links to the spacing page', () => {
+    renderTab({ inventory: [lightXbow], charClass: 'Fighter' });
+    expect(screen.getByTestId('spacing-note-lx1')).toHaveTextContent(/disadvantage while an enemy is within 5 ft/i);
+    expect(screen.getByTestId('spacing-learn-more-lx1')).toHaveAttribute(
+      'href', '/campaigns/1/encyclopedia/mechanics/spacing');
+  });
+
+  it('Crossbow Expert turns the spacing note into "no disadvantage"', () => {
+    renderTab({ inventory: [lightXbow], charClass: 'Fighter', characterData: { feats: [{ name: 'Crossbow Expert' }] } });
+    expect(screen.getByTestId('spacing-note-lx1')).toHaveTextContent(/no disadvantage/i);
+  });
+
+  it('shows the spacing note on a thrown weapon too', () => {
+    const handaxe = { uid: 'ha1', category: 'weapons', name: 'Handaxe', weapon_category: 'Simple', weapon_type: 'Melee', damage: '1d6', damage_type: 'Slashing', properties: '["Light", "Thrown"]', quantity: 1 };
+    renderTab({ inventory: [handaxe], charClass: 'Fighter' });
+    expect(screen.getByTestId('spacing-note-ha1')).toBeInTheDocument();
+  });
+
+  it('shows no spacing note on a melee-only weapon', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter' });
+    expect(screen.queryByTestId('spacing-note-w1')).not.toBeInTheDocument();
+  });
+
   it('renders weapon property badges (Heavy/Two-handed) on a weapon row', () => {
     renderTab({ inventory: [greatsword], race: 'Human', charClass: 'Fighter' });
     const row = screen.getByTestId('inv-row-gs1');

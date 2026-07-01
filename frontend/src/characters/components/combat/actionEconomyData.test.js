@@ -155,6 +155,39 @@ describe('buildActionEconomy — Fighter', () => {
     expect(bow.detailRest).toBe('to hit · 1d8 + 3 Piercing');
   });
 
+  it('adds a spacing note (disadvantage within 5 ft) to a ranged weapon attack', () => {
+    const args = fighterArgs(5, '5e');
+    args.attacks = [{ uid: 'lb1', name: 'Longbow', toHit: '+7', damage: '1d8 + 3 Piercing', proficient: true }];
+    args.inventory = [{ uid: 'lb1', name: 'Longbow', category: 'weapons', equipped: true, weapon_type: 'Ranged', properties: '["Ammunition", "Two-Handed"]' }];
+    const bow = buildActionEconomy(args).action.find((e) => e.name === 'Longbow');
+    expect(bow.spacingNote).toMatch(/disadvantage while an enemy is within 5 ft/i);
+  });
+
+  it('Crossbow Expert flips the ranged spacing note to "no disadvantage"', () => {
+    const args = fighterArgs(5, '5e');
+    args.attacks = [{ uid: 'hc1', name: 'Hand Crossbow', toHit: '+7', damage: '1d6 + 3 Piercing', proficient: true }];
+    args.inventory = [{ uid: 'hc1', name: 'Hand Crossbow', category: 'weapons', equipped: true, weapon_type: 'Ranged', properties: '["Ammunition", "Light"]' }];
+    args.characterData = { feats: [{ name: 'Crossbow Expert' }] };
+    const bow = buildActionEconomy(args).action.find((e) => e.name === 'Hand Crossbow');
+    expect(bow.spacingNote).toMatch(/no disadvantage/i);
+    expect(bow.spacingNote).toMatch(/Crossbow Expert/);
+  });
+
+  it('adds a spacing note to a thrown weapon', () => {
+    const args = fighterArgs(5, '5e');
+    args.attacks = [{ uid: 'ha1', name: 'Handaxe', toHit: '+5', damage: '1d6 + 3 Slashing', proficient: true }];
+    args.inventory = [{ uid: 'ha1', name: 'Handaxe', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Light", "Thrown"]' }];
+    const axe = buildActionEconomy(args).action.find((e) => e.name === 'Handaxe');
+    expect(axe.spacingNote).toBeTruthy();
+  });
+
+  it('no spacing note on a melee-only weapon', () => {
+    const args = fighterArgs(5, '5e');
+    args.inventory = [{ uid: 'w1', name: 'Longsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile (1d10)"]' }];
+    const ls = buildActionEconomy(args).action.find((e) => e.name === 'Longsword');
+    expect(ls.spacingNote).toBeNull();
+  });
+
   it('gives the unarmed strike a to-hit breakdown too', () => {
     const args = fighterArgs(5, '5e');
     args.attacks = [];

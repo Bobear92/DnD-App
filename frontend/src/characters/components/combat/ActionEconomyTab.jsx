@@ -128,6 +128,19 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
             >How the Loading property works</Link>
           </p>
         )}
+        {entry.spacingNote && (
+          <p
+            className={cn('text-[11px] leading-tight mt-0.5', /Crossbow Expert/i.test(entry.spacingNote) ? 'text-emerald-600' : 'text-muted-foreground')}
+            data-testid={`ae-spacing-${entry.key}`}
+          >
+            {entry.spacingNote}{' '}
+            <Link
+              to={`/campaigns/${campaignId}/encyclopedia/mechanics/spacing`}
+              className="text-primary hover:underline"
+              data-testid={`spacing-learn-more-${entry.key}`}
+            >How spacing works</Link>
+          </p>
+        )}
       </div>
       {/* Rest-rechargeable features get the same Use button as the Features tab. */}
       {resource && (
@@ -263,6 +276,16 @@ export default function ActionEconomyTab({
           {grouped.map(([src, list]) => (
             <div key={src} className="space-y-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{src === 'Weapon' ? 'Weapon Attacks' : src}</h3>
+              {src === 'Spell' && (
+                <p className="text-[11px] text-muted-foreground leading-tight" data-testid="ae-spacing-spells">
+                  A spell that requires a ranged attack roll (Fire Bolt, Eldritch Blast…) has disadvantage while an enemy is within 5 ft.{' '}
+                  <Link
+                    to={`/campaigns/${campaignId}/encyclopedia/mechanics/spacing`}
+                    className="text-primary hover:underline"
+                    data-testid="spacing-learn-more-spells"
+                  >How spacing works</Link>
+                </p>
+              )}
               <div className="space-y-2">
                 {list.map((e) => (
                   <ItemRow key={e.key} entry={e} resource={resourceFor(e)} onChange={onChange} readOnly={readOnly} campaignId={campaignId} />

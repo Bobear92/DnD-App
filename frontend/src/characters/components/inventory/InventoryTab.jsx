@@ -14,7 +14,7 @@ import {
   resolveWeaponAmmo, setWeaponAmmo, decrementAmmo, setAmmoQuantity,
 } from '@/characters/components/inventory/ammunitionData';
 import WeaponPropertyBadges from '@/characters/components/inventory/WeaponPropertyBadges';
-import { weaponBadges } from '@/characters/components/inventory/weaponPropertyData';
+import { weaponBadges, weaponFacets } from '@/characters/components/inventory/weaponPropertyData';
 import ItemPickerDialog from '@/characters/components/inventory/ItemPickerDialog';
 import {
   buildEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons, migrateHands,
@@ -427,6 +427,11 @@ export default function InventoryTab({
                 : null;
               const loadingIgnored = loadingNote && /ignored/i.test(loadingNote);
               const showAmmo = e.category === 'weapons' && weaponNeedsAmmo(e);
+              // A ranged attack (bow/crossbow/sling, or a thrown weapon) has disadvantage
+              // while an enemy is within 5 ft — flag it + link to the Spacing page. Crossbow
+              // Expert removes the penalty for ranged weapons.
+              const isRangedWeapon = e.category === 'weapons'
+                && (weaponNeedsAmmo(e) || weaponFacets(e).includes('Thrown'));
               return (
                 <div key={e.uid} className="flex items-center gap-3 px-3 py-2" data-testid={`inv-row-${e.uid}`}>
                   <div className={cn('w-1.5 h-9 rounded-full shrink-0', activeCategory.accent)} />
@@ -459,6 +464,25 @@ export default function InventoryTab({
                         >How the Loading property works</Link>
                       </div>
                     )}
+                    {isRangedWeapon && (() => {
+                      const hasCrossbowExpert = (characterData?.feats ?? []).some(
+                        (f) => (f?.name ?? f) === 'Crossbow Expert');
+                      return (
+                        <div
+                          className={cn('text-[11px] leading-tight', hasCrossbowExpert ? 'text-emerald-600' : 'text-muted-foreground')}
+                          data-testid={`spacing-note-${e.uid}`}
+                        >
+                          {hasCrossbowExpert
+                            ? 'No disadvantage firing while an enemy is within 5 ft (Crossbow Expert).'
+                            : 'Ranged attacks have disadvantage while an enemy is within 5 ft.'}{' '}
+                          <Link
+                            to={`/campaigns/${campaignId}/encyclopedia/mechanics/spacing`}
+                            className="text-primary hover:underline"
+                            data-testid={`spacing-learn-more-${e.uid}`}
+                          >How spacing works</Link>
+                        </div>
+                      );
+                    })()}
                     <div className="text-xs text-muted-foreground truncate">{activeCategory.subtitle(e)}</div>
                     {e.category === 'weapons' && (
                       <WeaponPropertyBadges badges={weaponBadges(e)} className="mt-1" />

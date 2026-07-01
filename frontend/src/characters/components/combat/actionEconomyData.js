@@ -172,6 +172,16 @@ const isImprovisedWeapon = (e) =>
   && ((e.weapon_category || '').toLowerCase() === 'improvised'
       || /improvised weapon/.test((e.name || '').toLowerCase()));
 
+/** A weapon that can make a ranged attack — a ranged weapon (bow/crossbow/sling/blowgun,
+ *  via the Ammunition property or weapon_type) or a thrown weapon. Such attacks have
+ *  disadvantage while an enemy is within 5 ft (see the Spacing mechanics page), unless
+ *  Crossbow Expert removes it. Mirrors InventoryTab's ranged-weapon detection. */
+const isRangedWeapon = (e) =>
+  e.category === 'weapons'
+  && ((e.weapon_type || '').toLowerCase() === 'ranged'
+      || (e.properties || '').toLowerCase().includes('ammunition')
+      || (e.properties || '').toLowerCase().includes('thrown'));
+
 /** A polearm that enables the Polearm Master bonus attack: glaive, halberd, quarterstaff, or spear. */
 const isPolearm = (e) =>
   e.category === 'weapons' && /\b(glaive|halberd|quarterstaff|spear)\b/.test((e.name || '').toLowerCase());
@@ -307,6 +317,13 @@ export function buildActionEconomy({
       detailRest: `to hit · ${atk.damage}${flag}${disadv}`,
       warning: atk.warning || null,
       loadingNote: atk.loadingNote || null,
+      // Situational note: a ranged/thrown attack has disadvantage while an enemy is within
+      // 5 ft. Crossbow Expert removes it. Rendered with a link to the Spacing page.
+      spacingNote: (weapon && isRangedWeapon(weapon))
+        ? (hasFeat(feats, 'Crossbow Expert')
+            ? 'No disadvantage firing while an enemy is within 5 ft (Crossbow Expert).'
+            : 'Ranged attacks have disadvantage while an enemy is within 5 ft.')
+        : null,
       // Great Weapon Master power-attack variant (5e), toggled in the UI. Null when N/A.
       powerAttack,
     });
