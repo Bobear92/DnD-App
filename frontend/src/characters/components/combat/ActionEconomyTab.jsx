@@ -54,6 +54,10 @@ function ToHitBreakdown({ toHit, breakdown, entryKey }) {
 }
 
 function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
+  // Great Weapon Master power attack: when a weapon entry carries a `powerAttack` variant,
+  // a toggle swaps the displayed to-hit/damage between the normal and −5/+10 numbers.
+  const [powerOn, setPowerOn] = useState(false);
+  const view = powerOn && entry.powerAttack ? entry.powerAttack : entry;
   return (
     <div
       className="flex items-start justify-between gap-3 rounded-md border bg-card px-3 py-2"
@@ -86,11 +90,27 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
         )}
         {entry.toHitBreakdown ? (
           <p className="text-xs text-muted-foreground mt-0.5">
-            <ToHitBreakdown toHit={entry.toHit} breakdown={entry.toHitBreakdown} entryKey={entry.key} />
-            {entry.detailRest ? ` ${entry.detailRest}` : ''}
+            <ToHitBreakdown toHit={view.toHit} breakdown={view.toHitBreakdown} entryKey={entry.key} />
+            {view.detailRest ? ` ${view.detailRest}` : ''}
           </p>
         ) : (
           entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>
+        )}
+        {entry.powerAttack && (
+          <button
+            type="button"
+            onClick={() => setPowerOn((v) => !v)}
+            className={cn(
+              'mt-1 rounded border px-1.5 py-0.5 text-[11px] font-medium transition-colors',
+              powerOn
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground hover:text-foreground'
+            )}
+            aria-pressed={powerOn}
+            data-testid={`ae-gwm-toggle-${entry.key}`}
+          >
+            {powerOn ? 'Great Weapon Master: on (−5 hit / +10 dmg)' : 'Use Great Weapon Master (−5 hit / +10 dmg)'}
+          </button>
         )}
         {entry.warning && (
           <p className="text-[11px] text-amber-600 leading-tight mt-0.5" data-testid={`ae-warning-${entry.key}`}>⚠ {entry.warning}</p>

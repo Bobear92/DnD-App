@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   classifyCastingTime, characterSpellNames, attacksPerAction, canTwoWeaponFight,
-  normalizeFeatureName, featuresKnownAtLevel, buildActionEconomy,
+  normalizeFeatureName, featuresKnownAtLevel, buildActionEconomy, greatWeaponMasterVariant,
 } from '@/characters/components/combat/actionEconomyData';
 
 describe('classifyCastingTime', () => {
@@ -42,6 +42,21 @@ describe('attacksPerAction', () => {
   });
   it('defaults to 1 for classes without authored tiers', () => {
     expect(attacksPerAction('Wizard', 20)).toBe(1);
+  });
+});
+
+describe('greatWeaponMasterVariant', () => {
+  it('subtracts 5 from to-hit and adds 10 to the flat damage modifier', () => {
+    const v = greatWeaponMasterVariant({ toHit: '+6', toHitBreakdown: [{ label: 'STR', value: 3 }, { label: 'Proficiency', value: 2 }], damage: '2d6 + 3 slashing' });
+    expect(v.toHit).toBe('+1');
+    expect(v.damage).toBe('2d6 + 13 slashing');
+    expect(v.toHitBreakdown).toContainEqual({ label: 'Great Weapon Master', value: -5 });
+  });
+  it('adds +10 when the weapon has no existing flat modifier', () => {
+    expect(greatWeaponMasterVariant({ toHit: '+4', damage: '1d12 slashing' }).damage).toBe('1d12 + 10 slashing');
+  });
+  it('folds a negative existing modifier into the +10', () => {
+    expect(greatWeaponMasterVariant({ toHit: '+0', damage: '2d6 - 1 bludgeoning' }).damage).toBe('2d6 + 9 bludgeoning');
   });
 });
 
@@ -410,6 +425,74 @@ describe('buildActionEconomy — Fighter', () => {
       const parry = buildActionEconomy(args).reaction.find((e) => e.name === 'Defensive Parry');
       expect(parry).toBeTruthy();
       expect(parry.detail).toMatch(/\+5 AC/);
+    });
+  });
+
+  describe('Great Weapon Master', () => {
+    const GWM = {
+      id: 30, name: 'Great Weapon Master', level: 4,
+      effects: [
+        { kind: 'ability_score', ability: 'strength', amount: 1 },
+        { kind: 'action', name: 'Cleave (Bonus Attack)', economy: 'bonus', trigger: 'When you score a crit or drop a creature to 0 HP with a melee weapon', description: 'Make one melee weapon attack as a bonus action.' },
+      ],
+    };
+    const greatsword = { uid: 'gs', name: 'Greatsword', category: 'weapons', equipped: true, hand: 'both', weapon_type: 'Melee', properties: '["Heavy", "Two-Handed"]', damage: '2d6', damage_type: 'slashing' };
+
+    it('hides the Cleave bonus attack when no melee weapon is equipped', () => {
+      const args = fighterArgs(4, '5e');
+      args.inventory = [];
+      args.attacks = [];
+      args.characterData = { feats: [GWM] };
+      expect(buildActionEconomy(args).bonus.find((e) => /cleave/i.test(e.name))).toBeFalsy();
+    });
+
+    it('shows the Cleave bonus attack when a melee weapon is equipped', () => {
+      const args = fighterArgs(4, '5e');
+      args.inventory = [greatsword];
+      args.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', toHitBreakdown: [{ label: 'STR', value: 3 }, { label: 'Proficiency', value: 2 }], damage: '2d6 + 3 slashing', proficient: true }];
+      args.characterData = { feats: [GWM] };
+      expect(buildActionEconomy(args).bonus.find((e) => /cleave/i.test(e.name))).toBeTruthy();
+    });
+
+    it('attaches a −5/+10 powerAttack variant to a proficient Heavy melee weapon (5e)', () => {
+      const args = fighterArgs(4, '5e');
+      args.inventory = [greatsword];
+      args.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', toHitBreakdown: [{ label: 'STR', value: 3 }, { label: 'Proficiency', value: 2 }], damage: '2d6 + 3 slashing', proficient: true }];
+      args.characterData = { feats: [GWM] };
+      const row = buildActionEconomy(args).action.find((e) => e.name === 'Greatsword');
+      expect(row.powerAttack).toBeTruthy();
+      expect(row.powerAttack.toHit).toBe('+1');
+      expect(row.powerAttack.detailRest).toContain('2d6 + 13 slashing');
+      expect(row.powerAttack.toHitBreakdown).toContainEqual({ label: 'Great Weapon Master', value: -5 });
+    });
+
+    it('does not attach powerAttack without the feat, to a non-heavy weapon, or when not proficient', () => {
+      const base = () => {
+        const a = fighterArgs(4, '5e');
+        a.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', damage: '2d6 + 3 slashing', proficient: true }];
+        a.inventory = [greatsword];
+        return a;
+      };
+      // No feat
+      expect(buildActionEconomy(base()).action.find((e) => e.name === 'Greatsword').powerAttack).toBeNull();
+      // Non-heavy weapon
+      const nonHeavy = base();
+      nonHeavy.characterData = { feats: [GWM] };
+      nonHeavy.inventory = [{ uid: 'gs', name: 'Longsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile (1d10)"]' }];
+      expect(buildActionEconomy(nonHeavy).action.find((e) => e.name === 'Greatsword').powerAttack).toBeNull();
+      // Not proficient
+      const notProf = base();
+      notProf.characterData = { feats: [GWM] };
+      notProf.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+3', damage: '2d6 + 3 slashing', proficient: false }];
+      expect(buildActionEconomy(notProf).action.find((e) => e.name === 'Greatsword').powerAttack).toBeNull();
+    });
+
+    it('does not attach the −5/+10 powerAttack in 2024 (the feat has no such option)', () => {
+      const args = fighterArgs(4, '5.5e');
+      args.inventory = [greatsword];
+      args.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', damage: '2d6 + 3 slashing', proficient: true }];
+      args.characterData = { feats: [GWM] };
+      expect(buildActionEconomy(args).action.find((e) => e.name === 'Greatsword').powerAttack).toBeNull();
     });
   });
 

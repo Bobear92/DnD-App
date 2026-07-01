@@ -18,7 +18,7 @@
  * their auto-derived weapon attacks + spells + universal menu until their feature map
  * is authored — expand CLASS_FEATURE_ACTIONS_* class-by-class.
  */
-import { abilityMod, profBonus, formatSigned, freeHandCount } from '@/characters/components/inventory/inventoryData';
+import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon } from '@/characters/components/inventory/inventoryData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
@@ -226,6 +226,30 @@ function unarmedAttack(scores = {}, level = 1, dice = null) {
   };
 }
 
+/** Add a flat amount to a damage string's modifier: "1d12 + 4 slashing" +10 → "1d12 + 14 slashing". */
+function addFlatDamage(damage, amount) {
+  const m = /^(\S+)(?:\s*([+-])\s*(\d+))?(.*)$/.exec((damage || '').trim());
+  if (!m) return damage;
+  const [, die, sign, num, rest] = m;
+  const flat = (sign === '-' ? -Number(num) : Number(num) || 0) + amount;
+  const flatStr = flat === 0 ? '' : ` ${flat > 0 ? '+' : '-'} ${Math.abs(flat)}`;
+  return `${die}${flatStr}${rest}`;
+}
+
+/**
+ * Great Weapon Master power attack (5e/2014): take −5 on the attack roll for +10 damage.
+ * Given a computed weapon attack row, returns the modified { toHit, toHitBreakdown, damage }.
+ * The flat damage modifier is parsed out of the row's damage string and raised by 10.
+ */
+export function greatWeaponMasterVariant(attackRow = {}) {
+  const base = parseInt(attackRow.toHit, 10) || 0;
+  return {
+    toHit: formatSigned(base - 5),
+    toHitBreakdown: [...(attackRow.toHitBreakdown || []), { label: 'Great Weapon Master', value: -5 }],
+    damage: addFlatDamage(attackRow.damage, 10),
+  };
+}
+
 /**
  * Build the four action-economy buckets for a specific character.
  *   attacks    — precomputed weapon attack rows [{name,toHit,damage,proficient}] (from getAttacks)
@@ -252,11 +276,25 @@ export function buildActionEconomy({
   // feat upgrades the unarmed die (e.g. Tavern Brawler's 1d4) so the upgrade is visible.
   const feats = characterData.feats || [];
   const unarmedDice = getFeatUnarmedDice(feats);
+  // Great Weapon Master's −5/+10 power attack is the 2014 mechanic; the 2024 feat replaces it
+  // with a flat +PB, so the toggle is 5e-only.
+  const gwm = !is2024 && hasFeat(feats, 'Great Weapon Master');
   const weaponRows = [...attacks];
   if (unarmedDice || weaponRows.length === 0) weaponRows.push(unarmedAttack(scores, level, unarmedDice));
   weaponRows.forEach((atk, i) => {
     const flag = atk.proficient === false ? ' · not proficient' : '';
     const disadv = atk.disadvantage ? ' · disadvantage' : '';
+    // Power-attack variant: only a proficient Heavy melee weapon qualifies for GWM.
+    const weapon = atk.uid ? (inventory || []).find((e) => e.uid === atk.uid) : null;
+    let powerAttack = null;
+    if (gwm && weapon && isMelee(weapon) && isHeavyWeapon(weapon) && atk.proficient !== false) {
+      const v = greatWeaponMasterVariant(atk);
+      powerAttack = {
+        toHit: v.toHit,
+        toHitBreakdown: v.toHitBreakdown,
+        detailRest: `to hit · ${v.damage}${flag}${disadv}`,
+      };
+    }
     push('action', {
       key: `weapon:${atk.uid || atk.name}:${i}`,
       name: atk.name,
@@ -269,6 +307,8 @@ export function buildActionEconomy({
       detailRest: `to hit · ${atk.damage}${flag}${disadv}`,
       warning: atk.warning || null,
       loadingNote: atk.loadingNote || null,
+      // Great Weapon Master power-attack variant (5e), toggled in the UI. Null when N/A.
+      powerAttack,
     });
   });
 
@@ -442,6 +482,8 @@ export function buildActionEconomy({
     // Polearm Master's bonus attack requires a qualifying polearm (glaive/halberd/quarterstaff/spear)
     // in hand — hide it when none is equipped.
     if (a.source === 'Polearm Master' && !hasEquipped(inventory, isPolearm)) continue;
+    // Great Weapon Master's Cleave bonus attack requires a melee weapon in hand — hide it otherwise.
+    if (a.source === 'Great Weapon Master' && !hasEquipped(inventory, isMelee)) continue;
     // Defensive Duelist's reaction only works while wielding a finesse weapon — hide it otherwise,
     // and when shown, spell out the +PB it adds to AC.
     let detail = [a.trigger, a.description].filter(Boolean).join(' — ');

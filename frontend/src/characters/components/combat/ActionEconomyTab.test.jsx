@@ -232,4 +232,23 @@ describe('ActionEconomyTab', () => {
     expect(bonus).toHaveTextContent('Grapple');
     expect(bonus).toHaveTextContent(/grapple the target/i); // detail-only sub-row renders its detail
   });
+
+  it('Great Weapon Master power-attack toggle swaps a Heavy melee weapon to −5/+10', () => {
+    // Fighter L5 (PB +3), STR 16 (+3), proficient Greatsword: +6 to hit, 2d6 + 3 damage.
+    renderTab({ inventory: [greatswordEntry], scores: { strength: 16 }, characterData: { feats: [{ name: 'Great Weapon Master' }] } });
+    expect(screen.getByTestId('ae-tohit-weapon:gs1:0')).toHaveTextContent('+6');
+    expect(screen.getByText(/2d6 \+ 3 Slashing/)).toBeInTheDocument();
+    const toggle = screen.getByTestId('ae-gwm-toggle-weapon:gs1:0');
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('ae-tohit-weapon:gs1:0')).toHaveTextContent('+1');
+    expect(screen.getByText(/2d6 \+ 13 Slashing/)).toBeInTheDocument();
+    // Toggling back restores the normal numbers.
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('ae-tohit-weapon:gs1:0')).toHaveTextContent('+6');
+  });
+
+  it('shows no Great Weapon Master toggle without the feat', () => {
+    renderTab({ inventory: [greatswordEntry], scores: { strength: 16 } });
+    expect(screen.queryByTestId('ae-gwm-toggle-weapon:gs1:0')).not.toBeInTheDocument();
+  });
 });
