@@ -344,6 +344,73 @@ describe('buildActionEconomy — Fighter', () => {
       expect(ec.action.find((e) => e.name === 'Unarmed Strike')).toBeFalsy();
       expect([...ec.action, ...ec.bonus].some((e) => e.source === 'Feat')).toBe(false);
     });
+
+    it('hides the Tavern Brawler combo when both hands are full and no improvised weapon is equipped', () => {
+      const args = fighterArgs(14, '5e');
+      args.inventory = [
+        { uid: 'sc', name: 'Scimitar', category: 'weapons', equipped: true, hand: 'main', weapon_type: 'Melee', properties: '["Finesse", "Light"]' },
+        { uid: 'hc', name: 'Crossbow, Hand', category: 'weapons', equipped: true, hand: 'off', weapon_type: 'Ranged', properties: '["Light", "Ammunition"]' },
+      ];
+      args.characterData = { feats: [TAVERN_BRAWLER] };
+      const ec = buildActionEconomy(args);
+      expect(ec['action+bonus'].find((e) => e.name === 'Tavern Brawler')).toBeFalsy();
+      expect(ec.bonus.find((e) => /grapple/i.test(e.name))).toBeFalsy();
+    });
+
+    it('shows the Tavern Brawler combo when a hand is free (Unarmed Strike lead)', () => {
+      const args = fighterArgs(14, '5e');
+      args.inventory = [
+        { uid: 'sc', name: 'Scimitar', category: 'weapons', equipped: true, hand: 'main', weapon_type: 'Melee', properties: '["Finesse", "Light"]' },
+      ]; // off hand free
+      args.characterData = { feats: [TAVERN_BRAWLER] };
+      const combo = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Tavern Brawler');
+      expect(combo).toBeTruthy();
+      expect(combo.subAttacks[0].name).toBe('Unarmed Strike');
+    });
+
+    const POLEARM_MASTER = {
+      id: 28, name: 'Polearm Master', level: 4,
+      effects: [
+        { kind: 'action', name: 'Polearm Butt (Bonus Attack)', economy: 'bonus', trigger: 'Attack with a glaive, halberd, quarterstaff, or spear', description: 'Bonus-action attack with the opposite end (1d4 bludgeoning).' },
+      ],
+    };
+
+    it('hides the Polearm Master bonus attack when no qualifying polearm is equipped', () => {
+      const args = fighterArgs(14, '5e');
+      args.inventory = [{ uid: 'sc', name: 'Scimitar', category: 'weapons', equipped: true, hand: 'main', weapon_type: 'Melee', properties: '["Finesse", "Light"]' }];
+      args.characterData = { feats: [POLEARM_MASTER] };
+      expect(buildActionEconomy(args).bonus.find((e) => /polearm/i.test(e.name))).toBeFalsy();
+    });
+
+    it('shows the Polearm Master bonus attack when a polearm is equipped', () => {
+      const args = fighterArgs(14, '5e');
+      args.inventory = [{ uid: 'gl', name: 'Glaive', category: 'weapons', equipped: true, hand: 'both', weapon_type: 'Melee', properties: '["Heavy", "Two-Handed", "Reach"]' }];
+      args.characterData = { feats: [POLEARM_MASTER] };
+      expect(buildActionEconomy(args).bonus.find((e) => /polearm/i.test(e.name))).toBeTruthy();
+    });
+
+    const DEFENSIVE_DUELIST = {
+      id: 6, name: 'Defensive Duelist', level: 4,
+      effects: [
+        { kind: 'action', name: 'Defensive Parry', economy: 'reaction', trigger: "When hit by a melee attack while wielding a finesse weapon", description: 'Add your proficiency bonus to your AC against that attack.' },
+      ],
+    };
+
+    it('hides Defensive Duelist when no finesse weapon is equipped', () => {
+      const args = fighterArgs(14, '5e');
+      args.inventory = [{ uid: 'ls', name: 'Longsword', category: 'weapons', equipped: true, hand: 'main', weapon_type: 'Melee', properties: '["Versatile (1d10)"]' }];
+      args.characterData = { feats: [DEFENSIVE_DUELIST] };
+      expect(buildActionEconomy(args).reaction.find((e) => e.name === 'Defensive Parry')).toBeFalsy();
+    });
+
+    it('shows Defensive Duelist with the +PB AC bonus when a finesse weapon is equipped', () => {
+      const args = fighterArgs(14, '5e'); // PB +5 at level 14
+      args.inventory = [{ uid: 'sc', name: 'Scimitar', category: 'weapons', equipped: true, hand: 'main', weapon_type: 'Melee', properties: '["Finesse", "Light"]' }];
+      args.characterData = { feats: [DEFENSIVE_DUELIST] };
+      const parry = buildActionEconomy(args).reaction.find((e) => e.name === 'Defensive Parry');
+      expect(parry).toBeTruthy();
+      expect(parry.detail).toMatch(/\+5 AC/);
+    });
   });
 
   describe('Crossbow Expert', () => {

@@ -18,7 +18,7 @@
  * their auto-derived weapon attacks + spells + universal menu until their feature map
  * is authored — expand CLASS_FEATURE_ACTIONS_* class-by-class.
  */
-import { abilityMod, profBonus, formatSigned } from '@/characters/components/inventory/inventoryData';
+import { abilityMod, profBonus, formatSigned, freeHandCount } from '@/characters/components/inventory/inventoryData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
@@ -171,6 +171,18 @@ const isImprovisedWeapon = (e) =>
   e.category === 'weapons'
   && ((e.weapon_category || '').toLowerCase() === 'improvised'
       || /improvised weapon/.test((e.name || '').toLowerCase()));
+
+/** A polearm that enables the Polearm Master bonus attack: glaive, halberd, quarterstaff, or spear. */
+const isPolearm = (e) =>
+  e.category === 'weapons' && /\b(glaive|halberd|quarterstaff|spear)\b/.test((e.name || '').toLowerCase());
+
+/** A finesse weapon — the Defensive Duelist reaction only works while wielding one. */
+const isFinesseWeapon = (e) =>
+  e.category === 'weapons' && (e.properties || '').toLowerCase().includes('finesse');
+
+/** Is any equipped weapon a match for the predicate? */
+const hasEquipped = (inventory, predicate) =>
+  (inventory || []).some((e) => e.equipped && predicate(e));
 
 /**
  * The equipped weapons that qualify for Two-Weapon Fighting — light melee weapons, or
@@ -353,10 +365,14 @@ export function buildActionEconomy({
   const grappleAction = getFeatActions(feats).find(
     (a) => a.source === 'Tavern Brawler' && /grapple/i.test(a.name),
   );
-  if (grappleAction) {
+  const equippedImprovised = (inventory || []).find((e) => e.equipped && isImprovisedWeapon(e));
+  // Only surface the combo when the character can actually make its Action half: an equipped
+  // improvised weapon, or a free hand for an Unarmed Strike. With both hands full and no
+  // improvised weapon, there's nothing to lead the grapple with, so hide it.
+  const canTavernBrawl = grappleAction && (equippedImprovised || freeHandCount(inventory) > 0);
+  if (canTavernBrawl) {
     const attackByUid = new Map(weaponRows.filter((a) => a.uid).map((a) => [a.uid, a]));
     const baseDamage = (w) => `${w.damage || '—'}${w.damage_type ? ` ${w.damage_type}` : ''}`;
-    const equippedImprovised = (inventory || []).find((e) => e.equipped && isImprovisedWeapon(e));
     let actionRow;
     if (equippedImprovised) {
       const row = attackByUid.get(equippedImprovised.uid);
@@ -415,6 +431,7 @@ export function buildActionEconomy({
   }
 
   // Feat actions (e.g. Tavern Brawler's bonus-action grapple), from snapshotted feat effects.
+  const pb = profBonus(level);
   for (const a of getFeatActions(feats)) {
     // Crossbow Expert's hand-crossbow attack only makes sense paired with an equipped hand
     // crossbow: it's shown as the Action+Bonus combo above when one is equipped, and not at
@@ -422,12 +439,22 @@ export function buildActionEconomy({
     if (hasCrossbowExpert && a.source === 'Crossbow Expert') continue;
     // Tavern Brawler's grapple is shown as the Action+Bonus combo above, never as a standalone bonus.
     if (a.source === 'Tavern Brawler' && /grapple/i.test(a.name)) continue;
+    // Polearm Master's bonus attack requires a qualifying polearm (glaive/halberd/quarterstaff/spear)
+    // in hand — hide it when none is equipped.
+    if (a.source === 'Polearm Master' && !hasEquipped(inventory, isPolearm)) continue;
+    // Defensive Duelist's reaction only works while wielding a finesse weapon — hide it otherwise,
+    // and when shown, spell out the +PB it adds to AC.
+    let detail = [a.trigger, a.description].filter(Boolean).join(' — ');
+    if (a.source === 'Defensive Duelist') {
+      if (!hasEquipped(inventory, isFinesseWeapon)) continue;
+      detail = `${detail} (currently +${pb} AC)`;
+    }
     push(a.economy, {
       key: a.key,
       name: a.name,
       source: 'Feat',
       cost: ECONOMY_COST_LABEL[a.economy] || a.economy,
-      detail: [a.trigger, a.description].filter(Boolean).join(' — '),
+      detail,
     });
   }
 
