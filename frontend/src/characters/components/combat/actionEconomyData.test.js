@@ -155,6 +155,24 @@ describe('buildActionEconomy — Fighter', () => {
     expect(bow.detailRest).toBe('to hit · 1d8 + 3 Piercing');
   });
 
+  it('rides a Champion crit range onto weapon attacks (not the unarmed fallback / non-Champions)', () => {
+    const args = { ...fighterArgs(3, '5e'), subclass: 'Champion' };
+    const ec = buildActionEconomy(args);
+    const ls = ec.action.find((e) => e.name === 'Longsword');
+    expect(ls.critRange).toBe('19–20');
+    expect(ls.critSource).toBe('Improved Critical');
+
+    // Level 15 → Superior Critical 18–20.
+    const superior = buildActionEconomy({ ...fighterArgs(15, '5e'), subclass: 'Champion' });
+    expect(superior.action.find((e) => e.name === 'Longsword').critRange).toBe('18–20');
+
+    // A Battle Master gets no crit range; the unarmed fallback (no weapon) never does.
+    const bm = buildActionEconomy({ ...fighterArgs(3, '5e'), subclass: 'Battle Master' });
+    expect(bm.action.find((e) => e.name === 'Longsword').critRange).toBeNull();
+    const unarmed = buildActionEconomy({ ...fighterArgs(3, '5e'), subclass: 'Champion', attacks: [] });
+    expect(unarmed.action.find((e) => e.name === 'Unarmed Strike').critRange).toBeNull();
+  });
+
   it('adds a spacing note (disadvantage within 5 ft) to a ranged weapon attack', () => {
     const args = fighterArgs(5, '5e');
     args.attacks = [{ uid: 'lb1', name: 'Longbow', toHit: '+7', damage: '1d8 + 3 Piercing', proficient: true }];

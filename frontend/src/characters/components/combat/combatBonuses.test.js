@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isDraconicSorcerer, hasToughFeat, hasDurableFeat, durableHitDieMin, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, getAcOptions, remarkableAthlete } from '@/characters/components/combat/combatBonuses';
+import { isDraconicSorcerer, hasToughFeat, hasDurableFeat, durableHitDieMin, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, getAcOptions, remarkableAthlete, critRange, critRangeLabel } from '@/characters/components/combat/combatBonuses';
 
 describe('remarkableAthlete', () => {
   it('null for non-Champion / non-Fighter / missing args', () => {
@@ -44,6 +44,45 @@ describe('remarkableAthlete', () => {
       expect(remarkableAthlete({ charClass: 'Fighter', subclass: 'Champion', level: 3, edition: '5e' })).toBeNull();
       expect(remarkableAthlete({ charClass: 'Fighter', subclass: 'Champion', level: 3, edition: '5.5e' })).not.toBeNull();
     });
+  });
+});
+
+describe('critRange', () => {
+  it('null for non-Champion / non-Fighter / missing args', () => {
+    expect(critRange()).toBeNull();
+    expect(critRange({ charClass: 'Fighter', subclass: 'Battle Master', level: 15 })).toBeNull();
+    expect(critRange({ charClass: 'Rogue', subclass: 'Champion', level: 15 })).toBeNull();
+  });
+  it('null for a Champion below level 3', () => {
+    expect(critRange({ charClass: 'Fighter', subclass: 'Champion', level: 2 })).toBeNull();
+  });
+  it('gives Improved Critical 19–20 at L3+', () => {
+    expect(critRange({ charClass: 'Fighter', subclass: 'Champion', level: 3 }))
+      .toEqual({ low: 19, high: 20, source: 'Improved Critical' });
+    expect(critRange({ charClass: 'Fighter', subclass: 'Champion', level: 14 }).source).toBe('Improved Critical');
+  });
+  it('upgrades to Superior Critical 18–20 at L15+', () => {
+    expect(critRange({ charClass: 'Fighter', subclass: 'Champion', level: 15 }))
+      .toEqual({ low: 18, high: 20, source: 'Superior Critical' });
+    expect(critRange({ charClass: 'Fighter', subclass: 'Champion', level: 20 }).low).toBe(18);
+  });
+  it('is edition-independent (Champion works in 2024 too)', () => {
+    expect(critRange({ charClass: 'Fighter', subclass: 'Champion', level: 3, edition: '5.5e' }).source)
+      .toBe('Improved Critical');
+  });
+});
+
+describe('critRangeLabel', () => {
+  it('null for a null crit', () => {
+    expect(critRangeLabel(null)).toBeNull();
+    expect(critRangeLabel(critRange({ charClass: 'Fighter', subclass: 'Battle Master', level: 15 }))).toBeNull();
+  });
+  it('renders the expanded range', () => {
+    expect(critRangeLabel({ low: 19, high: 20 })).toBe('19–20');
+    expect(critRangeLabel({ low: 18, high: 20 })).toBe('18–20');
+  });
+  it('renders a plain 20 when unexpanded', () => {
+    expect(critRangeLabel({ low: 20, high: 20 })).toBe('20');
   });
 });
 

@@ -146,6 +146,11 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
             {entry.savageAttacksNote}
           </p>
         )}
+        {entry.critRange && (
+          <p className="text-[11px] text-primary leading-tight font-medium mt-0.5" data-testid={`ae-crit-${entry.key}`}>
+            Crit {entry.critRange}{entry.critSource ? ` (${entry.critSource})` : ''}
+          </p>
+        )}
       </div>
       {/* Rest-rechargeable features get the same Use button as the Features tab. */}
       {resource && (

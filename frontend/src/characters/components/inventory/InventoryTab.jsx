@@ -25,6 +25,7 @@ import {
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
 } from '@/characters/components/inventory/inventoryData';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
+import { critRange, critRangeLabel } from '@/characters/components/combat/combatBonuses';
 import { getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
 
@@ -104,6 +105,10 @@ export default function InventoryTab({
 
   const size = creatureSize(characterData, race);
   const styles = gatherFightingStyles(characterData);
+  // Champion Fighter expanded crit range (Improved/Superior Critical) — applies to every
+  // weapon attack, so it's shown on each weapon row. Null for everyone else.
+  const crit = critRange({ charClass, subclass, level });
+  const critLabel = critRangeLabel(crit);
   const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats, styles });
   const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles });
   const attuned = attunedCount(inventory);
@@ -495,6 +500,11 @@ export default function InventoryTab({
                       </div>
                     )}
                     <div className="text-xs text-muted-foreground truncate">{activeCategory.subtitle(e)}</div>
+                    {e.category === 'weapons' && crit && (
+                      <div className="text-[11px] text-primary leading-tight font-medium" data-testid={`crit-range-${e.uid}`}>
+                        Crit {critLabel} ({crit.source})
+                      </div>
+                    )}
                     {e.category === 'weapons' && (
                       <WeaponPropertyBadges badges={weaponBadges(e)} className="mt-1" />
                     )}

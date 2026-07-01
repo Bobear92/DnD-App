@@ -196,6 +196,16 @@ describe('ActionEconomyTab', () => {
     expect(screen.queryByTestId('ae-savage-weapon:w1:0')).not.toBeInTheDocument();
   });
 
+  it('shows the Champion crit range on a weapon attack entry', () => {
+    renderTab({ inventory: [longswordEntry], subclass: 'Champion', level: 3 });
+    expect(screen.getByTestId('ae-crit-weapon:w1:0')).toHaveTextContent('Crit 19–20 (Improved Critical)');
+  });
+
+  it('no crit range for a non-Champion weapon attack', () => {
+    renderTab({ inventory: [longswordEntry], subclass: 'Battle Master', level: 3 });
+    expect(screen.queryByTestId('ae-crit-weapon:w1:0')).not.toBeInTheDocument();
+  });
+
   it('shows a ranged-spell spacing note under the Spell section', async () => {
     renderTab({ characterData: { prepared_spells: ['Fireball'] } });
     await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());

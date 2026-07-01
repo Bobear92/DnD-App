@@ -119,6 +119,24 @@ describe('InventoryTab', () => {
     expect(atk).toHaveTextContent('1d8 + 3 Slashing');
   });
 
+  it('shows the Champion crit range on weapon rows', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Champion', level: 3 });
+    expect(screen.getByTestId('crit-range-w1')).toHaveTextContent('Crit 19–20 (Improved Critical)');
+  });
+
+  it('upgrades the crit range to Superior Critical at L15', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Champion', level: 15 });
+    expect(screen.getByTestId('crit-range-w1')).toHaveTextContent('Crit 18–20 (Superior Critical)');
+  });
+
+  it('shows no crit range for a non-Champion / low-level Champion', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Battle Master', level: 15 });
+    expect(screen.queryByTestId('crit-range-w1')).not.toBeInTheDocument();
+    cleanup();
+    renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Champion', level: 2 });
+    expect(screen.queryByTestId('crit-range-w1')).not.toBeInTheDocument();
+  });
+
   it('5e: warns a Small creature about an equipped Heavy weapon (row + attack)', () => {
     renderTab({ inventory: [greatsword], race: 'Halfling', edition: '5e', charClass: 'Fighter' });
     expect(screen.getByTestId('attack-gs1')).toHaveTextContent('disadvantage');

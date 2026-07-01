@@ -53,6 +53,28 @@ export function remarkableAthlete({ charClass, subclass, level = 1, edition = '5
   };
 }
 
+/**
+ * Champion Fighter expanded critical-hit range, or null when it doesn't apply.
+ *   Improved Critical (Champion L3): weapon attacks crit on a roll of 19–20.
+ *   Superior Critical (Champion L15): weapon attacks crit on a roll of 18–20.
+ * Edition-independent — Champion exists in both 5e and 2024 with the same crit
+ * progression, so no edition gating is needed.
+ * Returns { low, high, source } — e.g. { low: 19, high: 20, source: 'Improved Critical' }.
+ */
+export function critRange({ charClass, subclass, level = 1 } = {}) {
+  if (charClass !== 'Fighter' || subclass !== 'Champion') return null;
+  const lvl = level ?? 1;
+  if (lvl >= 15) return { low: 18, high: 20, source: 'Superior Critical' };
+  if (lvl >= 3) return { low: 19, high: 20, source: 'Improved Critical' };
+  return null;
+}
+
+/** Display string for a crit range descriptor: { low, high } → "19–20" (or "20" if unexpanded). */
+export function critRangeLabel(crit) {
+  if (!crit) return null;
+  return crit.low >= 20 ? '20' : `${crit.low}–${crit.high}`;
+}
+
 /** True when the character has a feat with the given name (feats may be strings or {name}). */
 export function hasFeat(feats = [], name) {
   return (feats ?? []).some(f => (typeof f === 'string' ? f : f?.name) === name);

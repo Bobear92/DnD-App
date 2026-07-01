@@ -22,7 +22,7 @@ import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon } fro
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
-import { hasFeat } from '@/characters/components/combat/combatBonuses';
+import { hasFeat, critRange, critRangeLabel } from '@/characters/components/combat/combatBonuses';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
@@ -283,6 +283,11 @@ export function buildActionEconomy({
   const buckets = { no_action: [], action: [], bonus: [], 'action+bonus': [], reaction: [] };
   const push = (tab, entry) => { if (buckets[tab]) buckets[tab].push(entry); };
 
+  // Champion Fighter expanded crit range (Improved/Superior Critical) — applies to weapon
+  // attacks, so it rides on each real weapon Action entry. Null for everyone else.
+  const crit = critRange({ charClass, subclass, level });
+  const critLabel = critRangeLabel(crit);
+
   // Weapon attacks (Action). Show an unarmed strike when nothing is equipped, or whenever a
   // feat upgrades the unarmed die (e.g. Tavern Brawler's 1d4) so the upgrade is visible.
   const feats = characterData.feats || [];
@@ -331,6 +336,10 @@ export function buildActionEconomy({
         ? SAVAGE_ATTACKS_NOTE : null,
       // Great Weapon Master power-attack variant (5e), toggled in the UI. Null when N/A.
       powerAttack,
+      // Champion expanded crit range on real weapon attacks (not the unarmed fallback, which
+      // has no uid and isn't a weapon attack for Improved Critical).
+      critRange: atk.uid && crit ? critLabel : null,
+      critSource: atk.uid && crit ? crit.source : null,
     });
   });
 
