@@ -23,6 +23,7 @@ import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatur
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
 import { hasFeat } from '@/characters/components/combat/combatBonuses';
+import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
 const ECONOMY_COST_LABEL = {
@@ -324,6 +325,10 @@ export function buildActionEconomy({
             ? 'No disadvantage firing while an enemy is within 5 ft (Crossbow Expert).'
             : 'Ranged attacks have disadvantage while an enemy is within 5 ft.')
         : null,
+      // Half-Orc Savage Attacks: extra damage die on a melee weapon crit. Shown on melee
+      // weapon attacks (not unarmed strikes, which aren't weapons, nor ranged weapons).
+      savageAttacksNote: (weapon && isMelee(weapon) && hasSavageAttacks(characterData.race_traits))
+        ? SAVAGE_ATTACKS_NOTE : null,
       // Great Weapon Master power-attack variant (5e), toggled in the UI. Null when N/A.
       powerAttack,
     });

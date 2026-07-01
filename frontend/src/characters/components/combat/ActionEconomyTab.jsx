@@ -141,6 +141,11 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
             >How spacing works</Link>
           </p>
         )}
+        {entry.savageAttacksNote && (
+          <p className="text-[11px] text-emerald-600 leading-tight mt-0.5" data-testid={`ae-savage-${entry.key}`}>
+            {entry.savageAttacksNote}
+          </p>
+        )}
       </div>
       {/* Rest-rechargeable features get the same Use button as the Features tab. */}
       {resource && (

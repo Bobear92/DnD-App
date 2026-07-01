@@ -26,6 +26,7 @@ import {
 } from '@/characters/components/inventory/inventoryData';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import { getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
+import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
 
 // Tools are stored as adventuring-gear entries but get their own sub-tab (inserted
 // right after Gear). It isn't a real encyclopedia category — the Add picker reuses
@@ -432,6 +433,11 @@ export default function InventoryTab({
               // Expert removes the penalty for ranged weapons.
               const isRangedWeapon = e.category === 'weapons'
                 && (weaponNeedsAmmo(e) || weaponFacets(e).includes('Thrown'));
+              // Half-Orc Savage Attacks: extra damage die on a melee weapon crit — flag
+              // every melee weapon (weapon_type 'melee', incl. thrown melee like handaxes).
+              const showSavage = e.category === 'weapons'
+                && (e.weapon_type || '').toLowerCase() === 'melee'
+                && hasSavageAttacks(characterData?.race_traits);
               return (
                 <div key={e.uid} className="flex items-center gap-3 px-3 py-2" data-testid={`inv-row-${e.uid}`}>
                   <div className={cn('w-1.5 h-9 rounded-full shrink-0', activeCategory.accent)} />
@@ -483,6 +489,11 @@ export default function InventoryTab({
                         </div>
                       );
                     })()}
+                    {showSavage && (
+                      <div className="text-[11px] text-emerald-600 leading-tight" data-testid={`savage-attacks-${e.uid}`}>
+                        {SAVAGE_ATTACKS_NOTE}
+                      </div>
+                    )}
                     <div className="text-xs text-muted-foreground truncate">{activeCategory.subtitle(e)}</div>
                     {e.category === 'weapons' && (
                       <WeaponPropertyBadges badges={weaponBadges(e)} className="mt-1" />

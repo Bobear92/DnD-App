@@ -192,6 +192,21 @@ describe('InventoryTab', () => {
     expect(screen.queryByTestId('spacing-note-w1')).not.toBeInTheDocument();
   });
 
+  it('shows a Savage Attacks note on a melee weapon for a Half-Orc', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', characterData: { race_traits: ['Savage Attacks', 'Relentless Endurance'] } });
+    expect(screen.getByTestId('savage-attacks-w1')).toHaveTextContent(/Savage Attacks/i);
+  });
+
+  it('no Savage Attacks note on a ranged weapon even for a Half-Orc', () => {
+    renderTab({ inventory: [lightXbow], charClass: 'Fighter', characterData: { race_traits: ['Savage Attacks'] } });
+    expect(screen.queryByTestId('savage-attacks-lx1')).not.toBeInTheDocument();
+  });
+
+  it('no Savage Attacks note without the trait', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', characterData: {} });
+    expect(screen.queryByTestId('savage-attacks-w1')).not.toBeInTheDocument();
+  });
+
   it('renders weapon property badges (Heavy/Two-handed) on a weapon row', () => {
     renderTab({ inventory: [greatsword], race: 'Human', charClass: 'Fighter' });
     const row = screen.getByTestId('inv-row-gs1');

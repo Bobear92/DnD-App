@@ -39,6 +39,7 @@ import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
 import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
+import { hasRelentlessEndurance, RELENTLESS_ENDURANCE_NOTE } from '@/characters/components/race/raceCombatNotes';
 import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
@@ -1418,6 +1419,14 @@ export default function CharacterDetail() {
                       />
                     }
                   />
+                  {hasRelentlessEndurance(character?.character_data?.race_traits) && (
+                    <div
+                      className="mt-2 text-[11px] text-emerald-600 leading-tight"
+                      data-testid="relentless-endurance-note"
+                    >
+                      {RELENTLESS_ENDURANCE_NOTE}
+                    </div>
+                  )}
                   <div className="flex justify-end mt-1">
                     <Link
                       to={`/campaigns/${campaignId}/encyclopedia/mechanics/hit-dice`}

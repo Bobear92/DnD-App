@@ -188,6 +188,30 @@ describe('buildActionEconomy — Fighter', () => {
     expect(ls.spacingNote).toBeNull();
   });
 
+  it('adds a Savage Attacks note to a melee weapon for a Half-Orc', () => {
+    const args = fighterArgs(5, '5e');
+    args.characterData = { race_traits: ['Menacing', 'Savage Attacks', 'Relentless Endurance'] };
+    args.inventory = [{ uid: 'w1', name: 'Longsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile (1d10)"]' }];
+    const ls = buildActionEconomy(args).action.find((e) => e.name === 'Longsword');
+    expect(ls.savageAttacksNote).toMatch(/Savage Attacks/i);
+  });
+
+  it('no Savage Attacks note on a ranged weapon even for a Half-Orc', () => {
+    const args = fighterArgs(5, '5e');
+    args.characterData = { race_traits: ['Savage Attacks'] };
+    args.attacks = [{ uid: 'lb1', name: 'Longbow', toHit: '+7', damage: '1d8 + 3 Piercing', proficient: true }];
+    args.inventory = [{ uid: 'lb1', name: 'Longbow', category: 'weapons', equipped: true, weapon_type: 'Ranged', properties: '["Ammunition", "Two-Handed"]' }];
+    const bow = buildActionEconomy(args).action.find((e) => e.name === 'Longbow');
+    expect(bow.savageAttacksNote).toBeNull();
+  });
+
+  it('no Savage Attacks note without the trait', () => {
+    const args = fighterArgs(5, '5e');
+    args.inventory = [{ uid: 'w1', name: 'Longsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile (1d10)"]' }];
+    const ls = buildActionEconomy(args).action.find((e) => e.name === 'Longsword');
+    expect(ls.savageAttacksNote).toBeNull();
+  });
+
   it('gives the unarmed strike a to-hit breakdown too', () => {
     const args = fighterArgs(5, '5e');
     args.attacks = [];

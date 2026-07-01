@@ -636,6 +636,29 @@ describe('CharacterDetail', () => {
       const payload = characterService.updateCharacter.mock.calls.at(-1)[1];
       expect(payload.character_data.relentless_endurance_used).toBe(1);
     });
+
+    it('shows a Relentless Endurance note by the HP section for a Half-Orc', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Half-Orc',
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_traits: ['Relentless Endurance', 'Menacing', 'Savage Attacks'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('relentless-endurance-note')).toHaveTextContent(/Relentless Endurance/i);
+    });
+
+    it('does not show the Relentless Endurance note without the trait', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('relentless-endurance-note')).not.toBeInTheDocument();
+    });
   });
 
   describe('speed fields', () => {

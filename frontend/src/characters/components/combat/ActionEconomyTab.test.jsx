@@ -186,6 +186,16 @@ describe('ActionEconomyTab', () => {
     expect(screen.queryByTestId('ae-spacing-weapon:w1:0')).not.toBeInTheDocument();
   });
 
+  it('shows a Savage Attacks note on a melee weapon entry for a Half-Orc', () => {
+    renderTab({ inventory: [longswordEntry], characterData: { race_traits: ['Savage Attacks', 'Relentless Endurance'] } });
+    expect(screen.getByTestId('ae-savage-weapon:w1:0')).toHaveTextContent(/Savage Attacks/i);
+  });
+
+  it('no Savage Attacks note without the trait', () => {
+    renderTab({ inventory: [longswordEntry] });
+    expect(screen.queryByTestId('ae-savage-weapon:w1:0')).not.toBeInTheDocument();
+  });
+
   it('shows a ranged-spell spacing note under the Spell section', async () => {
     renderTab({ characterData: { prepared_spells: ['Fireball'] } });
     await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
