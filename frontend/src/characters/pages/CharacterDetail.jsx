@@ -40,6 +40,8 @@ import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
 import { hasRelentlessEndurance, RELENTLESS_ENDURANCE_NOTE } from '@/characters/components/race/raceCombatNotes';
+import { survivorNote, heroicWarriorNote } from '@/characters/components/subclass/subclassCombatNotes';
+import InspirationCard from '@/characters/components/combat/InspirationCard';
 import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
@@ -1260,8 +1262,8 @@ export default function CharacterDetail() {
                     </div>
                   </div>
 
-                  {/* Derived stats row */}
-                  <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                  {/* Derived stats row (Inspiration has its own card below) */}
+                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
                     <div className="rounded-md border py-2">
                       <div className="text-[10px] text-muted-foreground uppercase">Prof. Bonus</div>
                       <div className="font-bold">+{pb}</div>
@@ -1313,10 +1315,6 @@ export default function CharacterDetail() {
                           </>
                         );
                       })()}
-                    </div>
-                    <div className="rounded-md border py-2">
-                      <div className="text-[10px] text-muted-foreground uppercase">Inspiration</div>
-                      <div className="font-bold">{classSection.draft?.inspiration ? '✓' : '—'}</div>
                     </div>
                   </div>
 
@@ -1378,6 +1376,26 @@ export default function CharacterDetail() {
                 </div>
               </SectionCard>
 
+              {/* Inspiration — simple counter (default 0); persists immediately. Surfaces the
+                  2024 Champion Fighter's Heroic Warrior reminder, which lands on inspiration. */}
+              {classSection.draft !== null && (() => {
+                const raw = classSection.draft?.inspiration;
+                const value = typeof raw === 'number' ? raw : (raw ? 1 : 0);
+                return (
+                  <InspirationCard
+                    value={value}
+                    onChange={(v) => autoSaveClassPatch({ inspiration: v })}
+                    readOnly={!showEditable}
+                    note={heroicWarriorNote({
+                      charClass: character.char_class,
+                      subclass: classSection.draft?.subclass ?? character?.character_data?.subclass,
+                      level: identity.draft?.level ?? character.level,
+                      edition,
+                    })}
+                  />
+                );
+              })()}
+
               {/* Combat stats (HP, Hit Dice, AC, Speed) */}
               {ClassSheet && classSection.draft !== null && (
                 <SectionCard
@@ -1427,6 +1445,23 @@ export default function CharacterDetail() {
                       {RELENTLESS_ENDURANCE_NOTE}
                     </div>
                   )}
+                  {(() => {
+                    const note = survivorNote({
+                      charClass: character.char_class,
+                      subclass: classSection.draft?.subclass ?? character?.character_data?.subclass,
+                      level: identity.draft?.level ?? character.level,
+                      edition,
+                      conMod: Math.floor(((identity.draft?.constitution ?? character.constitution ?? 10) - 10) / 2),
+                    });
+                    return note ? (
+                      <div
+                        className="mt-2 text-[11px] text-emerald-600 leading-tight"
+                        data-testid="survivor-note"
+                      >
+                        {note}
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="flex justify-end mt-1">
                     <Link
                       to={`/campaigns/${campaignId}/encyclopedia/mechanics/hit-dice`}

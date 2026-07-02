@@ -25,7 +25,7 @@ import {
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
 } from '@/characters/components/inventory/inventoryData';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
-import { critRange, critRangeLabel } from '@/characters/components/combat/combatBonuses';
+import { critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
 import { getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
 
@@ -109,6 +109,9 @@ export default function InventoryTab({
   // weapon attack, so it's shown on each weapon row. Null for everyone else.
   const crit = critRange({ charClass, subclass, level });
   const critLabel = critRangeLabel(crit);
+  // Great Weapon Master's crit/kill bonus-attack reminder (both editions), shown on melee
+  // weapon rows next to the crit range. Null when the character lacks the feat.
+  const gwmBonusNote = greatWeaponMasterNote(characterData?.feats);
   const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats, styles });
   const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles });
   const attuned = attunedCount(inventory);
@@ -443,6 +446,10 @@ export default function InventoryTab({
               const showSavage = e.category === 'weapons'
                 && (e.weapon_type || '').toLowerCase() === 'melee'
                 && hasSavageAttacks(characterData?.race_traits);
+              // Great Weapon Master's crit/kill bonus attack — a melee-weapon benefit.
+              const showGwmBonus = e.category === 'weapons'
+                && (e.weapon_type || '').toLowerCase() === 'melee'
+                && !!gwmBonusNote;
               return (
                 <div key={e.uid} className="flex items-center gap-3 px-3 py-2" data-testid={`inv-row-${e.uid}`}>
                   <div className={cn('w-1.5 h-9 rounded-full shrink-0', activeCategory.accent)} />
@@ -497,6 +504,11 @@ export default function InventoryTab({
                     {showSavage && (
                       <div className="text-[11px] text-emerald-600 leading-tight" data-testid={`savage-attacks-${e.uid}`}>
                         {SAVAGE_ATTACKS_NOTE}
+                      </div>
+                    )}
+                    {showGwmBonus && (
+                      <div className="text-[11px] text-emerald-600 leading-tight" data-testid={`gwm-bonus-${e.uid}`}>
+                        {gwmBonusNote}
                       </div>
                     )}
                     <div className="text-xs text-muted-foreground truncate">{activeCategory.subtitle(e)}</div>

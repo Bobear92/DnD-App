@@ -659,6 +659,68 @@ describe('CharacterDetail', () => {
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByTestId('relentless-endurance-note')).not.toBeInTheDocument();
     });
+
+    it('shows a Survivor note by the HP section for a L18 Champion (5 + CON regain)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          level: 18,
+          // CON 14 → +2 → regain 5 + 2 = 7
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Champion' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('survivor-note')).toHaveTextContent(/Survivor: .*regain 7 HP/i);
+    });
+
+    it('does not show the Survivor note below L18 or for a non-Champion', async () => {
+      // BASE_CHARACTER is a level 5 Fighter with no subclass
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('survivor-note')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Inspiration card', () => {
+    it('renders an Inspiration card defaulting to 0', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('inspiration-card')).toBeInTheDocument();
+      expect(screen.getByTestId('inspiration-value')).toHaveTextContent('0');
+    });
+
+    it('increments inspiration and persists immediately via updateCharacter', async () => {
+      characterService.updateCharacter.mockResolvedValue({ success: true, data: BASE_CHARACTER });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('inspiration-inc'));
+      await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalled());
+      const payload = characterService.updateCharacter.mock.calls.at(-1)[1];
+      expect(payload.character_data.inspiration).toBe(1);
+    });
+
+    it('does not show the Heroic Warrior note for a non-Champion (5e)', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('heroic-warrior-note')).not.toBeInTheDocument();
+    });
+
+    it('shows the Heroic Warrior note for a 2024 L10 Champion Fighter', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player', edition: '5.5e' } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          level: 10,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Champion' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('heroic-warrior-note')).toHaveTextContent(/Heroic Warrior/i);
+    });
   });
 
   describe('speed fields', () => {

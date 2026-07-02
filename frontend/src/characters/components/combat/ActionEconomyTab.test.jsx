@@ -294,4 +294,21 @@ describe('ActionEconomyTab', () => {
     renderTab({ inventory: [greatswordEntry], scores: { strength: 16 } });
     expect(screen.queryByTestId('ae-gwm-toggle-weapon:gs1:0')).not.toBeInTheDocument();
   });
+
+  it('shows the GWM crit/kill bonus-attack note on the melee weapon entry AND as a standalone Bonus entry', () => {
+    const gwmFeat = {
+      name: 'Great Weapon Master',
+      effects: [{ kind: 'action', name: 'Cleave (Bonus Attack)', economy: 'bonus', trigger: 'When you score a critical hit or reduce a creature to 0 HP with a melee weapon', description: 'Make one melee weapon attack as a bonus action.' }],
+    };
+    renderTab({ inventory: [greatswordEntry], scores: { strength: 16 }, characterData: { feats: [gwmFeat] } });
+    expect(screen.getByTestId('ae-gwm-weapon:gs1:0')).toHaveTextContent(/critical hit.*bonus action/i);
+    // The standalone "Cleave (Bonus Attack)" entry is also present in the Bonus Actions bucket.
+    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    expect(screen.getByText(/cleave/i)).toBeInTheDocument();
+  });
+
+  it('shows no GWM bonus-attack note without the feat', () => {
+    renderTab({ inventory: [greatswordEntry], scores: { strength: 16 } });
+    expect(screen.queryByTestId('ae-gwm-weapon:gs1:0')).not.toBeInTheDocument();
+  });
 });

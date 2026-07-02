@@ -513,7 +513,7 @@ describe('buildActionEconomy — Fighter', () => {
     };
     const greatsword = { uid: 'gs', name: 'Greatsword', category: 'weapons', equipped: true, hand: 'both', weapon_type: 'Melee', properties: '["Heavy", "Two-Handed"]', damage: '2d6', damage_type: 'slashing' };
 
-    it('hides the Cleave bonus attack when no melee weapon is equipped', () => {
+    it('hides the standalone bonus attack when no melee weapon is equipped', () => {
       const args = fighterArgs(4, '5e');
       args.inventory = [];
       args.attacks = [];
@@ -521,12 +521,47 @@ describe('buildActionEconomy — Fighter', () => {
       expect(buildActionEconomy(args).bonus.find((e) => /cleave/i.test(e.name))).toBeFalsy();
     });
 
-    it('shows the Cleave bonus attack when a melee weapon is equipped', () => {
+    it('shows the standalone bonus attack in the Bonus bucket when a melee weapon is equipped', () => {
       const args = fighterArgs(4, '5e');
       args.inventory = [greatsword];
-      args.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', toHitBreakdown: [{ label: 'STR', value: 3 }, { label: 'Proficiency', value: 2 }], damage: '2d6 + 3 slashing', proficient: true }];
+      args.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', damage: '2d6 + 3 slashing', proficient: true }];
       args.characterData = { feats: [GWM] };
       expect(buildActionEconomy(args).bonus.find((e) => /cleave/i.test(e.name))).toBeTruthy();
+    });
+
+    it('attaches the crit/kill bonus-attack note to a melee weapon entry (both editions)', () => {
+      for (const ed of ['5e', '5.5e']) {
+        const args = fighterArgs(4, ed);
+        args.inventory = [greatsword];
+        args.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', damage: '2d6 + 3 slashing', proficient: true }];
+        args.characterData = { feats: [GWM] };
+        const row = buildActionEconomy(args).action.find((e) => e.name === 'Greatsword');
+        expect(row.greatWeaponMasterNote).toMatch(/critical hit.*bonus action/i);
+      }
+    });
+
+    it('does not attach the bonus-attack note without the feat, on a ranged weapon, or to the unarmed fallback', () => {
+      // No feat
+      const noFeat = fighterArgs(4, '5e');
+      noFeat.inventory = [greatsword];
+      noFeat.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', damage: '2d6 + 3 slashing', proficient: true }];
+      expect(buildActionEconomy(noFeat).action.find((e) => e.name === 'Greatsword').greatWeaponMasterNote).toBeNull();
+
+      // Ranged weapon — GWM's bonus attack is melee-only
+      const ranged = fighterArgs(4, '5e');
+      const bow = { uid: 'lb', name: 'Longbow', category: 'weapons', equipped: true, weapon_type: 'Ranged', properties: '["Ammunition", "Two-Handed"]', damage: '1d8', damage_type: 'piercing' };
+      ranged.inventory = [bow];
+      ranged.attacks = [{ uid: 'lb', name: 'Longbow', toHit: '+5', damage: '1d8 + 2 piercing', proficient: true }];
+      ranged.characterData = { feats: [GWM] };
+      expect(buildActionEconomy(ranged).action.find((e) => e.name === 'Longbow').greatWeaponMasterNote).toBeNull();
+
+      // Unarmed fallback (no weapon equipped) carries no note
+      const unarmed = fighterArgs(4, '5e');
+      unarmed.inventory = [];
+      unarmed.attacks = [];
+      unarmed.characterData = { feats: [GWM] };
+      const unarmedRow = buildActionEconomy(unarmed).action.find((e) => /unarmed/i.test(e.name));
+      expect(unarmedRow?.greatWeaponMasterNote ?? null).toBeNull();
     });
 
     it('attaches a −5/+10 powerAttack variant to a proficient Heavy melee weapon (5e)', () => {

@@ -80,6 +80,22 @@ export function hasFeat(feats = [], name) {
   return (feats ?? []).some(f => (typeof f === 'string' ? f : f?.name) === name);
 }
 
+/**
+ * Great Weapon Master's bonus-attack reminder, or null when the character lacks the feat.
+ * Both editions grant it: when you score a critical hit or reduce a creature to 0 HP with a
+ * melee weapon, you can make one melee weapon attack as a bonus action. Surfaced on the
+ * weapon itself (Items tab rows + Action Economy weapon entries), next to the −5/+10 power
+ * attack, so both GWM benefits read together instead of the bonus attack living off on its
+ * own in the Bonus Actions list. Edition-independent (the −5/+10 is 5e-only; this isn't).
+ */
+export function greatWeaponMasterNote(feats = []) {
+  if (!hasFeat(feats, 'Great Weapon Master')) return null;
+  return (
+    'Great Weapon Master: when you score a critical hit or reduce a creature to 0 HP with a ' +
+    'melee weapon, you can make one melee weapon attack as a bonus action.'
+  );
+}
+
 /** True when the character has the Tough feat (+2 HP per level). */
 export function hasToughFeat(feats = []) {
   return hasFeat(feats, 'Tough');

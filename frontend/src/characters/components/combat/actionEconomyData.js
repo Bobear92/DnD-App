@@ -22,7 +22,7 @@ import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon } fro
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
-import { hasFeat, critRange, critRangeLabel } from '@/characters/components/combat/combatBonuses';
+import { hasFeat, critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
@@ -295,6 +295,9 @@ export function buildActionEconomy({
   // Great Weapon Master's −5/+10 power attack is the 2014 mechanic; the 2024 feat replaces it
   // with a flat +PB, so the toggle is 5e-only.
   const gwm = !is2024 && hasFeat(feats, 'Great Weapon Master');
+  // GWM's crit/kill bonus-attack reminder (both editions) — co-located on melee weapon rows,
+  // so it sits next to the power attack rather than off in the Bonus Actions list.
+  const gwmBonusNote = greatWeaponMasterNote(feats);
   const weaponRows = [...attacks];
   if (unarmedDice || weaponRows.length === 0) weaponRows.push(unarmedAttack(scores, level, unarmedDice));
   weaponRows.forEach((atk, i) => {
@@ -336,6 +339,9 @@ export function buildActionEconomy({
         ? SAVAGE_ATTACKS_NOTE : null,
       // Great Weapon Master power-attack variant (5e), toggled in the UI. Null when N/A.
       powerAttack,
+      // Great Weapon Master's other benefit (both editions): a crit or kill with a melee
+      // weapon grants a bonus melee attack. Shown on melee weapon entries only.
+      greatWeaponMasterNote: (weapon && isMelee(weapon)) ? gwmBonusNote : null,
       // Champion expanded crit range on real weapon attacks (not the unarmed fallback, which
       // has no uid and isn't a weapon attack for Improved Critical).
       critRange: atk.uid && crit ? critLabel : null,
@@ -513,7 +519,8 @@ export function buildActionEconomy({
     // Polearm Master's bonus attack requires a qualifying polearm (glaive/halberd/quarterstaff/spear)
     // in hand — hide it when none is equipped.
     if (a.source === 'Polearm Master' && !hasEquipped(inventory, isPolearm)) continue;
-    // Great Weapon Master's Cleave bonus attack requires a melee weapon in hand — hide it otherwise.
+    // Great Weapon Master's crit/kill bonus attack needs a melee weapon in hand (its trigger).
+    // Shown BOTH as this standalone Bonus entry and as a reminder note on the melee weapon.
     if (a.source === 'Great Weapon Master' && !hasEquipped(inventory, isMelee)) continue;
     // Defensive Duelist's reaction only works while wielding a finesse weapon — hide it otherwise,
     // and when shown, spell out the +PB it adds to AC.

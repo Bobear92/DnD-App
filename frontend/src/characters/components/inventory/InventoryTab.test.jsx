@@ -225,6 +225,21 @@ describe('InventoryTab', () => {
     expect(screen.queryByTestId('savage-attacks-w1')).not.toBeInTheDocument();
   });
 
+  it('shows a Great Weapon Master bonus-attack note on a melee weapon row', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', characterData: { feats: [{ name: 'Great Weapon Master' }] } });
+    expect(screen.getByTestId('gwm-bonus-w1')).toHaveTextContent(/critical hit.*bonus action/i);
+  });
+
+  it('no Great Weapon Master bonus-attack note on a ranged weapon', () => {
+    renderTab({ inventory: [lightXbow], charClass: 'Fighter', characterData: { feats: [{ name: 'Great Weapon Master' }] } });
+    expect(screen.queryByTestId('gwm-bonus-lx1')).not.toBeInTheDocument();
+  });
+
+  it('no Great Weapon Master bonus-attack note without the feat', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', characterData: {} });
+    expect(screen.queryByTestId('gwm-bonus-w1')).not.toBeInTheDocument();
+  });
+
   it('renders weapon property badges (Heavy/Two-handed) on a weapon row', () => {
     renderTab({ inventory: [greatsword], race: 'Human', charClass: 'Fighter' });
     const row = screen.getByTestId('inv-row-gs1');

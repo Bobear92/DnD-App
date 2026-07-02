@@ -1,5 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { isDraconicSorcerer, hasToughFeat, hasDurableFeat, durableHitDieMin, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, getAcOptions, remarkableAthlete, critRange, critRangeLabel } from '@/characters/components/combat/combatBonuses';
+import { isDraconicSorcerer, hasToughFeat, hasDurableFeat, durableHitDieMin, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, getAcOptions, remarkableAthlete, critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
+
+describe('greatWeaponMasterNote', () => {
+  it('returns the crit/kill bonus-attack reminder when the character has the feat', () => {
+    const note = greatWeaponMasterNote([{ name: 'Great Weapon Master' }]);
+    expect(note).toMatch(/critical hit/i);
+    expect(note).toMatch(/bonus action/i);
+  });
+
+  it('accepts string feat names', () => {
+    expect(greatWeaponMasterNote(['Great Weapon Master'])).toBeTruthy();
+  });
+
+  it('returns null without the feat / no args', () => {
+    expect(greatWeaponMasterNote([{ name: 'Tough' }])).toBeNull();
+    expect(greatWeaponMasterNote([])).toBeNull();
+    expect(greatWeaponMasterNote()).toBeNull();
+  });
+});
 
 describe('remarkableAthlete', () => {
   it('null for non-Champion / non-Fighter / missing args', () => {
