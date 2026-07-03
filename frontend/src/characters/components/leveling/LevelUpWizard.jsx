@@ -13,6 +13,7 @@ import {
   SUBCLASS_OPTIONS_5E, SUBCLASS_OPTIONS_2024,
 } from '@/characters/components/classData/classChoicesData';
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
+import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 import SpellList from '@/characters/components/spells/SpellList';
 import { CLASS_PROGRESSION } from '@/characters/components/classData/classProgressionTables';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
@@ -173,6 +174,33 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // Subclass proficiency grants gained at this level (uses the subclass chosen in this
   // wizard, or the existing one for grants at later levels). Drives the Proficiencies step.
   const effectiveSubclass = subclassChoice || character.character_data?.subclass;
+
+  // The class feature tables carry generic placeholders at subclass-feature levels (e.g.
+  // "Martial Archetype Feature" → "You gain a feature from your Martial Archetype."). By the
+  // time this level-up runs the character's subclass is known (chosen here or earlier), so we
+  // resolve the ACTUAL subclass feature(s) gained at this level and substitute them for the
+  // placeholder — the player sees exactly what they're getting (e.g. Champion L15 Superior Critical).
+  const subclassFeaturesAtLevel = useMemo(() => {
+    if (!effectiveSubclass) return [];
+    const data = SUBCLASS_DATA[character.char_class]?.[subclassEdition]?.[effectiveSubclass];
+    if (!data?.features) return [];
+    return data.features.filter((f) => f.level === newLevel);
+  }, [character.char_class, subclassEdition, effectiveSubclass, newLevel]);
+
+  // A generic "gain a feature from your <subclass>" placeholder in the class table.
+  const isSubclassPlaceholder = (f) =>
+    /feature from your|capstone feature/i.test(f?.description || '');
+
+  // Class features shown on the Features step: when we can resolve the chosen subclass's
+  // features for this level, swap the generic placeholder(s) for the real feature(s); otherwise
+  // leave the placeholder text in place (better than dropping it).
+  const displayFeatures = useMemo(() => {
+    if (subclassFeaturesAtLevel.length === 0) return features;
+    return [
+      ...features.filter((f) => !isSubclassPlaceholder(f)),
+      ...subclassFeaturesAtLevel.map((f) => ({ ...f, _subclass: true })),
+    ];
+  }, [features, subclassFeaturesAtLevel]);
   // Subclass grants gained at this level — proficiency picks (Battle Master Student of War) or
   // class-pool picks (Champion Additional Fighting Style), unified in subclassGrants.js. Drives
   // the Subclass Grants step.
@@ -793,19 +821,24 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
               At level {newLevel}, your <span className="font-medium text-foreground">{character.char_class}</span> gains:
             </p>
 
-            {features.length === 0 ? (
+            {displayFeatures.length === 0 ? (
               <div className="rounded-md border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
                 No new class features at this level.
               </div>
             ) : (
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                {features.map((feat, i) => (
+                {displayFeatures.map((feat, i) => (
                   <div key={i} className="rounded-md border bg-card p-3 space-y-1.5">
                     <div className="font-semibold text-sm flex items-center gap-2">
                       <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
                         {i + 1}
                       </span>
                       {feat.name}
+                      {feat._subclass && (
+                        <span className="rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-medium px-2 py-0.5">
+                          {effectiveSubclass}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">{feat.description}</p>
                   </div>

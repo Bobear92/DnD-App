@@ -570,6 +570,42 @@ describe('LevelUpWizard', () => {
     });
   });
 
+  describe('Features step — resolves subclass features', () => {
+    // Champion Fighter leveling 14 → 15 gains the subclass feature Superior Critical.
+    // The class table only carries a generic "Martial Archetype Feature" placeholder there;
+    // the wizard should surface the real feature (name + description) from the chosen subclass.
+    const CHAMPION_L14 = {
+      ...FIGHTER_L2, level: 14,
+      character_data: { hp_max: 120, subclass: 'Champion', fighting_style: 'Defense' },
+    };
+
+    function toFeaturesStep(character, campaign = CAMPAIGN_5E) {
+      render(<LevelUpWizard character={character} campaign={campaign} onComplete={vi.fn()} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+    }
+
+    it('shows the real subclass feature instead of the generic placeholder (5e Champion L15)', () => {
+      toFeaturesStep(CHAMPION_L14);
+      expect(screen.getByText('Superior Critical')).toBeInTheDocument();
+      expect(screen.getByText(/critical hit on a roll of 18/i)).toBeInTheDocument();
+      expect(screen.queryByText('Martial Archetype Feature')).not.toBeInTheDocument();
+    });
+
+    it('resolves the 2024 subclass feature too', () => {
+      const champ2024 = { ...CHAMPION_L14, character_data: { hp_max: 120, subclass: 'Champion' } };
+      toFeaturesStep(champ2024, CAMPAIGN_2024);
+      expect(screen.getByText('Superior Critical')).toBeInTheDocument();
+      expect(screen.queryByText('Martial Archetype Feature')).not.toBeInTheDocument();
+    });
+
+    it('keeps the generic placeholder when the subclass is unknown', () => {
+      // No subclass stored → nothing to resolve, so the placeholder text remains.
+      toFeaturesStep({ ...CHAMPION_L14, character_data: { hp_max: 120 } });
+      expect(screen.getByText('Martial Archetype Feature')).toBeInTheDocument();
+    });
+  });
+
   describe('Ability Score Improvement step', () => {
     // Fighter 3 → 4 is an ASI level.
     const FIGHTER_L3 = { ...FIGHTER_L2, level: 3, strength: 15, dexterity: 14 };
