@@ -1704,9 +1704,10 @@ export default function CharacterCreate() {
       charisma:     form.charisma     + (combinedRaceAsi.charisma     ?? 0),
     };
 
-    // Store die+CON only — passive bonuses (race trait / subclass / Tough feat) are display-only
-    // and re-added by the sheet's MaxHpValue, so storing creationStartingHp would double-count.
-    const hp_max = creationBaseHp;
+    // Store the CON-INDEPENDENT roll base only (level 1 = the full hit die). Constitution AND the
+    // passive bonuses (race trait / subclass / Tough feat) are layered on dynamically by the sheet's
+    // MaxHpValue, so max HP tracks any later CON change automatically without rewriting stored HP.
+    const hp_rolls = creationHitDie;
 
     const allRaceLanguages = [
       ...(selectedRaceObj?.languages ?? []),
@@ -1725,7 +1726,7 @@ export default function CharacterCreate() {
       campaign_id: parseInt(campaignId),
       character_data: {
         ...classData,
-        hp_max,
+        hp_rolls,
         speed: creationSpeed,
         skill_proficiencies: [...new Set([
           ...(classData.skill_proficiencies ?? []),

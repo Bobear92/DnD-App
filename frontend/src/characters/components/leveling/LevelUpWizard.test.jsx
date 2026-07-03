@@ -384,7 +384,7 @@ describe('LevelUpWizard', () => {
       expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled();
     });
 
-    it('applies the manual roll + CON to hp_max in onComplete', async () => {
+    it('stores the CON-independent roll base (hp_rolls) in onComplete', async () => {
       const onComplete = vi.fn().mockResolvedValue(undefined);
       renderFighter(onComplete);
       fireEvent.click(screen.getByTestId('hp-method-manual'));
@@ -393,11 +393,11 @@ describe('LevelUpWizard', () => {
       fireEvent.click(screen.getByRole('button', { name: /Next/i }));   // features → confirm
       fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
 
-      // Fighter L1 hp_max 26, CON 14 (+2): 26 + (6 + 2) = 34
+      // Legacy hp_max 26 at L1, CON 14 (+2) → roll base 26 − 1×2 = 24; +6 die = 30 (effective L2 = 34).
       await waitFor(() => {
         expect(onComplete).toHaveBeenCalledWith(
           2,
-          expect.objectContaining({ hp_max: 34 })
+          expect.objectContaining({ hp_rolls: 30 })
         );
       });
     });
@@ -434,18 +434,18 @@ describe('LevelUpWizard', () => {
       expect(screen.getByTestId('hp-bonus-Dwarven Toughness')).toHaveTextContent('+1');
     });
 
-    it('folds Dwarven Toughness into HP gained but NOT into the stored hp_max', async () => {
+    it('folds Dwarven Toughness into HP gained but NOT into the stored roll base', async () => {
       const onComplete = vi.fn().mockResolvedValue(undefined);
       renderChar(HILL_DWARF_FIGHTER_L1, onComplete);
       fireEvent.click(screen.getByTestId('hp-method-average')); // d10 avg 6, +2 CON, +1 dwarf = +9
       fireEvent.click(screen.getByRole('button', { name: /Next/i })); // hp → features
       fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → confirm
-      // Confirm summary shows the effective new max: 26 + 8 stored + 2 (Toughness at L2) = 36
+      // Confirm summary shows the effective new max: 30 rolls + 4 CON + 2 (Toughness at L2) = 36
       expect(screen.getByText('36')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
-      // Stored hp_max excludes the passive bonus (sheet adds it): 26 + (6 + 2) = 34
+      // Stored roll base is CON-independent + excludes passives: (26 − 1×2 legacy) + 6 die = 30
       await waitFor(() => {
-        expect(onComplete).toHaveBeenCalledWith(2, expect.objectContaining({ hp_max: 34 }));
+        expect(onComplete).toHaveBeenCalledWith(2, expect.objectContaining({ hp_rolls: 30 }));
       });
     });
 
@@ -614,6 +614,49 @@ describe('LevelUpWizard', () => {
       fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
       await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
         4, expect.any(Object), expect.objectContaining({ strength: 20 })
+      ));
+    });
+
+    // Raising CON so its modifier increases must add HP retroactively: +1 for every character
+    // level (not just the new one). With the dynamic model this falls out of storing the roll
+    // base + recomputing effective max from the new CON — no retroactive bookkeeping needed.
+    it('surfaces retroactive HP in the confirm breakdown when an ASI raises the CON modifier', async () => {
+      // Fighter 3 → 4, legacy hp_max 26, CON 13 (+1). Take Average d10 = 6.
+      const CHAMP = { ...FIGHTER_L3, constitution: 13, character_data: { hp_max: 26 } };
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      toAsiStep(CHAMP, onComplete);
+      fireEvent.click(screen.getByTestId('asi-inc-constitution')); // 13 → 14 (+1 → +2 mod)
+      fireEvent.click(screen.getByTestId('asi-inc-dexterity'));    // spend the 2nd point
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // asi → confirm
+
+      // The confirm summary itemizes the post-increase CON and the retroactive top-up.
+      expect(screen.getByTestId('confirm-hp-breakdown')).toHaveTextContent(/\+ 2 CON/);
+      expect(screen.getByTestId('confirm-hp-breakdown')).toHaveTextContent(/\+ 3 retroactive CON/);
+      // Effective new max: 29 rolls + 4×2 CON = 37 (was 26 → gained 11: die 6 + this level's CON + 3 retro).
+      expect(screen.getByText('37')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      // Stored roll base is CON-independent: (26 − 3×1 legacy) + 6 die = 29. CON is layered dynamically.
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4,
+        expect.objectContaining({ hp_rolls: 29 }),
+        expect.objectContaining({ constitution: 14 })
+      ));
+    });
+
+    // No CON change → no retroactive top-up (guards against always-on retro HP).
+    it('does not add retroactive HP when CON is unchanged', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      // FIGHTER_L3 CON 14 (+2), legacy hp_max 26. Put both points into STR/DEX.
+      toAsiStep(FIGHTER_L3, onComplete);
+      fireEvent.click(screen.getByTestId('asi-inc-strength'));
+      fireEvent.click(screen.getByTestId('asi-inc-dexterity'));
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // asi → confirm
+      expect(screen.getByTestId('confirm-hp-breakdown')).not.toHaveTextContent(/retroactive/);
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      // Roll base: (26 − 3×2 legacy) + 6 die = 26. Effective stays 34 (= 26 + 4×2 CON).
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(
+        4, expect.objectContaining({ hp_rolls: 26 }), expect.any(Object)
       ));
     });
   });

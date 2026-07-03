@@ -578,6 +578,26 @@ describe('CharacterDetail', () => {
     });
   });
 
+  // Max HP derives from CON dynamically: stored hp_rolls is CON-independent, and the sheet layers
+  // CON × level on top — so any CON change (ASI, feat, item, GM edit) adjusts HP without a rewrite.
+  describe('max HP derives from CON dynamically (hp_rolls model)', () => {
+    it('shows roll base + CON × level as the effective Max HP', async () => {
+      const char = { ...BASE_CHARACTER, constitution: 14, character_data: { ...BASE_CHARACTER.character_data, hp_rolls: 42, hp_max: undefined } };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: char });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText('52')).toBeInTheDocument(); // 42 rolls + 5 × +2 CON
+    });
+
+    it('a higher CON yields a higher Max HP from the same roll base', async () => {
+      const char = { ...BASE_CHARACTER, constitution: 18, character_data: { ...BASE_CHARACTER.character_data, hp_rolls: 42, hp_max: undefined } };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: char });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText('62')).toBeInTheDocument(); // 42 rolls + 5 × +4 CON
+    });
+  });
+
   describe('Racial Features card (rest-rechargeable racial traits)', () => {
     it('shows the Racial Features card for a Half-Orc with Relentless Endurance', async () => {
       characterService.getCharacterById.mockResolvedValue({

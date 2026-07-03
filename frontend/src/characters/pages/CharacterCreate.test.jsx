@@ -744,13 +744,14 @@ describe('CharacterCreate', () => {
     });
   });
 
-  it('stores die+CON in hp_max and shows the effective HP (incl. Dwarven Toughness) in the review', async () => {
+  it('stores the CON-independent roll base (hp_rolls) and shows the effective HP (incl. Dwarven Toughness) in the review', async () => {
     characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 5 } });
     renderCreate();
     await selectClass('Fighter');
     fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: 'Bralin' } });
-    // Hill Dwarf: base +2 CON → keep CON=10 so finalCon=12, mod=+1. Dwarven Toughness (+1 HP per
-    // level) is DISPLAY-ONLY: stored hp_max = d10 + 1 CON = 11; the review shows the effective 12.
+    // Hill Dwarf: base +2 CON → keep CON=10 so finalCon=12, mod=+1. The stored roll base is
+    // CON-independent (d10 = 10); CON (+1) and the display-only Dwarven Toughness (+1/level) are
+    // layered on dynamically, so the review shows the effective 12.
     fireEvent.click(screen.getByTestId('race-card-Dwarf'));
     await waitFor(() => expect(screen.getByTestId('subrace-card-Hill Dwarf')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('subrace-card-Hill Dwarf'));
@@ -768,7 +769,7 @@ describe('CharacterCreate', () => {
     await waitFor(() => {
       expect(characterService.createCharacter).toHaveBeenCalledWith(
         expect.objectContaining({
-          character_data: expect.objectContaining({ hp_max: 11 }), // die+CON only, no passive bonus
+          character_data: expect.objectContaining({ hp_rolls: 10 }), // roll base only (d10), no CON/passives
         })
       );
     });
@@ -873,8 +874,8 @@ describe('CharacterCreate', () => {
     });
   });
 
-  it('injects calculated hp_max into character_data on submit', async () => {
-    // Fighter d10; default CON 10 = modifier 0 → hp_max = 10
+  it('injects the calculated roll base (hp_rolls) into character_data on submit', async () => {
+    // Fighter d10 → roll base = 10 (CON is layered dynamically, not stored)
     characterService.createCharacter.mockResolvedValue({ success: true, data: { id: 5 } });
     renderCreate();
     await advanceToReview('Fighter');
@@ -882,7 +883,7 @@ describe('CharacterCreate', () => {
     await waitFor(() => {
       expect(characterService.createCharacter).toHaveBeenCalledWith(
         expect.objectContaining({
-          character_data: expect.objectContaining({ hp_max: 10 }),
+          character_data: expect.objectContaining({ hp_rolls: 10 }),
         })
       );
     });
@@ -1530,7 +1531,7 @@ describe('CharacterCreate', () => {
     fireEvent.click(screen.getByText('Create Character'));
     await waitFor(() => {
       const call = characterService.createCharacter.mock.calls[0][0];
-      expect(call.character_data.hp_max).toBe(10); // d10 + 0 CON; Tough is display-only, not stored
+      expect(call.character_data.hp_rolls).toBe(10); // d10 roll base; CON + Tough are display-only, not stored
       expect(call.character_data.feats).toEqual([{ id: 9, name: 'Tough', level: 1 }]);
     });
   });

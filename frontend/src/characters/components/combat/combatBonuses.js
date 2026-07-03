@@ -152,6 +152,42 @@ export function totalHpBonus(args) {
 }
 
 /**
+ * The CON-independent hit-point base — the sum of a character's hit-die results across all
+ * levels (level 1 = full die), with NO Constitution folded in. Stored as
+ * `character_data.hp_rolls`; it only changes on level-up. Constitution is layered on
+ * dynamically at display time (see effectiveMaxHp) so that any change to the CON modifier —
+ * an ASI, a feat, a magic item, a GM edit — adjusts max HP automatically, retroactively across
+ * every level, without rewriting stored HP.
+ *
+ * Legacy fallback: characters created before this model stored `hp_max` WITH Constitution baked
+ * in. For them we recover the roll base as `hp_max − level × conMod` (exact while the stored
+ * hp_max is still consistent with the character's current CON, i.e. before any out-of-band CON
+ * edit; the next level-up persists a real `hp_rolls` and closes the gap permanently).
+ *
+ * @returns {number|null} the roll base, or null when neither field is present.
+ */
+export function hpRollBase(characterData = {}, { level = 1, conMod = 0 } = {}) {
+  if (typeof characterData?.hp_rolls === 'number') return characterData.hp_rolls;
+  if (typeof characterData?.hp_max === 'number') return characterData.hp_max - level * conMod;
+  return null;
+}
+
+/**
+ * Effective (displayed) maximum HP = roll base + CON × level + passive per-level bonuses
+ * (Tough, Dwarven Toughness, Draconic Resilience). Floored at `level` (RAW: at least 1 HP per
+ * level). Returns null when there's no roll base to work from.
+ *
+ * @param {object} characterData
+ * @param {{ level, conMod, charClass, subclass, raceTraits, feats }} ctx
+ */
+export function effectiveMaxHp(characterData = {}, { level = 1, conMod = 0, charClass, subclass, raceTraits = [], feats = [] } = {}) {
+  const base = hpRollBase(characterData, { level, conMod });
+  if (base == null) return null;
+  const total = base + conMod * level + totalHpBonus({ charClass, subclass, raceTraits, feats, level });
+  return Math.max(level, total);
+}
+
+/**
  * Alternate armor-class formulas that don't come from worn armor.
  * Returns [{ source, detail, formula, value }] computed from ability scores.
  */

@@ -33,7 +33,7 @@ import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
 import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '@/characters/components/feats/featEffects';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { MaxHpValue } from '@/characters/components/combat/CombatBonusInline';
-import { totalHpBonus, remarkableAthlete } from '@/characters/components/combat/combatBonuses';
+import { hpRollBase, effectiveMaxHp as computeEffectiveMaxHp, remarkableAthlete } from '@/characters/components/combat/combatBonuses';
 import { draconicLabel } from '@/characters/components/subclass/draconicData';
 import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
 import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
@@ -1410,13 +1410,13 @@ export default function CharacterDetail() {
                     onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
                     onHeal={autoSaveClassPatch}
                     effectiveMaxHp={
-                      (classSection.draft?.hp_max ?? 0) +
-                      totalHpBonus({
+                      computeEffectiveMaxHp(classSection.draft ?? {}, {
+                        level: identity.draft?.level ?? character.level,
+                        conMod: Math.floor(((identity.draft?.constitution ?? character.constitution ?? 10) - 10) / 2),
                         charClass: character.char_class,
                         subclass: classSection.draft?.subclass,
                         raceTraits: character?.character_data?.race_traits ?? [],
                         feats: character?.character_data?.feats ?? [],
-                        level: identity.draft?.level ?? character.level,
                       })
                     }
                     readOnly={!showEditable}
@@ -1433,7 +1433,11 @@ export default function CharacterDetail() {
                         raceTraits={character?.character_data?.race_traits ?? []}
                         feats={character?.character_data?.feats ?? []}
                         level={identity.draft?.level ?? character.level}
-                        baseMaxHp={classSection.draft?.hp_max}
+                        conMod={Math.floor(((identity.draft?.constitution ?? character.constitution ?? 10) - 10) / 2)}
+                        baseMaxHp={hpRollBase(classSection.draft ?? {}, {
+                          level: identity.draft?.level ?? character.level,
+                          conMod: Math.floor(((identity.draft?.constitution ?? character.constitution ?? 10) - 10) / 2),
+                        })}
                       />
                     }
                   />

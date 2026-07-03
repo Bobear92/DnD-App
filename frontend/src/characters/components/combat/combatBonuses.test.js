@@ -1,5 +1,56 @@
 import { describe, it, expect } from 'vitest';
-import { isDraconicSorcerer, hasToughFeat, hasDurableFeat, durableHitDieMin, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, getAcOptions, remarkableAthlete, critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
+import { isDraconicSorcerer, hasToughFeat, hasDurableFeat, durableHitDieMin, getHpBonuses, getHpBonusesPerLevel, totalHpBonus, hpRollBase, effectiveMaxHp, getAcOptions, remarkableAthlete, critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
+
+describe('hpRollBase', () => {
+  it('returns the stored hp_rolls when present (CON-independent)', () => {
+    expect(hpRollBase({ hp_rolls: 30 }, { level: 4, conMod: 3 })).toBe(30);
+  });
+  it('derives the roll base from a legacy hp_max by removing level × conMod', () => {
+    // Legacy hp_max baked CON in: 34 at level 4, CON +2 → roll base 34 − 8 = 26.
+    expect(hpRollBase({ hp_max: 34 }, { level: 4, conMod: 2 })).toBe(26);
+  });
+  it('prefers hp_rolls over a legacy hp_max', () => {
+    expect(hpRollBase({ hp_rolls: 26, hp_max: 999 }, { level: 4, conMod: 2 })).toBe(26);
+  });
+  it('returns null when neither field is present', () => {
+    expect(hpRollBase({}, { level: 3, conMod: 1 })).toBeNull();
+  });
+});
+
+describe('effectiveMaxHp', () => {
+  it('layers CON × level on top of the roll base', () => {
+    // 26 base + 3 CON × 4 levels = 38.
+    expect(effectiveMaxHp({ hp_rolls: 26 }, { level: 4, conMod: 3, charClass: 'Fighter' })).toBe(38);
+  });
+  it('recomputes dynamically when the CON modifier changes (no stored HP rewrite)', () => {
+    const cd = { hp_rolls: 26 };
+    expect(effectiveMaxHp(cd, { level: 4, conMod: 2 })).toBe(34); // +2 CON
+    expect(effectiveMaxHp(cd, { level: 4, conMod: 3 })).toBe(38); // +1 CON mod → +4 HP (retroactive across 4 levels)
+    expect(effectiveMaxHp(cd, { level: 4, conMod: 1 })).toBe(30); // −1 CON mod → −4 HP
+  });
+  it('adds passive per-level bonuses (Tough) on top of CON', () => {
+    // 26 base + 2 CON × 4 + Tough 2/level × 4 = 26 + 8 + 8 = 42.
+    expect(effectiveMaxHp({ hp_rolls: 26, feats: [{ name: 'Tough' }] }, { level: 4, conMod: 2, charClass: 'Fighter', feats: [{ name: 'Tough' }] })).toBe(42);
+  });
+  it('reproduces a legacy hp_max exactly at its own CON (self-consistent fallback)', () => {
+    // Legacy hp_max 34 (level 4, CON +2) ⇒ roll base 26 ⇒ effective 34.
+    expect(effectiveMaxHp({ hp_max: 34 }, { level: 4, conMod: 2 })).toBe(34);
+  });
+
+  it('a legacy-only record is stable across CON (the fallback derives base from the same conMod)', () => {
+    // With no stored hp_rolls, changing conMod re-derives the base by the same amount, so HP is
+    // unchanged — the documented legacy gap. Such records become dynamic once a real hp_rolls is
+    // persisted (next level-up). hp_rolls-backed records ARE dynamic (see the test above).
+    expect(effectiveMaxHp({ hp_max: 34 }, { level: 4, conMod: 3 })).toBe(34);
+    expect(effectiveMaxHp({ hp_max: 34 }, { level: 4, conMod: 1 })).toBe(34);
+  });
+  it('floors at 1 HP per level for extreme negative CON', () => {
+    expect(effectiveMaxHp({ hp_rolls: 3 }, { level: 3, conMod: -5 })).toBe(3); // max(3, 3 + (-15)) = 3
+  });
+  it('returns null with no roll base', () => {
+    expect(effectiveMaxHp({}, { level: 3, conMod: 1 })).toBeNull();
+  });
+});
 
 describe('greatWeaponMasterNote', () => {
   it('returns the crit/kill bonus-attack reminder when the character has the feat', () => {

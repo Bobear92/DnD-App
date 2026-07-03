@@ -29,6 +29,20 @@ describe('MaxHpValue', () => {
     expect(screen.getByText('+8 Tough')).toBeInTheDocument();
   });
 
+  it('folds CON × level into the number (roll base + conMod × level)', () => {
+    // baseMaxHp is the CON-independent roll base; conMod +3 at level 4 adds 12.
+    render(<MaxHpValue charClass="Fighter" subclass="Champion" level={4} baseMaxHp={26} conMod={3} />);
+    expect(screen.getByText('38')).toBeInTheDocument(); // 26 + 3×4
+  });
+
+  it('combines CON and a passive bonus, annotating only the passive source', () => {
+    render(<MaxHpValue charClass="Fighter" subclass="Champion" level={4} raceTraits={['Dwarven Toughness']} baseMaxHp={26} conMod={2} />);
+    expect(screen.getByText('38')).toBeInTheDocument(); // 26 + 2×4 CON + 1×4 Dwarven Toughness
+    expect(screen.getByText('+4 Dwarven Toughness')).toBeInTheDocument();
+    // CON isn't annotated — it's part of the base number.
+    expect(screen.queryByText(/CON/)).not.toBeInTheDocument();
+  });
+
   it('renders an em dash when baseMaxHp is missing', () => {
     render(<MaxHpValue charClass="Sorcerer" subclass="Draconic Bloodline" level={3} />);
     expect(screen.getByText('—')).toBeInTheDocument();

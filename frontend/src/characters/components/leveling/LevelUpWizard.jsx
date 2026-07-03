@@ -16,7 +16,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SpellList from '@/characters/components/spells/SpellList';
 import { CLASS_PROGRESSION } from '@/characters/components/classData/classProgressionTables';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
-import { getHpBonusesPerLevel, totalHpBonus } from '@/characters/components/combat/combatBonuses';
+import { getHpBonusesPerLevel, hpRollBase, effectiveMaxHp } from '@/characters/components/combat/combatBonuses';
 import { getManeuvers, maneuversKnownAtLevel } from '@/characters/components/classData/maneuversData';
 import { getLevelChoices, availablePoolOptions, applyLevelChoice } from '@/characters/components/classData/levelChoicesData';
 import { getSubclassGrants, availableGrantOptions, applyGrant } from '@/characters/components/classData/subclassGrants';
@@ -127,7 +127,6 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     return classFeats[newLevel] ?? [];
   }, [character.char_class, newLevel, CLASS_FEATURES, config]);
 
-  const currentHpMax = character.character_data?.hp_max ?? null;
 
   // Ability Score Improvement: every class gains the "Ability Score Improvement" feature
   // at its ASI levels (4/8/12/16/19, +6/14 Fighter, +10 Rogue) — detect it from the
@@ -434,8 +433,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     null;
 
   // Per-level HP bonuses (Hill Dwarf Dwarven Toughness +1, Tough feat +2, Draconic Resilience +1).
-  // These are display-only: the sheet's MaxHpValue adds them on top of the stored hp_max, so the
-  // wizard shows them but writes only die+CON into hp_max (writing them too would double-count).
+  // Display-only: the sheet's MaxHpValue re-adds them on top of the stored roll base per level.
   const hpBonusArgs = {
     charClass: character.char_class,
     subclass: character.character_data?.subclass,
@@ -445,19 +443,26 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const hpBonusRows = getHpBonusesPerLevel(hpBonusArgs);          // [{ source, detail, perLevel }]
   const perLevelHpBonus = hpBonusRows.reduce((s, b) => s + b.perLevel, 0);
 
-  // Stored gain (written to hp_max): die + CON, min 1. Displayed gain adds the passive bonuses.
-  const storedGain = hpDieResult != null ? Math.max(1, hpDieResult + con) : null;
-  const hpGain = storedGain != null ? storedGain + perLevelHpBonus : null;
+  // HP is stored as the CON-INDEPENDENT roll base (character_data.hp_rolls = the hit-die results,
+  // no Constitution). This level-up adds one die result; Constitution is layered on dynamically at
+  // display time, so raising CON here (via an ASI or half-feat) increases max HP retroactively
+  // across every level automatically — no retroactive bookkeeping, no CON baked into storage.
+  const conAfter = conMod(combinedScoreUpdates().constitution ?? (character.constitution ?? 10));
+  const oldLevel = character.level ?? 1;
+  const oldRollBase = hpRollBase(character.character_data ?? {}, { level: oldLevel, conMod: con });
+  const newRolls = oldRollBase != null && hpDieResult != null ? oldRollBase + hpDieResult : null;
 
-  const newStoredHpMax = currentHpMax != null && storedGain != null
-    ? currentHpMax + storedGain
+  // The extra HP a CON-modifier increase grants retroactively (prior levels catch up); shown in the
+  // confirm breakdown so the "HP gained" number is explained. 0 when CON is unchanged.
+  const retroHp = (conAfter - con) * oldLevel;
+
+  // Effective (displayed) max HP before/after = roll base + CON × level + passive bonuses.
+  const effectiveCurrentMax = effectiveMaxHp(character.character_data ?? {}, { level: oldLevel, conMod: con, ...hpBonusArgs });
+  const effectiveNewMax = newRolls != null
+    ? effectiveMaxHp({ hp_rolls: newRolls }, { level: newLevel, conMod: conAfter, ...hpBonusArgs })
     : null;
-  // Effective (displayed) max HP = stored hp_max + passive bonuses at that level — matches the sheet.
-  const effectiveCurrentMax = currentHpMax != null
-    ? currentHpMax + totalHpBonus({ ...hpBonusArgs, level: character.level ?? 1 })
-    : null;
-  const effectiveNewMax = effectiveCurrentMax != null && hpGain != null
-    ? effectiveCurrentMax + hpGain
+  const hpGain = effectiveNewMax != null && effectiveCurrentMax != null
+    ? effectiveNewMax - effectiveCurrentMax
     : null;
 
   const hpMethodLabel =
@@ -557,7 +562,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
 
     const newCharacterData = {
       ...(character.character_data ?? {}),
-      ...(newStoredHpMax != null ? { hp_max: newStoredHpMax } : {}),
+      ...(newRolls != null ? { hp_rolls: newRolls } : {}),
       ...(subclassChoice ? { subclass: subclassChoice } : {}),
       ...(isKnownCaster ? { cantrips, known_spells: knownSpells } : {}),
       ...grantPatch,
@@ -1256,8 +1261,9 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                   <span className="font-medium text-green-600">
                     +{hpGain ?? '—'}
                     {hpGain != null && (
-                      <span className="text-muted-foreground font-normal ml-1">
-                        ({hpMethodLabel}{con !== 0 ? ` + ${con} CON` : ''}
+                      <span className="text-muted-foreground font-normal ml-1" data-testid="confirm-hp-breakdown">
+                        ({hpMethodLabel}{conAfter !== 0 ? ` + ${conAfter} CON` : ''}
+                        {retroHp !== 0 ? ` ${retroHp > 0 ? '+' : '−'} ${Math.abs(retroHp)} retroactive CON` : ''}
                         {hpBonusRows.map(b => ` + ${b.perLevel} ${b.source}`).join('')})
                       </span>
                     )}
