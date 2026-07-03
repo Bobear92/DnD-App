@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ActionEconomyTab from '@/characters/components/combat/ActionEconomyTab';
 
@@ -204,6 +204,19 @@ describe('ActionEconomyTab', () => {
   it('no crit range for a non-Champion weapon attack', () => {
     renderTab({ inventory: [longswordEntry], subclass: 'Battle Master', level: 3 });
     expect(screen.queryByTestId('ae-crit-weapon:w1:0')).not.toBeInTheDocument();
+  });
+
+  it('shows the 2024 Champion Remarkable Athlete post-crit move note on a weapon attack entry', () => {
+    renderTab({ inventory: [longswordEntry], subclass: 'Champion', level: 3, edition: '5.5e' });
+    expect(screen.getByTestId('ae-remarkable-move-weapon:w1:0')).toHaveTextContent('half your Speed');
+  });
+
+  it('no Remarkable Athlete move note in 5e / for a non-Champion', () => {
+    renderTab({ inventory: [longswordEntry], subclass: 'Champion', level: 3, edition: '5e' });
+    expect(screen.queryByTestId('ae-remarkable-move-weapon:w1:0')).not.toBeInTheDocument();
+    cleanup();
+    renderTab({ inventory: [longswordEntry], subclass: 'Battle Master', level: 3, edition: '5.5e' });
+    expect(screen.queryByTestId('ae-remarkable-move-weapon:w1:0')).not.toBeInTheDocument();
   });
 
   it('shows a ranged-spell spacing note under the Spell section', async () => {

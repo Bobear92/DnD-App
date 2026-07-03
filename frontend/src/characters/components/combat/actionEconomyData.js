@@ -24,6 +24,7 @@ import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeat
 import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
 import { hasFeat, critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
+import { remarkableAthleteMoveNote } from '@/characters/components/subclass/subclassCombatNotes';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
 const ECONOMY_COST_LABEL = {
@@ -287,6 +288,9 @@ export function buildActionEconomy({
   // attacks, so it rides on each real weapon Action entry. Null for everyone else.
   const crit = critRange({ charClass, subclass, level });
   const critLabel = critRangeLabel(crit);
+  // 2024 Champion Remarkable Athlete's post-crit free move — crit-triggered, so it rides on
+  // each real weapon Action entry next to the crit range. Null for 5e / non-Champions.
+  const remarkableMove = remarkableAthleteMoveNote({ charClass, subclass, level, edition });
 
   // Weapon attacks (Action). Show an unarmed strike when nothing is equipped, or whenever a
   // feat upgrades the unarmed die (e.g. Tavern Brawler's 1d4) so the upgrade is visible.
@@ -346,6 +350,8 @@ export function buildActionEconomy({
       // has no uid and isn't a weapon attack for Improved Critical).
       critRange: atk.uid && crit ? critLabel : null,
       critSource: atk.uid && crit ? crit.source : null,
+      // 2024 Champion Remarkable Athlete post-crit free move — on real weapon attacks only.
+      remarkableMoveNote: atk.uid ? remarkableMove : null,
     });
   });
 

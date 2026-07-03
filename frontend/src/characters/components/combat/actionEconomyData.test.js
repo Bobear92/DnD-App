@@ -173,6 +173,22 @@ describe('buildActionEconomy — Fighter', () => {
     expect(unarmed.action.find((e) => e.name === 'Unarmed Strike').critRange).toBeNull();
   });
 
+  it('rides the 2024 Champion Remarkable Athlete post-crit move onto weapon attacks (not 5e / non-Champion / unarmed)', () => {
+    const ec = buildActionEconomy({ ...fighterArgs(3, '5.5e'), subclass: 'Champion' });
+    const ls = ec.action.find((e) => e.name === 'Longsword');
+    expect(ls.remarkableMoveNote).toContain('half your Speed');
+
+    // 5e Champion has no such rider.
+    const e5e = buildActionEconomy({ ...fighterArgs(3, '5e'), subclass: 'Champion' });
+    expect(e5e.action.find((e) => e.name === 'Longsword').remarkableMoveNote).toBeNull();
+
+    // Non-Champion and the unarmed fallback never get it.
+    const bm = buildActionEconomy({ ...fighterArgs(3, '5.5e'), subclass: 'Battle Master' });
+    expect(bm.action.find((e) => e.name === 'Longsword').remarkableMoveNote).toBeNull();
+    const unarmed = buildActionEconomy({ ...fighterArgs(3, '5.5e'), subclass: 'Champion', attacks: [] });
+    expect(unarmed.action.find((e) => e.name === 'Unarmed Strike').remarkableMoveNote).toBeNull();
+  });
+
   it('adds a spacing note (disadvantage within 5 ft) to a ranged weapon attack', () => {
     const args = fighterArgs(5, '5e');
     args.attacks = [{ uid: 'lb1', name: 'Longbow', toHit: '+7', damage: '1d8 + 3 Piercing', proficient: true }];

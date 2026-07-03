@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { hasSurvivor, survivorNote, hasHeroicWarrior, heroicWarriorNote } from './subclassCombatNotes';
+import {
+  hasSurvivor,
+  survivorNote,
+  hasHeroicWarrior,
+  heroicWarriorNote,
+  hasRemarkableAthleteMove,
+  remarkableAthleteMoveNote,
+} from './subclassCombatNotes';
 
 describe('hasSurvivor', () => {
   it('is true for a Champion Fighter at L18+', () => {
@@ -84,5 +91,43 @@ describe('heroicWarriorNote', () => {
     expect(heroicWarriorNote({ charClass: 'Fighter', subclass: 'Champion', level: 9, edition: '5.5e' })).toBeNull();
     expect(heroicWarriorNote({ charClass: 'Fighter', subclass: 'Battle Master', level: 10, edition: '5.5e' })).toBeNull();
     expect(heroicWarriorNote()).toBeNull();
+  });
+});
+
+describe('hasRemarkableAthleteMove', () => {
+  it('is true for a 2024 Champion Fighter at L3+', () => {
+    expect(hasRemarkableAthleteMove({ charClass: 'Fighter', subclass: 'Champion', level: 3, edition: '5.5e' })).toBe(true);
+    expect(hasRemarkableAthleteMove({ charClass: 'Fighter', subclass: 'Champion', level: 20, edition: '5.5e' })).toBe(true);
+  });
+
+  it('is false below L3', () => {
+    expect(hasRemarkableAthleteMove({ charClass: 'Fighter', subclass: 'Champion', level: 2, edition: '5.5e' })).toBe(false);
+  });
+
+  it('is false in 5e (the post-crit move is a 2024-only rider)', () => {
+    expect(hasRemarkableAthleteMove({ charClass: 'Fighter', subclass: 'Champion', level: 7, edition: '5e' })).toBe(false);
+  });
+
+  it('is false for other subclasses / classes / no args', () => {
+    expect(hasRemarkableAthleteMove({ charClass: 'Fighter', subclass: 'Battle Master', level: 3, edition: '5.5e' })).toBe(false);
+    expect(hasRemarkableAthleteMove({ charClass: 'Rogue', subclass: 'Champion', level: 3, edition: '5.5e' })).toBe(false);
+    expect(hasRemarkableAthleteMove()).toBe(false);
+  });
+});
+
+describe('remarkableAthleteMoveNote', () => {
+  it('returns the note for a 2024 Champion at L3+', () => {
+    const note = remarkableAthleteMoveNote({ charClass: 'Fighter', subclass: 'Champion', level: 3, edition: '5.5e' });
+    expect(note).toContain('Remarkable Athlete');
+    expect(note).toContain('critical hit');
+    expect(note).toContain('half your Speed');
+    expect(note).toContain('opportunity attacks');
+  });
+
+  it('returns null when it does not apply (5e, below L3, other subclass, no args)', () => {
+    expect(remarkableAthleteMoveNote({ charClass: 'Fighter', subclass: 'Champion', level: 7, edition: '5e' })).toBeNull();
+    expect(remarkableAthleteMoveNote({ charClass: 'Fighter', subclass: 'Champion', level: 2, edition: '5.5e' })).toBeNull();
+    expect(remarkableAthleteMoveNote({ charClass: 'Fighter', subclass: 'Battle Master', level: 3, edition: '5.5e' })).toBeNull();
+    expect(remarkableAthleteMoveNote()).toBeNull();
   });
 });

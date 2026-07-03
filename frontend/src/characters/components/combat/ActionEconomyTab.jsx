@@ -151,6 +151,11 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
             Crit {entry.critRange}{entry.critSource ? ` (${entry.critSource})` : ''}
           </p>
         )}
+        {entry.remarkableMoveNote && (
+          <p className="text-[11px] text-emerald-600 leading-tight mt-0.5" data-testid={`ae-remarkable-move-${entry.key}`}>
+            {entry.remarkableMoveNote}
+          </p>
+        )}
         {entry.greatWeaponMasterNote && (
           <p className="text-[11px] text-emerald-600 leading-tight mt-0.5" data-testid={`ae-gwm-${entry.key}`}>
             {entry.greatWeaponMasterNote}

@@ -28,6 +28,7 @@ import { gatherFightingStyles } from '@/characters/components/combat/fightingSty
 import { critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
 import { getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
+import { remarkableAthleteMoveNote } from '@/characters/components/subclass/subclassCombatNotes';
 
 // Tools are stored as adventuring-gear entries but get their own sub-tab (inserted
 // right after Gear). It isn't a real encyclopedia category — the Add picker reuses
@@ -109,6 +110,9 @@ export default function InventoryTab({
   // weapon attack, so it's shown on each weapon row. Null for everyone else.
   const crit = critRange({ charClass, subclass, level });
   const critLabel = critRangeLabel(crit);
+  // 2024 Champion Remarkable Athlete's post-crit free move — crit-triggered like the crit
+  // range, so it rides alongside it on each weapon row. Null for 5e / non-Champions.
+  const remarkableMoveNote = remarkableAthleteMoveNote({ charClass, subclass, level, edition });
   // Great Weapon Master's crit/kill bonus-attack reminder (both editions), shown on melee
   // weapon rows next to the crit range. Null when the character lacks the feat.
   const gwmBonusNote = greatWeaponMasterNote(characterData?.feats);
@@ -515,6 +519,11 @@ export default function InventoryTab({
                     {e.category === 'weapons' && crit && (
                       <div className="text-[11px] text-primary leading-tight font-medium" data-testid={`crit-range-${e.uid}`}>
                         Crit {critLabel} ({crit.source})
+                      </div>
+                    )}
+                    {e.category === 'weapons' && remarkableMoveNote && (
+                      <div className="text-[11px] text-emerald-600 leading-tight" data-testid={`remarkable-move-${e.uid}`}>
+                        {remarkableMoveNote}
                       </div>
                     )}
                     {e.category === 'weapons' && (

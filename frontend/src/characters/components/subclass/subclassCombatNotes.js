@@ -70,3 +70,32 @@ export function heroicWarriorNote({ charClass, subclass, level = 1, edition = '5
     'whenever you start your turn without it.'
   );
 }
+
+const REMARKABLE_ATHLETE_MOVE_UNLOCK = 3;
+
+/** True when this character has the 2024 Champion Remarkable Athlete post-crit free move. */
+export function hasRemarkableAthleteMove({ charClass, subclass, level = 1, edition = '5e' } = {}) {
+  return (
+    edition === '5.5e' &&
+    charClass === 'Fighter' &&
+    subclass === 'Champion' &&
+    (level ?? 1) >= REMARKABLE_ATHLETE_MOVE_UNLOCK
+  );
+}
+
+/**
+ * The 2024 Champion Remarkable Athlete post-Critical-Hit movement rider, or null when
+ * it doesn't apply. Surfaced next to the crit-range note on weapon attacks because it's
+ * crit-triggered — immediately after you score a Critical Hit (with any weapon), you can
+ * move up to half your Speed without provoking Opportunity Attacks. 2024 (L3) only; the
+ * 5e Remarkable Athlete has no such rider.
+ *
+ * @param {{ charClass, subclass, level?, edition? }} ctx
+ */
+export function remarkableAthleteMoveNote({ charClass, subclass, level = 1, edition = '5e' } = {}) {
+  if (!hasRemarkableAthleteMove({ charClass, subclass, level, edition })) return null;
+  return (
+    'Remarkable Athlete: immediately after you score a critical hit, you can move up to ' +
+    'half your Speed without provoking opportunity attacks.'
+  );
+}
