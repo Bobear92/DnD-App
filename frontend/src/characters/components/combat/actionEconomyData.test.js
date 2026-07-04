@@ -703,4 +703,97 @@ describe('buildActionEconomy — Fighter', () => {
       expect(entry.loadingNote).toMatch(/only one attack per action/i);
     });
   });
+
+  describe('Charger', () => {
+    const CHARGER = { id: 50, name: 'Charger', level: 4, effects: [{ kind: 'note', text: 'Dash then bonus attack/shove.' }] };
+    const longsword = { uid: 'w1', name: 'Longsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile"]', damage: '1d8', damage_type: 'slashing' };
+
+    it('adds a Dash + attack/shove Action+Bonus combo when a melee weapon is equipped', () => {
+      const args = fighterArgs(4, '5e');
+      args.characterData = { feats: [CHARGER] };
+      args.inventory = [longsword]; // default attacks already carry a Longsword row (uid w1)
+      const combo = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Charger');
+      expect(combo).toBeTruthy();
+      expect(combo.source).toBe('Feat');
+      expect(combo.cost).toBe('action + bonus action');
+      expect(combo.subAttacks.map((s) => [s.label, s.name])).toEqual([
+        ['Action', 'Dash'],
+        ['Bonus', 'Longsword'],
+        ['or Shove', 'Shove'],
+      ]);
+      // The bonus melee attack shows the equipped weapon's real to-hit/damage.
+      expect(combo.subAttacks[1].toHit).toBe('+5');
+      expect(combo.detail).toMatch(/Longsword/);
+      expect(combo.detail).toMatch(/Charger/);
+    });
+
+    it('shows only Dash + Shove when no melee weapon is equipped', () => {
+      const args = fighterArgs(4, '5e');
+      args.characterData = { feats: [CHARGER] };
+      args.inventory = [];
+      args.attacks = [];
+      const combo = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Charger');
+      expect(combo).toBeTruthy();
+      expect(combo.subAttacks.map((s) => [s.label, s.name])).toEqual([
+        ['Action', 'Dash'],
+        ['Bonus', 'Shove'],
+      ]);
+      expect(combo.subAttacks.some((s) => s.name === 'Longsword')).toBe(false);
+      expect(combo.detail).toMatch(/Equip a melee weapon/);
+    });
+
+    it('does not add the combo without the Charger feat', () => {
+      const args = fighterArgs(4, '5e');
+      args.inventory = [longsword];
+      expect(buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Charger')).toBeFalsy();
+    });
+
+    it('does not add the combo in 2024 (Charger is a different mechanic there)', () => {
+      const args = fighterArgs(4, '5.5e');
+      args.characterData = { feats: [CHARGER] };
+      args.inventory = [longsword];
+      expect(buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Charger')).toBeFalsy();
+    });
+
+    it('adds a 2024 "Charge" Action entry (attack + 1d8/push options) when a melee weapon is equipped', () => {
+      const args = fighterArgs(4, '5.5e');
+      args.characterData = { feats: [CHARGER] };
+      args.inventory = [longsword];
+      const ec = buildActionEconomy(args);
+      const charge = ec.action.find((e) => e.name === 'Charge');
+      expect(charge).toBeTruthy();
+      expect(charge.source).toBe('Feat');
+      expect(charge.cost).toBe('action'); // 2024 Charge is an Action, not Action+Bonus
+      expect(charge.subAttacks.map((s) => [s.label, s.name])).toEqual([
+        ['Attack', 'Longsword'],
+        ['+1d8', 'Extra damage'],
+        ['or Push', 'Push 10 ft'],
+      ]);
+      expect(charge.subAttacks[0].toHit).toBe('+5');
+      expect(charge.detail).toMatch(/\+10 ft of Speed/); // Dash bonus noted
+      // Not shown as an Action+Bonus combo in 2024.
+      expect(ec['action+bonus'].find((e) => e.name === 'Charge')).toBeFalsy();
+    });
+
+    it('does not add the 2024 Charge entry when no melee weapon is equipped', () => {
+      const args = fighterArgs(4, '5.5e');
+      args.characterData = { feats: [CHARGER] };
+      args.inventory = [];
+      args.attacks = [];
+      expect(buildActionEconomy(args).action.find((e) => e.name === 'Charge')).toBeFalsy();
+    });
+
+    it('does not add the 2024 Charge entry without the Charger feat', () => {
+      const args = fighterArgs(4, '5.5e');
+      args.inventory = [longsword];
+      expect(buildActionEconomy(args).action.find((e) => e.name === 'Charge')).toBeFalsy();
+    });
+
+    it('does not add the 2024 Charge Action entry in 5e', () => {
+      const args = fighterArgs(4, '5e');
+      args.characterData = { feats: [CHARGER] };
+      args.inventory = [longsword];
+      expect(buildActionEconomy(args).action.find((e) => e.name === 'Charge')).toBeFalsy();
+    });
+  });
 });

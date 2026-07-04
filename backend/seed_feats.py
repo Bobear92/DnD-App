@@ -96,7 +96,7 @@ FEAT_EFFECTS_5E = {
         _note("Stand from prone with only 5 ft of movement; climbing costs no extra movement; running jump after moving 5 ft."),
     ],
     "Charger": [
-        _note("After you Dash and move 10 ft straight toward a target, a melee attack/shove that turn gains +5 damage or pushes 10 ft."),
+        _note("After you take the Dash action, use a bonus action to make one melee weapon attack or to shove a creature. If you moved 10 ft straight toward the target first, the attack deals +5 damage or the shove pushes it up to 10 ft."),
     ],
     "Crossbow Expert": [
         _action("Hand Crossbow (Bonus Attack)", "bonus",
@@ -300,7 +300,7 @@ FEAT_EFFECTS_2024 = {
     "Ability Score Improvement": [_note("Increase one ability score by 2, or two by 1 each (max 20). Repeatable. Use the Ability Score step at level-up.")],
     "Actor": [_abil("charisma"), _note("Advantage on Deception/Performance to impersonate; mimic speech and sounds you've heard.")],
     "Athlete": [_abil_choice(["strength", "dexterity"]), _note("Stand from prone with 5 ft; climb without extra cost; running jump after moving 5 ft.")],
-    "Charger": [_abil_choice(["strength", "dexterity"]), _note("Once per turn after moving 10 ft straight toward a target, add bonus damage to a melee attack or shove it 10 ft as part of a Dash.")],
+    "Charger": [_abil_choice(["strength", "dexterity"]), _note("When you take the Dash action, your Speed increases by 10 ft for that action. Once per turn, if you move at least 10 ft straight toward a target immediately before hitting it with a melee attack, deal +1d8 damage or push it up to 10 ft away.")],
     "Chef": [_abil_choice(["constitution", "wisdom"]), _note("Cook's utensils proficiency; cook food on a short rest to heal allies; bake treats granting temporary hit points.")],
     "Crossbow Expert": [_abil("dexterity"), _note("Ignore the Loading property of crossbows; no disadvantage on ranged attacks within 5 ft; fire a hand crossbow as part of the Attack action's extra attack.")],
     "Crusher": [_abil_choice(["strength", "constitution"]), _note("Once per turn, move a creature 5 ft when you deal bludgeoning damage; a bludgeoning crit gives attackers advantage against it.")],
@@ -445,7 +445,7 @@ FEATS_5E = [
     ("Alert", "Always on the lookout for danger, you gain a +5 bonus to initiative, can't be surprised while conscious, and attackers that you can see don't gain advantage on attack rolls against you from being hidden.", None, False),
     ("Athlete", "You gain a +1 increase to Strength or Dexterity. When prone, standing up uses only 5 feet of movement. Climbing doesn't cost extra movement, and you can make a running long or high jump after moving only 5 feet on foot.", None, False),
     ("Actor", "You gain a +1 increase to Charisma, advantage on Deception and Performance checks when trying to pass yourself off as a different person, and you can mimic the speech of another person or the sounds of creatures you've heard.", None, False),
-    ("Charger", "When you Dash and then make a melee attack or shove in the same turn after moving at least 10 feet straight toward the target, you gain a +5 bonus to the attack's damage (or push the target 10 feet).", None, False),
+    ("Charger", "When you take the Dash action, you can use a bonus action to make one melee weapon attack or to shove a creature. If you moved at least 10 feet in a straight line toward the target immediately before the bonus action, you either deal +5 damage on the attack (if it hits) or push the target up to 10 feet away (if the shove succeeds).", None, False),
     ("Crossbow Expert", "You ignore the loading quality of crossbows you're proficient with, being within 5 feet of a hostile creature doesn't impose disadvantage on your ranged attacks, and you can make a hand-crossbow attack as a bonus action after a one-handed attack.", None, False),
     ("Defensive Duelist", "When you're wielding a finesse weapon you're proficient with and another creature hits you with a melee attack, you can use your reaction to add your proficiency bonus to your AC for that attack, potentially causing it to miss.", "Dexterity 13 or higher", False),
     ("Dual Wielder", "You gain a +1 bonus to AC while wielding a separate melee weapon in each hand, you can use two-weapon fighting even with non-light weapons, and you can draw or stow two one-handed weapons when you would normally only draw or stow one.", None, False),
@@ -503,7 +503,7 @@ FEATS_2024 = [
     ("Ability Score Improvement", "General feat. Increase one ability score by 2, or two ability scores by 1 each, to a maximum of 20. Repeatable.", "Level 4+", True),
     ("Actor", "General feat. Increase Charisma by 1 (max 20). You have advantage on Deception and Performance checks to impersonate someone, and can mimic speech or sounds you've heard.", "Level 4+, Charisma 13+", False),
     ("Athlete", "General feat. Increase Strength or Dexterity by 1 (max 20). Standing from prone costs only 5 feet, you can climb without extra cost, and can make a running jump after moving 5 feet.", "Level 4+, Strength or Dexterity 13+", False),
-    ("Charger", "General feat. Increase Strength or Dexterity by 1. Once per turn after moving 10 feet straight toward a target you can add bonus damage to a melee attack, or shove it 10 feet, as part of the same Dash.", "Level 4+", False),
+    ("Charger", "General feat. Increase your Strength or Dexterity by 1 (max 20). When you take the Dash action, your Speed increases by 10 feet for that action. And once per turn, if you move at least 10 feet in a straight line toward a target immediately before hitting it with a melee attack, you can either deal an extra 1d8 damage to it or push it up to 10 feet away.", "Level 4+", False),
     ("Chef", "General feat. Increase Constitution or Wisdom by 1. You gain cook's utensils proficiency, can prepare food during a short rest to heal allies, and can bake treats that grant temporary hit points.", "Level 4+", False),
     ("Crossbow Expert", "General feat. Increase Dexterity by 1. You ignore the Loading property of crossbows, ignore the disadvantage from being within 5 feet of an enemy on ranged attacks, and can fire a hand crossbow as part of the Attack action's extra attack.", "Level 4+, Dexterity 13+", False),
     ("Crusher", "General feat. Increase Strength or Constitution by 1. Once per turn when you deal bludgeoning damage you can move the target 5 feet, and scoring a crit with bludgeoning gives attackers advantage against it until your next turn.", "Level 4+", False),
@@ -583,9 +583,21 @@ def _seed_list(db, feats, edition, source, effects_map=None):
             .first()
         )
         if existing:
-            # Backfill structured effects onto an already-seeded feat (idempotent).
+            # Refresh authored fields onto an already-seeded system feat (idempotent).
+            # seed_feats.py is the source of truth for system feats, so text edits here
+            # (descriptions, prerequisites) and structured effects flow to existing rows.
+            changed = False
             if effects is not None and existing.effects != effects:
                 existing.effects = effects
+                changed = True
+            if existing.description != description:
+                existing.description = description
+                changed = True
+            new_prereq = _prereq(prereq_text)
+            if existing.prerequisites != new_prereq:
+                existing.prerequisites = new_prereq
+                changed = True
+            if changed:
                 updated += 1
             else:
                 skipped += 1

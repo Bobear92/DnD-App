@@ -483,6 +483,87 @@ export function buildActionEconomy({
     });
   }
 
+  // Charger (feat, 5e) — after you take the Dash action you can use a bonus action to make
+  // one melee weapon attack or to shove a creature (moving 10 ft straight toward the target
+  // first adds +5 damage on the attack or a 10-ft push on the shove). Present it as an Action
+  // (Dash) + Bonus combo. With a melee weapon equipped the bonus can be an attack OR a shove;
+  // with no melee weapon there's no weapon attack to make, so only the Dash + shove shows.
+  // (The 2024 Charger is a different mechanic — a damage rider on the Attack action — so no combo.)
+  if (!is2024 && hasFeat(feats, 'Charger')) {
+    const attackByUid = new Map(weaponRows.filter((a) => a.uid).map((a) => [a.uid, a]));
+    const baseDamage = (w) => `${w.damage || '—'}${w.damage_type ? ` ${w.damage_type}` : ''}`;
+    const meleeWeapon = (inventory || []).find((e) => e.equipped && isMelee(e));
+    const dashRow = {
+      label: 'Action',
+      name: 'Dash',
+      detail: 'Move up to your speed — at least 10 ft straight toward the target to power the bonus.',
+    };
+    const shoveRow = {
+      label: meleeWeapon ? 'or Shove' : 'Bonus',
+      name: 'Shove',
+      detail: 'Push the target 5 ft or knock it prone; push up to 10 ft if you moved 10 ft straight first.',
+    };
+    let chargerSubAttacks;
+    let chargerDetail;
+    if (meleeWeapon) {
+      const row = attackByUid.get(meleeWeapon.uid);
+      chargerSubAttacks = [
+        dashRow,
+        {
+          label: 'Bonus',
+          name: meleeWeapon.name,
+          toHit: row?.toHit ?? null,
+          damage: row?.damage ?? baseDamage(meleeWeapon),
+          warning: row?.warning ?? null,
+        },
+        shoveRow,
+      ];
+      chargerDetail = `After you Dash, use a bonus action to make one melee attack with ${meleeWeapon.name} or to shove the target. Move at least 10 ft straight toward it first for +5 damage on the attack (on a hit) or a 10-ft push on the shove (Charger).`;
+    } else {
+      chargerSubAttacks = [dashRow, shoveRow];
+      chargerDetail = 'After you Dash, use a bonus action to shove a creature. Move at least 10 ft straight toward it first to push it up to 10 ft (Charger). Equip a melee weapon to also make a bonus-action melee attack.';
+    }
+    push('action+bonus', {
+      key: 'charger',
+      name: 'Charger',
+      source: 'Feat',
+      cost: 'action + bonus action',
+      subAttacks: chargerSubAttacks,
+      detail: chargerDetail,
+    });
+  }
+
+  // Charger (feat, 2024) — a different mechanic from 5e: no bonus-action attack. A melee attack
+  // made during the Attack action after moving ≥10 ft straight toward the target gains, once per
+  // turn, either +1d8 damage OR a 10-ft push; and the Dash action gains +10 ft of Speed. Surface
+  // it as a distinct "Charge" Action entry, only when a melee weapon is equipped to make the attack.
+  if (is2024 && hasFeat(feats, 'Charger')) {
+    const meleeWeapon = (inventory || []).find((e) => e.equipped && isMelee(e));
+    if (meleeWeapon) {
+      const attackByUid = new Map(weaponRows.filter((a) => a.uid).map((a) => [a.uid, a]));
+      const baseDamage = (w) => `${w.damage || '—'}${w.damage_type ? ` ${w.damage_type}` : ''}`;
+      const row = attackByUid.get(meleeWeapon.uid);
+      push('action', {
+        key: 'charger-2024',
+        name: 'Charge',
+        source: 'Feat',
+        cost: 'action',
+        subAttacks: [
+          {
+            label: 'Attack',
+            name: meleeWeapon.name,
+            toHit: row?.toHit ?? null,
+            damage: row?.damage ?? baseDamage(meleeWeapon),
+            warning: row?.warning ?? null,
+          },
+          { label: '+1d8', name: 'Extra damage', detail: 'On the hit, deal an extra 1d8 damage (once per turn).' },
+          { label: 'or Push', name: 'Push 10 ft', detail: 'Instead of the extra damage, push the target up to 10 ft away (once per turn).' },
+        ],
+        detail: `Move at least 10 ft in a straight line toward a target, then hit it with ${meleeWeapon.name} (Attack action) to add +1d8 damage or a 10-ft push (once per turn). Your Dash action also gains +10 ft of Speed (Charger).`,
+      });
+    }
+  }
+
   // Class / subclass features (curated, level-gated by the character's known features).
   const featureMap = is2024 ? CLASS_FEATURE_ACTIONS_2024 : CLASS_FEATURE_ACTIONS_5E;
   const classFeatures = featureMap[charClass] || {};
