@@ -7,7 +7,8 @@
  * editable value.
  *
  * Config entry shape:
- *   { key, label, total: (level)=>number, recharge: 'short'|'long', minLevel?: number }
+ *   { key, label, total: (level)=>number, recharge: 'short'|'long', minLevel?: number,
+ *     description?: string }  — description is a short "what it does" line shown under the label
  *
  * @param {object} opts
  * @param {Array}  opts.resources  config restResources
@@ -24,6 +25,7 @@ export function useRestResource({ resources = [], level = 1, data = {} }) {
       return {
         key: r.key,
         label: r.label,
+        description: r.description,
         recharge: r.recharge,
         total,
         used,

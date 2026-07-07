@@ -83,7 +83,10 @@ export const WIZARD_2024 = {
   extraAttacks: null,
   lockedChoices: [],
   restResources: [
-    { key: 'memorize_spell_used', label: 'Memorize Spell (Long Rest)', total: () => 1, recharge: 'long', minLevel: 1 },
+    {
+      key: 'memorize_spell_used', label: 'Memorize Spell (Long Rest)', total: () => 1, recharge: 'long', minLevel: 1,
+      description: 'On a short rest, swap one prepared spell for another from your spellbook.',
+    },
   ],
   notes: [
     { label: 'Scholar (L2)', text: '1×/short rest: add d6 + INT modifier to Arcana, History, Nature, or Religion check.', minLevel: 2 },

@@ -2,6 +2,8 @@
  * CombatBlock — the HP / Hit Dice / AC / Speed region shared by every class sheet.
  * Hidden during creation (HP is auto-calculated; AC/speed depend on equipment).
  * `maxHpNode` / `acExtra` are render slots filled by CharacterDetail.
+ * `afterHpNode` renders between the HP grid and the Hit Dice tracker — used for
+ * HP-adjacent racial resources (Half-Orc Relentless Endurance).
  */
 import React from 'react';
 import { Input } from '@/components/ui/input';
@@ -19,7 +21,7 @@ function Field({ label, children }) {
   );
 }
 
-export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, level = 1, creation = false, maxHpNode = null, acExtra = null, conMod = 0, effectiveMaxHp, onHeal }) {
+export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, level = 1, creation = false, maxHpNode = null, afterHpNode = null, acExtra = null, conMod = 0, effectiveMaxHp, onHeal }) {
   return (
     <>
       <div className="grid grid-cols-3 gap-3">
@@ -33,6 +35,8 @@ export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, 
           <Input type="number" value={data.temp_hp ?? 0} onChange={e => set('temp_hp', parseInt(e.target.value) || 0)} readOnly={readOnly} className="text-center" />
         </Field>
       </div>
+
+      {afterHpNode}
 
       <HitDiceTracker
         hitDie={hitDie}

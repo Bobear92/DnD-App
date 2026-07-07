@@ -67,6 +67,10 @@ import {
 } from '@/characters/components/sheets/2024';
 import { cn } from '@/lib/utils';
 
+// Racial rest-resource keys that are HP mechanics — tracked in the HP & Movement
+// sub-tab (between Max HP and Hit Dice) instead of the Racial Features card.
+const HP_ADJACENT_RACIAL_KEYS = ['relentless_endurance_used'];
+
 const ABILITY_LABELS = [
   { key: 'strength', label: 'Strength', abbrev: 'STR', save: 'str_save_prof' },
   { key: 'dexterity', label: 'Dexterity', abbrev: 'DEX', save: 'dex_save_prof' },
@@ -177,6 +181,7 @@ export default function CharacterDetail() {
   const [playerView, setPlayerView] = useState(false);
   const [gmEdit, setGmEdit] = useState(false); // GM Edit toggle: unlocks permanent choices (Epic 1)
   const [featuresSubTab, setFeaturesSubTab] = useState('class'); // 'class' | 'feats'
+  const [statsSubTab, setStatsSubTab] = useState('identity'); // 'identity' | 'abilities' | 'hp'
   const [spellSource, setSpellSource] = useState('class'); // Spells tab source sub-tab: 'class' | 'racial' | 'feats'
 
   const [xpInput, setXpInput] = useState('');
@@ -305,6 +310,7 @@ export default function CharacterDetail() {
     const merged = { ...classSection.draft, ...savingThrows.draft };
     await saveSection({ character_data: merged }, (updated) => {
       classSection.commit(updated.character_data ?? {});
+      savingThrows.commit({ ...savingThrows.draft });
     });
   };
 
@@ -537,6 +543,22 @@ export default function CharacterDetail() {
 
   const calendarEras = calendar?.eras ?? [];
   const calendarMonths = calendar?.months ?? [];
+
+  // HP-adjacent racial resources (Half-Orc Relentless Endurance) live with HP, not in the
+  // Identity sub-tab's Racial Features card: data-driven sheets render the tracker between
+  // Max HP and Hit Dice via the CombatBlock `afterHpNode` slot; hand-written sheets show it
+  // right below their combat block until they migrate (same interim pattern as the feat
+  // speed note).
+  const hpAdjacentRacialNode = classSection.draft !== null ? (
+    <RacialResourceTracker
+      traits={character?.character_data?.race_traits ?? []}
+      level={identity.draft?.level ?? character.level}
+      data={classSection.draft}
+      onChange={autoSaveClassPatch}
+      readOnly={!showEditable}
+      includeKeys={HP_ADJACENT_RACIAL_KEYS}
+    />
+  ) : null;
 
   return (
     <MainLayout>
@@ -1124,8 +1146,41 @@ export default function CharacterDetail() {
 
             {/* ── Tab 1: Stats ── */}
             <TabsContent value="stats" className="space-y-4">
+              {/* Identity / Abilities / HP & Movement sub-tab toggle (same pattern as the
+                  Features tab) — the Stats tab was one long column; these split it. */}
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant={statsSubTab === 'identity' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setStatsSubTab('identity')}
+                  data-testid="stats-subtab-identity"
+                >
+                  Identity
+                </Button>
+                <Button
+                  type="button"
+                  variant={statsSubTab === 'abilities' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setStatsSubTab('abilities')}
+                  data-testid="stats-subtab-abilities"
+                >
+                  Abilities & Skills
+                </Button>
+                <Button
+                  type="button"
+                  variant={statsSubTab === 'hp' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setStatsSubTab('hp')}
+                  data-testid="stats-subtab-hp"
+                >
+                  HP & Movement
+                </Button>
+              </div>
+
+              {statsSubTab === 'identity' && (<>
               <SectionCard
-                title="Identity & Ability Scores"
+                title="Identity"
                 isDirty={identity.isDirty}
                 onSave={saveIdentity}
                 onReset={identity.reset}
@@ -1246,6 +1301,19 @@ export default function CharacterDetail() {
                     );
                   })()}
 
+                </div>
+              </SectionCard>
+              </>)}
+
+              {statsSubTab === 'abilities' && (
+              <SectionCard
+                title="Abilities, Saves & Skills"
+                isDirty={savingThrows.isDirty}
+                onSave={saveClassData}
+                onReset={savingThrows.reset}
+                canEdit={showEditable}
+              >
+                <div className="space-y-4">
                   {/* Ability scores */}
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Ability Scores</div>
@@ -1318,21 +1386,6 @@ export default function CharacterDetail() {
                     </div>
                   </div>
 
-                  {/* Feat speed bonus (e.g. Mobile +10). Data-driven sheets (Fighter/Wizard) fold it
-                      into CombatBlock's Total Speed, so only the hand-written sheets — which can't yet —
-                      show this central annotation. Drops away as classes migrate to the config. */}
-                  {(() => {
-                    const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
-                    const featSpeed = getFeatStatMods(feats, 'speed', { pb });
-                    if (!featSpeed || getClassConfig(character.char_class, edition)) return null;
-                    const sources = getFeatStatModSources(feats, 'speed', { pb });
-                    return (
-                      <div className="text-xs text-emerald-600" data-testid="speed-feat-note">
-                        +{featSpeed} ft speed from {sources.map((s) => s.source).join(', ')}
-                      </div>
-                    );
-                  })()}
-
                   {/* Saving Throws */}
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Saving Throws</div>
@@ -1375,10 +1428,11 @@ export default function CharacterDetail() {
                   />
                 </div>
               </SectionCard>
+              )}
 
               {/* Inspiration — simple counter (default 0); persists immediately. Surfaces the
                   2024 Champion Fighter's Heroic Warrior reminder, which lands on inspiration. */}
-              {classSection.draft !== null && (() => {
+              {statsSubTab === 'identity' && classSection.draft !== null && (() => {
                 const raw = classSection.draft?.inspiration;
                 const value = typeof raw === 'number' ? raw : (raw ? 1 : 0);
                 return (
@@ -1397,7 +1451,7 @@ export default function CharacterDetail() {
               })()}
 
               {/* Combat stats (HP, Hit Dice, AC, Speed) */}
-              {ClassSheet && classSection.draft !== null && (
+              {statsSubTab === 'hp' && ClassSheet && classSection.draft !== null && (
                 <SectionCard
                   title="Hit Points & Movement"
                   isDirty={classSection.isDirty}
@@ -1440,7 +1494,25 @@ export default function CharacterDetail() {
                         })}
                       />
                     }
+                    afterHpNode={hpAdjacentRacialNode}
                   />
+                  {/* Hand-written sheets don't support the afterHpNode slot yet — show the
+                      HP-adjacent racial tracker right below their combat block instead. */}
+                  {!getClassConfig(character.char_class, edition) && hpAdjacentRacialNode}
+                  {/* Feat speed bonus (e.g. Mobile +10). Data-driven sheets (Fighter/Wizard) fold it
+                      into CombatBlock's Total Speed, so only the hand-written sheets — which can't yet —
+                      show this central annotation. Drops away as classes migrate to the config. */}
+                  {(() => {
+                    const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
+                    const featSpeed = getFeatStatMods(feats, 'speed', { pb });
+                    if (!featSpeed || getClassConfig(character.char_class, edition)) return null;
+                    const sources = getFeatStatModSources(feats, 'speed', { pb });
+                    return (
+                      <div className="mt-2 text-xs text-emerald-600" data-testid="speed-feat-note">
+                        +{featSpeed} ft speed from {sources.map((s) => s.source).join(', ')}
+                      </div>
+                    );
+                  })()}
                   {hasRelentlessEndurance(character?.character_data?.race_traits) && (
                     <div
                       className="mt-2 text-[11px] text-emerald-600 leading-tight"
@@ -1479,20 +1551,24 @@ export default function CharacterDetail() {
               )}
 
               {/* Jumping — computed long/high jump distances (display-only); links to the mechanics page */}
-              <JumpCard
-                strength={identity.draft?.strength ?? character.strength}
-                feats={character?.character_data?.feats ?? []}
-                charClass={character.char_class}
-                subclass={classSection.draft?.subclass ?? character?.character_data?.subclass}
-                level={character.level}
-                edition={edition}
-              />
+              {statsSubTab === 'hp' && (
+                <JumpCard
+                  strength={identity.draft?.strength ?? character.strength}
+                  feats={character?.character_data?.feats ?? []}
+                  charClass={character.char_class}
+                  subclass={classSection.draft?.subclass ?? character?.character_data?.subclass}
+                  level={character.level}
+                  edition={edition}
+                />
+              )}
 
-              {/* Racial Features — all rest-rechargeable racial traits (incl. Dragonborn Breath Weapon) */}
-              {classSection.draft !== null && getRacialRestResources(
+              {/* Racial Features — rest-rechargeable racial traits (incl. Dragonborn Breath
+                  Weapon), except HP-adjacent ones (Relentless Endurance), which live in the
+                  HP & Movement sub-tab. */}
+              {statsSubTab === 'identity' && classSection.draft !== null && getRacialRestResources(
                 character?.character_data?.race_traits ?? [],
                 identity.draft?.level ?? character.level
-              ).length > 0 && (
+              ).some(r => !HP_ADJACENT_RACIAL_KEYS.includes(r.key)) && (
                 <SectionCard
                   title="Racial Features"
                   isDirty={classSection.isDirty}
@@ -1506,6 +1582,7 @@ export default function CharacterDetail() {
                     data={classSection.draft}
                     onChange={autoSaveClassPatch}
                     readOnly={!showEditable}
+                    excludeKeys={HP_ADJACENT_RACIAL_KEYS}
                   />
                 </SectionCard>
               )}
@@ -1539,9 +1616,9 @@ export default function CharacterDetail() {
               {featuresSubTab === 'class' && ClassSheet && classSection.draft !== null && (
                 <SectionCard
                   title={`${character.char_class} Features`}
-                  isDirty={classSection.isDirty || savingThrows.isDirty}
+                  isDirty={classSection.isDirty}
                   onSave={saveClassData}
-                  onReset={() => { classSection.reset(); savingThrows.reset(); }}
+                  onReset={classSection.reset}
                   canEdit={showEditable}
                 >
                   <ClassSheet

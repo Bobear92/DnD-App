@@ -36,4 +36,13 @@ describe('useRestResource', () => {
     const ind = rows.find((r) => r.key === 'indomitable_used');
     expect(ind.remaining).toBe(0);
   });
+
+  it('passes a resource description through to the row', () => {
+    const rows = useRestResource({
+      resources: [{ key: 'x', label: 'X', total: () => 1, recharge: 'short', description: 'Does the thing.' }],
+      level: 1,
+      data: {},
+    });
+    expect(rows[0].description).toBe('Does the thing.');
+  });
 });

@@ -30,10 +30,16 @@ describe('ClassSheet — martial section isolation', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
-  it('shows class features in the features section', () => {
+  it('shows class features in the features section (list collapsed until the header is clicked)', () => {
     fighter();
     expect(screen.getByText('Class Features')).toBeInTheDocument();
+    // The whole list is collapsed by default (header shows the earned count)
+    expect(screen.queryByText('Extra Attack (2 attacks)')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('class-features-toggle'));
     expect(screen.getByText('Extra Attack (2 attacks)')).toBeInTheDocument();
+    // Collapses again on re-click
+    fireEvent.click(screen.getByTestId('class-features-toggle'));
+    expect(screen.queryByText('Extra Attack (2 attacks)')).not.toBeInTheDocument();
   });
 
   it('folds a feat speed bonus (Mobile +10) into Total Speed in the stats section', () => {
@@ -42,6 +48,53 @@ describe('ClassSheet — martial section isolation', () => {
       level={5} section="stats" />);
     expect(screen.getByTestId('total-speed')).toHaveTextContent('40'); // 30 + 10
     expect(screen.getByTestId('total-speed-feat-note')).toHaveTextContent('+10 Mobile');
+  });
+});
+
+describe('ClassSheet — collapsible class features', () => {
+  it('hides a feature description until its name is clicked, and collapses on re-click', () => {
+    fighter();
+    fireEvent.click(screen.getByTestId('class-features-toggle')); // expand the section
+    const desc = 'You can attack twice, instead of once, whenever you take the Attack action on your turn.';
+    expect(screen.queryByText(desc)).not.toBeInTheDocument();
+    const toggle = screen.getByTestId('class-feature-toggle-Extra Attack (2 attacks)');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(screen.getByText(desc)).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(toggle);
+    expect(screen.queryByText(desc)).not.toBeInTheDocument();
+  });
+
+  it('features expand independently', () => {
+    fighter();
+    fireEvent.click(screen.getByTestId('class-features-toggle')); // expand the section
+    fireEvent.click(screen.getByTestId('class-feature-toggle-Second Wind'));
+    expect(screen.getByText(/bonus action to regain hit points/i)).toBeInTheDocument();
+    // Extra Attack stays collapsed
+    expect(screen.queryByText(/attack twice, instead of once/i)).not.toBeInTheDocument();
+  });
+
+  it('creation mode keeps level-1 descriptions expanded (no toggles)', () => {
+    render(<FighterSheet data={FIGHTER_DATA} level={1} section="all" creation />);
+    expect(screen.getByText(/bonus action to regain hit points/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('class-feature-toggle-Second Wind')).not.toBeInTheDocument();
+  });
+});
+
+describe('ClassSheet — rest resource descriptions', () => {
+  it('shows a short "what it does" line under each rest resource', () => {
+    fighter();
+    expect(screen.getByTestId('rest-resource-desc-second_wind_used'))
+      .toHaveTextContent('Bonus action: regain 1d10 + your Fighter level HP.');
+    expect(screen.getByTestId('rest-resource-desc-action_surge_used'))
+      .toHaveTextContent('Take one additional action on your turn.');
+  });
+
+  it('shows the Indomitable description once earned (L9)', () => {
+    render(<FighterSheet data={FIGHTER_DATA} level={9} section="features" />);
+    expect(screen.getByTestId('rest-resource-desc-indomitable_used'))
+      .toHaveTextContent('Reroll a failed saving throw — you must use the new roll.');
   });
 });
 

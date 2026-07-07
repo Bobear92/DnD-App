@@ -94,10 +94,17 @@ export default function RestResourceTracker({ resources = [], level = 1, data = 
       {rows.map((r) => (
         <div
           key={r.key}
-          className="flex items-center justify-between rounded-md border px-3 py-2"
+          className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
           data-testid={`rest-resource-${r.key}`}
         >
-          <span className="text-sm font-medium">{r.label}</span>
+          <div className="min-w-0">
+            <div className="text-sm font-medium">{r.label}</div>
+            {r.description && (
+              <div className="text-xs text-muted-foreground leading-snug" data-testid={`rest-resource-desc-${r.key}`}>
+                {r.description}
+              </div>
+            )}
+          </div>
           <RestResourceControl row={r} onChange={onChange} readOnly={readOnly} idPrefix="rest" />
         </div>
       ))}

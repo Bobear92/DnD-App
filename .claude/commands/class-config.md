@@ -33,7 +33,7 @@ ongoing work this skill covers.
   extraAttacks,                              // (level)=>number | null  (martial; shown at level >= 5)
   lockedChoices: [{ key, label, options, minLevel }],   // e.g. fighting_style → FIGHTER_FIGHTING_STYLES_*
   weaponMastery: { label, max:(level)=>n, note },       // 2024 martial only (omit/undefined otherwise)
-  restResources: [{ key, label, total:(level)=>n, recharge:'short'|'long', minLevel }],
+  restResources: [{ key, label, total:(level)=>n, recharge:'short'|'long', minLevel, description }],  // description = short "what it does" line shown under the label (always author one)
   notes: [{ label, text, minLevel }],        // informational (Tactical Mind, Scholar, …)
   subclass: { label, options, unlockLevel, subclassEdition },  // options from classChoicesData *_SUBCLASSES_*
   asiLevels: [4,6,8,...],

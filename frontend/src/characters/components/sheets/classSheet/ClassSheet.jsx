@@ -5,7 +5,7 @@
  *
  * Props (same contract as the legacy sheets, plus `gmEdit`):
  *   data, onChange, readOnly, level, creation, section, scores, abilityScores,
- *   backgroundSkills, raceSkills, raceGrantedCantrips, campaignId, isGm, acExtra, maxHpNode,
+ *   backgroundSkills, raceSkills, raceGrantedCantrips, campaignId, isGm, acExtra, maxHpNode, afterHpNode,
  *   gmEdit  — GM Edit toggle: when true, locked permanent choices become editable.
  *
  * `section`: 'all' | 'stats' | 'features' | 'spells' (CLAUDE.md section isolation).
@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, X } from 'lucide-react';
+import { ChevronDown, Plus, X } from 'lucide-react';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
@@ -72,7 +72,34 @@ function WeaponMasteryList({ value = [], onChange, readOnly, max }) {
   );
 }
 
+// One earned class feature: collapsed to its name (+ Lvl badge); click to expand the
+// description (same pattern as SubclassDetails feature toggles).
+function CollapsibleFeature({ feat, lvl }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-md border bg-muted/20">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        data-testid={`class-feature-toggle-${feat.name}`}
+        className="w-full flex items-center gap-2 p-3 text-left"
+      >
+        <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {lvl}</span>
+        <span className="font-semibold text-sm flex-1">{feat.name}</span>
+        <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="px-3 pb-3 text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+      )}
+    </div>
+  );
+}
+
 function FeaturesList({ features, level, creation }) {
+  // The whole earned-features list collapses behind its header (collapsed by default —
+  // it's the longest block on the tab); individual features expand independently inside.
+  const [open, setOpen] = useState(false);
   if (creation) {
     return (
       <div className="space-y-2">
@@ -91,16 +118,26 @@ function FeaturesList({ features, level, creation }) {
   );
   return (
     <div className="space-y-2">
-      <Label className="text-xs text-muted-foreground uppercase tracking-wide">Class Features</Label>
-      {earned.map((feat) => (
-        <div key={`${feat.lvl}-${feat.name}`} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {feat.lvl}</span>
-            <div className="font-semibold text-sm">{feat.name}</div>
-          </div>
-          <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
-        </div>
-      ))}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        data-testid="class-features-toggle"
+        className="w-full flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-left"
+      >
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Class Features</span>
+        <span className="text-xs text-muted-foreground">({earned.length})</span>
+        <span className="flex-1" />
+        <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <>
+          <div className="text-xs text-muted-foreground">Tap a feature to read what it does.</div>
+          {earned.map((feat) => (
+            <CollapsibleFeature key={`${feat.lvl}-${feat.name}`} feat={feat} lvl={feat.lvl} />
+          ))}
+        </>
+      )}
     </div>
   );
 }
@@ -123,6 +160,7 @@ export default function ClassSheet({
   gmEdit = false,
   acExtra = null,
   maxHpNode = null,
+  afterHpNode = null,
   effectiveMaxHp,
   onHeal,
 }) {
@@ -368,6 +406,7 @@ export default function ClassSheet({
           level={level}
           creation={creation}
           maxHpNode={maxHpNode}
+          afterHpNode={afterHpNode}
           acExtra={acExtra}
           conMod={conMod}
           effectiveMaxHp={effectiveMaxHp}

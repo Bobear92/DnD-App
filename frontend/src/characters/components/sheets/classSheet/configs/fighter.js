@@ -25,9 +25,18 @@ const extraAttacks = (level) => (level >= 20 ? 4 : level >= 11 ? 3 : level >= 5 
 const weaponMasteryMax = (level) => (level >= 16 ? 6 : level >= 10 ? 5 : level >= 4 ? 4 : 3);
 
 const REST_RESOURCES = [
-  { key: 'second_wind_used', label: 'Second Wind (Short Rest)', total: () => 1, recharge: 'short', minLevel: 1 },
-  { key: 'action_surge_used', label: 'Action Surge (Short Rest)', total: actionSurgeTotal, recharge: 'short', minLevel: 2 },
-  { key: 'indomitable_used', label: 'Indomitable (Long Rest)', total: indomitableTotal, recharge: 'long', minLevel: 9 },
+  {
+    key: 'second_wind_used', label: 'Second Wind (Short Rest)', total: () => 1, recharge: 'short', minLevel: 1,
+    description: 'Bonus action: regain 1d10 + your Fighter level HP.',
+  },
+  {
+    key: 'action_surge_used', label: 'Action Surge (Short Rest)', total: actionSurgeTotal, recharge: 'short', minLevel: 2,
+    description: 'Take one additional action on your turn.',
+  },
+  {
+    key: 'indomitable_used', label: 'Indomitable (Long Rest)', total: indomitableTotal, recharge: 'long', minLevel: 9,
+    description: 'Reroll a failed saving throw — you must use the new roll.',
+  },
 ];
 
 const ASI_LEVELS = [4, 6, 8, 12, 14, 16, 19];

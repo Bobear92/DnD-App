@@ -102,6 +102,12 @@ function renderDetail() {
   );
 }
 
+// The Stats tab is split into Identity / Abilities & Skills / HP & Movement sub-tabs
+// (default: identity). Waits for the character to load, then clicks into a sub-tab.
+async function openStatsSubTab(tab) {
+  fireEvent.click(await screen.findByTestId(`stats-subtab-${tab}`));
+}
+
 describe('CharacterDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -135,17 +141,53 @@ describe('CharacterDetail', () => {
 
   it('shows ability score values', async () => {
     renderDetail();
+    await openStatsSubTab('abilities');
     // Ability scores are read-only divs (not inputs); STR=16 in BASE_CHARACTER
     await waitFor(() => expect(screen.getAllByText('16').length).toBeGreaterThan(0));
   });
 
   it('shows proficiency bonus derived from level', async () => {
     renderDetail();
+    await openStatsSubTab('abilities');
     await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
     // Level 5 → prof bonus +3 (shown in derived stats row with label "Prof. Bonus")
     expect(screen.getByText('Prof. Bonus')).toBeInTheDocument();
     // Multiple +3 may appear (STR mod is also +3); just assert at least one exists
     expect(screen.getAllByText('+3').length).toBeGreaterThan(0);
+  });
+
+  describe('Stats tab — Identity / Abilities / HP & Movement sub-tabs', () => {
+    it('shows the three stats sub-tab buttons', async () => {
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('stats-subtab-identity')).toBeInTheDocument());
+      expect(screen.getByTestId('stats-subtab-abilities')).toBeInTheDocument();
+      expect(screen.getByTestId('stats-subtab-hp')).toBeInTheDocument();
+    });
+
+    it('defaults to Identity — abilities and HP content hidden until toggled', async () => {
+      renderDetail();
+      // Identity content (name input) present by default
+      await waitFor(() => expect(screen.getByDisplayValue('Aldric')).toBeInTheDocument());
+      // Abilities content (derived stats row) and HP content (Hit Dice) not rendered
+      expect(screen.queryByText('Prof. Bonus')).not.toBeInTheDocument();
+      expect(screen.queryByText('Hit Dice')).not.toBeInTheDocument();
+    });
+
+    it('clicking Abilities & Skills shows scores/saves/skills and hides identity fields', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Prof. Bonus')).toBeInTheDocument());
+      expect(screen.getByText('Saving Throws')).toBeInTheDocument();
+      expect(screen.queryByDisplayValue('Aldric')).not.toBeInTheDocument();
+    });
+
+    it('clicking HP & Movement shows the combat block and Jump card', async () => {
+      renderDetail();
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByText('Hit Dice')).toBeInTheDocument());
+      expect(screen.getByTestId('jump-card')).toBeInTheDocument();
+      expect(screen.queryByText('Prof. Bonus')).not.toBeInTheDocument();
+    });
   });
 
   it('player owner sees editable identity fields', async () => {
@@ -235,6 +277,8 @@ describe('CharacterDetail', () => {
     // BASE_CHARACTER is a level 5 Fighter
     renderDetail();
     await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+    // The Class Features list is collapsed behind its header — expand it first
+    fireEvent.click(screen.getByTestId('class-features-toggle'));
     // "Extra Attack (2 attacks)" is the level 5 Fighter feature name — must be shown
     expect(screen.getAllByText('Extra Attack (2 attacks)').length).toBeGreaterThan(0);
     // Indomitable variants are level 9+ — none should appear at level 5
@@ -565,6 +609,7 @@ describe('CharacterDetail', () => {
   describe('max HP is read-only', () => {
     it('max HP value is displayed from hp_max key in character_data', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // hp_max: 52 — shown as static text in the Fighter sheet HP section
       expect(screen.getByText('52')).toBeInTheDocument();
@@ -572,7 +617,8 @@ describe('CharacterDetail', () => {
 
     it('max HP is not an editable input (no display value for hp_max)', async () => {
       renderDetail();
-      await waitFor(() => expect(screen.getByDisplayValue('Aldric')).toBeInTheDocument());
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // 52 should not be an input value — it's rendered as a static div
       expect(screen.queryByDisplayValue('52')).not.toBeInTheDocument();
     });
@@ -585,6 +631,7 @@ describe('CharacterDetail', () => {
       const char = { ...BASE_CHARACTER, constitution: 14, character_data: { ...BASE_CHARACTER.character_data, hp_rolls: 42, hp_max: undefined } };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: char });
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText('52')).toBeInTheDocument(); // 42 rolls + 5 × +2 CON
     });
@@ -593,29 +640,70 @@ describe('CharacterDetail', () => {
       const char = { ...BASE_CHARACTER, constitution: 18, character_data: { ...BASE_CHARACTER.character_data, hp_rolls: 42, hp_max: undefined } };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: char });
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText('62')).toBeInTheDocument(); // 42 rolls + 5 × +4 CON
     });
   });
 
   describe('Racial Features card (rest-rechargeable racial traits)', () => {
-    it('shows the Racial Features card for a Half-Orc with Relentless Endurance', async () => {
+    const HALF_ORC = {
+      ...BASE_CHARACTER,
+      race: 'Half-Orc',
+      character_data: {
+        ...BASE_CHARACTER.character_data,
+        race_traits: ['Relentless Endurance', 'Menacing', 'Savage Attacks'],
+      },
+    };
+
+    it('Relentless Endurance tracker lives in the HP & Movement sub-tab (data-driven Fighter — inside the combat block)', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: HALF_ORC });
+      renderDetail();
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByTestId('racial-resource-tracker')).toBeInTheDocument());
+      const tracker = screen.getByTestId('racial-resource-tracker');
+      expect(within(tracker).getByText('Relentless Endurance')).toBeInTheDocument();
+      // Renders between Max HP and Hit Dice via the CombatBlock afterHpNode slot
+      const hitDice = screen.getByText('Hit Dice');
+      expect(tracker.compareDocumentPosition(hitDice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('Relentless Endurance tracker shows below the combat block for a hand-written sheet (Barbarian)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...HALF_ORC, char_class: 'Barbarian' },
+      });
+      renderDetail();
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByTestId('racial-resource-tracker')).toBeInTheDocument());
+      expect(within(screen.getByTestId('racial-resource-tracker')).getByText('Relentless Endurance')).toBeInTheDocument();
+    });
+
+    it('does NOT show a Racial Features card on Identity when Relentless Endurance is the only rest resource', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: HALF_ORC });
+      renderDetail();
+      // Default sub-tab is Identity — the tracker moved to HP & Movement
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByText('Racial Features')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('racial-resource-tracker')).not.toBeInTheDocument();
+    });
+
+    it('keeps non-HP racial resources (Dragonborn Breath Weapon) in the Identity Racial Features card', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,
         data: {
           ...BASE_CHARACTER,
-          race: 'Half-Orc',
+          race: 'Dragonborn',
           character_data: {
             ...BASE_CHARACTER.character_data,
-            race_traits: ['Relentless Endurance', 'Menacing', 'Savage Attacks'],
+            race_traits: ['Draconic Ancestry', 'Breath Weapon', 'Damage Resistance'],
           },
         },
       });
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
-      const tracker = screen.getByTestId('racial-resource-tracker');
-      expect(tracker).toBeInTheDocument();
-      expect(within(tracker).getByText('Relentless Endurance')).toBeInTheDocument();
+      expect(screen.getAllByText('Racial Features').length).toBeGreaterThan(0);
+      expect(within(screen.getByTestId('racial-resource-tracker')).getByText('Breath Weapon')).toBeInTheDocument();
     });
 
     it('does not show the Racial Features card when no rest-gated traits exist', async () => {
@@ -648,6 +736,7 @@ describe('CharacterDetail', () => {
       });
       characterService.updateCharacter.mockResolvedValue({ success: true, data: BASE_CHARACTER });
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByTestId('racial-resource-tracker')).toBeInTheDocument());
       // Clicking the use button persists immediately — live resources don't require a Save click.
       fireEvent.click(screen.getByLabelText('Use Relentless Endurance'));
@@ -670,12 +759,14 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByTestId('relentless-endurance-note')).toHaveTextContent(/Relentless Endurance/i);
     });
 
     it('does not show the Relentless Endurance note without the trait', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByTestId('relentless-endurance-note')).not.toBeInTheDocument();
     });
@@ -691,6 +782,7 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByTestId('survivor-note')).toHaveTextContent(/Survivor: .*regain 7 HP/i);
     });
@@ -698,6 +790,7 @@ describe('CharacterDetail', () => {
     it('does not show the Survivor note below L18 or for a non-Champion', async () => {
       // BASE_CHARACTER is a level 5 Fighter with no subclass
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByTestId('survivor-note')).not.toBeInTheDocument();
     });
@@ -746,6 +839,7 @@ describe('CharacterDetail', () => {
   describe('speed fields', () => {
     it('shows Speed (ft), Speed Bonus (ft), and Total Speed (ft) labels', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText('Speed (ft)')).toBeInTheDocument();
       expect(screen.getByText('Speed Bonus (ft)')).toBeInTheDocument();
@@ -754,6 +848,7 @@ describe('CharacterDetail', () => {
 
     it('base speed is a static display, not an editable input', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // character_data.speed is undefined → defaults to 30 in the static div
       // should NOT appear as an input value
@@ -762,6 +857,7 @@ describe('CharacterDetail', () => {
 
     it('total speed shows sum of base speed and bonus (both default 30+0=30)', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // Both Speed (ft) and Total Speed (ft) show 30 as static text
       const thirties = screen.getAllByText('30');
@@ -777,6 +873,7 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText('35')).toBeInTheDocument();
       expect(screen.getByText('45')).toBeInTheDocument();
@@ -1028,12 +1125,14 @@ describe('CharacterDetail', () => {
   describe('Hit Dice Tracker', () => {
     it('shows Hit Dice label in Stats tab', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText('Hit Dice')).toBeInTheDocument();
     });
 
     it('links the Hit Points & Movement card to the hit-dice mechanics page', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByTestId('hit-dice-learn-more')).toHaveAttribute(
         'href',
@@ -1043,6 +1142,7 @@ describe('CharacterDetail', () => {
 
     it('shows die type for Fighter (d10)', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // Match only the HitDiceTracker <span> (text starts with d10, not embedded in "1d10")
       const hdContainer = screen.getByText('Hit Dice').parentElement;
@@ -1051,6 +1151,7 @@ describe('CharacterDetail', () => {
 
     it('shows remaining / total count when no dice have been used', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // BASE_CHARACTER has no hit_dice_used → 0 used, level 5 → 5 / 5 remaining
       const hdContainer = screen.getByText('Hit Dice').parentElement;
@@ -1066,6 +1167,7 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       const hdContainer = screen.getByText('Hit Dice').parentElement;
       expect(within(hdContainer).getByText('2 / 5 remaining')).toBeInTheDocument();
@@ -1081,6 +1183,7 @@ describe('CharacterDetail', () => {
 
       it('shows a Use button (not +/-) in the Stats tab', async () => {
         renderDetail();
+        await openStatsSubTab('hp');
         await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
         const hdContainer = screen.getByText('Hit Dice').parentElement;
         expect(within(hdContainer).getByTestId('hit-dice-use-btn')).toBeInTheDocument();
@@ -1089,6 +1192,7 @@ describe('CharacterDetail', () => {
 
       it('clicking Use opens the heal dialog with a quantity selector', async () => {
         renderDetail();
+        await openStatsSubTab('hp');
         await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
         fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
         await waitFor(() => expect(screen.getByText('Spend Hit Dice to Heal')).toBeInTheDocument());
@@ -1102,6 +1206,7 @@ describe('CharacterDetail', () => {
           data: { ...BASE_CHARACTER, character_data: { ...BASE_CHARACTER.character_data, hit_dice_used: 1, current_hp: 48 } },
         });
         renderDetail();
+        await openStatsSubTab('hp');
         await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
 
         fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
@@ -1336,6 +1441,7 @@ describe('CharacterDetail', () => {
       };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: elfChar });
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // The legend updates to mention emerald
       expect(screen.getByText(/Emerald = from race/)).toBeInTheDocument();
@@ -1353,6 +1459,7 @@ describe('CharacterDetail', () => {
       };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: halfOrcChar });
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText(/Emerald = from race/)).toBeInTheDocument();
     });
@@ -1360,6 +1467,7 @@ describe('CharacterDetail', () => {
     it('does NOT show emerald legend when no race-granting traits are present (Human)', async () => {
       // BASE_CHARACTER is Human with no race_traits — no emerald segment
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText(/Emerald = from race/)).not.toBeInTheDocument();
       // Proficient legend still present
@@ -1372,6 +1480,7 @@ describe('CharacterDetail', () => {
     it('hides "Purple = expertise" when the character has no expertise', async () => {
       // BASE_CHARACTER is a Fighter with no expertise_skills
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText(/Purple = expertise/)).not.toBeInTheDocument();
       expect(screen.getByText(/Gold = proficient/)).toBeInTheDocument();
@@ -1390,6 +1499,7 @@ describe('CharacterDetail', () => {
       };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: rogueChar });
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText(/Purple = expertise/)).toBeInTheDocument();
     });
@@ -1397,6 +1507,7 @@ describe('CharacterDetail', () => {
     it('shows "Amber = from background" for background-granted proficiencies', async () => {
       // BASE_CHARACTER is a Soldier (grants Athletics, Intimidation) proficient in Athletics
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText(/Amber = from background/)).toBeInTheDocument();
     });
@@ -1414,6 +1525,7 @@ describe('CharacterDetail', () => {
       };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: sageChar });
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText(/Amber = from background/)).not.toBeInTheDocument();
     });
@@ -1431,12 +1543,14 @@ describe('CharacterDetail', () => {
       };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: skilledChar });
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText(/Blue = from feat/)).toBeInTheDocument();
     });
 
     it('does NOT show "Blue = from feat" when no feat granted a proficient skill', async () => {
       renderDetail(); // BASE_CHARACTER has no feats
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText(/Blue = from feat/)).not.toBeInTheDocument();
     });
@@ -1455,6 +1569,7 @@ describe('CharacterDetail', () => {
       };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: champion });
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText(/Teal = ½ prof \(Remarkable Athlete\)/)).toBeInTheDocument();
     });
@@ -1467,6 +1582,7 @@ describe('CharacterDetail', () => {
       };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: champion6 });
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText(/Remarkable Athlete/)).not.toBeInTheDocument();
     });
@@ -1484,6 +1600,7 @@ describe('CharacterDetail', () => {
       };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: champion2024 });
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText(/Teal = advantage \(Remarkable Athlete\)/)).toBeInTheDocument();
       expect(screen.getByTestId('skill-advantage-Athletics')).toHaveTextContent(/adv/i);
@@ -1501,6 +1618,7 @@ describe('CharacterDetail', () => {
       };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: champion2 });
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText(/Remarkable Athlete/)).not.toBeInTheDocument();
       expect(screen.queryByTestId('initiative-advantage-note')).not.toBeInTheDocument();
@@ -1520,6 +1638,7 @@ describe('CharacterDetail', () => {
       };
       characterService.getCharacterById.mockResolvedValue({ success: true, data: elfChar });
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // No duplicate Perception entries — single skill row
       const perceptionRows = screen.getAllByText('Perception');
@@ -1541,6 +1660,7 @@ describe('CharacterDetail', () => {
     it('folds the Draconic Resilience bonus into the Max HP value itself', async () => {
       characterService.getCharacterById.mockResolvedValue({ success: true, data: DRACONIC_SORCERER });
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // Max HP shows the effective total (52 + 5 = 57), not the base 52 with a separate row
       expect(screen.getByText('57')).toBeInTheDocument();
@@ -1570,6 +1690,7 @@ describe('CharacterDetail', () => {
 
     it('does NOT add any HP/AC bonus for a plain Fighter', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       // Plain Fighter: Max HP shows the base 52 with no source note, no AC options
       expect(screen.getByText('52')).toBeInTheDocument();
@@ -1633,6 +1754,7 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
+      await openStatsSubTab('abilities');
       // BASE_CHARACTER DEX 12 → +1, plus Alert +5 = +6
       await waitFor(() => expect(screen.getByTestId('initiative-value')).toHaveTextContent('+6'));
       expect(screen.getByTestId('initiative-feat-note')).toHaveTextContent('+5 Alert');
@@ -1650,6 +1772,7 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
+      await openStatsSubTab('abilities');
       // +1 DEX + 3 PB = +4
       await waitFor(() => expect(screen.getByTestId('initiative-value')).toHaveTextContent('+4'));
       expect(screen.getByTestId('initiative-feat-note')).toHaveTextContent('+3 Alert');
@@ -1657,6 +1780,7 @@ describe('CharacterDetail', () => {
 
     it('shows plain DEX initiative with no feat note when no feat modifies it', async () => {
       renderDetail(); // BASE_CHARACTER has no feats
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByTestId('initiative-value')).toHaveTextContent('+1'));
       expect(screen.queryByTestId('initiative-feat-note')).not.toBeInTheDocument();
     });
@@ -1673,6 +1797,7 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
+      await openStatsSubTab('abilities');
       // BASE_CHARACTER WIS 12 → +1, level 5 prof +3, base 10 = 14, plus Observant +5 = 19
       await waitFor(() => expect(screen.getByTestId('passive-perception-value')).toHaveTextContent('19'));
       expect(screen.getByTestId('passive-perception-feat-note')).toHaveTextContent('+5 Observant');
@@ -1680,6 +1805,7 @@ describe('CharacterDetail', () => {
 
     it('shows plain passive Perception with no feat note when no feat modifies it', async () => {
       renderDetail();
+      await openStatsSubTab('abilities');
       await waitFor(() => expect(screen.getByTestId('passive-perception-value')).toHaveTextContent('14'));
       expect(screen.queryByTestId('passive-perception-feat-note')).not.toBeInTheDocument();
     });
@@ -1697,6 +1823,7 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByTestId('speed-feat-note')).toHaveTextContent('+10 ft speed from Mobile'));
     });
 
@@ -1712,12 +1839,14 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByTestId('total-speed')).toHaveTextContent('40')); // 30 + 10 in CombatBlock
       expect(screen.queryByTestId('speed-feat-note')).not.toBeInTheDocument(); // central annotation suppressed
     });
 
     it('no speed feat note when no feat grants speed', async () => {
       renderDetail();
+      await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByTestId('speed-feat-note')).not.toBeInTheDocument();
     });
@@ -1746,6 +1875,7 @@ describe('CharacterDetail', () => {
         },
       });
       renderDetail();
+      await openStatsSubTab('abilities');
       // WIS 12 (+1) + proficiency bonus +3 (level 5) = +4
       await waitFor(() => expect(within(screen.getByTestId('save-wisdom')).getByText('+4')).toBeInTheDocument());
     });
