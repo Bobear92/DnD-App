@@ -85,7 +85,8 @@ export default function ArmorClassPage() {
               <li>
                 <span className="font-medium text-foreground">Heavy armor</span> — a{' '}
                 <span className="font-medium text-foreground">flat value</span>; Dexterity doesn't apply at all
-                (e.g. Plate is 18). Heavy armor often has a Strength requirement and can give disadvantage on Stealth.
+                (e.g. Plate is 18). Heavy armor often has a Strength requirement (see below) and can give
+                disadvantage on Stealth.
               </li>
               <li>
                 <span className="font-medium text-foreground">Shield</span> — a flat{' '}
@@ -96,6 +97,60 @@ export default function ArmorClassPage() {
               On your sheet, equip a piece of body armor (and optionally a shield) on the{' '}
               <span className="font-medium text-foreground">Items</span> tab and the AC summary recomputes
               automatically from its category and your Dexterity.
+            </p>
+          </Section>
+
+          <Section title="Strength requirements">
+            <p>
+              Some armor lists a Strength score — for example Chain Mail says{' '}
+              <span className="font-medium text-foreground">Str 13</span>, and Splint and Plate say{' '}
+              <span className="font-medium text-foreground">Str 15</span>. That's the Strength you need to
+              carry the armor's bulk comfortably. You can still <span className="font-medium text-foreground">wear
+              the armor without meeting it</span> — your AC is exactly the same — but the weight slows you down:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>
+                If your Strength score is <span className="font-medium text-foreground">lower than the listed
+                requirement</span>, your speed is <span className="font-medium text-foreground">reduced by 10
+                feet</span> while you wear that armor.
+              </li>
+              <li>
+                Once your Strength meets the requirement (say through an Ability Score Improvement), the
+                penalty goes away — nothing else about the armor changes.
+              </li>
+            </ul>
+            <p>
+              On your sheet, an armor piece you don't have the Strength for shows an amber warning on the{' '}
+              <span className="font-medium text-foreground">Items</span> tab, and while it's equipped the −10 ft
+              is subtracted from your Total Speed automatically. This is the same rule in the 2014 and 2024 rules.
+            </p>
+          </Section>
+
+          <Section title="Armor proficiency">
+            <p>
+              Your class (plus some races and feats) tells you which armor categories you're{' '}
+              <span className="font-medium text-foreground">proficient</span> with — light, medium, heavy,
+              and shields. You can put on any armor regardless, and it still gives its full AC, but wearing
+              armor or a shield you're <span className="font-medium text-foreground">not</span> proficient
+              with is severely punishing:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>
+                You have <span className="font-medium text-foreground">disadvantage on every ability check,
+                saving throw, and attack roll</span> that involves Strength or Dexterity — which includes
+                nearly all weapon attacks.
+              </li>
+              <li>
+                You <span className="font-medium text-foreground">can't cast spells</span> at all while
+                wearing it.
+              </li>
+            </ul>
+            <p>
+              The sheet tracks this for you: the Items tab shows a warning when you're wearing something
+              you're not proficient with, your weapon attacks are flagged with disadvantage, affected
+              Strength/Dexterity skills and saving throws are marked on the Stats tab, and the Spells tab
+              reminds you that casting is off until you take the armor off. Same rule in the 2014 and 2024
+              rules.
             </p>
           </Section>
 

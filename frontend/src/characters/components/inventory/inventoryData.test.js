@@ -6,6 +6,8 @@ import {
   isWeaponProficient, isArmorProficient, weaponAbility, computeAttack, getAttacks,
   abilityMod, profBonus, isHeavyWeapon, creatureSize, weaponAttackWarning,
   isLoadingWeapon, weaponLoadingNote,
+  armorStrengthNote, armorSpeedPenalty,
+  nonProficientEquippedArmor, armorNonProficiencyNote, wornNonProficientArmor,
   assignHand, handContents, migrateHands, freeHandCount,
   isTwoHandedWeapon, weaponVersatileDie, isVersatileWeapon, isShieldEntry,
 } from '@/characters/components/inventory/inventoryData';
@@ -341,6 +343,95 @@ describe('heavy weapon / size warnings', () => {
     const inv = [weapon({ uid: 'g1', equipped: true, ...greatsword })];
     const rows = getAttacks({ inventory: inv, scores: { strength: 16 }, level: 1, weaponProfText: 'martial weapons', size: 'Small', edition: '5e' });
     expect(rows[0].disadvantage).toBe(true);
+  });
+});
+
+describe('armor Strength requirements', () => {
+  const chainMail = { name: 'Chain Mail', armor_type: 'heavy', armor_class: 16, strength_requirement: 13 };
+  const leather = { name: 'Leather', armor_type: 'light', armor_class: 11 };
+
+  it('armorStrengthNote warns when STR is below the requirement', () => {
+    expect(armorStrengthNote(armor(chainMail), { strength: 11 }))
+      .toMatch(/Strength 13.*you have 11.*reduce your speed by 10 ft/i);
+  });
+
+  it('armorStrengthNote flips wording once the armor is equipped', () => {
+    expect(armorStrengthNote(armor({ ...chainMail, equipped: true }), { strength: 11 }))
+      .toMatch(/speed reduced by 10 ft while worn/i);
+  });
+
+  it('armorStrengthNote is null when the requirement is met or absent', () => {
+    expect(armorStrengthNote(armor(chainMail), { strength: 13 })).toBeNull();
+    expect(armorStrengthNote(armor(chainMail), { strength: 16 })).toBeNull();
+    expect(armorStrengthNote(armor(leather), { strength: 8 })).toBeNull();
+  });
+
+  it('armorStrengthNote treats a missing STR score as 10', () => {
+    expect(armorStrengthNote(armor(chainMail), {})).toMatch(/you have 10/);
+  });
+
+  it('armorSpeedPenalty returns −10 for equipped armor with unmet STR', () => {
+    const inv = [armor({ ...chainMail, equipped: true })];
+    expect(armorSpeedPenalty(inv, { strength: 11 }))
+      .toEqual({ penalty: 10, name: 'Chain Mail', required: 13, str: 11 });
+  });
+
+  it('armorSpeedPenalty is null when unequipped, met, or no requirement', () => {
+    expect(armorSpeedPenalty([armor(chainMail)], { strength: 11 })).toBeNull(); // not equipped
+    expect(armorSpeedPenalty([armor({ ...chainMail, equipped: true })], { strength: 14 })).toBeNull();
+    expect(armorSpeedPenalty([armor({ ...leather, equipped: true })], { strength: 8 })).toBeNull();
+    expect(armorSpeedPenalty([], { strength: 8 })).toBeNull();
+  });
+});
+
+describe('armor non-proficiency', () => {
+  const chainMail = { name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
+  const shieldItem = { name: 'Shield', armor_type: 'shield' };
+
+  it('isArmorProficient accepts labeled grants ("Heavy armor") and raw categories ("Heavy")', () => {
+    expect(isArmorProficient({ armor_type: 'heavy' }, { raceArmor: ['Heavy armor'] })).toBe(true);
+    expect(isArmorProficient({ armor_type: 'heavy' }, { raceArmor: ['Heavy'] })).toBe(true);
+    expect(isArmorProficient({ armor_type: 'light' }, { raceArmor: ['Light armor', 'Medium armor'] })).toBe(true);
+    expect(isArmorProficient({ armor_type: 'heavy' }, { raceArmor: ['Light armor'] })).toBe(false);
+  });
+
+  it('isArmorProficient counts a "Shields" grant for shields', () => {
+    expect(isArmorProficient({ armor_type: 'shield' }, { raceArmor: ['Shields'] })).toBe(true);
+    expect(isArmorProficient({ armor_type: 'shield' }, { armorProfText: 'Light armor' })).toBe(false);
+  });
+
+  it('nonProficientEquippedArmor finds worn armor or a shield without proficiency', () => {
+    const inv = [armor({ ...chainMail, equipped: true })];
+    expect(nonProficientEquippedArmor(inv, { armorProfText: 'None' })?.name).toBe('Chain Mail');
+    expect(nonProficientEquippedArmor(inv, { armorProfText: 'All armor, shields' })).toBeNull();
+    const shieldOnly = [armor({ ...shieldItem, equipped: true })];
+    expect(nonProficientEquippedArmor(shieldOnly, { armorProfText: 'Light armor' })?.name).toBe('Shield');
+    expect(nonProficientEquippedArmor([armor(chainMail)], { armorProfText: 'None' })).toBeNull(); // not equipped
+  });
+
+  it('getAttacks puts every weapon attack at disadvantage while wearing non-proficient armor', () => {
+    const inv = [
+      weapon({ uid: 'w1', equipped: true, name: 'Longsword', damage: '1d8', weapon_category: 'Martial' }),
+      armor({ uid: 'a1', equipped: true, ...chainMail }),
+    ];
+    const rows = getAttacks({ inventory: inv, scores: { strength: 16 }, level: 1, weaponProfText: 'martial weapons', armorProfText: 'None' });
+    expect(rows[0].disadvantage).toBe(true);
+    expect(rows[0].warning).toMatch(/Chain Mail without proficiency/i);
+    const ok = getAttacks({ inventory: inv, scores: { strength: 16 }, level: 1, weaponProfText: 'martial weapons', armorProfText: 'All armor, shields' });
+    expect(ok[0].disadvantage).toBe(false);
+  });
+
+  it('wornNonProficientArmor assembles the context itself (class text + feat armor grants)', () => {
+    const inv = [armor({ uid: 'a1', equipped: true, ...chainMail })];
+    expect(wornNonProficientArmor({ inventory: inv, charClass: 'Wizard', characterData: {} })?.name).toBe('Chain Mail');
+    expect(wornNonProficientArmor({ inventory: inv, charClass: 'Fighter', characterData: {} })).toBeNull();
+    const heavilyArmored = { feats: [{ name: 'Heavily Armored', effects: [{ kind: 'proficiency', prof_type: 'armor', items: ['Heavy'] }] }] };
+    expect(wornNonProficientArmor({ inventory: inv, charClass: 'Wizard', characterData: heavilyArmored })).toBeNull();
+  });
+
+  it('armorNonProficiencyNote spells out the consequences', () => {
+    expect(armorNonProficiencyNote('Chain Mail')).toMatch(/disadvantage on Strength and Dexterity/i);
+    expect(armorNonProficiencyNote('Chain Mail')).toMatch(/can't cast spells/i);
   });
 });
 

@@ -18,7 +18,7 @@
  * their auto-derived weapon attacks + spells + universal menu until their feature map
  * is authored — expand CLASS_FEATURE_ACTIONS_* class-by-class.
  */
-import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon } from '@/characters/components/inventory/inventoryData';
+import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor } from '@/characters/components/inventory/inventoryData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
@@ -279,6 +279,8 @@ export function buildActionEconomy({
   attacks = [],
   scores = {},
   spellIndex = {},
+  armorProfText = '',
+  raceArmor = [],
 } = {}) {
   const is2024 = edition === '5.5e' || edition === '2024';
   const buckets = { no_action: [], action: [], bonus: [], 'action+bonus': [], reaction: [] };
@@ -303,7 +305,17 @@ export function buildActionEconomy({
   // so it sits next to the power attack rather than off in the Bonus Actions list.
   const gwmBonusNote = greatWeaponMasterNote(feats);
   const weaponRows = [...attacks];
-  if (unarmedDice || weaponRows.length === 0) weaponRows.push(unarmedAttack(scores, level, unarmedDice));
+  if (unarmedDice || weaponRows.length === 0) {
+    const ua = unarmedAttack(scores, level, unarmedDice);
+    // An unarmed strike is a STR-based attack roll, so worn non-proficient armor puts it
+    // at disadvantage too (equipped-weapon rows already carry this via getAttacks).
+    const badArmor = nonProficientEquippedArmor(inventory, { armorProfText, raceArmor });
+    if (badArmor) {
+      ua.disadvantage = true;
+      ua.warning = `Wearing ${badArmor.name} without proficiency — attack rolls at disadvantage.`;
+    }
+    weaponRows.push(ua);
+  }
   weaponRows.forEach((atk, i) => {
     const flag = atk.proficient === false ? ' · not proficient' : '';
     const disadv = atk.disadvantage ? ' · disadvantage' : '';

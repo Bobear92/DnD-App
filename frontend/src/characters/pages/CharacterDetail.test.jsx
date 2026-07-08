@@ -1851,6 +1851,129 @@ describe('CharacterDetail', () => {
       expect(screen.queryByTestId('speed-feat-note')).not.toBeInTheDocument();
     });
 
+    it('shows the central armor Str-requirement speed annotation for a hand-written class (Barbarian)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          char_class: 'Barbarian', // hand-written sheet → no CombatBlock fold-in, annotation shown
+          strength: 11,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            inventory: [{ uid: 'a1', category: 'armor', name: 'Chain Mail', armor_type: 'heavy', armor_class: 16, strength_requirement: 13, equipped: true }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByTestId('speed-armor-note'))
+        .toHaveTextContent('−10 ft speed: Chain Mail requires Strength 13 (you have 11).'));
+    });
+
+    it('folds the armor Str penalty into Total Speed for a data-driven class (Fighter), suppressing the annotation', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER, // Fighter is data-driven
+          strength: 11,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            inventory: [{ uid: 'a1', category: 'armor', name: 'Chain Mail', armor_type: 'heavy', armor_class: 16, strength_requirement: 13, equipped: true }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByTestId('total-speed')).toHaveTextContent('20')); // 30 − 10 in CombatBlock
+      expect(screen.getByTestId('total-speed-armor-note')).toHaveTextContent('−10 ft Chain Mail (Str 13 required)');
+      expect(screen.queryByTestId('speed-armor-note')).not.toBeInTheDocument(); // central annotation suppressed
+    });
+
+    it("shows the Spells-tab banner when wearing armor without proficiency (can't cast)", async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          char_class: 'Wizard',
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            inventory: [{ uid: 'a1', category: 'armor', name: 'Chain Mail', armor_type: 'heavy', armor_class: 16, equipped: true }],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByTestId('spells-armor-warning'))
+        .toHaveTextContent(/can't cast spells while wearing armor you're not proficient with \(Chain Mail\)/i));
+    });
+
+    it('no Spells-tab armor banner when nothing non-proficient is worn', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, char_class: 'Wizard' },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('spells-armor-warning')).not.toBeInTheDocument();
+    });
+
+    it('marks STR/DEX saves and skills with the armor non-proficiency penalty', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          char_class: 'Wizard',
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            inventory: [{ uid: 'a1', category: 'armor', name: 'Chain Mail', armor_type: 'heavy', armor_class: 16, equipped: true }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('saves-armor-warning'))
+        .toHaveTextContent(/wearing Chain Mail without proficiency/i));
+      // STR/DEX skills carry a "dis" tag; others do not.
+      expect(screen.getByTestId('skill-armor-dis-Athletics')).toBeInTheDocument();
+      expect(screen.getByTestId('skill-armor-dis-Acrobatics')).toBeInTheDocument();
+      expect(screen.queryByTestId('skill-armor-dis-Arcana')).not.toBeInTheDocument();
+    });
+
+    it('no saves note or skill tags for a proficient wearer (Fighter in Chain Mail)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER, // Fighter — proficient with all armor
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            inventory: [{ uid: 'a1', category: 'armor', name: 'Chain Mail', armor_type: 'heavy', armor_class: 16, equipped: true }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('saves-armor-warning')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('skill-armor-dis-Athletics')).not.toBeInTheDocument();
+    });
+
+    it('no armor speed annotation when the requirement is met', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          char_class: 'Barbarian',
+          character_data: {
+            ...BASE_CHARACTER.character_data, // strength 16 meets the requirement
+            inventory: [{ uid: 'a1', category: 'armor', name: 'Chain Mail', armor_type: 'heavy', armor_class: 16, strength_requirement: 13, equipped: true }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('speed-armor-note')).not.toBeInTheDocument();
+    });
+
     it('shows feat-granted languages under "From Feats" (Linguist)', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,

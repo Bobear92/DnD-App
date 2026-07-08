@@ -12,6 +12,8 @@
 import { getAcOptions, hasFeat } from '@/characters/components/combat/combatBonuses';
 import { getFeatAcMods } from '@/characters/components/feats/featEffects';
 import { styleToHitBonus, styleDamageBonus, styleAcBonus } from '@/characters/components/combat/fightingStyles';
+import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
+import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
 
 /** Two or more equipped melee weapons (Dual Wielder's condition). */
 function twoMeleeWeaponsEquipped(inventory = []) {
@@ -340,11 +342,81 @@ export function isWeaponProficient(weapon, { weaponProfText = '', raceWeapons = 
 export function isArmorProficient(armor, { armorProfText = '', raceArmor = [] } = {}) {
   const text = (armorProfText || '').toLowerCase();
   const type = (armor.armor_type || '').toLowerCase();
-  if (type === 'shield') return text.includes('shield');
+  // Grants come raw ("Heavy") or labeled ("Heavy armor", "Shields") — race trait grants and
+  // gatherProficiencies feat grants both use the labeled form, so accept either.
+  const grants = (raceArmor || []).map((a) => (a || '').toLowerCase());
+  if (type === 'shield') return text.includes('shield') || grants.some((g) => g.includes('shield'));
   if (text.includes('all armor')) return true;
   if (type && text.includes(`${type} armor`)) return true;
-  if ((raceArmor || []).some((a) => (a || '').toLowerCase() === type)) return true;
+  if (grants.some((g) => g === type || g === `${type} armor`)) return true;
   return false;
+}
+
+// ─── Armor non-proficiency (RAW, 2014 + 2024) ────────────────────────────────────
+// Wearing armor (or a shield) without proficiency: disadvantage on every ability
+// check, saving throw, and attack roll that involves Strength or Dexterity, and the
+// wearer can't cast spells. AC still applies — only the wearer's rolls suffer.
+
+/**
+ * The first equipped body armor or shield the character is NOT proficient with,
+ * or null. Same proficiency context as the per-row check (class text + grants).
+ */
+export function nonProficientEquippedArmor(inventory = [], { armorProfText = '', raceArmor = [] } = {}) {
+  const worn = [equippedBodyArmor(inventory), equippedShield(inventory)].filter(Boolean);
+  return worn.find((a) => !isArmorProficient(a, { armorProfText, raceArmor })) || null;
+}
+
+/** The full consequence text for wearing armor without proficiency. */
+export function armorNonProficiencyNote(name) {
+  return `Wearing ${name} without proficiency: disadvantage on Strength and Dexterity ability checks, saving throws, and attack rolls — and you can't cast spells.`;
+}
+
+/**
+ * Convenience wrapper that assembles the armor-proficiency context itself (class
+ * text + stored race grants + feat grants, via gatherProficiencies) — one call for
+ * every surface that shows the penalty (Spells-tab banner, saves note, skill tags).
+ */
+export function wornNonProficientArmor({ inventory, charClass, characterData = {} } = {}) {
+  const armorProfText = (CLASS_PROFICIENCIES_5E[charClass] || {}).armor || '';
+  const raceArmor = gatherProficiencies({ charClass, characterData }).armor.grants;
+  return nonProficientEquippedArmor(inventory ?? characterData.inventory ?? [], { armorProfText, raceArmor });
+}
+
+// ─── Armor Strength requirements ─────────────────────────────────────────────────
+
+// RAW (2014 + 2024): armor listing a Strength score reduces the wearer's speed by
+// 10 ft unless their Strength meets it. AC is unaffected — only speed.
+export const ARMOR_STR_SPEED_PENALTY = 10;
+
+/**
+ * Warning for an armor entry whose Strength requirement the character doesn't meet,
+ * or null (no requirement / requirement met). Shown on the row whether or not the
+ * armor is equipped — the wording flips from "will reduce" to "reduced".
+ */
+export function armorStrengthNote(armor = {}, scores = {}) {
+  const required = Number(armor.strength_requirement) || 0;
+  if (!required) return null;
+  const str = Number(scores.strength) || 10;
+  if (str >= required) return null;
+  const effect = armor.equipped
+    ? `speed reduced by ${ARMOR_STR_SPEED_PENALTY} ft while worn`
+    : `wearing it will reduce your speed by ${ARMOR_STR_SPEED_PENALTY} ft`;
+  return `Requires Strength ${required} (you have ${str}) — ${effect}.`;
+}
+
+/**
+ * Speed penalty from the equipped body armor's unmet Strength requirement.
+ * Returns { penalty, name, required, str } or null when no penalty applies.
+ * Consumed by the Total Speed renderers (CombatBlock / CharacterDetail annotation).
+ */
+export function armorSpeedPenalty(inventory = [], scores = {}) {
+  const armor = equippedBodyArmor(inventory);
+  if (!armor) return null;
+  const required = Number(armor.strength_requirement) || 0;
+  if (!required) return null;
+  const str = Number(scores.strength) || 10;
+  if (str >= required) return null;
+  return { penalty: ARMOR_STR_SPEED_PENALTY, name: armor.name, required, str };
 }
 
 // ─── Attacks ─────────────────────────────────────────────────────────────────────
@@ -465,16 +537,24 @@ export function computeAttack(weapon, { scores = {}, level = 1, proficient = fal
 }
 
 /** Attack rows for every equipped weapon in the inventory. */
-export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [] } = {}) {
+export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [], armorProfText = '', raceArmor = [] } = {}) {
   const equipped = (inventory || []).filter((e) => e.category === 'weapons' && e.equipped);
   // Dueling requires wielding a single weapon (a shield is fine, a second weapon is not).
   const soloWeapon = equipped.length === 1;
+  // Worn non-proficient armor/shield → every weapon attack roll (STR or DEX) is at disadvantage.
+  const badArmor = nonProficientEquippedArmor(inventory, { armorProfText, raceArmor });
   return equipped.map((w) => {
     // A Versatile weapon gripped in both hands (hand === 'both') uses its larger die.
     const versatileTwoHanded = isVersatileWeapon(w) && w.hand === 'both';
-    return {
+    const row = {
       uid: w.uid,
       ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }), size, edition, feats, styles, soloWeapon, versatileTwoHanded }),
     };
+    if (badArmor) {
+      row.disadvantage = true;
+      row.warning = [row.warning, `Wearing ${badArmor.name} without proficiency — attack rolls at disadvantage.`]
+        .filter(Boolean).join(' ');
+    }
+    return row;
   });
 }

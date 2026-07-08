@@ -5,8 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
-import { getRaceGrantedWeapons } from '@/characters/components/race/raceProficienciesData';
-import { getAttacks, creatureSize, formatSigned } from '@/characters/components/inventory/inventoryData';
+import { getRaceGrantedWeapons, getRaceGrantedArmor } from '@/characters/components/race/raceProficienciesData';
+import { getAttacks, creatureSize, formatSigned, nonProficientEquippedArmor } from '@/characters/components/inventory/inventoryData';
+import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import {
   buildActionEconomy, characterSpellNames, TABS, TAB_LABELS, SOURCE_ORDER,
@@ -210,7 +211,15 @@ export default function ActionEconomyTab({
   const raceWeapons = getRaceGrantedWeapons(race, subrace) || [];
   const size = creatureSize(characterData, race);
   const styles = gatherFightingStyles(characterData);
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles });
+  // Armor proficiency context (class text + race trait grants + stored race/feat grants) —
+  // worn non-proficient armor puts every STR/DEX attack roll at disadvantage and blocks casting.
+  const armorProfText = (CLASS_PROFICIENCIES_5E[charClass] || {}).armor || '';
+  const raceArmor = [
+    ...(getRaceGrantedArmor(race, subrace) || []),
+    ...gatherProficiencies({ charClass, characterData }).armor.grants,
+  ];
+  const badArmor = nonProficientEquippedArmor(inventory, { armorProfText, raceArmor });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor });
 
   // A loading weapon caps the Attack action to one shot even with Extra Attack (unless a
   // feat lifts it — Crossbow Expert sets loadingNote to "…ignored…"). Surface a caveat on
@@ -218,8 +227,8 @@ export default function ActionEconomyTab({
   const cappedLoadingWeapon = attacks.find((a) => a.loadingNote && !/ignored/i.test(a.loadingNote));
 
   const economy = useMemo(
-    () => buildActionEconomy({ charClass, subclass, level, edition, characterData, inventory, attacks, scores, spellIndex }),
-    [charClass, subclass, level, edition, characterData, inventory, attacks, spellIndex]
+    () => buildActionEconomy({ charClass, subclass, level, edition, characterData, inventory, attacks, scores, spellIndex, armorProfText, raceArmor }),
+    [charClass, subclass, level, edition, characterData, inventory, attacks, spellIndex, armorProfText, raceArmor]
   );
 
   // Rest-rechargeable resources from the class config (Fighter: Second Wind, Action Surge,
@@ -296,6 +305,11 @@ export default function ActionEconomyTab({
           {grouped.map(([src, list]) => (
             <div key={src} className="space-y-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{src === 'Weapon' ? 'Weapon Attacks' : src}</h3>
+              {src === 'Spell' && badArmor && (
+                <p className="text-[11px] text-amber-600 leading-tight" data-testid="ae-armor-spells">
+                  You can't cast spells while wearing {badArmor.name} — you're not proficient with it.
+                </p>
+              )}
               {src === 'Spell' && (
                 <p className="text-[11px] text-muted-foreground leading-tight" data-testid="ae-spacing-spells">
                   A spell that requires a ranged attack roll (Fire Bolt, Eldritch Blast…) has disadvantage while an enemy is within 5 ft.{' '}

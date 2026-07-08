@@ -103,6 +103,61 @@ describe('InventoryTab', () => {
     expect(screen.getByTestId('inventory-ac')).toHaveTextContent('16'); // heavy, no DEX
   });
 
+  it('warns on an equipped armor row when the Strength requirement is unmet', () => {
+    renderTab({
+      inventory: [{ ...chainMail, strength_requirement: 13 }],
+      scores: { strength: 11, dexterity: 10 },
+    });
+    fireEvent.click(screen.getByTestId('inv-category-armor'));
+    expect(screen.getByTestId('inv-str-warning-arm1'))
+      .toHaveTextContent(/Requires Strength 13 \(you have 11\).*speed reduced by 10 ft while worn/i);
+  });
+
+  it('warns before equipping too — unequipped armor with unmet STR shows the future penalty', () => {
+    renderTab({
+      inventory: [{ ...chainMail, equipped: false, strength_requirement: 13 }],
+      scores: { strength: 11, dexterity: 10 },
+    });
+    fireEvent.click(screen.getByTestId('inv-category-armor'));
+    expect(screen.getByTestId('inv-str-warning-arm1'))
+      .toHaveTextContent(/wearing it will reduce your speed by 10 ft/i);
+  });
+
+  it('shows the non-proficiency banner when wearing armor without proficiency', () => {
+    renderTab({ inventory: [chainMail], charClass: 'Wizard' });
+    const banner = screen.getByTestId('armor-nonprof-warning');
+    expect(banner).toHaveTextContent(/Chain Mail without proficiency/i);
+    expect(banner).toHaveTextContent(/can't cast spells/i);
+  });
+
+  it('no non-proficiency banner for a proficient class or when a feat grants the armor', () => {
+    renderTab({ inventory: [chainMail], charClass: 'Fighter' });
+    expect(screen.queryByTestId('armor-nonprof-warning')).not.toBeInTheDocument();
+    cleanup();
+    renderTab({
+      inventory: [chainMail],
+      charClass: 'Wizard',
+      characterData: { feats: [{ name: 'Heavily Armored', effects: [{ kind: 'proficiency', prof_type: 'armor', items: ['Heavy'] }] }] },
+    });
+    expect(screen.queryByTestId('armor-nonprof-warning')).not.toBeInTheDocument();
+  });
+
+  it('weapon attacks show disadvantage while wearing non-proficient armor', () => {
+    renderTab({ inventory: [chainMail, longsword], charClass: 'Wizard' });
+    expect(screen.getByTestId('attack-w1')).toHaveTextContent('(disadvantage)');
+    expect(screen.getByTestId('attack-warning-w1')).toHaveTextContent(/Chain Mail without proficiency/i);
+  });
+
+  it('shows no Strength warning when the requirement is met or absent', () => {
+    renderTab({
+      inventory: [{ ...chainMail, strength_requirement: 13 }, leather],
+      scores: { strength: 14, dexterity: 10 },
+    });
+    fireEvent.click(screen.getByTestId('inv-category-armor'));
+    expect(screen.queryByTestId('inv-str-warning-arm1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('inv-str-warning-arm2')).not.toBeInTheDocument();
+  });
+
   it('links the AC summary to the armor-class mechanics page', () => {
     renderTab();
     expect(screen.getByTestId('armor-class-learn-more')).toHaveAttribute(

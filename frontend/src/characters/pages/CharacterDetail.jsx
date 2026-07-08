@@ -27,6 +27,7 @@ import { getFeatGrantedSkills } from '@/characters/components/feats/featProficie
 import RacialResourceTracker from '@/characters/components/race/RacialResourceTracker';
 import JumpCard from '@/characters/components/combat/JumpCard';
 import WalletCard from '@/characters/components/inventory/WalletCard';
+import { armorSpeedPenalty, wornNonProficientArmor } from '@/characters/components/inventory/inventoryData';
 import InventoryTab from '@/characters/components/inventory/InventoryTab';
 import ActionEconomyTab from '@/characters/components/combat/ActionEconomyTab';
 import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
@@ -532,6 +533,16 @@ export default function CharacterDetail() {
   }
 
   const pb = profBonus(identity.draft?.level ?? character.level);
+
+  // Armor worn without proficiency (RAW, both editions): disadvantage on STR/DEX ability
+  // checks, saving throws, and attack rolls, and no spellcasting. Drives the saves note,
+  // the skill "dis" tags, and the Spells-tab banner; the per-attack disadvantage is folded
+  // in by getAttacks (Items + Action Economy tabs).
+  const nonProfArmor = wornNonProficientArmor({
+    inventory: (classSection.draft ?? character.character_data)?.inventory,
+    charClass: character.char_class,
+    characterData: classSection.draft ?? character.character_data ?? {},
+  });
   const edition = campaign?.edition || '5e';
   const ClassSheet = (edition === '5.5e' ? CLASS_SHEETS_2024 : CLASS_SHEETS_5E)[character.char_class];
 
@@ -1414,6 +1425,11 @@ export default function CharacterDetail() {
                         );
                       })}
                     </div>
+                    {nonProfArmor && (
+                      <p className="text-[10px] text-amber-600 mt-1" data-testid="saves-armor-warning">
+                        STR &amp; DEX saving throws at disadvantage — wearing {nonProfArmor.name} without proficiency.
+                      </p>
+                    )}
                   </div>
 
                   {/* Skills */}
@@ -1425,6 +1441,7 @@ export default function CharacterDetail() {
                     level={character.level}
                     edition={edition}
                     readOnly={displayAsPlayer || !canEdit}
+                    nonProfArmorName={nonProfArmor?.name}
                   />
                 </div>
               </SectionCard>
@@ -1512,6 +1529,18 @@ export default function CharacterDetail() {
                         +{featSpeed} ft speed from {sources.map((s) => s.source).join(', ')}
                       </div>
                     );
+                  })()}
+                  {/* Armor Strength-requirement speed penalty (−10 ft). Data-driven sheets fold it
+                      into CombatBlock's Total Speed; hand-written sheets show this annotation. */}
+                  {(() => {
+                    if (getClassConfig(character.char_class, edition)) return null;
+                    const inv = classSection.draft?.inventory ?? character.character_data?.inventory ?? [];
+                    const penalty = armorSpeedPenalty(inv, identity.draft ?? {});
+                    return penalty ? (
+                      <div className="mt-2 text-xs text-amber-600" data-testid="speed-armor-note">
+                        −{penalty.penalty} ft speed: {penalty.name} requires Strength {penalty.required} (you have {penalty.str}).
+                      </div>
+                    ) : null;
                   })()}
                   {hasRelentlessEndurance(character?.character_data?.race_traits) && (
                     <div
@@ -1711,6 +1740,15 @@ export default function CharacterDetail() {
             {/* ── Tab 5: Spells ── */}
             {hasSpells && (
               <TabsContent value="spells" className="space-y-4">
+                {nonProfArmor && (
+                  <div
+                    className="rounded-lg border border-amber-500/60 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-500"
+                    data-testid="spells-armor-warning"
+                  >
+                    You can't cast spells while wearing armor you're not proficient with ({nonProfArmor.name}).
+                    Unequip it in the Items tab to cast spells again.
+                  </div>
+                )}
                 {(() => {
                   // Spells are grouped by SOURCE — Class / Racial / Feats — each shown only when
                   // the character actually has spells from it (so the tab doesn't get crowded).
@@ -1967,7 +2005,7 @@ function SectionCard({ title, subtitle, children, isDirty, onSave, onReset, canE
   );
 }
 
-function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition, readOnly }) {
+function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition, readOnly, nonProfArmorName }) {
   const storedProfs = classData?.skill_proficiencies ?? [];
   const expertiseSkills = classData?.expertise_skills ?? [];
   // Existing characters created before race-granted skills were saved into the
@@ -1998,6 +2036,8 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
   if (featGranted.length > 0) legendParts.push('Blue = from feat');
   if (raBonus > 0) legendParts.push('Teal = ½ prof (Remarkable Athlete)');
   if (raAdvSkills.length > 0) legendParts.push('Teal = advantage (Remarkable Athlete)');
+  // Worn non-proficient armor: disadvantage on every STR/DEX ability check.
+  if (nonProfArmorName) legendParts.push(`"dis" = disadvantage (wearing ${nonProfArmorName} without proficiency)`);
 
   return (
     <div>
@@ -2037,6 +2077,9 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
               <span className="flex-1 truncate">{skill}</span>
               {raAdvantage && (
                 <span className="text-[9px] font-semibold text-teal-600 uppercase" data-testid={`skill-advantage-${skill}`}>adv</span>
+              )}
+              {nonProfArmorName && (ability === 'strength' || ability === 'dexterity') && (
+                <span className="text-[9px] font-semibold text-amber-600 uppercase" data-testid={`skill-armor-dis-${skill}`}>dis</span>
               )}
               <span className="font-medium tabular-nums text-muted-foreground">
                 {bonus >= 0 ? `+${bonus}` : bonus}

@@ -143,6 +143,35 @@ describe('ActionEconomyTab', () => {
     expect(screen.getByText(/Small creatures attack with it at disadvantage/i)).toBeInTheDocument();
   });
 
+  it('flags weapon attacks with disadvantage while wearing non-proficient armor', () => {
+    const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
+    renderTab({ charClass: 'Wizard', inventory: [longswordEntry, chainMailEntry] });
+    expect(screen.getByText('Longsword')).toBeInTheDocument();
+    expect(screen.getByText(/1d8.*·\s*disadvantage/i)).toBeInTheDocument();
+    expect(screen.getByText(/Chain Mail without proficiency/i)).toBeInTheDocument();
+  });
+
+  it('the unarmed fallback (no weapon equipped) is at disadvantage in non-proficient armor', () => {
+    const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
+    renderTab({ charClass: 'Wizard', inventory: [chainMailEntry] });
+    expect(screen.getByText('Unarmed Strike')).toBeInTheDocument();
+    expect(screen.getByText(/bludgeoning.*·\s*disadvantage/i)).toBeInTheDocument();
+  });
+
+  it("shows a can't-cast note under the Spell section while wearing non-proficient armor", async () => {
+    const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
+    renderTab({ charClass: 'Wizard', inventory: [chainMailEntry], characterData: { prepared_spells: ['Fireball'] } });
+    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
+    expect(screen.getByTestId('ae-armor-spells')).toHaveTextContent(/can't cast spells while wearing Chain Mail/i);
+  });
+
+  it('no armor-spells note when the worn armor is proficient', async () => {
+    const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
+    renderTab({ charClass: 'Fighter', inventory: [chainMailEntry], characterData: { prepared_spells: ['Fireball'] } });
+    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
+    expect(screen.queryByTestId('ae-armor-spells')).not.toBeInTheDocument();
+  });
+
   it('shows the Extra Attack note for a level 5 Fighter', () => {
     renderTab();
     expect(screen.getByTestId('ae-attacks-per-action')).toHaveTextContent('2 attacks');

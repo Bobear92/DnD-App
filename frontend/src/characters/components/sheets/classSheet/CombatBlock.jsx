@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { getFeatStatMods, getFeatStatModSources } from '@/characters/components/feats/featEffects';
 import { hasDurableFeat } from '@/characters/components/combat/combatBonuses';
+import { armorSpeedPenalty } from '@/characters/components/inventory/inventoryData';
 
 function Field({ label, children }) {
   return (
@@ -21,7 +22,7 @@ function Field({ label, children }) {
   );
 }
 
-export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, level = 1, creation = false, maxHpNode = null, afterHpNode = null, acExtra = null, conMod = 0, effectiveMaxHp, onHeal }) {
+export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, level = 1, creation = false, maxHpNode = null, afterHpNode = null, acExtra = null, conMod = 0, effectiveMaxHp, onHeal, scores = {} }) {
   return (
     <>
       <div className="grid grid-cols-3 gap-3">
@@ -59,7 +60,9 @@ export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, 
         const pb = Math.ceil(level / 4) + 1;
         const featSpeed = getFeatStatMods(data.feats, 'speed', { pb });
         const sources = getFeatStatModSources(data.feats, 'speed', { pb });
-        const total = (data.speed ?? 30) + (data.speed_bonus ?? 0) + featSpeed;
+        // Equipped armor with an unmet Strength requirement reduces speed by 10 ft.
+        const armorPenalty = armorSpeedPenalty(data.inventory, scores);
+        const total = (data.speed ?? 30) + (data.speed_bonus ?? 0) + featSpeed - (armorPenalty?.penalty ?? 0);
         return (
           <div className="grid grid-cols-3 gap-3">
             <Field label="Speed (ft)">
@@ -73,6 +76,11 @@ export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, 
               {sources.length > 0 && (
                 <div className="text-[9px] text-emerald-600 leading-tight text-center" data-testid="total-speed-feat-note">
                   {sources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
+                </div>
+              )}
+              {armorPenalty && (
+                <div className="text-[9px] text-amber-600 leading-tight text-center" data-testid="total-speed-armor-note">
+                  −{armorPenalty.penalty} ft {armorPenalty.name} (Str {armorPenalty.required} required)
                 </div>
               )}
             </Field>

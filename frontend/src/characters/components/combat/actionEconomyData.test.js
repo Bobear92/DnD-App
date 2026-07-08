@@ -155,6 +155,21 @@ describe('buildActionEconomy — Fighter', () => {
     expect(bow.detailRest).toBe('to hit · 1d8 + 3 Piercing');
   });
 
+  it('puts the unarmed fallback at disadvantage while wearing non-proficient armor (STR-based attack)', () => {
+    const chainMail = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
+    const ec = buildActionEconomy({
+      ...fighterArgs(1, '5e'), attacks: [], inventory: [chainMail], armorProfText: 'None',
+    });
+    const ua = ec.action.find((e) => e.name === 'Unarmed Strike');
+    expect(ua.detail).toMatch(/· disadvantage/);
+    expect(ua.warning).toMatch(/Chain Mail without proficiency/i);
+    // Proficient (or no armor ctx breach) → no flag.
+    const ok = buildActionEconomy({
+      ...fighterArgs(1, '5e'), attacks: [], inventory: [chainMail], armorProfText: 'All armor, shields',
+    });
+    expect(ok.action.find((e) => e.name === 'Unarmed Strike').detail).not.toMatch(/disadvantage/);
+  });
+
   it('rides a Champion crit range onto weapon attacks (not the unarmed fallback / non-Champions)', () => {
     const args = { ...fighterArgs(3, '5e'), subclass: 'Champion' };
     const ec = buildActionEconomy(args);

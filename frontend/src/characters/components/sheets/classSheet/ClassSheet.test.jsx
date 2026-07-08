@@ -49,6 +49,24 @@ describe('ClassSheet — martial section isolation', () => {
     expect(screen.getByTestId('total-speed')).toHaveTextContent('40'); // 30 + 10
     expect(screen.getByTestId('total-speed-feat-note')).toHaveTextContent('+10 Mobile');
   });
+
+  it('subtracts the armor Strength-requirement penalty (−10 ft) from Total Speed', () => {
+    const inventory = [{ uid: 'a1', category: 'armor', name: 'Chain Mail', armor_type: 'heavy', armor_class: 16, strength_requirement: 13, equipped: true }];
+    render(<FighterSheet
+      data={{ ...FIGHTER_DATA, speed: 30, inventory }}
+      level={5} section="stats" scores={{ strength: 11 }} />);
+    expect(screen.getByTestId('total-speed')).toHaveTextContent('20'); // 30 − 10
+    expect(screen.getByTestId('total-speed-armor-note')).toHaveTextContent('−10 ft Chain Mail (Str 13 required)');
+  });
+
+  it('shows no armor speed penalty once Strength meets the requirement', () => {
+    const inventory = [{ uid: 'a1', category: 'armor', name: 'Chain Mail', armor_type: 'heavy', armor_class: 16, strength_requirement: 13, equipped: true }];
+    render(<FighterSheet
+      data={{ ...FIGHTER_DATA, speed: 30, inventory }}
+      level={5} section="stats" scores={{ strength: 13 }} />);
+    expect(screen.getByTestId('total-speed')).toHaveTextContent('30');
+    expect(screen.queryByTestId('total-speed-armor-note')).not.toBeInTheDocument();
+  });
 });
 
 describe('ClassSheet — collapsible class features', () => {

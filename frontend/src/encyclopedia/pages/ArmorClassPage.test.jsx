@@ -30,4 +30,18 @@ describe('ArmorClassPage', () => {
     expect(screen.getByText(/AC 18/)).toBeInTheDocument();
     expect(screen.getByText(/AC 15/)).toBeInTheDocument();
   });
+
+  it('explains armor proficiency and its penalties', () => {
+    renderPage();
+    expect(screen.getByRole('heading', { name: 'Armor proficiency' })).toBeInTheDocument();
+    expect(screen.getByText(/disadvantage on every ability check/i)).toBeInTheDocument();
+    expect(screen.getByText(/can't cast spells/i)).toBeInTheDocument();
+  });
+
+  it('explains armor Strength requirements and the −10 ft speed penalty', () => {
+    renderPage();
+    expect(screen.getByRole('heading', { name: 'Strength requirements' })).toBeInTheDocument();
+    expect(screen.getByText(/reduced by 10\s*feet/i)).toBeInTheDocument();
+    expect(screen.getByText(/lower than the listed\s*requirement/i)).toBeInTheDocument();
+  });
 });

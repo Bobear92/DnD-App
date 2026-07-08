@@ -411,6 +411,7 @@ export default function ClassSheet({
           conMod={conMod}
           effectiveMaxHp={effectiveMaxHp}
           onHeal={onHeal}
+          scores={scores}
         />
       )}
 

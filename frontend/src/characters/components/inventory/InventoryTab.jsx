@@ -20,6 +20,7 @@ import {
   buildEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons, migrateHands,
   toggleEquipped, toggleAttuned, attunedCount, computeArmorClass, getAttacks,
   isWeaponProficient, isArmorProficient, creatureSize, weaponAttackWarning, weaponLoadingNote,
+  armorStrengthNote, nonProficientEquippedArmor, armorNonProficiencyNote,
   assignHand, handContents, isShieldEntry, isHandCapable, isTwoHandedWeapon, isVersatileWeapon,
   abilityMod, profBonus, formatSigned,
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
@@ -97,8 +98,10 @@ export default function InventoryTab({
 
   const profs = CLASS_PROFICIENCIES_5E[charClass] || {};
   const armorProfText = profs.armor || '';
-  const raceArmor = getRaceGrantedArmor(race, subrace) || [];
   const proficiencies = gatherProficiencies({ charClass, characterData });
+  // Race trait grants + gathered grants (stored race armor + feat armor — Heavily Armored etc.)
+  // all count toward the armor proficiency check.
+  const raceArmor = [...(getRaceGrantedArmor(race, subrace) || []), ...proficiencies.armor.grants];
   // Fold feat- and race-granted weapon proficiencies (e.g. Tavern Brawler → "Improvised
   // weapons") into the proficiency text + list so an equipped granted weapon reads as proficient.
   const weaponProfText = [profs.weapons || '', ...proficiencies.weapons.grants].filter(Boolean).join(', ');
@@ -117,8 +120,10 @@ export default function InventoryTab({
   // weapon rows next to the crit range. Null when the character lacks the feat.
   const gwmBonusNote = greatWeaponMasterNote(characterData?.feats);
   const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats, styles });
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor });
   const attuned = attunedCount(inventory);
+  // Worn armor/shield without proficiency — disadvantage on STR/DEX rolls + no spellcasting.
+  const badArmor = nonProficientEquippedArmor(inventory, { armorProfText, raceArmor });
 
   // Hands: which weapon/shield is in each hand (a two-handed weapon fills both).
   const hands = handContents(inventory);
@@ -302,6 +307,15 @@ export default function InventoryTab({
 
   return (
     <div className="space-y-4">
+      {badArmor && (
+        <div
+          className="rounded-lg border border-amber-500/60 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-500"
+          data-testid="armor-nonprof-warning"
+        >
+          {armorNonProficiencyNote(badArmor.name)}
+        </div>
+      )}
+
       {/* Combat summary */}
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="rounded-lg border bg-card p-4">
@@ -435,6 +449,9 @@ export default function InventoryTab({
               const attackWarning = e.category === 'weapons'
                 ? weaponAttackWarning(e, { size, scores, edition })
                 : null;
+              // Armor with a Strength requirement the character doesn't meet — warn on
+              // the row before AND after equipping (unmet Str = −10 ft speed while worn).
+              const strWarning = e.category === 'armor' ? armorStrengthNote(e, scores) : null;
               const loadingNote = e.category === 'weapons'
                 ? weaponLoadingNote(e, { feats: characterData?.feats, proficient, edition })
                 : null;
@@ -472,6 +489,9 @@ export default function InventoryTab({
                     </div>
                     {attackWarning && (
                       <div className="text-[11px] text-amber-600 leading-tight" data-testid={`inv-warning-${e.uid}`}>{attackWarning}</div>
+                    )}
+                    {strWarning && (
+                      <div className="text-[11px] text-amber-600 leading-tight" data-testid={`inv-str-warning-${e.uid}`}>{strWarning}</div>
                     )}
                     {loadingNote && (
                       <div
