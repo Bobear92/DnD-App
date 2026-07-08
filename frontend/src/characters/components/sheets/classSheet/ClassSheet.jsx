@@ -27,6 +27,7 @@ import RestResourceTracker from '@/characters/components/sheets/classSheet/RestR
 import SkillProficiencyPicker from '@/characters/components/sheets/classSheet/SkillProficiencyPicker';
 import { useLockedChoice } from '@/characters/components/sheets/classSheet/hooks/useLockedChoice';
 import { getEarnedSubclassGrants, availableGrantOptions } from '@/characters/components/classData/subclassGrants';
+import { getSubclassCaster } from '@/characters/components/classData/subclassCasterData';
 
 function Field({ label, children }) {
   return (
@@ -164,9 +165,6 @@ export default function ClassSheet({
   effectiveMaxHp,
   onHeal,
 }) {
-  // Martial classes render nothing in the spells section.
-  if (section === 'spells' && !config.caster) return null;
-
   const set = (key, value) => onChange?.({ [key]: value });
   const conMod = Math.floor(((scores.constitution ?? 10) - 10) / 2);
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
@@ -178,6 +176,17 @@ export default function ClassSheet({
   // Inside the Features tab the content splits into two sub-tabs: General class features
   // vs the subclass's features. Other sections (stats/spells/all/creation) render flat.
   const [featuresTab, setFeaturesTab] = useState('general');
+
+  // Class-level caster (Wizard) or a subclass-granted one (Eldritch Knight — level-gated
+  // to the subclass unlock). Drives the shared CasterSpellBlock.
+  const activeCaster = config.caster
+    ?? getSubclassCaster(config.className, config.edition, data.subclass, level);
+
+  // Martial (non-caster) characters render nothing in the spells section. This return
+  // sits BELOW the hooks: it depends on data.subclass, so it can flip within a mounted
+  // component (GM sets the subclass) — returning before the hooks would change the hook
+  // order between renders.
+  if (section === 'spells' && !activeCaster) return null;
 
   // ── Feature blocks (defined once, composed into either the flat layout or the sub-tabs) ──
 
@@ -425,9 +434,9 @@ export default function ClassSheet({
       {showFeatures && portentBlock}
 
       {/* Caster spell UI (creation pickers + play sub-tabs) */}
-      {config.caster && (
+      {activeCaster && (
         <CasterSpellBlock
-          caster={config.caster}
+          caster={activeCaster}
           data={data}
           onChange={onChange}
           readOnly={readOnly}

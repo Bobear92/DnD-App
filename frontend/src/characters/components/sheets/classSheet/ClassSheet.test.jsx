@@ -2,6 +2,11 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { FighterSheet5e as FighterSheet, FighterSheet2024 } from '@/characters/components/sheets/classSheet/configs';
 
+// The Eldritch Knight known-caster block renders an encyclopedia Link.
+vi.mock('react-router-dom', () => ({
+  Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
+}));
+
 // Behavior tests for the data-driven ClassSheet via the Fighter (martial) config.
 // Covers the Epic 0 / Epic 1 / Epic 3 primitives: locked choices + GM Edit, rest-resource
 // use-buttons, section isolation. Wizard (caster) behavior is covered by WizardSheet.test.jsx.
@@ -255,5 +260,55 @@ describe('ClassSheet — Champion Additional Fighting Style (subclass level choi
     openSubclassTab();
     const block = screen.getByTestId('subclass-grant-additional_fighting_style');
     expect(within(block).getByText('—')).toBeInTheDocument();
+  });
+});
+
+describe('ClassSheet — Eldritch Knight subclass caster', () => {
+  const EK_DATA = {
+    ...FIGHTER_DATA,
+    subclass: 'Eldritch Knight',
+    cantrips: ['Fire Bolt', 'Blade Ward'],
+    known_spells: ['Shield', 'Magic Missile', 'Burning Hands'],
+    spell_slots: { 1: { total: 2, used: 1 } },
+  };
+
+  it('renders the known-caster block in the spells section for an EK Fighter', () => {
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} />);
+    expect(screen.getByTestId('known-caster-block')).toBeInTheDocument();
+    // Third-caster slots at L3: 2 × L1 (one used → 1/2)
+    expect(screen.getByText('Spell Slots (Long Rest)')).toBeInTheDocument();
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+    // Known lists with count/limit labels (2/2 cantrips, 3/3 spells at L3)
+    expect(screen.getByText(/Cantrips Known — 2\/2/)).toBeInTheDocument();
+    expect(screen.getByText(/Spells Known — 3\/3/)).toBeInTheDocument();
+    // The wizard-list / INT note
+    expect(screen.getByText(/Wizard list/i)).toBeInTheDocument();
+    // No prepare flow for a known caster
+    expect(screen.queryByText('Prepare Spells')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing in the spells section before the subclass caster unlocks (L2)', () => {
+    const { container } = render(
+      <FighterSheet data={{ ...FIGHTER_DATA, subclass: 'Eldritch Knight' }} level={2} section="spells" campaignId={1} />
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('still renders nothing in the spells section for a Champion at L3+', () => {
+    const { container } = render(<FighterSheet data={FIGHTER_DATA} level={5} section="spells" campaignId={1} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('the slot stepper persists via onChange (spell_slots patch, same semantics as the Wizard grid)', () => {
+    const onChange = vi.fn();
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} onChange={onChange} />);
+    // The − button undoes one expended use (used 1 → 0); casting is what expends slots.
+    fireEvent.click(screen.getByRole('button', { name: '−' }));
+    expect(onChange).toHaveBeenCalledWith({ spell_slots: { 1: { total: 2, used: 0 } } });
+  });
+
+  it('readOnly hides the slot steppers and list controls', () => {
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} readOnly />);
+    expect(screen.queryByRole('button', { name: '−' })).not.toBeInTheDocument();
   });
 });

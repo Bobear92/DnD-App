@@ -565,6 +565,16 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             if cd.get('subclass') == 'Battle Master':
                 patch['superiority_dice_used'] = 0
                 changes.append('Superiority Dice recovered')
+            if cd.get('subclass') == 'Eldritch Knight':
+                # Subclass caster: Fighter isn't in _SPELLCASTING_CLASSES, so reset the
+                # EK's spell slots here (same shape as the class-caster reset above).
+                spell_slots = cd.get('spell_slots', {})
+                patch['spell_slots'] = {
+                    str(sl): {'total': data.get('total', 0), 'used': 0}
+                    for sl, data in spell_slots.items()
+                    if isinstance(data, dict)
+                }
+                changes.append('Spell slots recovered')
         elif cls == 'Monk':
             patch['ki_used'] = 0
             changes.append('Focus points recovered' if edition == '5.5e' else 'Ki points recovered')

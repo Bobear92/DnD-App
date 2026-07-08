@@ -74,6 +74,80 @@ export default function CasterSpellBlock({
     onChange?.({ spell_slots: newSlots, arcane_recovery_used: true });
   };
 
+  // Shared spell-slot tracker grid (used by both the prepared and the known layouts).
+  const slotGrid = (
+    <div className="space-y-2">
+      <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+        {slotsTable.map((total, i) => {
+          if (total === 0) return null;
+          const slotLevel = i + 1;
+          const used = spellSlots[slotLevel]?.used ?? 0;
+          return (
+            <div key={slotLevel} className="rounded-md border text-center p-2">
+              <div className="text-xs text-muted-foreground">Level {slotLevel}</div>
+              <div className="font-bold text-sm">{total - used}/{total}</div>
+              {!readOnly && (
+                <div className="flex justify-center gap-0.5 mt-1">
+                  <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                    disabled={used <= 0} onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
+                  {isGm && (
+                    <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
+                      disabled={used >= total} onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // ── Known caster (subclass casters like the Eldritch Knight): no prepare flow ─────
+  // A fixed spell list picked at level-up (the LevelUpWizard New Spells step) — the sheet
+  // shows the slot tracker + editable cantrip/known lists with Cast buttons. No creation
+  // UI: subclass casters unlock after level 1.
+  if (caster.kind === 'known') {
+    if (creation || (section !== 'all' && section !== 'spells')) return null;
+    const cantripLimit = caster.cantripsKnownAt ? caster.cantripsKnownAt(level) : null;
+    const knownLimit = caster.spellsKnownAt ? caster.spellsKnownAt(level) : null;
+    return (
+      <div className="space-y-4" data-testid="known-caster-block">
+        {caster.note && (
+          <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{caster.note}</div>
+        )}
+        {slotGrid}
+        <SpellList
+          spells={data.cantrips ?? []}
+          onAdd={(n) => addSpell('cantrips', n)}
+          onRemove={(n) => removeSpell('cantrips', n)}
+          readOnly={readOnly}
+          label={`Cantrips Known${cantripLimit != null ? ` — ${(data.cantrips ?? []).length}/${cantripLimit}` : ''}`}
+          placeholder="Add cantrip…"
+          isCantrips={true}
+        />
+        <SpellList
+          spells={data.known_spells ?? []}
+          onAdd={(n) => addSpell('known_spells', n)}
+          onRemove={(n) => removeSpell('known_spells', n)}
+          readOnly={readOnly}
+          label={`Spells Known${knownLimit != null ? ` — ${(data.known_spells ?? []).length}/${knownLimit}` : ''}`}
+          placeholder="Add spell…"
+          onCastSpell={!readOnly ? handleCastSpell : undefined}
+          availableSlots={!readOnly ? availableSlots : undefined}
+        />
+        <div className="pt-2 border-t">
+          <Link to={`/campaigns/${campaignId}/encyclopedia`}
+            className="text-xs text-primary inline-flex items-center gap-1 hover:underline">
+            <ExternalLink className="h-3 w-3" />
+            Browse all spells in the Encyclopedia
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   // ── Creation: static info + curated pickers ──────────────────────────────────
   if (creation) {
     return (
@@ -164,32 +238,7 @@ export default function CasterSpellBlock({
               </Dialog>
             </>
           )}
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-              {slotsTable.map((total, i) => {
-                if (total === 0) return null;
-                const slotLevel = i + 1;
-                const used = spellSlots[slotLevel]?.used ?? 0;
-                return (
-                  <div key={slotLevel} className="rounded-md border text-center p-2">
-                    <div className="text-xs text-muted-foreground">Level {slotLevel}</div>
-                    <div className="font-bold text-sm">{total - used}/{total}</div>
-                    {!readOnly && (
-                      <div className="flex justify-center gap-0.5 mt-1">
-                        <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                          disabled={used <= 0} onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
-                        {isGm && (
-                          <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                            disabled={used >= total} onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {slotGrid}
           <SpellList spells={data.cantrips ?? []} onAdd={(n) => addSpell('cantrips', n)} onRemove={(n) => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
           <SpellList
             spells={prepared}

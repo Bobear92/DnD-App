@@ -353,4 +353,46 @@ describe('ActionEconomyTab', () => {
     renderTab({ inventory: [greatswordEntry], scores: { strength: 16 } });
     expect(screen.queryByTestId('ae-gwm-weapon:gs1:0')).not.toBeInTheDocument();
   });
+
+  it('shows Weapon Bond as a Subclass bonus action for an Eldritch Knight at L3', () => {
+    renderTab({ subclass: 'Eldritch Knight', level: 3 });
+    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    expect(screen.getByText('Weapon Bond')).toBeInTheDocument();
+    expect(screen.getByText(/summon/i)).toBeInTheDocument();
+  });
+
+  it('shows no Weapon Bond for a Champion', () => {
+    renderTab({ subclass: 'Champion', level: 3 });
+    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    expect(screen.queryByText('Weapon Bond')).not.toBeInTheDocument();
+  });
+
+  it('renders the War Magic combo on Action+Bonus for an Eldritch Knight at L7', () => {
+    renderTab({ subclass: 'Eldritch Knight', level: 7 });
+    fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+    expect(screen.getByText('War Magic')).toBeInTheDocument();
+    // Sub rows: cast a cantrip (Action) + the equipped weapon (Bonus)
+    expect(screen.getByTestId('ae-twf-action')).toHaveTextContent(/cast a cantrip/i);
+    expect(screen.getByTestId('ae-twf-bonus')).toHaveTextContent('Longsword');
+  });
+
+  it('shows the Eldritch Strike note on a weapon entry for an Eldritch Knight at L10', () => {
+    renderTab({ subclass: 'Eldritch Knight', level: 10 });
+    expect(screen.getByTestId('ae-eldritch-weapon:w1:0')).toHaveTextContent(/disadvantage on the next saving throw/i);
+  });
+
+  it('shows no Eldritch Strike note below L10 or for a non-EK subclass', () => {
+    renderTab({ subclass: 'Eldritch Knight', level: 9 });
+    expect(screen.queryByTestId('ae-eldritch-weapon:w1:0')).not.toBeInTheDocument();
+    cleanup();
+    renderTab({ subclass: 'Champion', level: 10 });
+    expect(screen.queryByTestId('ae-eldritch-weapon:w1:0')).not.toBeInTheDocument();
+  });
+
+  it('appends the Arcane Charge rider to Action Surge for an Eldritch Knight at L15', () => {
+    renderTab({ subclass: 'Eldritch Knight', level: 15 });
+    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    expect(screen.getByText(/Arcane Charge/)).toBeInTheDocument();
+    expect(screen.getByText(/teleport up to 30 ft/i)).toBeInTheDocument();
+  });
 });

@@ -24,7 +24,8 @@ import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeat
 import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
 import { hasFeat, critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
-import { remarkableAthleteMoveNote } from '@/characters/components/subclass/subclassCombatNotes';
+import { remarkableAthleteMoveNote, eldritchStrikeNote } from '@/characters/components/subclass/subclassCombatNotes';
+import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
 const ECONOMY_COST_LABEL = {
@@ -104,6 +105,42 @@ export const CLASS_FEATURE_ACTIONS_2024 = {
     'Indomitable': { tab: 'no_action', cost: 'no action', resourceKey: 'indomitable_used', description: 'When you fail a saving throw, reroll it (adding your fighter level) — no action required. Once per long rest.' },
   },
 };
+
+// ─── Subclass feature → action economy (curated) ──────────────────────────────────
+// SUBCLASS_FEATURE_ACTIONS_*[class][subclass][featureName] — same entry shape as the
+// class maps. Level-gated from SUBCLASS_DATA (the subclass feature tables), NOT the
+// class feature tables, whose subclass levels are generic placeholders ("Martial
+// Archetype Feature") that can never match a real feature name. Adding a subclass
+// feature here is pure data entry.
+
+export const SUBCLASS_FEATURE_ACTIONS_5E = {
+  Fighter: {
+    'Eldritch Knight': {
+      'Weapon Bond': { tab: 'bonus', cost: 'bonus action', description: "Summon your bonded weapon to your hand (bonus action). You can't be disarmed of it while it's on the same plane. Bonding takes a 1-hour ritual; you can bond one weapon." },
+    },
+  },
+};
+
+export const SUBCLASS_FEATURE_ACTIONS_2024 = {
+  Fighter: {
+    'Eldritch Knight': {
+      'Weapon Bond': { tab: 'bonus', cost: 'bonus action', description: "Summon a bonded weapon to your hand (bonus action). You can't be disarmed of a bonded weapon while it's on the same plane. Bonding takes a 1-hour ritual; you can bond up to two weapons." },
+    },
+  },
+};
+
+/** Subclass feature names earned at or below `level`, from the SUBCLASS_DATA tables. */
+export function subclassFeaturesKnownAtLevel(charClass, edition, subclass, level = 1) {
+  const ed = edition === '5.5e' || edition === '2024' ? '5.5e' : '5e';
+  const features = SUBCLASS_DATA[charClass]?.[ed]?.[subclass]?.features || [];
+  const seen = new Set();
+  const names = [];
+  for (const f of features) {
+    if (f.level > Number(level)) continue;
+    if (f.name && !seen.has(f.name)) { seen.add(f.name); names.push(f.name); }
+  }
+  return names;
+}
 
 // ─── Racial trait → action economy ───────────────────────────────────────────────
 // Keyed by racial trait name as stored in character_data.race_traits.
@@ -293,6 +330,9 @@ export function buildActionEconomy({
   // 2024 Champion Remarkable Athlete's post-crit free move — crit-triggered, so it rides on
   // each real weapon Action entry next to the crit range. Null for 5e / non-Champions.
   const remarkableMove = remarkableAthleteMoveNote({ charClass, subclass, level, edition });
+  // Eldritch Knight's Eldritch Strike (L10) — an on-hit weapon-attack rider, so it rides on
+  // each real weapon Action entry. Null for everyone else.
+  const eldritchStrike = eldritchStrikeNote({ charClass, subclass, level });
 
   // Weapon attacks (Action). Show an unarmed strike when nothing is equipped, or whenever a
   // feat upgrades the unarmed die (e.g. Tavern Brawler's 1d4) so the upgrade is visible.
@@ -364,6 +404,9 @@ export function buildActionEconomy({
       critSource: atk.uid && crit ? crit.source : null,
       // 2024 Champion Remarkable Athlete post-crit free move — on real weapon attacks only.
       remarkableMoveNote: atk.uid ? remarkableMove : null,
+      // Eldritch Knight Eldritch Strike on-hit rider — on real weapon attacks only (an
+      // unarmed strike isn't a weapon attack for this feature).
+      eldritchStrikeNote: atk.uid ? eldritchStrike : null,
     });
   });
 
@@ -576,6 +619,42 @@ export function buildActionEconomy({
     }
   }
 
+  // War Magic (Eldritch Knight L7, both editions) — cast a cantrip with your action, then make
+  // one weapon attack as a bonus action. At L18 Improved War Magic upgrades the trigger to any
+  // spell. Presented as an Action + Bonus combo (Crossbow Expert pattern) with the equipped
+  // weapon's real numbers; only shown when a weapon is equipped (no weapon → no bonus attack).
+  // NOTE: casting the cantrip IS your action — you don't also take the Attack action, so no
+  // Extra Attack that turn (the detail says so; the app displays attacks, it doesn't roll them).
+  if (charClass === 'Fighter' && subclass === 'Eldritch Knight' && level >= 7) {
+    const weaponRow = weaponRows.find((a) => a.uid);
+    if (weaponRow) {
+      const improved = level >= 18;
+      push('action+bonus', {
+        key: 'war-magic',
+        name: 'War Magic',
+        source: 'Subclass',
+        cost: 'action + bonus action',
+        subAttacks: [
+          {
+            label: 'Action',
+            name: improved ? 'Cast a spell' : 'Cast a cantrip',
+            detail: improved
+              ? 'Use your action to cast any spell (Improved War Magic).'
+              : 'Use your action to cast a cantrip.',
+          },
+          {
+            label: 'Bonus',
+            name: weaponRow.name,
+            toHit: weaponRow.toHit,
+            damage: weaponRow.damage,
+            warning: weaponRow.warning ?? null,
+          },
+        ],
+        detail: `Cast a ${improved ? 'spell (Improved War Magic, L18)' : 'cantrip'} with your action, then make one weapon attack with ${weaponRow.name} as a bonus action. Casting replaces the Attack action, so Extra Attack doesn't apply that turn.`,
+      });
+    }
+  }
+
   // Class / subclass features (curated, level-gated by the character's known features).
   const featureMap = is2024 ? CLASS_FEATURE_ACTIONS_2024 : CLASS_FEATURE_ACTIONS_5E;
   const classFeatures = featureMap[charClass] || {};
@@ -591,6 +670,32 @@ export function buildActionEconomy({
       detail: def.description,
       resourceKey: def.resourceKey,
     });
+  }
+
+  // Subclass features (curated, level-gated by the SUBCLASS_DATA feature tables — the class
+  // tables only carry placeholders at subclass levels, so they can't resolve these names).
+  const subclassFeatureMap = is2024 ? SUBCLASS_FEATURE_ACTIONS_2024 : SUBCLASS_FEATURE_ACTIONS_5E;
+  const subclassFeatures = subclassFeatureMap[charClass]?.[subclass] || {};
+  for (const fname of subclassFeaturesKnownAtLevel(charClass, edition, subclass, level)) {
+    const def = subclassFeatures[fname];
+    if (!def) continue;
+    push(def.tab, {
+      key: `subclass:${fname}`,
+      name: fname,
+      source: 'Subclass',
+      cost: def.cost,
+      detail: def.description,
+      resourceKey: def.resourceKey,
+    });
+  }
+
+  // Arcane Charge (Eldritch Knight L15) — a rider on Action Surge, so it's appended to the
+  // Action Surge entry rather than listed as its own action (it costs nothing extra).
+  if (charClass === 'Fighter' && subclass === 'Eldritch Knight' && level >= 15) {
+    const surge = buckets.no_action.find((e) => e.key === 'feature:Action Surge');
+    if (surge) {
+      surge.detail += ' Arcane Charge (L15): when you use Action Surge, you can teleport up to 30 ft to an unoccupied space you can see, before or after the extra action.';
+    }
   }
 
   // Racial trait actions.

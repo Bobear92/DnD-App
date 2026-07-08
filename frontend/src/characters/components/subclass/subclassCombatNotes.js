@@ -71,6 +71,34 @@ export function heroicWarriorNote({ charClass, subclass, level = 1, edition = '5
   );
 }
 
+const ELDRITCH_STRIKE_UNLOCK = 10;
+
+/** True when this character is an Eldritch Knight Fighter with Eldritch Strike (L10+, both editions). */
+export function hasEldritchStrike({ charClass, subclass, level = 1 } = {}) {
+  return (
+    charClass === 'Fighter' &&
+    subclass === 'Eldritch Knight' &&
+    (level ?? 1) >= ELDRITCH_STRIKE_UNLOCK
+  );
+}
+
+/**
+ * Eldritch Knight "Eldritch Strike" reminder string, or null when it doesn't apply.
+ * L10, identical in both editions: hitting a creature with a weapon attack gives it
+ * disadvantage on the next saving throw it makes against a spell you cast before the
+ * end of your next turn. An on-hit rider, so it's surfaced on weapon attack rows
+ * (Items tab + Action Economy) where the hit actually happens.
+ *
+ * @param {{ charClass, subclass, level? }} ctx
+ */
+export function eldritchStrikeNote({ charClass, subclass, level = 1 } = {}) {
+  if (!hasEldritchStrike({ charClass, subclass, level })) return null;
+  return (
+    'Eldritch Strike: when you hit a creature with a weapon attack, it has disadvantage ' +
+    'on the next saving throw it makes against a spell you cast before the end of your next turn.'
+  );
+}
+
 const REMARKABLE_ATHLETE_MOVE_UNLOCK = 3;
 
 /** True when this character has the 2024 Champion Remarkable Athlete post-crit free move. */

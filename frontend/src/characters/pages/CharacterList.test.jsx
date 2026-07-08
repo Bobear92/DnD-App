@@ -255,6 +255,18 @@ describe('CharacterList — rest buttons (GM view)', () => {
     expect(screen.getByText(/Mage Armor \(feat free cast\)/i)).toBeInTheDocument();
   });
 
+  it('long rest summary lists spell slots for an Eldritch Knight Fighter', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], character_data: { subclass: 'Eldritch Knight' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText('All spell slots')).toBeInTheDocument();
+  });
+
   it('confirmation dialog shows selected character names', async () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));

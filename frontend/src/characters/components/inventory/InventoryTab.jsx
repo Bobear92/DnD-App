@@ -29,7 +29,7 @@ import { gatherFightingStyles } from '@/characters/components/combat/fightingSty
 import { critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
 import { getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
-import { remarkableAthleteMoveNote } from '@/characters/components/subclass/subclassCombatNotes';
+import { remarkableAthleteMoveNote, eldritchStrikeNote } from '@/characters/components/subclass/subclassCombatNotes';
 
 // Tools are stored as adventuring-gear entries but get their own sub-tab (inserted
 // right after Gear). It isn't a real encyclopedia category — the Add picker reuses
@@ -119,6 +119,9 @@ export default function InventoryTab({
   // Great Weapon Master's crit/kill bonus-attack reminder (both editions), shown on melee
   // weapon rows next to the crit range. Null when the character lacks the feat.
   const gwmBonusNote = greatWeaponMasterNote(characterData?.feats);
+  // Eldritch Knight's Eldritch Strike (L10) — an on-hit weapon-attack rider, shown on every
+  // weapon row. Null for everyone else.
+  const eldritchNote = eldritchStrikeNote({ charClass, subclass, level });
   const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats, styles });
   const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor });
   const attuned = attunedCount(inventory);
@@ -539,6 +542,11 @@ export default function InventoryTab({
                     {e.category === 'weapons' && crit && (
                       <div className="text-[11px] text-primary leading-tight font-medium" data-testid={`crit-range-${e.uid}`}>
                         Crit {critLabel} ({crit.source})
+                      </div>
+                    )}
+                    {e.category === 'weapons' && eldritchNote && (
+                      <div className="text-[11px] text-violet-500 leading-tight" data-testid={`eldritch-strike-${e.uid}`}>
+                        {eldritchNote}
                       </div>
                     )}
                     {e.category === 'weapons' && remarkableMoveNote && (

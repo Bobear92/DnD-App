@@ -1327,4 +1327,104 @@ describe('LevelUpWizard', () => {
       });
     });
   });
+
+  describe('New Spells step — Eldritch Knight (caster subclass)', () => {
+    it('choosing Eldritch Knight at L3 adds the New Spells step in the same wizard run', () => {
+      render(
+        <LevelUpWizard
+          character={FIGHTER_L2}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      // No New Spells step before the subclass is chosen.
+      expect(screen.queryByText('New Spells')).not.toBeInTheDocument();
+      chooseTakeAverage(); // hp → subclass
+      fireEvent.click(screen.getByText('Eldritch Knight'));
+      expect(screen.getByText('New Spells')).toBeInTheDocument();
+      // Choosing a non-caster subclass instead removes it again.
+      fireEvent.click(screen.getByText('Champion'));
+      expect(screen.queryByText('New Spells')).not.toBeInTheDocument();
+    });
+
+    it('shows the EK targets (2 cantrips / 3 spells at L3) from the subclass progression', () => {
+      render(
+        <LevelUpWizard
+          character={FIGHTER_L2}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      chooseTakeAverage();                                            // hp → subclass
+      fireEvent.click(screen.getByText('Eldritch Knight'));
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // subclass → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
+      expect(screen.getByText('2')).toBeInTheDocument();  // cantrips target
+      expect(screen.getByText('3')).toBeInTheDocument();  // spells-known target
+      expect(screen.getByText('add:Cantrips Known')).toBeInTheDocument();
+      expect(screen.getByText('add:Spells Known')).toBeInTheDocument();
+    });
+
+    it('shows the New Spells step for an existing Eldritch Knight at a later level-up (L3→4)', () => {
+      const ek = { ...FIGHTER_L2, level: 3, character_data: { hp_max: 30, subclass: 'Eldritch Knight' } };
+      render(
+        <LevelUpWizard
+          character={ek}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.getByText('New Spells')).toBeInTheDocument();
+    });
+
+    it('includes chosen cantrips and spells in onComplete for an EK Fighter (2024 too)', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      // L4→5 — not an ASI level, so the flow is hp → features → spells → confirm.
+      const ek = {
+        ...FIGHTER_L2,
+        level: 4,
+        character_data: { hp_max: 36, subclass: 'Eldritch Knight', cantrips: ['Fire Bolt'], known_spells: ['Shield'] },
+      };
+      render(
+        <LevelUpWizard
+          character={ek}
+          campaign={CAMPAIGN_2024}
+          onComplete={onComplete}
+          onClose={vi.fn()}
+        />
+      );
+      chooseTakeAverage();                                            // hp → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
+      fireEvent.click(screen.getByText('add:Cantrips Known'));
+      fireEvent.click(screen.getByText('add:Spells Known'));
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // spells → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+
+      await waitFor(() => {
+        expect(onComplete).toHaveBeenCalledWith(
+          5,
+          expect.objectContaining({
+            cantrips: expect.arrayContaining(['Fire Bolt', 'Cantrips Known Pick']),
+            known_spells: expect.arrayContaining(['Shield', 'Spells Known Pick']),
+          })
+        );
+      });
+    });
+
+    it('does NOT show the New Spells step for a Champion Fighter at L3→4', () => {
+      const champ = { ...FIGHTER_L2, level: 3, character_data: { hp_max: 30, subclass: 'Champion' } };
+      render(
+        <LevelUpWizard
+          character={champ}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      expect(screen.queryByText('New Spells')).not.toBeInTheDocument();
+    });
+  });
 });

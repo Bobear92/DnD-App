@@ -915,6 +915,32 @@ describe('CharacterDetail', () => {
       expect(screen.queryByRole('tab', { name: /Spells/i })).not.toBeInTheDocument();
     });
 
+    it('shows Spells tab trigger for an Eldritch Knight Fighter (caster subclass)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Eldritch Knight' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
+    });
+
+    it('does NOT show Spells tab for a Champion Fighter (non-caster subclass)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Champion' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByRole('tab', { name: /Spells/i })).not.toBeInTheDocument();
+    });
+
     it('shows Spells tab trigger for Wizard (spellcasting class)', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,

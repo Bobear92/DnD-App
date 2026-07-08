@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyCastingTime, characterSpellNames, attacksPerAction, canTwoWeaponFight,
   normalizeFeatureName, featuresKnownAtLevel, buildActionEconomy, greatWeaponMasterVariant,
+  subclassFeaturesKnownAtLevel,
 } from '@/characters/components/combat/actionEconomyData';
 
 describe('classifyCastingTime', () => {
@@ -810,5 +811,105 @@ describe('buildActionEconomy — Fighter', () => {
       args.inventory = [longsword];
       expect(buildActionEconomy(args).action.find((e) => e.name === 'Charge')).toBeFalsy();
     });
+  });
+});
+
+describe('buildActionEconomy — Eldritch Knight (Fighter subclass)', () => {
+  const ekArgs = (level, edition = '5e', extra = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Eldritch Knight',
+    level,
+    edition,
+    characterData: {},
+    inventory: [],
+    attacks: [{ uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true }],
+    scores: { strength: 16 },
+    spellIndex: {},
+    ...extra,
+  });
+
+  it('subclassFeaturesKnownAtLevel reads the SUBCLASS_DATA feature levels', () => {
+    expect(subclassFeaturesKnownAtLevel('Fighter', '5e', 'Eldritch Knight', 3))
+      .toEqual(expect.arrayContaining(['Spellcasting', 'Weapon Bond']));
+    expect(subclassFeaturesKnownAtLevel('Fighter', '5e', 'Eldritch Knight', 3)).not.toContain('War Magic');
+    expect(subclassFeaturesKnownAtLevel('Fighter', '5.5e', 'Eldritch Knight', 7)).toContain('War Magic');
+    expect(subclassFeaturesKnownAtLevel('Fighter', '5e', 'Nonexistent', 20)).toEqual([]);
+  });
+
+  it('adds Weapon Bond as a bonus action from L3 (source Subclass)', () => {
+    const ec = buildActionEconomy(ekArgs(3));
+    const bond = ec.bonus.find((e) => e.name === 'Weapon Bond');
+    expect(bond).toBeTruthy();
+    expect(bond.source).toBe('Subclass');
+    expect(bond.detail).toMatch(/summon/i);
+    expect(bond.detail).toMatch(/one weapon/i); // 5e bonds a single weapon
+  });
+
+  it('Weapon Bond is edition-aware (2024 bonds up to two weapons)', () => {
+    const ec = buildActionEconomy(ekArgs(3, '5.5e'));
+    const bond = ec.bonus.find((e) => e.name === 'Weapon Bond');
+    expect(bond.detail).toMatch(/two weapons/i);
+  });
+
+  it('does not add Weapon Bond for a Champion or below the subclass level', () => {
+    const champ = buildActionEconomy({ ...ekArgs(3), subclass: 'Champion' });
+    expect(champ.bonus.find((e) => e.name === 'Weapon Bond')).toBeFalsy();
+    const low = buildActionEconomy(ekArgs(2));
+    expect(low.bonus.find((e) => e.name === 'Weapon Bond')).toBeFalsy();
+  });
+
+  it('adds the War Magic Action+Bonus combo at L7 with the equipped weapon as the bonus attack', () => {
+    const ec = buildActionEconomy(ekArgs(7));
+    const wm = ec['action+bonus'].find((e) => e.key === 'war-magic');
+    expect(wm).toBeTruthy();
+    expect(wm.source).toBe('Subclass');
+    expect(wm.subAttacks.map((s) => s.label)).toEqual(['Action', 'Bonus']);
+    expect(wm.subAttacks[0].name).toBe('Cast a cantrip');
+    expect(wm.subAttacks[1].name).toBe('Longsword');
+    expect(wm.subAttacks[1].toHit).toBe('+5');
+    expect(wm.detail).toMatch(/Extra Attack doesn't apply/);
+  });
+
+  it('upgrades War Magic to any spell at L18 (Improved War Magic, level-keyed)', () => {
+    const ec = buildActionEconomy(ekArgs(18));
+    const wm = ec['action+bonus'].find((e) => e.key === 'war-magic');
+    expect(wm.subAttacks[0].name).toBe('Cast a spell');
+    expect(wm.detail).toMatch(/Improved War Magic/);
+    // Still one entry, not two.
+    expect(ec['action+bonus'].filter((e) => e.key === 'war-magic')).toHaveLength(1);
+  });
+
+  it('hides War Magic below L7, without a weapon equipped, and for non-EK subclasses', () => {
+    expect(buildActionEconomy(ekArgs(6))['action+bonus'].find((e) => e.key === 'war-magic')).toBeFalsy();
+    expect(buildActionEconomy(ekArgs(7, '5e', { attacks: [] }))['action+bonus'].find((e) => e.key === 'war-magic')).toBeFalsy();
+    expect(buildActionEconomy({ ...ekArgs(7), subclass: 'Champion' })['action+bonus'].find((e) => e.key === 'war-magic')).toBeFalsy();
+  });
+
+  it('appends the Arcane Charge teleport rider to Action Surge at L15', () => {
+    const ec = buildActionEconomy(ekArgs(15));
+    const surge = ec.no_action.find((e) => e.key === 'feature:Action Surge');
+    expect(surge.detail).toMatch(/Arcane Charge/);
+    expect(surge.detail).toMatch(/teleport up to 30 ft/i);
+    // Not before L15, and not for other subclasses.
+    const l14 = buildActionEconomy(ekArgs(14)).no_action.find((e) => e.key === 'feature:Action Surge');
+    expect(l14.detail).not.toMatch(/Arcane Charge/);
+    const champ = buildActionEconomy({ ...ekArgs(15), subclass: 'Champion' })
+      .no_action.find((e) => e.key === 'feature:Action Surge');
+    expect(champ.detail).not.toMatch(/Arcane Charge/);
+  });
+
+  it('rides the Eldritch Strike note onto real weapon attacks at L10 (not unarmed, not non-EK)', () => {
+    const ec = buildActionEconomy(ekArgs(10));
+    const ls = ec.action.find((e) => e.name === 'Longsword');
+    expect(ls.eldritchStrikeNote).toMatch(/disadvantage on the next saving throw/);
+    // Below L10 → null.
+    const l9 = buildActionEconomy(ekArgs(9)).action.find((e) => e.name === 'Longsword');
+    expect(l9.eldritchStrikeNote).toBeNull();
+    // Unarmed fallback (no uid) → null.
+    const ua = buildActionEconomy(ekArgs(10, '5e', { attacks: [] })).action.find((e) => e.name === 'Unarmed Strike');
+    expect(ua.eldritchStrikeNote).toBeNull();
+    // Champion → null.
+    const champ = buildActionEconomy({ ...ekArgs(10), subclass: 'Champion' }).action.find((e) => e.name === 'Longsword');
+    expect(champ.eldritchStrikeNote).toBeNull();
   });
 });

@@ -42,6 +42,7 @@ import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects'
 import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
 import { hasRelentlessEndurance, RELENTLESS_ENDURANCE_NOTE } from '@/characters/components/race/raceCombatNotes';
 import { survivorNote, heroicWarriorNote } from '@/characters/components/subclass/subclassCombatNotes';
+import { getSubclassCaster } from '@/characters/components/classData/subclassCasterData';
 import InspirationCard from '@/characters/components/combat/InspirationCard';
 import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
@@ -549,7 +550,15 @@ export default function CharacterDetail() {
   const raceGrantedCantrips = computeRaceGrantedCantrips(character);
   const featGrantedSpells = getFeatGrantedSpells(character.character_data?.feats);
   const hasFeatSpells = featGrantedSpells.cantrips.length + featGrantedSpells.leveled.length + featGrantedSpells.ritualBooks.length > 0;
-  const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || raceGrantedCantrips.length > 0 || hasFeatSpells;
+  // Class-source spellcasting: a spellcasting class, or a caster SUBCLASS (Eldritch Knight
+  // Fighter) once its spellcasting feature is earned.
+  const subclassCaster = !!getSubclassCaster(
+    character.char_class,
+    edition,
+    (classSection.draft ?? character.character_data)?.subclass,
+    character.level,
+  );
+  const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || subclassCaster || raceGrantedCantrips.length > 0 || hasFeatSpells;
   const tabCount = hasSpells ? 6 : 5;
 
   const calendarEras = calendar?.eras ?? [];
@@ -1752,7 +1761,8 @@ export default function CharacterDetail() {
                 {(() => {
                   // Spells are grouped by SOURCE — Class / Racial / Feats — each shown only when
                   // the character actually has spells from it (so the tab doesn't get crowded).
-                  const isCaster = ClassSheet && classSection.draft !== null && SPELLCASTING_CLASSES.has(character.char_class);
+                  const isCaster = ClassSheet && classSection.draft !== null
+                    && (SPELLCASTING_CLASSES.has(character.char_class) || subclassCaster);
                   const featData = classSection.draft?.feats ?? character.character_data?.feats ?? [];
                   const fg = getFeatGrantedSpells(featData);
                   const hasFeat = fg.cantrips.length + fg.leveled.length + fg.ritualBooks.length > 0;

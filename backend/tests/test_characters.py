@@ -577,6 +577,58 @@ class TestApplyRest:
         updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
         assert updated["character_data"]["superiority_dice_used"] == 0
 
+    def test_long_rest_resets_eldritch_knight_spell_slots(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=7,
+            character_data={
+                "subclass": "Eldritch Knight",
+                "hp_max": 58,
+                "spell_slots": {"1": {"total": 4, "used": 3}, "2": {"total": 2, "used": 1}},
+            },
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
+        assert cd["spell_slots"] == {
+            "1": {"total": 4, "used": 0},
+            "2": {"total": 2, "used": 0},
+        }
+
+    def test_short_rest_does_not_reset_eldritch_knight_spell_slots(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=3,
+            character_data={
+                "subclass": "Eldritch Knight",
+                "spell_slots": {"1": {"total": 2, "used": 2}},
+            },
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
+        assert cd["spell_slots"] == {"1": {"total": 2, "used": 2}}
+
+    def test_non_eldritch_knight_fighter_has_no_spell_slot_reset(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=7,
+            character_data={"subclass": "Champion", "hp_max": 58},
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        cd = client.get(f"/api/characters/{char_id}", headers=h_gm).json()["character_data"]
+        assert "spell_slots" not in cd
+
     def test_non_battle_master_fighter_has_no_superiority_dice_reset(self, client):
         h_gm, _, campaign_id = self._setup(client)
         char_id = self._create_char(

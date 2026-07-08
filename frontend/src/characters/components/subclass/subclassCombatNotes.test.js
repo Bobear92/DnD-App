@@ -6,6 +6,8 @@ import {
   heroicWarriorNote,
   hasRemarkableAthleteMove,
   remarkableAthleteMoveNote,
+  hasEldritchStrike,
+  eldritchStrikeNote,
 } from './subclassCombatNotes';
 
 describe('hasSurvivor', () => {
@@ -129,5 +131,35 @@ describe('remarkableAthleteMoveNote', () => {
     expect(remarkableAthleteMoveNote({ charClass: 'Fighter', subclass: 'Champion', level: 2, edition: '5.5e' })).toBeNull();
     expect(remarkableAthleteMoveNote({ charClass: 'Fighter', subclass: 'Battle Master', level: 3, edition: '5.5e' })).toBeNull();
     expect(remarkableAthleteMoveNote()).toBeNull();
+  });
+});
+
+describe('hasEldritchStrike', () => {
+  it('is true for an Eldritch Knight Fighter at L10+ (both editions — no edition arg)', () => {
+    expect(hasEldritchStrike({ charClass: 'Fighter', subclass: 'Eldritch Knight', level: 10 })).toBe(true);
+    expect(hasEldritchStrike({ charClass: 'Fighter', subclass: 'Eldritch Knight', level: 20 })).toBe(true);
+  });
+
+  it('is false below L10, for other subclasses/classes, and with no args', () => {
+    expect(hasEldritchStrike({ charClass: 'Fighter', subclass: 'Eldritch Knight', level: 9 })).toBe(false);
+    expect(hasEldritchStrike({ charClass: 'Fighter', subclass: 'Champion', level: 10 })).toBe(false);
+    expect(hasEldritchStrike({ charClass: 'Wizard', subclass: 'Eldritch Knight', level: 10 })).toBe(false);
+    expect(hasEldritchStrike()).toBe(false);
+  });
+});
+
+describe('eldritchStrikeNote', () => {
+  it('returns the on-hit rider note for an Eldritch Knight at L10+', () => {
+    const note = eldritchStrikeNote({ charClass: 'Fighter', subclass: 'Eldritch Knight', level: 10 });
+    expect(note).toContain('Eldritch Strike');
+    expect(note).toContain('weapon attack');
+    expect(note).toContain('disadvantage on the next saving throw');
+    expect(note).toContain('end of your next turn');
+  });
+
+  it('returns null when it does not apply', () => {
+    expect(eldritchStrikeNote({ charClass: 'Fighter', subclass: 'Eldritch Knight', level: 9 })).toBeNull();
+    expect(eldritchStrikeNote({ charClass: 'Fighter', subclass: 'Battle Master', level: 10 })).toBeNull();
+    expect(eldritchStrikeNote()).toBeNull();
   });
 });

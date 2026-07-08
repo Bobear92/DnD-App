@@ -205,6 +205,19 @@ describe('InventoryTab', () => {
     expect(screen.queryByTestId('remarkable-move-w1')).not.toBeInTheDocument();
   });
 
+  it('shows the Eldritch Strike note on weapon rows for an Eldritch Knight at L10', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Eldritch Knight', level: 10 });
+    expect(screen.getByTestId('eldritch-strike-w1')).toHaveTextContent(/disadvantage on the next saving throw/i);
+  });
+
+  it('shows no Eldritch Strike note below L10 / for a non-EK subclass', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Eldritch Knight', level: 9 });
+    expect(screen.queryByTestId('eldritch-strike-w1')).not.toBeInTheDocument();
+    cleanup();
+    renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Champion', level: 10 });
+    expect(screen.queryByTestId('eldritch-strike-w1')).not.toBeInTheDocument();
+  });
+
   it('5e: warns a Small creature about an equipped Heavy weapon (row + attack)', () => {
     renderTab({ inventory: [greatsword], race: 'Halfling', edition: '5e', charClass: 'Fighter' });
     expect(screen.getByTestId('attack-gs1')).toHaveTextContent('disadvantage');

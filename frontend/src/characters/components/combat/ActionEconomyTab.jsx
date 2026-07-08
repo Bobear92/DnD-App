@@ -147,6 +147,11 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
             {entry.savageAttacksNote}
           </p>
         )}
+        {entry.eldritchStrikeNote && (
+          <p className="text-[11px] text-violet-500 leading-tight mt-0.5" data-testid={`ae-eldritch-${entry.key}`}>
+            {entry.eldritchStrikeNote}
+          </p>
+        )}
         {entry.critRange && (
           <p className="text-[11px] text-primary leading-tight font-medium mt-0.5" data-testid={`ae-crit-${entry.key}`}>
             Crit {entry.critRange}{entry.critSource ? ` (${entry.critSource})` : ''}

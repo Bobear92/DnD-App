@@ -16,6 +16,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 import SpellList from '@/characters/components/spells/SpellList';
 import { CLASS_PROGRESSION } from '@/characters/components/classData/classProgressionTables';
+import { getSubclassCaster } from '@/characters/components/classData/subclassCasterData';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { getHpBonusesPerLevel, hpRollBase, effectiveMaxHp } from '@/characters/components/combat/combatBonuses';
 import { getManeuvers, maneuversKnownAtLevel } from '@/characters/components/classData/maneuversData';
@@ -116,11 +117,13 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const subclassOptions = config?.subclass?.options ?? SUBCLASS_OPTS[character.char_class] ?? [];
   const subclassEdition = config?.subclass?.subclassEdition ?? (is2024 ? '5.5e' : '5e');
 
-  // Known casters pick spells/cantrips on level-up.
+  // Known casters pick spells/cantrips on level-up. A KNOWN caster is either a spellcasting
+  // class (Bard/Sorcerer/Warlock — targets from CLASS_PROGRESSION) or a known-caster SUBCLASS
+  // (Eldritch Knight — targets from subclassCasterData). The subclass may be chosen in THIS
+  // wizard run (the L3 subclass step), so the caster derivation lives below, after
+  // `effectiveSubclass` is known.
   const progression = CLASS_PROGRESSION[is2024 ? '5.5e' : '5e']?.[character.char_class];
-  const isKnownCaster = KNOWN_CASTERS.has(character.char_class);
-  const cantripsTarget = isKnownCaster ? progressionValue(progression, 'cantrips', newLevel) : null;
-  const knownTarget = isKnownCaster ? progressionValue(progression, 'known', newLevel) : null;
+  const classKnownCaster = KNOWN_CASTERS.has(character.char_class);
 
   const features = useMemo(() => {
     const classFeats = config?.features ?? CLASS_FEATURES[character.char_class];
@@ -174,6 +177,18 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // Subclass proficiency grants gained at this level (uses the subclass chosen in this
   // wizard, or the existing one for grants at later levels). Drives the Proficiencies step.
   const effectiveSubclass = subclassChoice || character.character_data?.subclass;
+
+  // Subclass-granted spellcasting (Eldritch Knight): choosing the subclass at its unlock
+  // level adds the New Spells step in this same wizard run. Targets come from the subclass
+  // caster's own progression rather than CLASS_PROGRESSION.
+  const subclassCaster = getSubclassCaster(character.char_class, edition, effectiveSubclass, newLevel);
+  const isKnownCaster = classKnownCaster || subclassCaster?.kind === 'known';
+  const cantripsTarget = classKnownCaster
+    ? progressionValue(progression, 'cantrips', newLevel)
+    : subclassCaster ? subclassCaster.cantripsKnownAt(newLevel) : null;
+  const knownTarget = classKnownCaster
+    ? progressionValue(progression, 'known', newLevel)
+    : subclassCaster ? subclassCaster.spellsKnownAt(newLevel) : null;
 
   // The class feature tables carry generic placeholders at subclass-feature levels (e.g.
   // "Martial Archetype Feature" → "You gain a feature from your Martial Archetype."). By the

@@ -77,6 +77,7 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
   else if (cls === 'Fighter') {
     items.push('Action Surge, Second Wind & Indomitable');
     if (characterData?.subclass === 'Battle Master') items.push('Superiority Dice');
+    if (characterData?.subclass === 'Eldritch Knight') items.push('All spell slots');
   }
   else if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');
   else if (cls === 'Paladin') items.push('Lay on Hands, Divine Sense & Channel Divinity, spell preparation unlocked');
