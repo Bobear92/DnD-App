@@ -317,6 +317,28 @@ describe('CharacterDetail', () => {
       await waitFor(() => expect(screen.queryByText('GM Notes')).not.toBeInTheDocument());
     });
 
+    it('GM sees spell-slot steppers for an EK; Player View hides them (isGm gated on !playerView)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            subclass: 'Eldritch Knight',
+            spell_slots: { 1: { total: 3, used: 1 } },
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Player View')).toBeInTheDocument());
+      // GM view: correction steppers present on the slot tracker.
+      await waitFor(() => expect(screen.getByTestId('slot-dec-1')).toBeInTheDocument());
+      // Player View preview: the steppers must disappear.
+      fireEvent.click(screen.getByText('Player View'));
+      await waitFor(() => expect(screen.queryByTestId('slot-dec-1')).not.toBeInTheDocument());
+      expect(screen.queryByTestId('slot-inc-1')).not.toBeInTheDocument();
+    });
+
     it('calls updateCharacter with gm_notes on save', async () => {
       characterService.updateCharacter.mockResolvedValue({
         success: true,

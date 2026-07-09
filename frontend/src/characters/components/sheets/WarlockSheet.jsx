@@ -149,16 +149,23 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [], rac
   );
 }
 
-export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], raceGrantedCantrips = [], section = 'all', acExtra = null, maxHpNode = null }) {
+export default function WarlockSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], raceGrantedCantrips = [], section = 'all', acExtra = null, maxHpNode = null, isGm = false }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
+  // Known spells/cantrips are permanent choices — players change them only at level-up
+  // (or freely during creation); the GM can edit the lists at whim.
+  const canEditSpellLists = creation || (isGm && !readOnly);
   const [newInvocation, setNewInvocation] = useState('');
 
   const [slotCount, slotLevel] = pactSlotsForLevel(level);
   const slotsUsed = data.pact_slots_used ?? 0;
+  // Pact Magic casting: every known spell burns one pact slot (all slots share slotLevel).
+  const pactAvailableSlots = {};
+  for (let l = 1; l <= slotLevel; l++) pactAvailableSlots[l] = slotCount - slotsUsed;
+  const handleCastSpell = () => set('pact_slots_used', Math.min(slotCount, slotsUsed + 1));
 
   const Field = ({ label, children }) => (
     <div className="space-y-1">
@@ -219,12 +226,17 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
             <div className="text-sm font-medium">Pact Magic Slots (Short Rest)</div>
             <div className="text-xs text-muted-foreground">{slotCount - slotsUsed} / {slotCount} level-{slotLevel} slots remaining</div>
           </div>
-          {!readOnly && (
+          {isGm && !readOnly && (
             <div className="flex items-center gap-1">
               <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('pact_slots_used', Math.max(0, slotsUsed - 1))} disabled={slotsUsed <= 0}>−</button>
+                onClick={() => set('pact_slots_used', Math.min(slotCount, slotsUsed + 1))} disabled={slotsUsed >= slotCount}>−</button>
               <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('pact_slots_used', Math.min(slotCount, slotsUsed + 1))} disabled={slotsUsed >= slotCount}>+</button>
+                onClick={() => set('pact_slots_used', Math.max(0, slotsUsed - 1))} disabled={slotsUsed <= 0}>+</button>
+            </div>
+          )}
+          {!isGm && !readOnly && (
+            <div className="text-xs text-muted-foreground italic max-w-40 text-right" data-testid="pact-tracker-note">
+              Spent by casting · recover on a rest from your GM
             </div>
           )}
         </div>
@@ -310,14 +322,14 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           selected={data.cantrips ?? []} onChange={v => set('cantrips', v)} raceGrantedSpells={raceGrantedCantrips} />
       )}
       {!creation && (section === 'all' || section === 'spells') && (
-        <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
+        <SpellList spells={data.cantrips ?? []} onAdd={canEditSpellLists ? (n => addSpell('cantrips', n)) : undefined} onRemove={canEditSpellLists ? (n => removeSpell('cantrips', n)) : undefined} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
       )}
       {creation && (
         <SpellPickerCreation label="Spells Known at Level 1 (choose 2)" limit={2} options={WARLOCK_SPELLS_L1_5E}
           selected={data.known_spells ?? []} onChange={v => set('known_spells', v)} />
       )}
       {!creation && (section === 'all' || section === 'spells') && (
-        <SpellList spells={data.known_spells ?? []} onAdd={n => addSpell('known_spells', n)} onRemove={n => removeSpell('known_spells', n)} readOnly={readOnly} label="Spells Known" placeholder="Add spell…" />
+        <SpellList spells={data.known_spells ?? []} onAdd={canEditSpellLists ? (n => addSpell('known_spells', n)) : undefined} onRemove={canEditSpellLists ? (n => removeSpell('known_spells', n)) : undefined} readOnly={readOnly} label="Spells Known" placeholder="Add spell…" onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? pactAvailableSlots : undefined} />
       )}
 
       {creation && (

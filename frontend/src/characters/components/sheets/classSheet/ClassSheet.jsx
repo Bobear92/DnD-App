@@ -446,6 +446,7 @@ export default function ClassSheet({
           abilityScores={abilityScores}
           campaignId={campaignId}
           isGm={isGm}
+          gmEdit={gmEdit}
           raceGrantedCantrips={raceGrantedCantrips}
         />
       )}

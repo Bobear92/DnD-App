@@ -146,3 +146,19 @@ describe('SorcererSheet Draconic Bloodline — Dragon Ancestor picker', () => {
     expect(screen.queryByTestId('draconic-bloodline-badge')).not.toBeInTheDocument();
   });
 });
+
+describe('SorcererSheet spell slot controls (players cast, GM corrects)', () => {
+  it('a player (non-GM, editable) gets NO slot steppers — only the casting note', () => {
+    sheet('spells', 5, { readOnly: false });
+    expect(screen.queryByTestId('slot-dec-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('slot-inc-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('slot-tracker-note')).toBeInTheDocument();
+  });
+
+  it('the GM gets steppers that patch spell_slots', () => {
+    const onChange = vi.fn();
+    sheet('spells', 5, { readOnly: false, isGm: true, onChange });
+    fireEvent.click(screen.getByTestId('slot-dec-1'));
+    expect(onChange).toHaveBeenCalledWith({ spell_slots: { 1: { total: 4, used: 1 } } });
+  });
+});

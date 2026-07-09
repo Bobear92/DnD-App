@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import SpellList from '@/characters/components/spells/SpellList';
+import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
+import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
@@ -193,13 +195,9 @@ export default function RangerSheet({ data = {}, onChange, readOnly = false, lev
   const prepareLimit = Math.max(1, level + wisMod);
 
   const slots = slotsForLevel(level);
-  const spellSlots = data.spell_slots ?? {};
+  const { spellSlots, availableSlots, setSlotUsed, handleCastSpell } = useSlotCaster({ slots, data, onChange });
   const maxSpellLevel = maxCastableLevel(slots);
 
-  const setSlotUsed = (slotLevel, used) => {
-    const total = slots[slotLevel - 1];
-    onChange?.({ spell_slots: { ...spellSlots, [slotLevel]: { total, used: Math.max(0, Math.min(total, used)) } } });
-  };
 
   const Field = ({ label, children }) => (
     <div className="space-y-1">
@@ -341,31 +339,8 @@ export default function RangerSheet({ data = {}, onChange, readOnly = false, lev
 
           {spellSubTab === 'prepared' && (
             <div className="space-y-3">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                  {slots.map((total, i) => {
-                    if (total === 0) return null;
-                    const sl = i + 1;
-                    const used = spellSlots[sl]?.used ?? 0;
-                    return (
-                      <div key={sl} className="rounded-md border text-center p-2">
-                        <div className="text-xs text-muted-foreground">Level {sl}</div>
-                        <div className="font-bold text-sm">{total - used}/{total}</div>
-                        {!readOnly && (
-                          <div className="flex justify-center gap-0.5 mt-1">
-                            <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                              disabled={used <= 0} onClick={() => setSlotUsed(sl, used - 1)}>−</button>
-                            <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                              disabled={used >= total} onClick={() => setSlotUsed(sl, used + 1)}>+</button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <SpellList spells={data.prepared_spells ?? []} readOnly={true} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} campaignId={campaignId} />
+              <SpellSlotTracker slots={slots} spellSlots={spellSlots} onSetSlotUsed={setSlotUsed} readOnly={readOnly} isGm={isGm} />
+              <SpellList spells={data.prepared_spells ?? []} readOnly={true} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} campaignId={campaignId} onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
             </div>
           )}
 

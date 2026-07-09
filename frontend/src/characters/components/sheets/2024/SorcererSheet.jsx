@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import SpellList from '@/characters/components/spells/SpellList';
+import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
+import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
@@ -149,23 +151,22 @@ function SkillPicker({ value, onChange, max, backgroundSkills = [], raceSkills =
   );
 }
 
-export default function SorcererSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], raceGrantedCantrips = [], section = 'all', acExtra = null, maxHpNode = null }) {
+export default function SorcererSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], raceGrantedCantrips = [], section = 'all', acExtra = null, maxHpNode = null, isGm = false }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
+  // Known spells/cantrips are permanent choices — players change them only at level-up
+  // (or freely during creation); the GM can edit the lists at whim.
+  const canEditSpellLists = creation || (isGm && !readOnly);
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
 
   const slots = slotsForLevel(level);
-  const spellSlots = data.spell_slots ?? {};
+  const { spellSlots, availableSlots, setSlotUsed, handleCastSpell } = useSlotCaster({ slots, data, onChange });
   const sorceryPointsTotal = level >= 2 ? level : 0;
   const sorceryUsed = data.sorcery_points_used ?? 0;
   const mmMax = metamagicCount(level);
 
-  const setSlotUsed = (slotLevel, used) => {
-    const total = slots[slotLevel - 1];
-    onChange?.({ spell_slots: { ...spellSlots, [slotLevel]: { total, used: Math.max(0, Math.min(total, used)) } } });
-  };
 
   const Field = ({ label, children }) => (
     <div className="space-y-1">
@@ -331,36 +332,13 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
       )}
 
       {!creation && (section === 'all' || section === 'spells') && (
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-            {slots.map((total, i) => {
-              if (total === 0) return null;
-              const sl = i + 1;
-              const used = spellSlots[sl]?.used ?? 0;
-              return (
-                <div key={sl} className="rounded-md border text-center p-2">
-                  <div className="text-xs text-muted-foreground">Level {sl}</div>
-                  <div className="font-bold text-sm">{total - used}/{total}</div>
-                  {!readOnly && (
-                    <div className="flex justify-center gap-0.5 mt-1">
-                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                        disabled={used <= 0} onClick={() => setSlotUsed(sl, used - 1)}>−</button>
-                      <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                        disabled={used >= total} onClick={() => setSlotUsed(sl, used + 1)}>+</button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <SpellSlotTracker slots={slots} spellSlots={spellSlots} onSetSlotUsed={setSlotUsed} readOnly={readOnly} isGm={isGm} />
       )}
 
       {!creation && (section === 'all' || section === 'spells') && (
         <>
-          <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
-          <SpellList spells={data.known_spells ?? []} onAdd={n => addSpell('known_spells', n)} onRemove={n => removeSpell('known_spells', n)} readOnly={readOnly} label="Spells Known" placeholder="Add spell…" />
+          <SpellList spells={data.cantrips ?? []} onAdd={canEditSpellLists ? (n => addSpell('cantrips', n)) : undefined} onRemove={canEditSpellLists ? (n => removeSpell('cantrips', n)) : undefined} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
+          <SpellList spells={data.known_spells ?? []} onAdd={canEditSpellLists ? (n => addSpell('known_spells', n)) : undefined} onRemove={canEditSpellLists ? (n => removeSpell('known_spells', n)) : undefined} readOnly={readOnly} label="Spells Known" placeholder="Add spell…" onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
         </>
       )}
 

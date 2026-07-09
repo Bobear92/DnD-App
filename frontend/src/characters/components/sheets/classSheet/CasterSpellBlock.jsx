@@ -18,6 +18,8 @@ import {
 import { Lock, Unlock, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import SpellList from '@/characters/components/spells/SpellList';
+import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
+import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import SpellPickerCreation from '@/characters/components/sheets/classSheet/SpellPickerCreation';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
 
@@ -34,6 +36,7 @@ export default function CasterSpellBlock({
   abilityScores = {},
   campaignId,
   isGm = false,
+  gmEdit = false,
   raceGrantedCantrips = [],
 }) {
   const set = (key, value) => onChange?.({ [key]: value });
@@ -75,43 +78,30 @@ export default function CasterSpellBlock({
   };
 
   // Shared spell-slot tracker grid (used by both the prepared and the known layouts).
+  // Players get no manual steppers — slots are spent via Cast and restored by GM rest.
   const slotGrid = (
-    <div className="space-y-2">
-      <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
-      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-        {slotsTable.map((total, i) => {
-          if (total === 0) return null;
-          const slotLevel = i + 1;
-          const used = spellSlots[slotLevel]?.used ?? 0;
-          return (
-            <div key={slotLevel} className="rounded-md border text-center p-2">
-              <div className="text-xs text-muted-foreground">Level {slotLevel}</div>
-              <div className="font-bold text-sm">{total - used}/{total}</div>
-              {!readOnly && (
-                <div className="flex justify-center gap-0.5 mt-1">
-                  <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                    disabled={used <= 0} onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
-                  {isGm && (
-                    <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                      disabled={used >= total} onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <SpellSlotTracker
+      slots={slotsTable}
+      spellSlots={spellSlots}
+      onSetSlotUsed={setSlotUsed}
+      readOnly={readOnly}
+      isGm={isGm}
+    />
   );
 
   // ── Known caster (subclass casters like the Eldritch Knight): no prepare flow ─────
   // A fixed spell list picked at level-up (the LevelUpWizard New Spells step) — the sheet
-  // shows the slot tracker + editable cantrip/known lists with Cast buttons. No creation
-  // UI: subclass casters unlock after level 1.
+  // shows the slot tracker + cantrip/known lists with Cast buttons. Players can't edit the
+  // lists here (spells change only at level-up); the GM can curate at whim via browse
+  // pickers + the free-text fallback. No creation UI: subclass casters unlock after L1.
   if (caster.kind === 'known') {
     if (creation || (section !== 'all' && section !== 'spells')) return null;
     const cantripLimit = caster.cantripsKnownAt ? caster.cantripsKnownAt(level) : null;
     const knownLimit = caster.spellsKnownAt ? caster.spellsKnownAt(level) : null;
+    // The lists are set in stone (level-up only) — even the GM's editing tools stay hidden
+    // until the header GM Edit toggle is on, so the sheet never reads as "re-choose spells".
+    const canEditLists = isGm && gmEdit && !readOnly;
+    const maxKnownLevel = maxCastableLevel(slotsTable);
     return (
       <div className="space-y-4" data-testid="known-caster-block">
         {caster.note && (
@@ -120,23 +110,64 @@ export default function CasterSpellBlock({
         {slotGrid}
         <SpellList
           spells={data.cantrips ?? []}
-          onAdd={(n) => addSpell('cantrips', n)}
-          onRemove={(n) => removeSpell('cantrips', n)}
+          onAdd={canEditLists ? (n) => addSpell('cantrips', n) : undefined}
+          onRemove={canEditLists ? (n) => removeSpell('cantrips', n) : undefined}
           readOnly={readOnly}
           label={`Cantrips Known${cantripLimit != null ? ` — ${(data.cantrips ?? []).length}/${cantripLimit}` : ''}`}
           placeholder="Add cantrip…"
           isCantrips={true}
         />
+        {canEditLists && caster.spellList && (
+          <div className="rounded-md border p-3 space-y-2" data-testid="gm-cantrip-browser">
+            <div className="text-xs font-medium text-muted-foreground">GM — edit cantrips from the {caster.spellList} list</div>
+            <ClassSpellBrowser
+              mode="learn"
+              className={caster.spellList}
+              campaignId={campaignId}
+              preparedSpells={data.cantrips ?? []}
+              prepareLimit={cantripLimit}
+              onAdd={(n) => addSpell('cantrips', n)}
+              onRemove={(n) => removeSpell('cantrips', n)}
+              minSpellLevel={0}
+              maxSpellLevel={0}
+              grantedSpells={raceGrantedCantrips}
+              grantedLabel="Granted by their race"
+            />
+          </div>
+        )}
         <SpellList
           spells={data.known_spells ?? []}
-          onAdd={(n) => addSpell('known_spells', n)}
-          onRemove={(n) => removeSpell('known_spells', n)}
+          onAdd={canEditLists ? (n) => addSpell('known_spells', n) : undefined}
+          onRemove={canEditLists ? (n) => removeSpell('known_spells', n) : undefined}
           readOnly={readOnly}
           label={`Spells Known${knownLimit != null ? ` — ${(data.known_spells ?? []).length}/${knownLimit}` : ''}`}
           placeholder="Add spell…"
           onCastSpell={!readOnly ? handleCastSpell : undefined}
           availableSlots={!readOnly ? availableSlots : undefined}
         />
+        {canEditLists && caster.spellList && maxKnownLevel > 0 && (
+          <div className="rounded-md border p-3 space-y-2" data-testid="gm-spell-browser">
+            <div className="text-xs font-medium text-muted-foreground">GM — edit spells from the {caster.spellList} list · up to level {maxKnownLevel}</div>
+            <ClassSpellBrowser
+              mode="learn"
+              className={caster.spellList}
+              campaignId={campaignId}
+              preparedSpells={data.known_spells ?? []}
+              prepareLimit={knownLimit}
+              onAdd={(n) => addSpell('known_spells', n)}
+              onRemove={(n) => removeSpell('known_spells', n)}
+              minSpellLevel={1}
+              maxSpellLevel={maxKnownLevel}
+            />
+          </div>
+        )}
+        {!canEditLists && !readOnly && (
+          <p className="text-xs text-muted-foreground italic" data-testid="known-lists-note">
+            {isGm
+              ? 'These lists change at level-up. Turn on GM Edit (page header) to adjust them directly.'
+              : 'You learn and swap spells when you level up. Your GM can adjust these lists directly.'}
+          </p>
+        )}
         <div className="pt-2 border-t">
           <Link to={`/campaigns/${campaignId}/encyclopedia`}
             className="text-xs text-primary inline-flex items-center gap-1 hover:underline">

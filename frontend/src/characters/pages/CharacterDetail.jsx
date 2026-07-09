@@ -41,6 +41,7 @@ import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
 import { hasRelentlessEndurance, RELENTLESS_ENDURANCE_NOTE } from '@/characters/components/race/raceCombatNotes';
+import { computeRaceGrantedCantrips } from '@/characters/components/race/raceCantrips';
 import { survivorNote, heroicWarriorNote } from '@/characters/components/subclass/subclassCombatNotes';
 import { getSubclassCaster } from '@/characters/components/classData/subclassCasterData';
 import InspirationCard from '@/characters/components/combat/InspirationCard';
@@ -149,17 +150,6 @@ const ALIGNMENTS = [
 ];
 
 const NPC_STATUSES = ['alive', 'dead', 'missing', 'unknown'];
-
-function computeRaceGrantedCantrips(character) {
-  const cd = character?.character_data ?? {};
-  const cantrips = [];
-  if (cd.high_elf_cantrip) cantrips.push(cd.high_elf_cantrip);
-  const SUBRACE_CANTRIPS = { 'Forest Gnome': 'Minor Illusion', 'Drow': 'Dancing Lights' };
-  if (SUBRACE_CANTRIPS[cd.subrace]) cantrips.push(SUBRACE_CANTRIPS[cd.subrace]);
-  const RACE_CANTRIPS = { 'Tiefling': 'Thaumaturgy' };
-  if (RACE_CANTRIPS[character?.race]) cantrips.push(RACE_CANTRIPS[character.race]);
-  return cantrips;
-}
 
 function useSection(initial) {
   const [draft, setDraft] = useState(initial);
@@ -646,7 +636,7 @@ export default function CharacterDetail() {
           <LevelingCard
             character={character}
             campaign={campaign}
-            isGm={isGm}
+            isGm={isGm && !playerView}
             isOwner={isOwner}
             displayAsPlayer={displayAsPlayer}
             xpInput={xpInput}
@@ -1808,7 +1798,7 @@ export default function CharacterDetail() {
                             section="spells"
                             abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
                             campaignId={campaignId}
-                            isGm={isGm}
+                            isGm={isGm && !playerView}
                           />
                         </SectionCard>
                       )}

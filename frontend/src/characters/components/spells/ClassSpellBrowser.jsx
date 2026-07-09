@@ -14,7 +14,7 @@ export function maxCastableLevel(slots) {
 }
 
 export default function ClassSpellBrowser({
-  className,        // "Cleric", "Druid", "Paladin", "Ranger"
+  className,        // "Cleric", "Druid", "Paladin", "Ranger" — or the granted list ("Wizard" for an Eldritch Knight)
   campaignId,
   preparedSpells = [],
   prepareLimit = 1,
@@ -23,6 +23,10 @@ export default function ClassSpellBrowser({
   locked = false,
   isGm = false,
   maxSpellLevel = 9,
+  minSpellLevel = 1, // 0 = cantrips; min===max===0 renders a cantrip-only picker
+  mode = 'prepare',  // 'prepare' (daily prep + lock flow) | 'learn' (known-caster picks — no lock UI)
+  grantedSpells = [], // spells already granted from elsewhere (race cantrips) — shown non-selectable
+  grantedLabel = 'Already granted',
   onLock,
   onUnlock,
 }) {
@@ -30,18 +34,20 @@ export default function ClassSpellBrowser({
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState(null);
+  const [expandedId, setExpandedId] = useState(null); // spell whose full description is shown
+  const isLearn = mode === 'learn';
 
   useEffect(() => {
     encyclopediaService.getSpells(campaignId).then(allSpells => {
       const classSpells = allSpells.filter(s => {
         if (!s.classes) return false;
         const names = s.classes.split(',').map(n => n.trim().toLowerCase());
-        return names.includes(className.toLowerCase()) && s.level > 0 && s.level <= maxSpellLevel;
+        return names.includes(className.toLowerCase()) && s.level >= minSpellLevel && s.level <= maxSpellLevel;
       });
       setSpells(classSpells);
       setLoading(false);
     });
-  }, [campaignId, className, maxSpellLevel]);
+  }, [campaignId, className, maxSpellLevel, minSpellLevel]);
 
   const filtered = spells.filter(s => {
     if (levelFilter !== null && s.level !== levelFilter) return false;
@@ -56,13 +62,19 @@ export default function ClassSpellBrowser({
   });
   const levels = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
 
-  const atLimit = preparedSpells.length >= prepareLimit;
-  const playerLocked = locked && !isGm;
+  const atLimit = prepareLimit != null && preparedSpells.length >= prepareLimit;
+  const playerLocked = !isLearn && locked && !isGm;
+  const noun = isLearn ? 'chosen' : 'prepared';
+  const addLabel = isLearn ? '+ Learn' : '+ Prepare';
+  const filterLevels = Array.from(
+    { length: Math.max(maxSpellLevel - Math.max(minSpellLevel, 1) + 1, 0) },
+    (_, i) => i + Math.max(minSpellLevel, 1),
+  );
 
   return (
     <div className="space-y-4">
       {/* Lock status */}
-      {playerLocked ? (
+      {isLearn ? null : playerLocked ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/20 px-3 py-2.5 flex items-center gap-2">
           <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
           <span className="text-sm text-amber-800 dark:text-amber-300">
@@ -85,7 +97,7 @@ export default function ClassSpellBrowser({
       ) : null}
 
       {/* GM controls */}
-      {isGm && (
+      {!isLearn && isGm && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/20">
           <div className="text-sm flex items-center gap-1.5">
             {locked
@@ -105,7 +117,9 @@ export default function ClassSpellBrowser({
       {/* Prepared count + search + level filter */}
       <div className="space-y-2">
         <div className="text-xs text-muted-foreground font-medium">
-          {preparedSpells.length}/{prepareLimit} spells prepared · {atLimit ? 'Limit reached' : `${prepareLimit - preparedSpells.length} more available`}
+          {prepareLimit != null
+            ? <>{preparedSpells.length}/{prepareLimit} spells {noun} · {atLimit ? 'Limit reached' : `${prepareLimit - preparedSpells.length} more available`}</>
+            : <>{preparedSpells.length} spells {noun}</>}
         </div>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -117,16 +131,18 @@ export default function ClassSpellBrowser({
               className="pl-8 h-8 text-sm"
             />
           </div>
-          <select
-            className="rounded-md border bg-background px-2 py-1 text-sm min-w-[110px]"
-            value={levelFilter ?? ''}
-            onChange={e => setLevelFilter(e.target.value ? parseInt(e.target.value) : null)}
-          >
-            <option value="">All Levels</option>
-            {Array.from({ length: maxSpellLevel }, (_, i) => i + 1).map(l => (
-              <option key={l} value={l}>Level {l}</option>
-            ))}
-          </select>
+          {filterLevels.length > 1 && (
+            <select
+              className="rounded-md border bg-background px-2 py-1 text-sm min-w-[110px]"
+              value={levelFilter ?? ''}
+              onChange={e => setLevelFilter(e.target.value ? parseInt(e.target.value) : null)}
+            >
+              <option value="">All Levels</option>
+              {filterLevels.map(l => (
+                <option key={l} value={l}>Level {l}</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -142,41 +158,77 @@ export default function ClassSpellBrowser({
           {levels.map(lvl => (
             <div key={lvl}>
               <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 border-b pb-1">
-                Level {lvl}
+                {lvl === 0 ? 'Cantrips' : `Level ${lvl}`}
               </div>
               <div className="space-y-1">
                 {byLevel[lvl].sort((a, b) => a.name.localeCompare(b.name)).map(spell => {
                   const isPrepared = preparedSpells.includes(spell.name);
+                  const isGranted = grantedSpells.includes(spell.name);
+                  const isExpanded = expandedId === spell.id;
+                  const meta = [spell.school, spell.casting_time, spell.range].filter(Boolean).join(' · ');
+                  const toggle = () => setExpandedId(isExpanded ? null : spell.id);
+                  // The whole row toggles the full description (a div role=button so the inner
+                  // Learn/Remove button stays a real, non-nested button — it stops propagation).
                   return (
-                    <div key={spell.id} className={cn(
-                      'flex items-center justify-between rounded-md border px-3 py-1.5 text-sm',
-                      isPrepared && 'bg-primary/5 border-primary/30'
-                    )}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={cn('truncate', isPrepared && 'font-medium')}>{spell.name}</span>
-                        {spell.ritual && <Badge variant="outline" className="text-xs py-0 px-1 shrink-0">Ritual</Badge>}
-                        {spell.concentration && <Badge variant="outline" className="text-xs py-0 px-1 shrink-0">Conc</Badge>}
+                    <div
+                      key={spell.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isExpanded}
+                      onClick={toggle}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+                      className={cn(
+                        'rounded-md border px-3 py-2 text-sm cursor-pointer hover:border-primary/40',
+                        isPrepared && 'bg-primary/5 border-primary/30',
+                        isGranted && 'opacity-80'
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={cn('truncate', isPrepared && 'font-medium')}>{spell.name}</span>
+                          {spell.ritual && <Badge variant="outline" className="text-xs py-0 px-1 shrink-0">Ritual</Badge>}
+                          {spell.concentration && <Badge variant="outline" className="text-xs py-0 px-1 shrink-0">Conc</Badge>}
+                        </div>
+                        {isGranted ? (
+                          <Badge
+                            variant="outline"
+                            data-testid={`spell-granted-${spell.id}`}
+                            className="text-xs py-0 px-1.5 shrink-0 border-violet-400/60 text-violet-500 dark:text-violet-400"
+                          >
+                            {grantedLabel}
+                          </Badge>
+                        ) : isPrepared ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={playerLocked}
+                            onClick={e => { e.stopPropagation(); onRemove(spell.name); }}
+                            className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive shrink-0"
+                          >
+                            Remove
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={playerLocked || atLimit}
+                            onClick={e => { e.stopPropagation(); onAdd(spell.name); }}
+                            className="h-6 px-2 text-xs shrink-0"
+                          >
+                            {addLabel}
+                          </Button>
+                        )}
                       </div>
-                      {isPrepared ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={playerLocked}
-                          onClick={() => onRemove(spell.name)}
-                          className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive shrink-0"
+                      {meta && (
+                        <div className="text-xs text-muted-foreground/80 mt-0.5">{meta}</div>
+                      )}
+                      {spell.description && (
+                        <p
+                          data-testid={`spell-desc-${spell.id}`}
+                          className={cn('text-xs text-muted-foreground mt-1 whitespace-pre-line', !isExpanded && 'line-clamp-2')}
                         >
-                          Remove
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={playerLocked || atLimit}
-                          onClick={() => onAdd(spell.name)}
-                          className="h-6 px-2 text-xs shrink-0"
-                        >
-                          + Prepare
-                        </Button>
+                          {spell.description}
+                        </p>
                       )}
                     </div>
                   );

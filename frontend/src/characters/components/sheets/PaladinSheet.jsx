@@ -16,6 +16,8 @@ import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { PALADIN_FIGHTING_STYLES_5E, PALADIN_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
+import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
+import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
 import { cn } from '@/lib/utils';
 
 // Paladin spell slot table (half-caster)
@@ -62,13 +64,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
 
   const slots = slotsForLevel(level);
   const maxSpellLevel = maxCastableLevel(slots);
-  const spellSlots = data.spell_slots ?? {};
-
-  const setSlotUsed = (slotLevel, used) => {
-    const total = slots[slotLevel - 1];
-    const clamped = Math.max(0, Math.min(total, used));
-    onChange?.({ spell_slots: { ...spellSlots, [slotLevel]: { total, used: clamped } } });
-  };
+  const { spellSlots, availableSlots, setSlotUsed, handleCastSpell } = useSlotCaster({ slots, data, onChange });
 
   const hasCasting = level >= 2;
   const hasSubclass = level >= 3;
@@ -226,32 +222,9 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
 
           {spellSubTab === 'prepared' && (
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Spell Slots (Long Rest)</Label>
-                <div className="grid grid-cols-5 gap-2">
-                  {slots.map((total, i) => {
-                    if (total === 0) return null;
-                    const slotLevel = i + 1;
-                    const used = spellSlots[slotLevel]?.used ?? 0;
-                    return (
-                      <div key={slotLevel} className="rounded-md border text-center p-2">
-                        <div className="text-xs text-muted-foreground">Lv {slotLevel}</div>
-                        <div className="font-bold">{total - used}/{total}</div>
-                        {!readOnly && (
-                          <div className="flex justify-center gap-0.5 mt-1">
-                            <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                              disabled={used <= 0} onClick={() => setSlotUsed(slotLevel, used - 1)}>−</button>
-                            <button className="h-5 w-5 text-xs rounded border hover:bg-muted disabled:opacity-40"
-                              disabled={used >= total} onClick={() => setSlotUsed(slotLevel, used + 1)}>+</button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <SpellSlotTracker slots={slots} spellSlots={spellSlots} onSetSlotUsed={setSlotUsed} readOnly={readOnly} isGm={isGm} />
               {!creation && <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips" placeholder="Add cantrip…" isCantrips={true} />}
-              <SpellList spells={data.prepared_spells ?? []} readOnly={true} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} placeholder="" />
+              <SpellList spells={data.prepared_spells ?? []} readOnly={true} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} placeholder="" onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
             </div>
           )}
 

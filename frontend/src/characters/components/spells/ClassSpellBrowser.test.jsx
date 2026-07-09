@@ -12,11 +12,17 @@ vi.mock('@/encyclopedia/encyclopediaService', () => ({
 }));
 
 const MOCK_SPELLS = [
-  { id: 1, name: 'Cure Wounds',   level: 1, classes: 'Cleric, Druid', ritual: false, concentration: false },
+  { id: 1, name: 'Cure Wounds',   level: 1, classes: 'Cleric, Druid', ritual: false, concentration: false,
+    school: 'Evocation', casting_time: '1 action', range: 'Touch',
+    description: 'A creature you touch regains hit points equal to 1d8 plus your spellcasting ability modifier.' },
   { id: 2, name: 'Bless',         level: 1, classes: 'Cleric, Paladin', ritual: false, concentration: true },
   { id: 3, name: 'Zone of Truth', level: 2, classes: 'Cleric, Paladin', ritual: true, concentration: false },
   { id: 4, name: 'Fireball',      level: 3, classes: 'Sorcerer, Wizard', ritual: false, concentration: false },
   { id: 5, name: 'Detect Magic',  level: 1, classes: 'Cleric, Bard', ritual: true, concentration: false },
+  { id: 6, name: 'Fire Bolt',     level: 0, classes: 'Sorcerer, Wizard', ritual: false, concentration: false },
+  { id: 7, name: 'Shield',        level: 1, classes: 'Sorcerer, Wizard', ritual: false, concentration: false,
+    school: 'Abjuration', casting_time: '1 reaction', range: 'Self',
+    description: 'An invisible barrier of magical force appears and protects you, granting +5 AC until the start of your next turn.' },
 ];
 
 function browser(props = {}) {
@@ -128,11 +134,93 @@ describe('ClassSpellBrowser', () => {
     prepareButtons.forEach(btn => expect(btn).toBeDisabled());
   });
 
+  it('shows the spell description and school/time/range meta on each row', async () => {
+    browser();
+    await waitFor(() => expect(screen.getByText('Cure Wounds')).toBeInTheDocument());
+    expect(screen.getByTestId('spell-desc-1')).toHaveTextContent(/regains hit points/);
+    expect(screen.getByText('Evocation · 1 action · Touch')).toBeInTheDocument();
+    // A spell with no description/meta renders neither (no crash, no empty line).
+    expect(screen.queryByTestId('spell-desc-2')).not.toBeInTheDocument();
+  });
+
+  it('clicking anywhere on the spell row toggles the clamped description to full text', async () => {
+    browser();
+    await waitFor(() => expect(screen.getByText('Cure Wounds')).toBeInTheDocument());
+    const desc = screen.getByTestId('spell-desc-1');
+    expect(desc).toHaveClass('line-clamp-2');
+    // The whole row is the toggle (role=button with aria-expanded).
+    const row = screen.getByRole('button', { name: /Cure Wounds/, expanded: false });
+    fireEvent.click(row);
+    expect(screen.getByTestId('spell-desc-1')).not.toHaveClass('line-clamp-2');
+    fireEvent.click(screen.getByRole('button', { name: /Cure Wounds/, expanded: true }));
+    expect(screen.getByTestId('spell-desc-1')).toHaveClass('line-clamp-2');
+  });
+
+  it('the add button does not toggle the description (stopPropagation)', async () => {
+    const onAdd = vi.fn();
+    browser({ onAdd });
+    await waitFor(() => expect(screen.getByText('Cure Wounds')).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole('button', { name: '+ Prepare' })[0]);
+    expect(onAdd).toHaveBeenCalled();
+    // Every row still collapsed.
+    expect(screen.getByTestId('spell-desc-1')).toHaveClass('line-clamp-2');
+  });
+
+  it('a granted spell shows the granted badge instead of an add button', async () => {
+    const onAdd = vi.fn();
+    browser({
+      mode: 'learn', className: 'Wizard', minSpellLevel: 0, maxSpellLevel: 0,
+      grantedSpells: ['Fire Bolt'], grantedLabel: 'Granted by your race', onAdd,
+    });
+    await waitFor(() => expect(screen.getByText('Fire Bolt')).toBeInTheDocument());
+    expect(screen.getByTestId('spell-granted-6')).toHaveTextContent('Granted by your race');
+    // No Learn button on the granted row — clicking the row only expands, never adds.
+    const row = screen.getByRole('button', { name: /Fire Bolt/ });
+    expect(row.querySelector('button')).toBeNull();
+    fireEvent.click(row);
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
   it('shows empty state when no spells match search', async () => {
     browser();
     await waitFor(() => expect(screen.getByText('Cure Wounds')).toBeInTheDocument());
     fireEvent.change(screen.getByPlaceholderText('Search spells…'), { target: { value: 'zzznomatch' } });
     expect(screen.getByText('No spells match your search.')).toBeInTheDocument();
+  });
+});
+
+describe('ClassSpellBrowser — learn mode (known casters / Eldritch Knight)', () => {
+  it('hides the prepare/lock UI and uses + Learn buttons', async () => {
+    browser({ mode: 'learn', className: 'Wizard', locked: true, isGm: false });
+    await waitFor(() => expect(screen.getByText('Shield')).toBeInTheDocument());
+    expect(screen.queryByText(/Spells prepared for today/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Prepare for Today/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '+ Learn' }).length).toBeGreaterThan(0);
+    // Learn mode ignores the daily-prep lock — the buttons stay enabled.
+    expect(screen.getAllByRole('button', { name: '+ Learn' })[0]).not.toBeDisabled();
+  });
+
+  it('minSpellLevel=0/maxSpellLevel=0 renders a cantrip-only picker with a Cantrips header', async () => {
+    browser({ mode: 'learn', className: 'Wizard', minSpellLevel: 0, maxSpellLevel: 0 });
+    await waitFor(() => expect(screen.getByText('Fire Bolt')).toBeInTheDocument());
+    expect(screen.getByText('Cantrips')).toBeInTheDocument();
+    expect(screen.queryByText('Shield')).not.toBeInTheDocument();   // level 1 excluded
+    expect(screen.queryByText('Fireball')).not.toBeInTheDocument(); // level 3 excluded
+    // Single-level range → no level filter dropdown.
+    expect(screen.queryByText('All Levels')).not.toBeInTheDocument();
+  });
+
+  it('default (prepare) mode still excludes cantrips', async () => {
+    browser({ className: 'Wizard', maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByText('Shield')).toBeInTheDocument());
+    expect(screen.queryByText('Fire Bolt')).not.toBeInTheDocument();
+  });
+
+  it('null prepareLimit shows a plain count and never hits the limit', async () => {
+    browser({ mode: 'learn', className: 'Wizard', prepareLimit: null, preparedSpells: ['Shield'] });
+    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
+    expect(screen.getByText(/1 spells chosen/)).toBeInTheDocument();
+    screen.getAllByRole('button', { name: '+ Learn' }).forEach(btn => expect(btn).not.toBeDisabled());
   });
 });
 

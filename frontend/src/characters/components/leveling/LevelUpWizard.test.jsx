@@ -31,6 +31,29 @@ vi.mock('@/characters/components/spells/SpellList', () => ({
   ),
 }));
 
+// The browse picker in the New Spells step (fetches the spell catalog in the real component).
+// The mock exposes the class list + level bounds it was given and an add button.
+vi.mock('@/characters/components/spells/ClassSpellBrowser', () => ({
+  default: ({ className, minSpellLevel, maxSpellLevel, onAdd, grantedSpells = [] }) => {
+    const kind = minSpellLevel === 0 ? 'cantrips' : 'spells';
+    return (
+      <div data-testid={`csb-${kind}`}>
+        <span data-testid={`csb-class-${kind}`}>{className}</span>
+        <span data-testid={`csb-max-${kind}`}>{String(maxSpellLevel)}</span>
+        <span data-testid={`csb-granted-${kind}`}>{grantedSpells.join(',')}</span>
+        <button type="button" onClick={() => onAdd?.(kind === 'cantrips' ? 'Browse Cantrip' : 'Browse Spell')}>
+          {`csb-add:${kind}`}
+        </button>
+      </div>
+    );
+  },
+  maxCastableLevel: (slots) => {
+    let max = 0;
+    slots.forEach((n, i) => { if (n > 0) max = i + 1; });
+    return max;
+  },
+}));
+
 // FeatPicker uses a Radix dialog — mock it to a flat button list so we can assert which
 // feats are offered (eligibility filtering) and pick one.
 vi.mock('@/characters/components/feats/FeatPicker', () => ({
@@ -1412,6 +1435,101 @@ describe('LevelUpWizard', () => {
           })
         );
       });
+    });
+
+    it('renders Wizard-list browse pickers (cantrips + spells up to level 1) for an EK at L3', () => {
+      render(
+        <LevelUpWizard
+          character={FIGHTER_L2}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      chooseTakeAverage();                                            // hp → subclass
+      fireEvent.click(screen.getByText('Eldritch Knight'));
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // subclass → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
+      // EK learns from the Wizard list; third-caster slots at L3 = 2× L1 → max spell level 1.
+      expect(screen.getByTestId('csb-class-cantrips')).toHaveTextContent('Wizard');
+      expect(screen.getByTestId('csb-class-spells')).toHaveTextContent('Wizard');
+      expect(screen.getByTestId('csb-max-spells')).toHaveTextContent('1');
+    });
+
+    it('spells picked via the browser flow into onComplete', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      // L4→5 — not an ASI level, so the flow is hp → features → spells → confirm.
+      const ek = { ...FIGHTER_L2, level: 4, character_data: { hp_max: 36, subclass: 'Eldritch Knight' } };
+      render(
+        <LevelUpWizard
+          character={ek}
+          campaign={CAMPAIGN_5E}
+          onComplete={onComplete}
+          onClose={vi.fn()}
+        />
+      );
+      chooseTakeAverage();                                            // hp → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
+      fireEvent.click(screen.getByText('csb-add:cantrips'));
+      fireEvent.click(screen.getByText('csb-add:spells'));
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // spells → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+
+      await waitFor(() => {
+        expect(onComplete).toHaveBeenCalledWith(
+          5,
+          expect.objectContaining({
+            cantrips: expect.arrayContaining(['Browse Cantrip']),
+            known_spells: expect.arrayContaining(['Browse Spell']),
+          })
+        );
+      });
+    });
+
+    it('race-granted cantrips are passed to the cantrip browser as non-selectable (High Elf Fire Bolt)', () => {
+      // L4→5 — not an ASI level, so the flow is hp → features → spells.
+      const ek = {
+        ...FIGHTER_L2,
+        level: 4,
+        race: 'Elf',
+        character_data: {
+          hp_max: 36, subclass: 'Eldritch Knight',
+          subrace: 'High Elf', high_elf_cantrip: 'Fire Bolt',
+        },
+      };
+      render(
+        <LevelUpWizard
+          character={ek}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      chooseTakeAverage();                                            // hp → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
+      expect(screen.getByTestId('csb-granted-cantrips')).toHaveTextContent('Fire Bolt');
+      // The leveled-spell browser gets no race grants.
+      expect(screen.getByTestId('csb-granted-spells')).toHaveTextContent(/^$/);
+    });
+
+    it('a known-caster class (Sorcerer) gets a browser for its own class list', () => {
+      const sorc = {
+        id: 9, char_class: 'Sorcerer', level: 2, constitution: 10,
+        character_data: { hp_max: 14, subclass: 'Draconic Bloodline' },
+      };
+      render(
+        <LevelUpWizard
+          character={sorc}
+          campaign={CAMPAIGN_5E}
+          onComplete={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+      chooseTakeAverage();                                            // hp → features
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
+      expect(screen.getByTestId('csb-class-spells')).toHaveTextContent('Sorcerer');
+      // Full caster at L3 → 2nd-level slots.
+      expect(screen.getByTestId('csb-max-spells')).toHaveTextContent('2');
     });
 
     it('does NOT show the New Spells step for a Champion Fighter at L3→4', () => {

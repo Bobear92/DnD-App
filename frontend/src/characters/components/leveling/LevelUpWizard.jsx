@@ -15,6 +15,8 @@ import {
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 import SpellList from '@/characters/components/spells/SpellList';
+import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
+import { computeRaceGrantedCantrips } from '@/characters/components/race/raceCantrips';
 import { CLASS_PROGRESSION } from '@/characters/components/classData/classProgressionTables';
 import { getSubclassCaster } from '@/characters/components/classData/subclassCasterData';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
@@ -189,6 +191,25 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const knownTarget = classKnownCaster
     ? progressionValue(progression, 'known', newLevel)
     : subclassCaster ? subclassCaster.spellsKnownAt(newLevel) : null;
+
+  // The list the New Spells browser offers, and the highest castable spell level at the
+  // new level. Class known casters learn from their own class list; a caster subclass
+  // (Eldritch Knight) learns from its granted list (`spellList: 'Wizard'`).
+  const spellListClass = classKnownCaster ? character.char_class : (subclassCaster?.spellList ?? null);
+  // Cantrips the race already grants (High Elf pick, Forest Gnome, Drow, Tiefling) — the
+  // cantrip browser shows these non-selectable so a class pick can't duplicate them.
+  const raceGrantedCantrips = computeRaceGrantedCantrips(character);
+  const maxKnownSpellLevel = (() => {
+    if (classKnownCaster) {
+      const pact = progressionValue(progression, 'slot_level', newLevel); // Warlock Pact Magic ("3rd")
+      if (pact != null) return parseInt(pact) || 9;
+      for (let l = 9; l >= 1; l--) {
+        if ((progressionValue(progression, `s${l}`, newLevel) || 0) > 0) return l;
+      }
+      return 9;
+    }
+    return subclassCaster ? maxCastableLevel(subclassCaster.slotsForLevel(newLevel)) : null;
+  })();
 
   // The class feature tables carry generic placeholders at subclass-feature levels (e.g.
   // "Martial Archetype Feature" → "You gain a feature from your Martial Archetype."). By the
@@ -1093,6 +1114,26 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                   placeholder="Add cantrip…"
                   isCantrips
                 />
+                {spellListClass && (
+                  <div className="rounded-md border p-3 space-y-2" data-testid="cantrip-browser">
+                    <div className="text-xs font-medium text-muted-foreground">
+                      Browse {spellListClass} cantrips
+                    </div>
+                    <ClassSpellBrowser
+                      mode="learn"
+                      className={spellListClass}
+                      campaignId={campaign?.id}
+                      preparedSpells={cantrips}
+                      prepareLimit={cantripsTarget}
+                      onAdd={n => setCantrips(c => addUnique(c, n))}
+                      onRemove={n => setCantrips(c => removeName(c, n))}
+                      minSpellLevel={0}
+                      maxSpellLevel={0}
+                      grantedSpells={raceGrantedCantrips}
+                      grantedLabel="Granted by your race"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -1110,6 +1151,24 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                 label="Spells Known"
                 placeholder="Add spell…"
               />
+              {spellListClass && maxKnownSpellLevel > 0 && (
+                <div className="rounded-md border p-3 space-y-2" data-testid="spell-browser">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    Browse the {spellListClass} spell list · up to level {maxKnownSpellLevel}
+                  </div>
+                  <ClassSpellBrowser
+                    mode="learn"
+                    className={spellListClass}
+                    campaignId={campaign?.id}
+                    preparedSpells={knownSpells}
+                    prepareLimit={knownTarget}
+                    onAdd={n => setKnownSpells(s => addUnique(s, n))}
+                    onRemove={n => setKnownSpells(s => removeName(s, n))}
+                    minSpellLevel={1}
+                    maxSpellLevel={maxKnownSpellLevel}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -299,16 +299,49 @@ describe('ClassSheet — Eldritch Knight subclass caster', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('the slot stepper persists via onChange (spell_slots patch, same semantics as the Wizard grid)', () => {
+  it('players cannot add/remove known spells or cantrips — lists change at level-up (note shown)', () => {
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} onChange={vi.fn()} />);
+    expect(screen.queryByPlaceholderText('Add spell…')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Add cantrip…')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('gm-spell-browser')).not.toBeInTheDocument();
+    expect(screen.getByTestId('known-lists-note')).toHaveTextContent(/level up/i);
+  });
+
+  it('the GM with GM Edit OFF sees locked lists too — no editors, just the toggle hint', () => {
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} onChange={vi.fn()} isGm />);
+    expect(screen.queryByPlaceholderText('Add spell…')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('gm-cantrip-browser')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('gm-spell-browser')).not.toBeInTheDocument();
+    expect(screen.getByTestId('known-lists-note')).toHaveTextContent(/GM Edit/);
+  });
+
+  it('the GM with GM Edit ON can edit the lists — free-text add plus Wizard-list browse pickers', () => {
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} onChange={vi.fn()} isGm gmEdit />);
+    expect(screen.getByPlaceholderText('Add spell…')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Add cantrip…')).toBeInTheDocument();
+    expect(screen.getByTestId('gm-cantrip-browser')).toBeInTheDocument();
+    expect(screen.getByTestId('gm-spell-browser')).toBeInTheDocument();
+    expect(screen.queryByTestId('known-lists-note')).not.toBeInTheDocument();
+  });
+
+  it('players get NO slot steppers — slots are spent by casting and reset by GM rest', () => {
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} onChange={vi.fn()} />);
+    expect(screen.queryByTestId('slot-inc-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('slot-dec-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('slot-tracker-note')).toBeInTheDocument();
+  });
+
+  it('the GM slot stepper persists via onChange (spell_slots patch, same semantics as the Wizard grid)', () => {
     const onChange = vi.fn();
-    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} onChange={onChange} />);
-    // The − button undoes one expended use (used 1 → 0); casting is what expends slots.
-    fireEvent.click(screen.getByRole('button', { name: '−' }));
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} onChange={onChange} isGm />);
+    // The + button undoes one expended use (used 1 → 0); casting is what expends slots.
+    fireEvent.click(screen.getByTestId('slot-inc-1'));
     expect(onChange).toHaveBeenCalledWith({ spell_slots: { 1: { total: 2, used: 0 } } });
   });
 
   it('readOnly hides the slot steppers and list controls', () => {
-    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} readOnly />);
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} readOnly isGm />);
+    expect(screen.queryByTestId('slot-inc-1')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '−' })).not.toBeInTheDocument();
   });
 });
