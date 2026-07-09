@@ -836,19 +836,47 @@ describe('buildActionEconomy — Eldritch Knight (Fighter subclass)', () => {
     expect(subclassFeaturesKnownAtLevel('Fighter', '5e', 'Nonexistent', 20)).toEqual([]);
   });
 
-  it('adds Weapon Bond as a bonus action from L3 (source Subclass)', () => {
+  it('adds Weapon Bond as a bonus action from L3 (source Subclass) with a bond-one hint', () => {
     const ec = buildActionEconomy(ekArgs(3));
     const bond = ec.bonus.find((e) => e.name === 'Weapon Bond');
     expect(bond).toBeTruthy();
     expect(bond.source).toBe('Subclass');
     expect(bond.detail).toMatch(/summon/i);
-    expect(bond.detail).toMatch(/one weapon/i); // 5e bonds a single weapon
+    expect(bond.detail).toMatch(/up to two weapons/i); // RAW both editions
+    // nothing bonded yet → the entry points at the Items-tab picker
+    expect(bond.detail).toMatch(/no weapon bonded yet/i);
   });
 
-  it('Weapon Bond is edition-aware (2024 bonds up to two weapons)', () => {
-    const ec = buildActionEconomy(ekArgs(3, '5.5e'));
-    const bond = ec.bonus.find((e) => e.name === 'Weapon Bond');
-    expect(bond.detail).toMatch(/two weapons/i);
+  it('a bonded weapon replaces the generic entry with "Bonded {Name}" carrying its info', () => {
+    const rapier = { uid: 'rp1', category: 'weapons', name: 'Rapier', damage: '1d8', damage_type: 'piercing', properties: 'Finesse' };
+    const ec = buildActionEconomy(ekArgs(3, '5e', {
+      inventory: [rapier],
+      characterData: { bonded_weapon_uids: ['rp1'] },
+    }));
+    expect(ec.bonus.find((e) => e.name === 'Weapon Bond')).toBeFalsy();
+    const bonded = ec.bonus.find((e) => e.name === 'Bonded Rapier');
+    expect(bonded).toBeTruthy();
+    expect(bonded.source).toBe('Subclass');
+    expect(bonded.detail).toMatch(/summon your bonded rapier/i);
+    expect(bonded.detail).toMatch(/1d8 piercing/i);
+    expect(bonded.subAttacks).toBeNull(); // not equipped → no live attack row
+  });
+
+  it('an equipped bonded weapon attaches its real attack row; two bonds → two entries', () => {
+    const rapier = { uid: 'rp1', category: 'weapons', name: 'Rapier', damage: '1d8', damage_type: 'piercing', equipped: true, hand: 'main' };
+    const dagger = { uid: 'dg1', category: 'weapons', name: 'Dagger', damage: '1d4', damage_type: 'piercing', equipped: false };
+    const ec = buildActionEconomy(ekArgs(3, '5e', {
+      inventory: [rapier, dagger],
+      characterData: { bonded_weapon_uids: ['rp1', 'dg1'] },
+      attacks: [{ uid: 'rp1', name: 'Rapier', toHit: '+5', damage: '1d8 + 3 piercing', proficient: true }],
+    }));
+    const bondedRapier = ec.bonus.find((e) => e.name === 'Bonded Rapier');
+    const bondedDagger = ec.bonus.find((e) => e.name === 'Bonded Dagger');
+    expect(bondedRapier.subAttacks).toEqual([
+      expect.objectContaining({ label: 'Attack', name: 'Rapier', toHit: '+5', damage: '1d8 + 3 piercing' }),
+    ]);
+    expect(bondedDagger).toBeTruthy();
+    expect(bondedDagger.subAttacks).toBeNull();
   });
 
   it('does not add Weapon Bond for a Champion or below the subclass level', () => {
@@ -856,6 +884,22 @@ describe('buildActionEconomy — Eldritch Knight (Fighter subclass)', () => {
     expect(champ.bonus.find((e) => e.name === 'Weapon Bond')).toBeFalsy();
     const low = buildActionEconomy(ekArgs(2));
     expect(low.bonus.find((e) => e.name === 'Weapon Bond')).toBeFalsy();
+  });
+
+  it('a weapon attack entry carries the hexNote from its attack row (Hex Warrior)', () => {
+    const ec = buildActionEconomy({
+      charClass: 'Warlock',
+      subclass: 'The Hexblade',
+      level: 1,
+      edition: '5e',
+      characterData: {},
+      inventory: [{ uid: 'rp1', category: 'weapons', name: 'Rapier', equipped: true }],
+      attacks: [{ uid: 'rp1', name: 'Rapier', toHit: '+6', damage: '1d8 + 4 piercing', proficient: true, hexNote: 'Uses Charisma for attack & damage (Hex Warrior).' }],
+      scores: { charisma: 18 },
+      spellIndex: {},
+    });
+    const row = ec.action.find((e) => e.name === 'Rapier');
+    expect(row.hexNote).toMatch(/Hex Warrior/);
   });
 
   it('adds the War Magic Action+Bonus combo at L7 with the equipped weapon as the bonus attack', () => {

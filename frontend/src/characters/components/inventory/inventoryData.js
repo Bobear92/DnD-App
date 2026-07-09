@@ -421,17 +421,27 @@ export function armorSpeedPenalty(inventory = [], scores = {}) {
 
 // ─── Attacks ─────────────────────────────────────────────────────────────────────
 
-/** Which ability a weapon uses: ranged → DEX, finesse → better of STR/DEX, else STR. */
-export function weaponAbility(weapon, scores = {}) {
+/**
+ * Which ability a weapon uses: ranged → DEX, finesse → better of STR/DEX, else STR.
+ * `hexWeapon` (Hexblade's Hex Warrior designated weapon) MAY use Charisma instead —
+ * taken whenever it's strictly better, since it's a player-favorable option; the
+ * result carries `hex: true` so the attack row can note the source.
+ */
+export function weaponAbility(weapon, scores = {}, { hexWeapon = false } = {}) {
   const props = (weapon.properties || '').toLowerCase();
   const ranged = (weapon.weapon_type || '').toLowerCase() === 'ranged';
   const str = abilityMod(scores.strength);
   const dex = abilityMod(scores.dexterity);
-  if (ranged) return { ability: 'dexterity', mod: dex };
-  if (props.includes('finesse')) {
-    return dex > str ? { ability: 'dexterity', mod: dex } : { ability: 'strength', mod: str };
+  let base;
+  if (ranged) base = { ability: 'dexterity', mod: dex };
+  else if (props.includes('finesse')) {
+    base = dex > str ? { ability: 'dexterity', mod: dex } : { ability: 'strength', mod: str };
+  } else base = { ability: 'strength', mod: str };
+  if (hexWeapon) {
+    const cha = abilityMod(scores.charisma);
+    if (cha > base.mod) return { ability: 'charisma', mod: cha, hex: true };
   }
-  return { ability: 'strength', mod: str };
+  return base;
 }
 
 /** Does this weapon have the Heavy property? */
@@ -516,8 +526,8 @@ const ABILITY_ABBR = {
  * [{label, value}] making up the to-hit total (ability mod, proficiency, fighting styles)
  * so the UI can show "how the +N is calculated".
  */
-export function computeAttack(weapon, { scores = {}, level = 1, proficient = false, size = 'Medium', edition = '5e', feats = [], styles = [], soloWeapon = false, versatileTwoHanded = false } = {}) {
-  const { ability, mod } = weaponAbility(weapon, scores);
+export function computeAttack(weapon, { scores = {}, level = 1, proficient = false, size = 'Medium', edition = '5e', feats = [], styles = [], soloWeapon = false, versatileTwoHanded = false, hexWeapon = false } = {}) {
+  const { ability, mod, hex } = weaponAbility(weapon, scores, { hexWeapon });
   const { bonus: toHitStyle, sources: toHitSources, parts: toHitParts } = styleToHitBonus(weapon, styles);
   const { bonus: dmgStyle, sources: dmgSources } = styleDamageBonus(weapon, styles, { soloWeapon });
   const toHit = formatSigned(mod + (proficient ? profBonus(level) : 0) + toHitStyle);
@@ -533,11 +543,13 @@ export function computeAttack(weapon, { scores = {}, level = 1, proficient = fal
   const warning = weaponAttackWarning(weapon, { size, scores, edition });
   const loadingNote = weaponLoadingNote(weapon, { feats, proficient, edition });
   const styleNotes = [...new Set([...toHitSources, ...dmgSources])];
-  return { name: weapon.name, toHit, toHitBreakdown, damage, ability, proficient, disadvantage: !!warning, warning, loadingNote, styleNotes };
+  // Hex Warrior actually drove the numbers (CHA beat STR/DEX) — surface the source.
+  const hexNote = hex ? 'Uses Charisma for attack & damage (Hex Warrior).' : null;
+  return { name: weapon.name, toHit, toHitBreakdown, damage, ability, proficient, disadvantage: !!warning, warning, loadingNote, styleNotes, hexNote };
 }
 
 /** Attack rows for every equipped weapon in the inventory. */
-export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [], armorProfText = '', raceArmor = [] } = {}) {
+export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [], armorProfText = '', raceArmor = [], hexWeaponUid = null } = {}) {
   const equipped = (inventory || []).filter((e) => e.category === 'weapons' && e.equipped);
   // Dueling requires wielding a single weapon (a shield is fine, a second weapon is not).
   const soloWeapon = equipped.length === 1;
@@ -548,7 +560,7 @@ export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfT
     const versatileTwoHanded = isVersatileWeapon(w) && w.hand === 'both';
     const row = {
       uid: w.uid,
-      ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }), size, edition, feats, styles, soloWeapon, versatileTwoHanded }),
+      ...computeAttack(w, { scores, level, proficient: isWeaponProficient(w, { weaponProfText, raceWeapons }), size, edition, feats, styles, soloWeapon, versatileTwoHanded, hexWeapon: !!hexWeaponUid && w.uid === hexWeaponUid }),
     };
     if (badArmor) {
       row.disadvantage = true;

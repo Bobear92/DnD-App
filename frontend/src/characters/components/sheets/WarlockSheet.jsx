@@ -16,6 +16,8 @@ import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { WARLOCK_SUBCLASSES_5E, PACT_BOONS_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { eldritchInvocationsKnownAtLevel } from '@/characters/components/classData/levelChoicesData';
+import WeaponDesignationPanel from '@/characters/components/inventory/WeaponDesignationPanel';
+import { hexWeaponUid, HEX_WARRIOR_NOTE, canBeHexWeapon } from '@/characters/components/inventory/weaponBondData';
 
 // Pact Magic slot table: [slot_count, slot_level]
 const PACT_SLOTS = {
@@ -260,6 +262,27 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
           />
         )}
       </Field>
+      )}
+
+      {showFeatures && !creation && data.subclass === 'The Hexblade' && (
+        <div className="space-y-1.5" data-testid="hex-warrior-panel">
+          <WeaponDesignationPanel
+            title="Hex Warrior Weapon"
+            description={HEX_WARRIOR_NOTE}
+            inventory={data.inventory || []}
+            designatedUids={hexWeaponUid(data) ? [hexWeaponUid(data)] : []}
+            capacity={1}
+            eligible={canBeHexWeapon}
+            ineligibleReason="Has the Two-Handed property — Hex Warrior can't be applied to it."
+            readOnly
+            badgeLabel="Hex Weapon"
+            emptyText="No weapon designated yet."
+            testIdPrefix="hex-features"
+          />
+          <p className="text-xs text-muted-foreground" data-testid="hex-warrior-items-hint">
+            Designate or change your Hex Warrior weapon in the Items tab (Weapons → Hex Warrior Weapon).
+          </p>
+        </div>
       )}
 
       {showFeatures && level >= 3 && (

@@ -24,6 +24,7 @@ import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeat
 import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
 import { hasFeat, critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
+import { bondedWeapons } from '@/characters/components/inventory/weaponBondData';
 import { remarkableAthleteMoveNote, eldritchStrikeNote } from '@/characters/components/subclass/subclassCombatNotes';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 
@@ -116,7 +117,7 @@ export const CLASS_FEATURE_ACTIONS_2024 = {
 export const SUBCLASS_FEATURE_ACTIONS_5E = {
   Fighter: {
     'Eldritch Knight': {
-      'Weapon Bond': { tab: 'bonus', cost: 'bonus action', description: "Summon your bonded weapon to your hand (bonus action). You can't be disarmed of it while it's on the same plane. Bonding takes a 1-hour ritual; you can bond one weapon." },
+      'Weapon Bond': { tab: 'bonus', cost: 'bonus action', description: "Summon a bonded weapon to your hand (bonus action). You can't be disarmed of a bonded weapon while it's on the same plane. Bonding takes a 1-hour ritual; you can bond up to two weapons, but can summon only one at a time." },
     },
   },
 };
@@ -407,6 +408,8 @@ export function buildActionEconomy({
       // Eldritch Knight Eldritch Strike on-hit rider — on real weapon attacks only (an
       // unarmed strike isn't a weapon attack for this feature).
       eldritchStrikeNote: atk.uid ? eldritchStrike : null,
+      // Hexblade Hex Warrior — this attack's numbers actually used Charisma.
+      hexNote: atk.hexNote || null,
     });
   });
 
@@ -676,9 +679,43 @@ export function buildActionEconomy({
   // tables only carry placeholders at subclass levels, so they can't resolve these names).
   const subclassFeatureMap = is2024 ? SUBCLASS_FEATURE_ACTIONS_2024 : SUBCLASS_FEATURE_ACTIONS_5E;
   const subclassFeatures = subclassFeatureMap[charClass]?.[subclass] || {};
+  const attackByWeaponUid = new Map(weaponRows.filter((a) => a.uid).map((a) => [a.uid, a]));
   for (const fname of subclassFeaturesKnownAtLevel(charClass, edition, subclass, level)) {
     const def = subclassFeatures[fname];
     if (!def) continue;
+    // Weapon Bond with weapons actually bonded (Items tab → Bonded Weapons): replace the
+    // generic entry with one per bonded weapon — "Bonded Rapier" — carrying the weapon's
+    // damage info, plus its real attack row when it's equipped.
+    if (fname === 'Weapon Bond') {
+      const bonded = bondedWeapons(inventory, characterData);
+      if (bonded.length > 0) {
+        for (const w of bonded) {
+          const row = attackByWeaponUid.get(w.uid);
+          const weaponInfo = [w.damage, w.damage_type].filter(Boolean).join(' ');
+          push(def.tab, {
+            key: `subclass:weapon-bond:${w.uid}`,
+            name: `Bonded ${w.name}`,
+            source: 'Subclass',
+            cost: def.cost,
+            detail: `Summon your bonded ${w.name} to your hand as a bonus action — you can't be`
+              + ` disarmed of it while it's on the same plane.${weaponInfo ? ` ${weaponInfo}.` : ''}`,
+            subAttacks: row
+              ? [{ label: 'Attack', name: w.name, toHit: row.toHit, damage: row.damage, warning: row.warning }]
+              : null,
+          });
+        }
+        continue;
+      }
+      // No weapon bonded yet — keep the generic entry with a pointer to the picker.
+      push(def.tab, {
+        key: `subclass:${fname}`,
+        name: fname,
+        source: 'Subclass',
+        cost: def.cost,
+        detail: `${def.description} No weapon bonded yet — bond one from the Items tab (Weapons → Bonded Weapons).`,
+      });
+      continue;
+    }
     push(def.tab, {
       key: `subclass:${fname}`,
       name: fname,

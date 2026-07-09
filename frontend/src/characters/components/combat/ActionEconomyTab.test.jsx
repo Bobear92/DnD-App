@@ -396,3 +396,56 @@ describe('ActionEconomyTab', () => {
     expect(screen.getByText(/teleport up to 30 ft/i)).toBeInTheDocument();
   });
 });
+
+describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
+  const rapierEntry = {
+    uid: 'rp1', category: 'weapons', equipped: true, hand: 'main', name: 'Rapier',
+    weapon_category: 'Martial', weapon_type: 'melee', damage: '1d8', damage_type: 'Piercing', properties: 'Finesse',
+  };
+
+  it('renders "Bonded Rapier" on Bonus Actions for an EK with a bonded weapon', () => {
+    renderTab({
+      subclass: 'Eldritch Knight', level: 3,
+      inventory: [rapierEntry],
+      characterData: { bonded_weapon_uids: ['rp1'] },
+    });
+    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    expect(screen.getByText('Bonded Rapier')).toBeInTheDocument();
+    expect(screen.queryByText('Weapon Bond')).not.toBeInTheDocument();
+    // equipped bonded weapon → its real attack row renders as a sub-row
+    expect(screen.getByText(/summon your bonded rapier/i)).toBeInTheDocument();
+  });
+
+  it('keeps the generic Weapon Bond entry with a picker hint when nothing is bonded', () => {
+    renderTab({ subclass: 'Eldritch Knight', level: 3, inventory: [rapierEntry] });
+    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    expect(screen.getByText('Weapon Bond')).toBeInTheDocument();
+    expect(screen.getByText(/no weapon bonded yet/i)).toBeInTheDocument();
+  });
+
+  it('shows the Hex Warrior CHA note on the hex weapon attack entry', () => {
+    renderTab({
+      charClass: 'Warlock', subclass: 'The Hexblade', level: 1,
+      scores: { strength: 10, dexterity: 12, charisma: 18 },
+      inventory: [rapierEntry],
+      characterData: { hex_weapon_uid: 'rp1' },
+    });
+    // default Actions tab — the weapon entry carries the hex note
+    const note = screen.getByTestId(/^ae-hex-weapon:rp1/);
+    expect(note).toHaveTextContent(/Hex Warrior/);
+    // CHA +4 + prof +2 (Hex Warrior grants martial weapon proficiency) = +6; the to-hit
+    // renders as the clickable breakdown chip, the rest as detail text.
+    expect(screen.getByTestId(/^ae-tohit-weapon:rp1/)).toHaveTextContent('+6');
+    expect(screen.getByText(/to hit · 1d8 \+ 4 Piercing/)).toBeInTheDocument();
+  });
+
+  it('shows no hex note for a non-Hexblade Warlock with the same stored uid', () => {
+    renderTab({
+      charClass: 'Warlock', subclass: 'The Fiend', level: 1,
+      scores: { strength: 10, dexterity: 12, charisma: 18 },
+      inventory: [rapierEntry],
+      characterData: { hex_weapon_uid: 'rp1' },
+    });
+    expect(screen.queryByTestId(/^ae-hex-weapon:rp1/)).not.toBeInTheDocument();
+  });
+});

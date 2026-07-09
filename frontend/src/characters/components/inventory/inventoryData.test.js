@@ -590,3 +590,48 @@ describe('hands', () => {
     expect(twoHanded[0].damage).toContain('1d10'); // two-handed grip → versatile die
   });
 });
+
+describe('Hex Warrior weapon (CHA attacks)', () => {
+  const scores = { strength: 10, dexterity: 12, charisma: 18 }; // STR +0, DEX +1, CHA +4
+  const longsword = weapon({ uid: 'ls', name: 'Longsword', damage: '1d8', damage_type: 'slashing', properties: 'Versatile (1d10)', weapon_type: 'melee' });
+
+  it('weaponAbility uses CHA for a hex weapon when CHA beats STR/DEX', () => {
+    const res = weaponAbility(longsword, scores, { hexWeapon: true });
+    expect(res).toMatchObject({ ability: 'charisma', mod: 4, hex: true });
+  });
+
+  it('weaponAbility keeps the normal ability when it beats CHA (and when not hexed)', () => {
+    const strong = { strength: 20, charisma: 12 }; // STR +5 > CHA +1
+    expect(weaponAbility(longsword, strong, { hexWeapon: true })).toMatchObject({ ability: 'strength', mod: 5 });
+    expect(weaponAbility(longsword, scores)).toMatchObject({ ability: 'strength', mod: 0 });
+  });
+
+  it('computeAttack folds CHA into to-hit/damage, breakdown, and a hexNote', () => {
+    const atk = computeAttack(longsword, { scores, level: 5, proficient: true, hexWeapon: true });
+    expect(atk.toHit).toBe('+7'); // +4 CHA +3 prof
+    expect(atk.damage).toBe('1d8 + 4 slashing');
+    expect(atk.toHitBreakdown[0]).toEqual({ label: 'CHA', value: 4 });
+    expect(atk.hexNote).toMatch(/Hex Warrior/);
+  });
+
+  it('computeAttack has a null hexNote when CHA was not used', () => {
+    const atk = computeAttack(longsword, { scores: { strength: 20, charisma: 12 }, level: 5, proficient: true, hexWeapon: true });
+    expect(atk.hexNote).toBeNull();
+    const plain = computeAttack(longsword, { scores, level: 5, proficient: true });
+    expect(plain.hexNote).toBeNull();
+  });
+
+  it('getAttacks applies the hex to only the designated uid', () => {
+    const other = weapon({ uid: 'rp', name: 'Rapier', damage: '1d8', damage_type: 'piercing', properties: 'Finesse', weapon_type: 'melee', equipped: true, hand: 'off' });
+    const rows = getAttacks({
+      inventory: [{ ...longsword, equipped: true, hand: 'main' }, other],
+      scores, level: 1, hexWeaponUid: 'ls',
+    });
+    const ls = rows.find((r) => r.uid === 'ls');
+    const rp = rows.find((r) => r.uid === 'rp');
+    expect(ls.ability).toBe('charisma');
+    expect(ls.hexNote).toMatch(/Hex Warrior/);
+    expect(rp.ability).toBe('dexterity'); // finesse, not hexed
+    expect(rp.hexNote).toBeNull();
+  });
+});

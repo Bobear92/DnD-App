@@ -25,6 +25,11 @@ import {
   abilityMod, profBonus, formatSigned,
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
 } from '@/characters/components/inventory/inventoryData';
+import {
+  weaponBondCapacity, bondedWeaponUids, isWeaponBonded, toggleBondedWeapon, WEAPON_BOND_NOTE,
+  isHexWarrior, canBeHexWeapon, hexWeaponUid as storedHexWeaponUid, setHexWeapon, HEX_WARRIOR_NOTE,
+} from '@/characters/components/inventory/weaponBondData';
+import WeaponDesignationPanel from '@/characters/components/inventory/WeaponDesignationPanel';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import { critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
 import { getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
@@ -98,7 +103,7 @@ export default function InventoryTab({
 
   const profs = CLASS_PROFICIENCIES_5E[charClass] || {};
   const armorProfText = profs.armor || '';
-  const proficiencies = gatherProficiencies({ charClass, characterData });
+  const proficiencies = gatherProficiencies({ charClass, subclass, edition, characterData });
   // Race trait grants + gathered grants (stored race armor + feat armor — Heavily Armored etc.)
   // all count toward the armor proficiency check.
   const raceArmor = [...(getRaceGrantedArmor(race, subrace) || []), ...proficiencies.armor.grants];
@@ -122,8 +127,15 @@ export default function InventoryTab({
   // Eldritch Knight's Eldritch Strike (L10) — an on-hit weapon-attack rider, shown on every
   // weapon row. Null for everyone else.
   const eldritchNote = eldritchStrikeNote({ charClass, subclass, level });
+  // Weapon designations: Eldritch Knight's Weapon Bond (up to 2 bonded weapons) and the
+  // Hexblade's Hex Warrior weapon (one, lacks Two-Handed, attacks with CHA). Both are
+  // chosen here from the owned weapons and stored as inventory-entry uids.
+  const bondCapacity = weaponBondCapacity({ charClass, subclass, level });
+  const bondedUids = bondedWeaponUids(characterData);
+  const hexWarrior = isHexWarrior({ charClass, subclass, edition });
+  const hexUid = hexWarrior ? storedHexWeaponUid(characterData) : null;
   const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats, styles });
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor, hexWeaponUid: hexUid });
   const attuned = attunedCount(inventory);
   // Worn armor/shield without proficiency — disadvantage on STR/DEX rolls + no spellcasting.
   const badArmor = nonProficientEquippedArmor(inventory, { armorProfText, raceArmor });
@@ -365,6 +377,9 @@ export default function InventoryTab({
                       Includes {a.styleNotes.join(', ')} fighting style.
                     </span>
                   )}
+                  {a.hexNote && (
+                    <span className="text-[11px] text-violet-600 leading-tight" data-testid={`attack-hex-${a.uid}`}>{a.hexNote}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -428,6 +443,48 @@ export default function InventoryTab({
         </div>
       )}
 
+      {/* Bonded Weapons — Eldritch Knight Weapon Bond (choose from owned weapons). */}
+      {activeId === 'weapons' && bondCapacity > 0 && (
+        <WeaponDesignationPanel
+          title="Bonded Weapons"
+          description={WEAPON_BOND_NOTE}
+          inventory={inventory}
+          designatedUids={bondedUids}
+          capacity={bondCapacity}
+          onToggle={(uid) => {
+            const patch = toggleBondedWeapon(characterData, uid, bondCapacity);
+            if (patch) onChange?.(patch);
+          }}
+          readOnly={readOnly}
+          badgeLabel="Bonded"
+          actionLabel="Bond"
+          clearLabel="Unbond"
+          emptyText="No weapon bonded yet."
+          testIdPrefix="bond"
+        />
+      )}
+
+      {/* Hex Warrior weapon — Hexblade Warlock (one weapon lacking Two-Handed; uses CHA). */}
+      {activeId === 'weapons' && hexWarrior && (
+        <WeaponDesignationPanel
+          title="Hex Warrior Weapon"
+          description={HEX_WARRIOR_NOTE}
+          inventory={inventory}
+          designatedUids={hexUid ? [hexUid] : []}
+          capacity={1}
+          eligible={canBeHexWeapon}
+          ineligibleReason="Has the Two-Handed property — Hex Warrior can't be applied to it."
+          onToggle={(uid) => onChange?.(setHexWeapon(characterData, uid))}
+          readOnly={readOnly}
+          swapAtCapacity
+          badgeLabel="Hex Weapon"
+          actionLabel="Designate"
+          clearLabel="Clear"
+          emptyText="No weapon designated yet."
+          testIdPrefix="hex"
+        />
+      )}
+
       {/* Active category */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -485,6 +542,12 @@ export default function InventoryTab({
                       ) : e.equipped ? (
                         <Badge className="text-xs bg-emerald-600 text-white">Equipped</Badge>
                       ) : null}
+                      {isWeaponBonded(e, characterData) && (
+                        <Badge className="text-xs bg-violet-600 text-white" data-testid={`bond-badge-${e.uid}`}>Bonded</Badge>
+                      )}
+                      {hexUid && e.uid === hexUid && (
+                        <Badge className="text-xs bg-violet-600 text-white" data-testid={`hex-badge-${e.uid}`}>Hex Weapon</Badge>
+                      )}
                       {e.attuned && <Badge className="text-xs bg-violet-600 text-white">Attuned</Badge>}
                       {canEquip && e.equipped && !proficient && (
                         <span className="text-xs text-amber-600">Not proficient</span>

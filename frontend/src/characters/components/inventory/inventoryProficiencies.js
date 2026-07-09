@@ -8,16 +8,27 @@ const dedup = (arr) => [...new Set((arr || []).filter(Boolean))];
 
 const labelArmor = (items) => (items || []).map((a) => (/armor|shield/i.test(a) ? a : `${a} armor`));
 
-export function gatherProficiencies({ charClass, characterData = {} } = {}) {
+// Fixed (non-choice) proficiency grants conferred by a subclass feature. Choice-based
+// subclass grants live in subclassGrants.js; these are automatic riders.
+//   Hexblade "Hex Warrior" (5e Warlock, L1): medium armor, shields, and martial weapons.
+const SUBCLASS_PROF_GRANTS_5E = {
+  Warlock: {
+    'The Hexblade': { weapons: ['Martial weapons'], armor: ['Medium armor', 'Shields'] },
+  },
+};
+
+export function gatherProficiencies({ charClass, subclass, edition = '5e', characterData = {} } = {}) {
   const profs = CLASS_PROFICIENCIES_5E[charClass] || {};
   const cd = characterData || {};
   // Fixed proficiency grants from feats (Heavily/Lightly/Moderately Armored, etc.).
   const feat = getFeatProficiencyGrants(cd.feats);
+  const is2024 = edition === '5.5e' || edition === '2024';
+  const sub = (!is2024 && SUBCLASS_PROF_GRANTS_5E[charClass]?.[subclass || cd.subclass]) || {};
   return {
     // feat.weapons/armor = fixed grants (Heavily Armored, …); feat_*_proficiencies = count-choice
     // picks chosen at acquisition (Weapon Master weapons, Skilled tools).
-    weapons: { text: profs.weapons || '', grants: dedup([...(cd.race_weapon_proficiencies || []), ...feat.weapons, ...(cd.feat_weapon_proficiencies || [])]) },
-    armor: { text: profs.armor || '', grants: dedup([...(cd.race_armor_proficiencies || []), ...labelArmor(feat.armor)]) },
+    weapons: { text: profs.weapons || '', grants: dedup([...(cd.race_weapon_proficiencies || []), ...feat.weapons, ...(cd.feat_weapon_proficiencies || []), ...(sub.weapons || [])]) },
+    armor: { text: profs.armor || '', grants: dedup([...(cd.race_armor_proficiencies || []), ...labelArmor(feat.armor), ...(sub.armor || [])]) },
     tools: {
       text: profs.tools || '',
       grants: dedup([

@@ -10,9 +10,13 @@ import {
   FIGHTER_SUBCLASSES_5E, FIGHTER_SUBCLASSES_2024,
 } from '@/characters/components/classData/classChoicesData';
 import BattleMasterPanel from '@/characters/components/subclass/BattleMasterPanel';
+import WeaponBondPanel from '@/characters/components/subclass/WeaponBondPanel';
 
-// Interactive per-subclass panels (maneuver picker + superiority dice, etc.).
-const FIGHTER_SUBCLASS_PANELS = { 'Battle Master': BattleMasterPanel };
+// Interactive per-subclass panels (maneuver picker + superiority dice, bonded weapons, etc.).
+const FIGHTER_SUBCLASS_PANELS = {
+  'Battle Master': BattleMasterPanel,
+  'Eldritch Knight': WeaponBondPanel,
+};
 
 const FIGHTER_SKILLS = [
   'Acrobatics', 'Animal Handling', 'Athletics', 'History',

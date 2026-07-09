@@ -596,3 +596,75 @@ describe('InventoryTab — Hands', () => {
     expect(screen.queryByTestId('hand-grip-main')).not.toBeInTheDocument();
   });
 });
+
+describe('InventoryTab — Weapon Bond (Eldritch Knight)', () => {
+  const rapier = { uid: 'rp1', category: 'weapons', name: 'Rapier', weapon_category: 'Martial', weapon_type: 'Melee', damage: '1d8', damage_type: 'Piercing', properties: 'Finesse', equipped: false, quantity: 1 };
+
+  it('shows the Bonded Weapons panel for an EK L3+ and bonding persists bonded_weapon_uids', () => {
+    const onChange = vi.fn();
+    renderTab({ subclass: 'Eldritch Knight', level: 3, inventory: [longsword, rapier], onChange });
+    expect(screen.getByTestId('bond-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('bond-count')).toHaveTextContent('0/2');
+    fireEvent.click(screen.getByTestId('bond-toggle-rp1'));
+    expect(onChange).toHaveBeenCalledWith({ bonded_weapon_uids: ['rp1'] });
+  });
+
+  it('shows a Bonded badge on the bonded weapon row and the designated entry', () => {
+    renderTab({
+      subclass: 'Eldritch Knight', level: 3, inventory: [longsword, rapier],
+      characterData: { bonded_weapon_uids: ['rp1'] },
+    });
+    expect(screen.getByTestId('bond-badge-rp1')).toHaveTextContent('Bonded');
+    expect(screen.getByTestId('bond-designated-rp1')).toHaveTextContent('Rapier');
+    expect(screen.queryByTestId('bond-badge-w1')).not.toBeInTheDocument();
+  });
+
+  it('does not show the panel for a Champion, below L3, or in readOnly chooser form', () => {
+    renderTab({ subclass: 'Champion', level: 5, inventory: [longsword] });
+    expect(screen.queryByTestId('bond-panel')).not.toBeInTheDocument();
+    cleanup();
+    renderTab({ subclass: 'Eldritch Knight', level: 2, inventory: [longsword] });
+    expect(screen.queryByTestId('bond-panel')).not.toBeInTheDocument();
+    cleanup();
+    renderTab({
+      subclass: 'Eldritch Knight', level: 3, inventory: [longsword], readOnly: true,
+      characterData: { bonded_weapon_uids: ['w1'] },
+    });
+    expect(screen.getByTestId('bond-designated-w1')).toBeInTheDocument();
+    expect(screen.queryByTestId('bond-toggle-w1')).not.toBeInTheDocument();
+  });
+});
+
+describe('InventoryTab — Hex Warrior weapon (Hexblade Warlock)', () => {
+  const rapier = { uid: 'rp1', category: 'weapons', name: 'Rapier', weapon_category: 'Martial', weapon_type: 'melee', damage: '1d8', damage_type: 'Piercing', properties: 'Finesse', equipped: true, hand: 'main', quantity: 1 };
+
+  it('shows the Hex Warrior panel for a 5e Hexblade and designating persists hex_weapon_uid', () => {
+    const onChange = vi.fn();
+    renderTab({ charClass: 'Warlock', subclass: 'The Hexblade', inventory: [rapier], onChange });
+    expect(screen.getByTestId('hex-panel')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('hex-toggle-rp1'));
+    expect(onChange).toHaveBeenCalledWith({ hex_weapon_uid: 'rp1' });
+  });
+
+  it('excludes Two-Handed weapons with a reason and hides the panel for other patrons', () => {
+    renderTab({ charClass: 'Warlock', subclass: 'The Hexblade', inventory: [greatsword] });
+    expect(screen.getByTestId('hex-ineligible-gs1')).toHaveTextContent(/two-handed/i);
+    expect(screen.queryByTestId('hex-toggle-gs1')).not.toBeInTheDocument();
+    cleanup();
+    renderTab({ charClass: 'Warlock', subclass: 'The Fiend', inventory: [rapier] });
+    expect(screen.queryByTestId('hex-panel')).not.toBeInTheDocument();
+  });
+
+  it('the hex weapon attacks with CHA when it beats STR/DEX, with a Hex Warrior note + badge', () => {
+    renderTab({
+      charClass: 'Warlock', subclass: 'The Hexblade', level: 1,
+      scores: { strength: 10, dexterity: 12, charisma: 18 },
+      inventory: [rapier],
+      characterData: { hex_weapon_uid: 'rp1' },
+    });
+    expect(screen.getByTestId('hex-badge-rp1')).toHaveTextContent('Hex Weapon');
+    // CHA +4 + prof +2 = +6 (finesse DEX would be +1+2 = +3)
+    expect(screen.getByTestId('attack-rp1')).toHaveTextContent('+6 · 1d8 + 4 Piercing');
+    expect(screen.getByTestId('attack-hex-rp1')).toHaveTextContent(/Hex Warrior/);
+  });
+});

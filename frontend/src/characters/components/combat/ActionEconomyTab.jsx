@@ -8,6 +8,7 @@ import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classP
 import { getRaceGrantedWeapons, getRaceGrantedArmor } from '@/characters/components/race/raceProficienciesData';
 import { getAttacks, creatureSize, formatSigned, nonProficientEquippedArmor } from '@/characters/components/inventory/inventoryData';
 import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
+import { isHexWarrior, hexWeaponUid as storedHexWeaponUid } from '@/characters/components/inventory/weaponBondData';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import {
   buildActionEconomy, characterSpellNames, TABS, TAB_LABELS, SOURCE_ORDER,
@@ -152,6 +153,11 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
             {entry.eldritchStrikeNote}
           </p>
         )}
+        {entry.hexNote && (
+          <p className="text-[11px] text-violet-500 leading-tight mt-0.5" data-testid={`ae-hex-${entry.key}`}>
+            {entry.hexNote}
+          </p>
+        )}
         {entry.critRange && (
           <p className="text-[11px] text-primary leading-tight font-medium mt-0.5" data-testid={`ae-crit-${entry.key}`}>
             Crit {entry.critRange}{entry.critSource ? ` (${entry.critSource})` : ''}
@@ -212,8 +218,11 @@ export default function ActionEconomyTab({
     return () => { cancelled = true; };
   }, [campaignId, spellNames.length]);
 
-  const weaponProfText = (CLASS_PROFICIENCIES_5E[charClass] || {}).weapons || '';
-  const raceWeapons = getRaceGrantedWeapons(race, subrace) || [];
+  const proficiencies = gatherProficiencies({ charClass, subclass, edition, characterData });
+  // Class text + race trait grants + gathered grants (feat/subclass weapon riders like
+  // Hex Warrior's martial weapons) — same assembly as the Items tab.
+  const weaponProfText = [(CLASS_PROFICIENCIES_5E[charClass] || {}).weapons || '', ...proficiencies.weapons.grants].filter(Boolean).join(', ');
+  const raceWeapons = [...(getRaceGrantedWeapons(race, subrace) || []), ...proficiencies.weapons.grants];
   const size = creatureSize(characterData, race);
   const styles = gatherFightingStyles(characterData);
   // Armor proficiency context (class text + race trait grants + stored race/feat grants) —
@@ -221,10 +230,12 @@ export default function ActionEconomyTab({
   const armorProfText = (CLASS_PROFICIENCIES_5E[charClass] || {}).armor || '';
   const raceArmor = [
     ...(getRaceGrantedArmor(race, subrace) || []),
-    ...gatherProficiencies({ charClass, characterData }).armor.grants,
+    ...proficiencies.armor.grants,
   ];
   const badArmor = nonProficientEquippedArmor(inventory, { armorProfText, raceArmor });
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor });
+  // Hexblade's designated Hex Warrior weapon attacks with CHA when it's better.
+  const hexUid = isHexWarrior({ charClass, subclass, edition }) ? storedHexWeaponUid(characterData) : null;
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor, hexWeaponUid: hexUid });
 
   // A loading weapon caps the Attack action to one shot even with Extra Attack (unless a
   // feat lifts it — Crossbow Expert sets loadingNote to "…ignored…"). Surface a caveat on
