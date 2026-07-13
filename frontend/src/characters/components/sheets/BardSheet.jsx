@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import SpellList from '@/characters/components/spells/SpellList';
+import SpellAddPicker from '@/characters/components/spells/SpellAddPicker';
+import { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
@@ -215,7 +217,7 @@ function SpellPickerCreation({ label, limit, options, selected, onChange, raceGr
   );
 }
 
-export default function BardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], raceGrantedCantrips = [], section = 'all', acExtra = null, maxHpNode = null, isGm = false }) {
+export default function BardSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], raceGrantedCantrips = [], section = 'all', acExtra = null, maxHpNode = null, isGm = false, campaignId }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
@@ -372,7 +374,22 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
         />
       )}
       {!creation && (section === 'all' || section === 'spells') && (
-        <SpellList spells={data.cantrips ?? []} onAdd={canEditSpellLists ? (n => addSpell('cantrips', n)) : undefined} onRemove={canEditSpellLists ? (n => removeSpell('cantrips', n)) : undefined} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
+        <>
+          <SpellList spells={data.cantrips ?? []} onRemove={canEditSpellLists ? (n => removeSpell('cantrips', n)) : undefined} readOnly={readOnly} label="Cantrips Known" isCantrips={true} />
+          {canEditSpellLists && (
+          <SpellAddPicker
+            className="Bard"
+            campaignId={campaignId}
+            spells={data.cantrips ?? []}
+            onAdd={n => addSpell('cantrips', n)}
+            onRemove={n => removeSpell('cantrips', n)}
+            minSpellLevel={0}
+            maxSpellLevel={0}
+            label="Add a cantrip"
+            testId="cantrip-add"
+          />
+          )}
+        </>
       )}
 
       {/* Spells Known — spells section only */}
@@ -386,7 +403,22 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
         />
       )}
       {!creation && (section === 'all' || section === 'spells') && (
-        <SpellList spells={data.known_spells ?? []} onAdd={canEditSpellLists ? (n => addSpell('known_spells', n)) : undefined} onRemove={canEditSpellLists ? (n => removeSpell('known_spells', n)) : undefined} readOnly={readOnly} label="Spells Known" placeholder="Add spell…" onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
+        <>
+          <SpellList spells={data.known_spells ?? []} onRemove={canEditSpellLists ? (n => removeSpell('known_spells', n)) : undefined} readOnly={readOnly} label="Spells Known" onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
+          {canEditSpellLists && (
+          <SpellAddPicker
+            className="Bard"
+            campaignId={campaignId}
+            spells={data.known_spells ?? []}
+            onAdd={n => addSpell('known_spells', n)}
+            onRemove={n => removeSpell('known_spells', n)}
+            minSpellLevel={1}
+            maxSpellLevel={maxCastableLevel(slots)}
+            label="Add a spell"
+            testId="known-add"
+          />
+          )}
+        </>
       )}
 
       {/* Class features — features only */}

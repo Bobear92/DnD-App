@@ -10,6 +10,7 @@ class Spell(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     name = Column(String(200), nullable=False, index=True)
+    edition = Column(String(10), nullable=False, default="5e")
     level = Column(Integer, nullable=False)
     school = Column(String(100), nullable=False)
 

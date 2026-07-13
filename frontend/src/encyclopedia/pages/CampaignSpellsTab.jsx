@@ -30,7 +30,7 @@ function schoolPill(school) {
   return SCHOOL_COLORS[school] ?? 'bg-muted text-foreground';
 }
 
-export default function CampaignSpellsTab({ campaignId }) {
+export default function CampaignSpellsTab({ campaignId, edition = '5e' }) {
   const navigate = useNavigate();
   const [spells, setSpells] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,13 +40,13 @@ export default function CampaignSpellsTab({ campaignId }) {
 
   const load = () => {
     setLoading(true);
-    encyclopediaService.getSpells(campaignId).then((all) => {
+    encyclopediaService.getSpells(campaignId, edition).then((all) => {
       setSpells(all.filter((s) => s.owner_type === 'campaign'));
       setLoading(false);
     });
   };
 
-  useEffect(() => { load(); }, [campaignId]);
+  useEffect(() => { load(); }, [campaignId, edition]);
 
   const filtered = search
     ? spells.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))

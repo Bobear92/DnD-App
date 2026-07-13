@@ -9,9 +9,13 @@ api.interceptors.request.use((config) => {
 });
 
 const encyclopediaService = {
-  getSpells: async (campaignId) => {
+  // `edition` ('5e' | '5.5e') picks that edition's text; a spell with no entry for the
+  // requested edition falls back to its 5e text server-side.
+  getSpells: async (campaignId, edition) => {
     try {
-      const params = campaignId ? { campaign_id: campaignId } : {};
+      const params = {};
+      if (campaignId) params.campaign_id = campaignId;
+      if (edition) params.edition = edition;
       const res = await api.get('/encyclopedia/spells', { params });
       return Array.isArray(res.data) ? res.data : [];
     } catch {

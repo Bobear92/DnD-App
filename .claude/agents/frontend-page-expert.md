@@ -213,8 +213,8 @@ Always:
 ## Encyclopedia Module Patterns
 The encyclopedia lives at `frontend/src/encyclopedia/`:
 - `data/skillsData.js` — static reference data (e.g. the 18 5e skills). Pattern: pure JS module exporting a `SKILLS` array, by-name index, full-ability-name map, and a color helper. No API, no service, no edition/campaign variance. Use this pattern for any future static reference data (conditions, damage types, languages, etc.)
-- `encyclopediaService.js` — service for all spell CRUD calls (getSpells, getSpell, createSpell, updateSpell, deleteSpell); uses the same axios + JWT interceptor pattern as other services
-- `EncyclopediaPage.jsx` — multi-tab host: Classes | Skills | Spells | Campaign Spells (GM only); tab bar at top; edition toggle only visible on Classes tab
+- `encyclopediaService.js` — service for all spell CRUD calls (getSpells, getSpell, createSpell, updateSpell, deleteSpell); uses the same axios + JWT interceptor pattern as other services. `getSpells(campaignId, edition)` — every spell-catalog consumer passes the edition; the server serves 2024 text where authored and falls back to 5e text otherwise
+- `EncyclopediaPage.jsx` — multi-tab host: Classes | Skills | Spells | Items | Feats | Mechanics; tab bar at top; the edition toggle shows on the edition-aware tabs (Classes, Feats, Spells — spell text differs by edition) and is hidden on the rest. GM-only System/Campaign sub-tabs live inside the Spells and Items tabs
 - `SkillsTab.jsx` — two-pane static browser (sidebar list with search + ability filter, detail panel with header bar/description/example checks); no API; first skill auto-selected on mount
 - `SpellsTab.jsx` — shows all spells (system + campaign-scoped), school/level/search filters, detail dialog on row click; GM sees Override and Edit Override buttons
 - `CampaignSpellsTab.jsx` — GM-only; shows only campaign-owned spells (`owner_type === 'campaign'`); New Homebrew + Edit + Delete buttons

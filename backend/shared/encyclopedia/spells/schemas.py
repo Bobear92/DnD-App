@@ -6,6 +6,7 @@ from shared.enums import OwnerType
 
 class SpellBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
+    edition: str = Field("5e", max_length=10)
     level: int = Field(..., ge=0, le=9)
     school: str = Field(..., min_length=1, max_length=100)
     casting_time: str = Field(..., min_length=1, max_length=100)
@@ -26,6 +27,7 @@ class SpellCreate(SpellBase):
 
 class SpellUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
+    edition: Optional[str] = Field(None, max_length=10)
     level: Optional[int] = Field(None, ge=0, le=9)
     school: Optional[str] = Field(None, min_length=1, max_length=100)
     casting_time: Optional[str] = Field(None, min_length=1, max_length=100)

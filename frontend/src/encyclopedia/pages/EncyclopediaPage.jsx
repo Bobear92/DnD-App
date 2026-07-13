@@ -41,7 +41,7 @@ const TABS = [
 ];
 
 // Tabs whose content is edition-aware (the edition toggle is shown for these).
-const EDITION_AWARE_TABS = ['classes', 'feats'];
+const EDITION_AWARE_TABS = ['classes', 'feats', 'spells'];
 
 export default function EncyclopediaPage() {
   const { campaignId } = useParams();
@@ -89,7 +89,7 @@ export default function EncyclopediaPage() {
           <p className="text-sm text-muted-foreground">Reference material for rules, classes, and more</p>
         </div>
 
-        {/* Edition toggle — relevant for edition-aware tabs (Classes, Feats) */}
+        {/* Edition toggle — relevant for edition-aware tabs (Classes, Feats, Spells) */}
         {EDITION_AWARE_TABS.includes(activeTab) && (
           <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
             {['5e', '5.5e'].map((ed) => (
@@ -219,10 +219,10 @@ export default function EncyclopediaPage() {
             )}
             <div className="flex-1 min-h-0 overflow-hidden">
               {(!isGm || spellsSubTab === 'system') && (
-                <SpellsTab isGm={isGm} campaignId={campaignId} />
+                <SpellsTab isGm={isGm} campaignId={campaignId} edition={edition} />
               )}
               {isGm && spellsSubTab === 'campaign' && (
-                <CampaignSpellsTab campaignId={campaignId} />
+                <CampaignSpellsTab campaignId={campaignId} edition={edition} />
               )}
             </div>
           </div>

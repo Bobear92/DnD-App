@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import SpellList from '@/characters/components/spells/SpellList';
+import SpellAddPicker from '@/characters/components/spells/SpellAddPicker';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
@@ -262,9 +263,24 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
               {/* Spell slots */}
               <SpellSlotTracker slots={slots} spellSlots={spellSlots} onSetSlotUsed={setSlotUsed} readOnly={readOnly} isGm={isGm} />
               {/* Cantrips */}
-              <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
+              <>
+                <SpellList spells={data.cantrips ?? []} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" isCantrips={true} />
+                {!readOnly && (
+                <SpellAddPicker
+                  className="Cleric"
+                  campaignId={campaignId}
+                  spells={data.cantrips ?? []}
+                  onAdd={n => addSpell('cantrips', n)}
+                  onRemove={n => removeSpell('cantrips', n)}
+                  minSpellLevel={0}
+                  maxSpellLevel={0}
+                  label="Add a cantrip"
+                  testId="cantrip-add"
+                />
+                )}
+              </>
               {/* Prepared spells (read-only reference — manage in Prepare Spells tab) */}
-              <SpellList spells={data.prepared_spells ?? []} readOnly={true} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} placeholder="" onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
+              <SpellList spells={data.prepared_spells ?? []} readOnly={true} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
             </div>
           )}
 

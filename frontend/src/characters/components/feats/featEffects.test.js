@@ -256,7 +256,11 @@ describe('featEffects resolver', () => {
       source: 'Wizard', ability: 'intelligence', ritual: true, ritual_book: ['Detect Magic', 'Identify'],
     } } };
     const out = getFeatGrantedSpells([{ name: 'Alert' }, ritualCaster]);
-    expect(out.ritualBooks).toEqual([{ featIndex: 1, source: 'Ritual Caster', spells: ['Detect Magic', 'Identify'] }]);
+    // `source` names the feat (the card heading); `spellList` is the class list its rituals
+    // come from, which the compendium picker filters on.
+    expect(out.ritualBooks).toEqual([
+      { featIndex: 1, source: 'Ritual Caster', spellList: 'Wizard', spells: ['Detect Magic', 'Identify'] },
+    ]);
     expect(out.leveled).toEqual([]); // ritual spells aren't lumped into the generic leveled list
     expect(out.freeCasts).toEqual([]); // cast as rituals only, no free cast
   });

@@ -265,7 +265,9 @@ export function getFeatGrantedSpells(feats = []) {
     // Ritual Caster: a growable, editable ritual book (cast as rituals only — no free cast).
     // `featIndex` lets the Feats tab persist add/remove back to the right feat instance.
     if (sg.ritual) {
-      ritualBooks.push({ featIndex, source, spells: [...(sg.ritual_book || [])] });
+      // `source` is the FEAT (for the card heading); `spellList` is the class list the rituals
+      // are drawn from (sg.source — e.g. "Wizard"), which the compendium picker filters on.
+      ritualBooks.push({ featIndex, source, spellList: sg.source, spells: [...(sg.ritual_book || [])] });
       return;
     }
     for (const name of sg.cantrips || []) cantrips.push({ name, level: 0, source });

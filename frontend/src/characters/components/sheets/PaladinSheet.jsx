@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import SpellList from '@/characters/components/spells/SpellList';
+import SpellAddPicker from '@/characters/components/spells/SpellAddPicker';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
@@ -223,8 +224,23 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
           {spellSubTab === 'prepared' && (
             <div className="space-y-4">
               <SpellSlotTracker slots={slots} spellSlots={spellSlots} onSetSlotUsed={setSlotUsed} readOnly={readOnly} isGm={isGm} />
-              {!creation && <SpellList spells={data.cantrips ?? []} onAdd={n => addSpell('cantrips', n)} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips" placeholder="Add cantrip…" isCantrips={true} />}
-              <SpellList spells={data.prepared_spells ?? []} readOnly={true} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} placeholder="" onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
+              {!creation && <>
+   <SpellList spells={data.cantrips ?? []} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips" isCantrips={true} />
+   {!readOnly && (
+   <SpellAddPicker
+     className="Paladin"
+     campaignId={campaignId}
+     spells={data.cantrips ?? []}
+     onAdd={n => addSpell('cantrips', n)}
+     onRemove={n => removeSpell('cantrips', n)}
+     minSpellLevel={0}
+     maxSpellLevel={0}
+     label="Add a cantrip"
+     testId="cantrip-add"
+   />
+   )}
+ </>}
+              <SpellList spells={data.prepared_spells ?? []} readOnly={true} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
             </div>
           )}
 

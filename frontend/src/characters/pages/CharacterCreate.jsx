@@ -2598,7 +2598,7 @@ export default function CharacterCreate() {
                     <div data-testid="review-race-cantrips">
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Race-Granted Cantrips</div>
                       {/* Clickable — opens the spell detail dialog (same as CharacterDetail) */}
-                      <SpellList spells={raceGrantedCantrips} isCantrips readOnly label="Click a cantrip to see its details" placeholder="" />
+                      <SpellList spells={raceGrantedCantrips} isCantrips readOnly label="Click a cantrip to see its details" />
                     </div>
                   )}
                   {raceChoices.half_elf_skills?.length > 0 && (

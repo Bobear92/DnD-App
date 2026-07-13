@@ -277,7 +277,7 @@ describe('ActionEconomyTab', () => {
 
   it('fetches and buckets known spells by casting time', async () => {
     renderTab({ characterData: { prepared_spells: ['Healing Word', 'Shield', 'Fireball'] } });
-    await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(1, '5e'));
     // Fireball (action) shows on the default Actions tab
     await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
     // Healing Word is a bonus action

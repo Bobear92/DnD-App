@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
-import { Plus, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useCampaign } from '@/campaigns/CampaignContext';
 
 const LEVEL_LABELS = {
@@ -16,10 +15,13 @@ const LEVEL_LABELS = {
   7: '7th Level', 8: '8th Level', 9: '9th Level',
 };
 
-async function fetchSpellCatalog(campaignId) {
+async function fetchSpellCatalog(campaignId, edition) {
   try {
     const token = localStorage.getItem('token');
-    const qs = campaignId ? `?campaign_id=${campaignId}` : '';
+    const params = new URLSearchParams();
+    if (campaignId) params.set('campaign_id', campaignId);
+    if (edition) params.set('edition', edition);
+    const qs = params.toString() ? `?${params}` : '';
     const res = await fetch(`http://localhost:8000/api/encyclopedia/spells${qs}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
@@ -36,13 +38,20 @@ async function fetchSpellCatalog(campaignId) {
  * Clicking a spell name opens a Dialog with full spell details fetched from the encyclopedia API.
  * Falls back gracefully when the API catalog is empty or unavailable.
  *
+ * This list is DISPLAY + REMOVE only. There is deliberately no free-text "add a spell" input:
+ * a character may only ever know spells that exist in the compendium, so every add flows through
+ * a catalog picker (ClassSpellBrowser / SpellPickerCreation). Homebrew spells reach a character
+ * by the GM authoring them into the campaign compendium, where the pickers then offer them.
+ *
  * Props:
  *   spells           string[]    current spell names
- *   onAdd            (name)=>void  called when user adds a spell (omit to hide add input)
  *   onRemove         (name)=>void  called when user removes a spell (omit to hide remove buttons)
+ *   lockedSpells     string[]    spells that CANNOT be removed right now (no X shown) — e.g. a 5e
+ *                                Eldritch Knight's permanent cantrips, or spells you can no longer
+ *                                swap because this level's one swap is spent. A refusal you can see
+ *                                beats a button that silently does nothing.
  *   readOnly         boolean
  *   label            string      section heading
- *   placeholder      string      add-input placeholder text
  *   isCantrips       boolean     if true, skip API level lookup (always shown as Cantrips section)
  *   onCastSpell      (name, level)=>void  if provided, shows a Cast button per non-cantrip spell;
  *                                          clicking Cast opens a confirm dialog before firing this callback
@@ -50,11 +59,10 @@ async function fetchSpellCatalog(campaignId) {
  */
 export default function SpellList({
   spells = [],
-  onAdd,
   onRemove,
+  lockedSpells = [],
   readOnly = false,
   label,
-  placeholder = 'Add spell…',
   isCantrips = false,
   onCastSpell,
   availableSlots,
@@ -62,9 +70,9 @@ export default function SpellList({
 }) {
   const ctx = useCampaign();
   const campaignId = ctx?.campaign?.id;
+  const edition = ctx?.campaign?.edition;
   const [catalog, setCatalog] = useState([]);
   const [detailName, setDetailName] = useState(null);
-  const [newValue, setNewValue] = useState('');
   // Pending cast awaiting confirmation: { name, level } or null
   const [castConfirm, setCastConfirm] = useState(null);
 
@@ -73,9 +81,9 @@ export default function SpellList({
   // clicking any cantrip shows the "not in compendium" fallback.
   useEffect(() => {
     if (campaignId) {
-      fetchSpellCatalog(campaignId).then(setCatalog).catch(() => {});
+      fetchSpellCatalog(campaignId, edition).then(setCatalog).catch(() => {});
     }
-  }, [campaignId]);
+  }, [campaignId, edition]);
 
   const spellMap = {};
   catalog.forEach(s => { spellMap[s.name] = s; });
@@ -97,13 +105,6 @@ export default function SpellList({
   const sortedLevels = Object.keys(grouped)
     .map(Number)
     .sort((a, b) => (a === -1 ? 1 : b === -1 ? -1 : a - b));
-
-  const handleAdd = () => {
-    const trimmed = newValue.trim();
-    if (!trimmed || spells.includes(trimmed)) return;
-    onAdd?.(trimmed);
-    setNewValue('');
-  };
 
   const openDetail = (name) => {
     setDetailName(name);
@@ -167,7 +168,7 @@ export default function SpellList({
                           Cast
                         </button>
                       )}
-                      {!readOnly && onRemove && (
+                      {!readOnly && onRemove && !lockedSpells.includes(name) && (
                         <button
                           type="button"
                           data-testid={`remove-spell-${name}`}
@@ -185,21 +186,6 @@ export default function SpellList({
           </div>
         );
       })}
-
-      {!readOnly && onAdd && (
-        <div className="flex gap-2">
-          <Input
-            placeholder={placeholder}
-            value={newValue}
-            onChange={e => setNewValue(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAdd())}
-            className="flex-1 h-8 text-sm"
-          />
-          <Button type="button" size="sm" variant="outline" data-testid="spell-add-button" onClick={handleAdd}>
-            <Plus className="h-3 w-3" />
-          </Button>
-        </div>
-      )}
 
       <Dialog open={!!castConfirm} onOpenChange={open => !open && setCastConfirm(null)}>
         <DialogContent className="max-w-sm">

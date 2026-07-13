@@ -290,7 +290,7 @@ export default function RangerSheet({ data = {}, onChange, readOnly = false, lev
       )}
 
       {!creation && (section === 'all' || section === 'spells') && (
-        <SpellList spells={data.prepared_spells ?? []} onAdd={n => addSpell('prepared_spells', n)} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label="Prepared Spells" placeholder="Add spell…" onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
+        <SpellList spells={data.prepared_spells ?? []} onRemove={n => removeSpell('prepared_spells', n)} readOnly={readOnly} label="Prepared Spells" onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
       )}
 
       {showFeatures && level >= 3 && (

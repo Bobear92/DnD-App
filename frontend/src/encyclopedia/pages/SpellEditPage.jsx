@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useCampaign } from '@/campaigns/CampaignContext';
 import encyclopediaService from '../encyclopediaService';
 
 const SCHOOLS = [
@@ -37,6 +38,7 @@ export default function SpellEditPage() {
   const { campaignId, spellId } = useParams();
   const navigate = useNavigate();
   const isNew = spellId === 'new';
+  const edition = useCampaign()?.campaign?.edition || '5e';
 
   const [form, setForm] = useState(EMPTY);
   const [original, setOriginal] = useState(null);
@@ -83,6 +85,8 @@ export default function SpellEditPage() {
         const created = await encyclopediaService.createSpell({
           ...form,
           higher_level: form.higher_level || null,
+          // Homebrew belongs to the edition the campaign is played in.
+          edition,
           owner_type: 'campaign',
           owner_id: parseInt(campaignId),
         });

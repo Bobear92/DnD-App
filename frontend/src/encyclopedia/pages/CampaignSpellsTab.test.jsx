@@ -64,9 +64,9 @@ describe('CampaignSpellsTab', () => {
     expect(screen.getByText('Loading…')).toBeInTheDocument();
   });
 
-  it('calls getSpells with the correct campaignId', async () => {
+  it('calls getSpells with the correct campaignId and edition', async () => {
     renderTab('42');
-    await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith('42'));
+    await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith('42', '5e'));
   });
 
   it('renders campaign-scoped spells after load', async () => {

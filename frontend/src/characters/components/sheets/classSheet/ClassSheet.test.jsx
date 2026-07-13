@@ -7,6 +7,25 @@ vi.mock('react-router-dom', () => ({
   Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
 }));
 
+// Spells are only ever added from the compendium, so the GM's add path IS this browser.
+// Mock it to a single add button per category (the gm-*-browser test ids live on the
+// wrapper in CasterSpellBlock, so they still assert independently of this mock).
+vi.mock('@/characters/components/spells/ClassSpellBrowser', () => ({
+  default: ({ schools, minSpellLevel, onAdd }) => {
+    const kind = minSpellLevel === 0 ? 'cantrips' : schools ? 'restricted' : 'any';
+    return (
+      <button type="button" data-testid={`csb-add-${kind}`} onClick={() => onAdd?.('Absorb Elements')}>
+        {`csb-add:${kind}`}
+      </button>
+    );
+  },
+  maxCastableLevel: (slots) => {
+    let max = 0;
+    slots.forEach((n, i) => { if (n > 0) max = i + 1; });
+    return max;
+  },
+}));
+
 // Behavior tests for the data-driven ClassSheet via the Fighter (martial) config.
 // Covers the Epic 0 / Epic 1 / Epic 3 primitives: locked choices + GM Edit, rest-resource
 // use-buttons, section isolation. Wizard (caster) behavior is covered by WizardSheet.test.jsx.
@@ -269,6 +288,8 @@ describe('ClassSheet — Eldritch Knight subclass caster', () => {
     subclass: 'Eldritch Knight',
     cantrips: ['Fire Bolt', 'Blade Ward'],
     known_spells: ['Shield', 'Magic Missile', 'Burning Hands'],
+    // 5e: 2 Abjuration/Evocation slots + the 1 any-school slot earned at L3.
+    ek_spell_slots: { Shield: 'restricted', 'Magic Missile': 'restricted', 'Burning Hands': 'any' },
     spell_slots: { 1: { total: 2, used: 1 } },
   };
 
@@ -278,9 +299,11 @@ describe('ClassSheet — Eldritch Knight subclass caster', () => {
     // Third-caster slots at L3: 2 × L1 (one used → 1/2)
     expect(screen.getByText('Spell Slots (Long Rest)')).toBeInTheDocument();
     expect(screen.getByText('1/2')).toBeInTheDocument();
-    // Known lists with count/limit labels (2/2 cantrips, 3/3 spells at L3)
+    // Known lists with count/limit labels. 5e splits the 3 leveled spells into the two
+    // school categories: 2 Abjuration/Evocation + the 1 any-school slot earned at L3.
     expect(screen.getByText(/Cantrips Known — 2\/2/)).toBeInTheDocument();
-    expect(screen.getByText(/Spells Known — 3\/3/)).toBeInTheDocument();
+    expect(screen.getByText(/Abjuration & Evocation Spells — 2\/2/)).toBeInTheDocument();
+    expect(screen.getByText(/Any School — 1\/1/)).toBeInTheDocument();
     // The wizard-list / INT note
     expect(screen.getByText(/Wizard list/i)).toBeInTheDocument();
     // No prepare flow for a known caster
@@ -315,13 +338,37 @@ describe('ClassSheet — Eldritch Knight subclass caster', () => {
     expect(screen.getByTestId('known-lists-note')).toHaveTextContent(/GM Edit/);
   });
 
-  it('the GM with GM Edit ON can edit the lists — free-text add plus Wizard-list browse pickers', () => {
+  it('the GM with GM Edit ON edits the lists through the compendium browsers — no free-text add', () => {
     render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} onChange={vi.fn()} isGm gmEdit />);
-    expect(screen.getByPlaceholderText('Add spell…')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Add cantrip…')).toBeInTheDocument();
+    // A browse picker per school category (5e), plus the cantrip one.
     expect(screen.getByTestId('gm-cantrip-browser')).toBeInTheDocument();
-    expect(screen.getByTestId('gm-spell-browser')).toBeInTheDocument();
+    expect(screen.getByTestId('gm-spell-browser-restricted')).toBeInTheDocument();
+    expect(screen.getByTestId('gm-spell-browser-any')).toBeInTheDocument();
     expect(screen.queryByTestId('known-lists-note')).not.toBeInTheDocument();
+    // Spells only ever come from the compendium — there is no type-a-name input anywhere.
+    expect(screen.queryByPlaceholderText('Add spell…')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Add cantrip…')).not.toBeInTheDocument();
+  });
+
+  it('5e: a spell shows in the slot it was recorded in, and a GM add records the slot', () => {
+    const onChange = vi.fn();
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} onChange={onChange} isGm gmEdit />);
+    // Burning Hands is an Evocation but was learned in the any-school slot — it stays there.
+    expect(screen.getByTestId('ek-known-any')).toHaveTextContent('Burning Hands');
+    expect(screen.getByTestId('ek-known-restricted')).toHaveTextContent('Shield');
+
+    // Adding through the restricted category's compendium browser records that slot.
+    fireEvent.click(screen.getByTestId('csb-add-restricted'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      known_spells: [...EK_DATA.known_spells, 'Absorb Elements'],
+      ek_spell_slots: { ...EK_DATA.ek_spell_slots, 'Absorb Elements': 'restricted' },
+    }));
+  });
+
+  it('2024 EK has no school split — one unrestricted Spells Known list', () => {
+    render(<FighterSheet2024 data={EK_DATA} level={3} section="spells" campaignId={1} />);
+    expect(screen.getByText(/Spells Known — 3\/3/)).toBeInTheDocument();
+    expect(screen.queryByTestId('ek-known-restricted')).not.toBeInTheDocument();
   });
 
   it('players get NO slot steppers — slots are spent by casting and reset by GM rest', () => {

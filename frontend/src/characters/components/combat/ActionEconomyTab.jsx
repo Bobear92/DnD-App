@@ -206,7 +206,7 @@ export default function ActionEconomyTab({
     if (spellNames.length === 0) { setSpellIndex({}); return; }
     let cancelled = false;
     setLoading(true);
-    encyclopediaService.getSpells(campaignId).then((all) => {
+    encyclopediaService.getSpells(campaignId, edition).then((all) => {
       if (cancelled) return;
       const idx = {};
       for (const s of all || []) {
@@ -216,7 +216,7 @@ export default function ActionEconomyTab({
       setLoading(false);
     }).catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [campaignId, spellNames.length]);
+  }, [campaignId, edition, spellNames.length]);
 
   const proficiencies = gatherProficiencies({ charClass, subclass, edition, characterData });
   // Class text + race trait grants + gathered grants (feat/subclass weapon riders like

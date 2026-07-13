@@ -57,6 +57,7 @@ def seed_spells():
 
                 existing = db.query(Spell).filter(
                     Spell.name == name,
+                    Spell.edition == "5e",
                     Spell.owner_type == OwnerType.system,
                     Spell.owner_id.is_(None),
                 ).first()
@@ -81,6 +82,7 @@ def seed_spells():
                 else:
                     spell = Spell(
                         name=data["name"],
+                        edition="5e",
                         level=data["level"],
                         school=data["school"]["name"],
                         casting_time=data.get("casting_time", ""),

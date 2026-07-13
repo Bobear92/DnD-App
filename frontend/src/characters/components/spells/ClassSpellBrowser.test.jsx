@@ -11,18 +11,28 @@ vi.mock('@/encyclopedia/encyclopediaService', () => ({
   default: { getSpells: vi.fn() },
 }));
 
+// The browser reads the campaign's edition from context so it requests that edition's
+// spell text (a 2024 campaign gets the 2024 Blade Ward, not the 2014 one).
+let mockEdition = '5e';
+vi.mock('@/campaigns/CampaignContext', () => ({
+  useCampaign: () => ({ campaign: { id: 42, edition: mockEdition } }),
+}));
+
 const MOCK_SPELLS = [
   { id: 1, name: 'Cure Wounds',   level: 1, classes: 'Cleric, Druid', ritual: false, concentration: false,
     school: 'Evocation', casting_time: '1 action', range: 'Touch',
     description: 'A creature you touch regains hit points equal to 1d8 plus your spellcasting ability modifier.' },
   { id: 2, name: 'Bless',         level: 1, classes: 'Cleric, Paladin', ritual: false, concentration: true },
   { id: 3, name: 'Zone of Truth', level: 2, classes: 'Cleric, Paladin', ritual: true, concentration: false },
-  { id: 4, name: 'Fireball',      level: 3, classes: 'Sorcerer, Wizard', ritual: false, concentration: false },
+  { id: 4, name: 'Fireball',      level: 3, classes: 'Sorcerer, Wizard', ritual: false, concentration: false,
+    school: 'Evocation' },
   { id: 5, name: 'Detect Magic',  level: 1, classes: 'Cleric, Bard', ritual: true, concentration: false },
   { id: 6, name: 'Fire Bolt',     level: 0, classes: 'Sorcerer, Wizard', ritual: false, concentration: false },
   { id: 7, name: 'Shield',        level: 1, classes: 'Sorcerer, Wizard', ritual: false, concentration: false,
     school: 'Abjuration', casting_time: '1 reaction', range: 'Self',
     description: 'An invisible barrier of magical force appears and protects you, granting +5 AC until the start of your next turn.' },
+  { id: 8, name: 'Charm Person',  level: 1, classes: 'Bard, Wizard', ritual: false, concentration: true,
+    school: 'Enchantment' },
 ];
 
 function browser(props = {}) {
@@ -38,6 +48,7 @@ function browser(props = {}) {
 }
 
 beforeEach(() => {
+  mockEdition = '5e';
   encyclopediaService.getSpells.mockResolvedValue(MOCK_SPELLS);
 });
 
@@ -63,9 +74,15 @@ describe('ClassSpellBrowser', () => {
     expect(screen.queryByText('Zone of Truth')).not.toBeInTheDocument();
   });
 
+  it("requests the campaign's edition — a 2024 campaign gets 2024 spell text", async () => {
+    mockEdition = '5.5e';
+    browser({ campaignId: 42 });
+    await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(42, '5.5e'));
+  });
+
   it('calls getSpells with the campaignId', async () => {
     browser({ campaignId: 42 });
-    await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(42));
+    await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(42, '5e'));
   });
 
   it('calls onAdd when + Prepare button clicked', async () => {
@@ -236,5 +253,104 @@ describe('maxCastableLevel', () => {
 
   it('returns 1 for only level 1 slots', () => {
     expect(maxCastableLevel([2, 0, 0, 0, 0])).toBe(1);
+  });
+});
+
+describe('schools filter (5e Eldritch Knight)', () => {
+  it('offers only spells of the given schools', async () => {
+    browser({ className: 'Wizard', schools: ['Abjuration', 'Evocation'], maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByText('Shield')).toBeInTheDocument()); // Abjuration
+    expect(screen.getByText('Fireball')).toBeInTheDocument();                    // Evocation
+    expect(screen.queryByText('Charm Person')).not.toBeInTheDocument();          // Enchantment — not a legal pick
+  });
+
+  it('offers the whole class list when no schools are given (the any-school slot / 2024 EK)', async () => {
+    browser({ className: 'Wizard', maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByText('Charm Person')).toBeInTheDocument());
+    expect(screen.getByText('Shield')).toBeInTheDocument();
+  });
+
+  it('matches schools case-insensitively', async () => {
+    browser({ className: 'Wizard', schools: ['abjuration'], maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByText('Shield')).toBeInTheDocument());
+    expect(screen.queryByText('Fireball')).not.toBeInTheDocument();
+  });
+});
+
+describe('school filter dropdown', () => {
+  it('offers exactly the restricted pair on a school-restricted picker', async () => {
+    browser({ className: 'Wizard', schools: ['Abjuration', 'Evocation'], maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByTestId('spell-school-filter')).toBeInTheDocument());
+    const opts = [...screen.getByTestId('spell-school-filter').options].map(o => o.textContent);
+    expect(opts).toEqual(['All Schools', 'Abjuration', 'Evocation']);
+  });
+
+  it('offers every school present in the list on an unrestricted picker', async () => {
+    browser({ className: 'Wizard', maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByTestId('spell-school-filter')).toBeInTheDocument());
+    const opts = [...screen.getByTestId('spell-school-filter').options].map(o => o.textContent);
+    // Wizard spells in the fixture: Shield (Abj), Fireball (Evo), Charm Person (Ench).
+    expect(opts).toEqual(['All Schools', 'Abjuration', 'Enchantment', 'Evocation']);
+  });
+
+  it('is hidden on a cantrip-only picker — leveled spells only', async () => {
+    browser({ className: 'Wizard', minSpellLevel: 0, maxSpellLevel: 0 });
+    await waitFor(() => expect(screen.getByText('Fire Bolt')).toBeInTheDocument());
+    expect(screen.queryByTestId('spell-school-filter')).not.toBeInTheDocument();
+  });
+
+  it('narrows the visible spells to the chosen school', async () => {
+    browser({ className: 'Wizard', maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('spell-school-filter'), { target: { value: 'Abjuration' } });
+    expect(screen.getByText('Shield')).toBeInTheDocument();
+    expect(screen.queryByText('Fireball')).not.toBeInTheDocument();
+    expect(screen.queryByText('Charm Person')).not.toBeInTheDocument();
+    // Back to All Schools restores the full list.
+    fireEvent.change(screen.getByTestId('spell-school-filter'), { target: { value: '' } });
+    expect(screen.getByText('Fireball')).toBeInTheDocument();
+  });
+
+  it('cannot widen past the legal set — filtering a restricted picker still hides off-school spells', async () => {
+    browser({ className: 'Wizard', schools: ['Abjuration', 'Evocation'], maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByText('Shield')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('spell-school-filter'), { target: { value: 'Evocation' } });
+    expect(screen.getByText('Fireball')).toBeInTheDocument();
+    expect(screen.queryByText('Charm Person')).not.toBeInTheDocument();
+  });
+
+  it('is hidden when only one school is available (nothing to filter)', async () => {
+    browser({ className: 'Wizard', schools: ['Abjuration'], maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByText('Shield')).toBeInTheDocument());
+    expect(screen.queryByTestId('spell-school-filter')).not.toBeInTheDocument();
+  });
+
+  it('empty state names the filtered school', async () => {
+    // The school options are derived from the spells actually present, so a school on its own
+    // can never come up empty — it takes a school + level pair that nothing satisfies.
+    // (Wizard fixture: the only Enchantment spell is level 1, so Enchantment + level 3 is empty.)
+    browser({ className: 'Wizard', maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByText('Charm Person')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('spell-school-filter'), { target: { value: 'Enchantment' } });
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '3' } }); // level filter
+    expect(screen.getByText(/No Enchantment spells available/)).toBeInTheDocument();
+  });
+});
+
+describe('lockedSpells (a chosen spell you may not give up right now)', () => {
+  it('shows Locked instead of Remove, and offers no way to drop it', async () => {
+    const onRemove = vi.fn();
+    browser({ className: 'Wizard', preparedSpells: ['Shield'], lockedSpells: ['Shield'], onRemove, maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByText('Shield')).toBeInTheDocument());
+    expect(screen.getByTestId('spell-locked-7')).toHaveTextContent('Locked');
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    expect(onRemove).not.toHaveBeenCalled();
+  });
+
+  it('an unlocked chosen spell still shows Remove', async () => {
+    browser({ className: 'Wizard', preparedSpells: ['Shield'], maxSpellLevel: 3 });
+    await waitFor(() => expect(screen.getByText('Shield')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+    expect(screen.queryByTestId('spell-locked-7')).not.toBeInTheDocument();
   });
 });

@@ -300,3 +300,130 @@ class TestSpellFields:
         assert "higher_level" in spell
         assert spell["ritual"] is True
         assert spell["higher_level"] == "Extra damage."
+
+
+class TestSpellEdition:
+    """A spell whose 2024 text differs is stored as its own row (name + edition + owner
+    scope). A 2024 campaign reads 5.5e text where it exists and falls back to the 5e row
+    otherwise, so switching a campaign to 2024 never empties the compendium."""
+
+    PREFIX = "/api/encyclopedia/spells"
+
+    def _create(self, client, headers, name="Blade Ward", **overrides):
+        payload = _sys({
+            "name": name, "level": 0, "school": "Abjuration",
+            "casting_time": "1 action", "range": "Self", "components": "V, S",
+            "duration": "1 round", "description": "2014 text.", "classes": "Wizard",
+            **overrides,
+        })
+        resp = client.post(self.PREFIX, json=payload, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    def _names(self, client, headers, **params):
+        resp = client.get(self.PREFIX, headers=headers, params=params)
+        assert resp.status_code == 200
+        return resp.json()
+
+    def test_edition_defaults_to_5e(self, client):
+        admin_h, _ = make_admin(client)
+        assert self._create(client, admin_h)["edition"] == "5e"
+
+    def test_edition_round_trips_in_detail_and_list(self, client):
+        admin_h, _ = make_admin(client)
+        spell_id = self._create(client, admin_h, edition="5.5e")["id"]
+        detail = client.get(f"{self.PREFIX}/{spell_id}", headers=admin_h).json()
+        assert detail["edition"] == "5.5e"
+        listed = self._names(client, admin_h)
+        assert listed[0]["edition"] == "5.5e"
+
+    def test_same_name_can_exist_in_both_editions(self, client):
+        admin_h, _ = make_admin(client)
+        self._create(client, admin_h, edition="5e")
+        self._create(client, admin_h, edition="5.5e", duration="Concentration, up to 1 minute")
+        # No edition filter: both rows are their own entry.
+        assert len(self._names(client, admin_h)) == 2
+
+    def test_duplicate_name_in_same_edition_rejected(self, client):
+        admin_h, _ = make_admin(client)
+        self._create(client, admin_h, edition="5e")
+        payload = _sys({
+            "name": "Blade Ward", "edition": "5e", "level": 0, "school": "Abjuration",
+            "casting_time": "1 action", "range": "Self", "components": "V, S",
+            "duration": "1 round", "description": "dupe", "classes": "Wizard",
+        })
+        resp = client.post(self.PREFIX, json=payload, headers=admin_h)
+        assert resp.status_code == 400
+
+    def test_edition_filter_returns_that_editions_text(self, client):
+        admin_h, _ = make_admin(client)
+        self._create(client, admin_h, edition="5e", description="2014 text.")
+        self._create(client, admin_h, edition="5.5e", description="2024 text.")
+
+        spells_5e = self._names(client, admin_h, edition="5e")
+        assert [s["description"] for s in spells_5e] == ["2014 text."]
+
+        spells_2024 = self._names(client, admin_h, edition="5.5e")
+        assert [s["description"] for s in spells_2024] == ["2024 text."]
+
+    def test_5e_query_never_returns_a_5_5e_only_spell(self, client):
+        admin_h, _ = make_admin(client)
+        self._create(client, admin_h, name="True Strike", edition="5.5e")
+        assert self._names(client, admin_h, edition="5e") == []
+
+    def test_2024_falls_back_to_5e_text_when_no_5_5e_row(self, client):
+        """The whole point of the fallback: a spell with no authored 2024 text is still
+        visible to a 2024 campaign, reading its 5e row."""
+        admin_h, _ = make_admin(client)
+        self._create(client, admin_h, name="Fireball", edition="5e", description="2014 text.")
+
+        spells = self._names(client, admin_h, edition="5.5e")
+        assert len(spells) == 1
+        assert spells[0]["name"] == "Fireball"
+        assert spells[0]["edition"] == "5e"
+        assert spells[0]["description"] == "2014 text."
+
+    def test_2024_row_shadows_the_5e_fallback(self, client):
+        admin_h, _ = make_admin(client)
+        self._create(client, admin_h, edition="5e", description="2014 text.")
+        self._create(client, admin_h, edition="5.5e", description="2024 text.")
+
+        spells = self._names(client, admin_h, edition="5.5e")
+        assert len(spells) == 1, "the 5.5e row must shadow the 5e one, not duplicate it"
+        assert spells[0]["description"] == "2024 text."
+
+    def test_campaign_override_shadows_system_within_an_edition(self, client):
+        admin_h, _ = make_admin(client)
+        gm_h, _ = make_user(client, 2)
+        campaign_id = make_campaign(client, gm_h)
+        self._create(client, admin_h, edition="5.5e", description="system 2024 text.")
+
+        payload = _camp({
+            "name": "Blade Ward", "edition": "5.5e", "level": 0, "school": "Abjuration",
+            "casting_time": "1 action", "range": "Self", "components": "V, S",
+            "duration": "1 round", "description": "GM override.", "classes": "Wizard",
+        }, campaign_id)
+        assert client.post(self.PREFIX, json=payload, headers=gm_h).status_code == 201
+
+        spells = self._names(client, gm_h, campaign_id=campaign_id, edition="5.5e")
+        assert len(spells) == 1
+        assert spells[0]["description"] == "GM override."
+
+    def test_campaign_override_beats_a_5e_fallback_row(self, client):
+        """A GM's 2024 override must win over the system 5e row it replaces — not sit
+        alongside it as a duplicate."""
+        admin_h, _ = make_admin(client)
+        gm_h, _ = make_user(client, 2)
+        campaign_id = make_campaign(client, gm_h)
+        self._create(client, admin_h, name="Fireball", edition="5e", description="system 2014 text.")
+
+        payload = _camp({
+            "name": "Fireball", "edition": "5.5e", "level": 3, "school": "Evocation",
+            "casting_time": "1 action", "range": "150 feet", "components": "V, S, M",
+            "duration": "Instantaneous", "description": "GM 2024 override.", "classes": "Wizard",
+        }, campaign_id)
+        assert client.post(self.PREFIX, json=payload, headers=gm_h).status_code == 201
+
+        spells = self._names(client, gm_h, campaign_id=campaign_id, edition="5.5e")
+        assert len(spells) == 1
+        assert spells[0]["description"] == "GM 2024 override."

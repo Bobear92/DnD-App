@@ -9,11 +9,32 @@
  *   - LevelUpWizard uses cantripsKnownAt/spellsKnownAt as the New Spells step targets.
  *   - CharacterDetail uses getSubclassCaster to decide the Spells tab / Class source.
  *
- * Eldritch Knight (both editions): a THIRD caster — INT-based, wizard spell list
- * (focused on abjuration/evocation), slots from L3 up to 4th level at L19. The 2024
- * version words its spells as "prepared", but mechanically it's the same fixed list
- * swapped on level-up, so the app models both editions as KNOWN casters (matching how
- * it models the 2024 Sorcerer/Bard).
+ * Eldritch Knight (both editions): a THIRD caster — INT-based, wizard spell list,
+ * slots from L3 up to 4th level at L19. The 2024 version words its spells as
+ * "prepared", but mechanically it's the same fixed list swapped on level-up, so the
+ * app models both editions as KNOWN casters (matching how it models the 2024
+ * Sorcerer/Bard).
+ *
+ * The editions differ in TWO ways, both modeled here:
+ *
+ *   1. School restriction (5e only). A 5e EK's leveled spells must be Abjuration or
+ *      Evocation, EXCEPT the one spell learned at each of levels 3, 8, 14 and 20 —
+ *      four "any school" slots over 20 levels. (At L3 the EK learns three 1st-level
+ *      spells: two restricted, one any-school.) The 2024 EK dropped the restriction
+ *      entirely — any Wizard spell.
+ *
+ *      The restriction attaches to the SLOT, not to the spell's actual school: a
+ *      Shield (an abjuration) chosen for the any-school slot still occupies that
+ *      slot and may later be swapped for a spell of any school. So the slot each
+ *      spell was learned under is RECORDED at pick time in a sidecar on
+ *      character_data — `ek_spell_slots: { [spellName]: 'restricted' | 'any' }` —
+ *      rather than inferred from the spell's school. `known_spells` stays a flat
+ *      string[] (shared with every other known caster + the action economy).
+ *
+ *   2. Swap on level-up. Both editions may replace ONE leveled spell whenever the
+ *      character gains a Fighter level (not only on levels that grant a new spell) —
+ *      and a 5e swap must stay within its slot's category. The 2024 EK may ALSO swap
+ *      one cantrip per level; 5e cantrips are permanent once chosen.
  */
 
 // Third-caster spell slots by CLASS level (index = level − 1), padded to 9 spell levels
@@ -59,7 +80,39 @@ export const ekSpellsKnownAt = (level) => {
   return 0;
 };
 
-const EK_CASTER = {
+/** The two schools a 5e Eldritch Knight is normally limited to. */
+export const EK_RESTRICTED_SCHOOLS = ['Abjuration', 'Evocation'];
+
+/** Class levels at which a 5e EK's newly learned spell may come from ANY school. */
+export const EK_FREE_SCHOOL_LEVELS = [3, 8, 14, 20];
+
+/** Slot categories a known EK spell can occupy. */
+export const EK_SLOT_RESTRICTED = 'restricted';
+export const EK_SLOT_ANY = 'any';
+
+/** How many "any school" spells a 5e EK knows at this level (1 at L3 → 4 at L20). */
+export const ekAnySlotsAt = (level) => {
+  const l = Number(level) || 0;
+  return EK_FREE_SCHOOL_LEVELS.filter((lvl) => l >= lvl).length;
+};
+
+/** How many Abjuration/Evocation-restricted spells a 5e EK knows at this level. */
+export const ekRestrictedSlotsAt = (level) =>
+  Math.max(0, ekSpellsKnownAt(level) - ekAnySlotsAt(level));
+
+/**
+ * The recorded slot category of each known EK spell:
+ *   character_data.ek_spell_slots = { [spellName]: 'restricted' | 'any' }
+ * A spell missing from the map is treated as restricted (the common case), so a
+ * partially-recorded list still renders.
+ */
+export const ekSpellSlots = (characterData) => characterData?.ek_spell_slots ?? {};
+
+/** The known spells recorded in a given slot category, in `knownSpells` order. */
+export const ekSpellsInSlot = (knownSpells = [], slotMap = {}, slot = EK_SLOT_RESTRICTED) =>
+  knownSpells.filter((name) => (slotMap[name] ?? EK_SLOT_RESTRICTED) === slot);
+
+const EK_COMMON = {
   kind: 'known',
   spellcastingAbility: 'intelligence',
   unlockLevel: 3,
@@ -67,15 +120,33 @@ const EK_CASTER = {
   cantripsKnownAt: ekCantripsKnownAt,
   spellsKnownAt: ekSpellsKnownAt,
   spellList: 'Wizard',
-  note: 'You learn spells from the Wizard list, primarily Abjuration and Evocation. Intelligence is your spellcasting ability.',
+  // Both editions: replace one leveled spell whenever you gain a level in this class.
+  leveledSwapPerLevel: 1,
 };
 
-// SUBCLASS_CASTERS[class][edition][subclass] → caster object. Both EK editions share
-// the same numbers (see the module comment on the 2024 "prepared" wording).
+const EK_CASTER_5E = {
+  ...EK_COMMON,
+  restrictedSchools: EK_RESTRICTED_SCHOOLS,
+  freeSchoolLevels: EK_FREE_SCHOOL_LEVELS,
+  anySlotsAt: ekAnySlotsAt,
+  restrictedSlotsAt: ekRestrictedSlotsAt,
+  cantripSwapPerLevel: 0, // 5e cantrips are permanent once chosen
+  note: 'You learn spells from the Wizard list. Most must be Abjuration or Evocation — only the spells you learn at levels 3, 8, 14 and 20 may come from any school. Intelligence is your spellcasting ability.',
+};
+
+const EK_CASTER_2024 = {
+  ...EK_COMMON,
+  restrictedSchools: null, // 2024 dropped the Abjuration/Evocation restriction
+  cantripSwapPerLevel: 1,  // 2024 may also swap one cantrip each Fighter level
+  note: 'You learn spells from the Wizard list — any school. Intelligence is your spellcasting ability.',
+};
+
+// SUBCLASS_CASTERS[class][edition][subclass] → caster object. The EK editions share the
+// same slot/known numbers but differ on the school restriction + cantrip swapping.
 export const SUBCLASS_CASTERS = {
   Fighter: {
-    '5e': { 'Eldritch Knight': EK_CASTER },
-    '5.5e': { 'Eldritch Knight': EK_CASTER },
+    '5e': { 'Eldritch Knight': EK_CASTER_5E },
+    '5.5e': { 'Eldritch Knight': EK_CASTER_2024 },
   },
 };
 

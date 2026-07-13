@@ -28,8 +28,10 @@ vi.mock('@/characters/components/classData/ClassOverview', () => ({
 }));
 
 vi.mock('./SpellsTab', () => ({
-  default: ({ isGm, campaignId }) => (
-    <div data-testid="spells-tab">SpellsTab isGm={String(isGm)} campaign={campaignId}</div>
+  default: ({ isGm, campaignId, edition }) => (
+    <div data-testid="spells-tab" data-edition={edition}>
+      SpellsTab isGm={String(isGm)} campaign={campaignId}
+    </div>
   ),
 }));
 
@@ -197,10 +199,22 @@ describe('EncyclopediaPage', () => {
     await waitFor(() => expect(screen.getByTestId('spells-tab')).toBeInTheDocument());
   });
 
-  it('hides edition toggle when Spells tab is active', () => {
+  // Spell text differs between editions (2024 Blade Ward is a different spell), so Spells
+  // is edition-aware like Classes and Feats — the toggle stays available on it.
+  it('shows the edition toggle when Spells tab is active', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
-    expect(screen.queryByRole('button', { name: '5e' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '5e' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2024' })).toBeInTheDocument();
+  });
+
+  it('passes the toggled edition to SpellsTab', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+    expect(screen.getByTestId('spells-tab')).toHaveAttribute('data-edition', '5e');
+
+    fireEvent.click(screen.getByRole('button', { name: '2024' }));
+    expect(screen.getByTestId('spells-tab')).toHaveAttribute('data-edition', '5.5e');
   });
 
   it('does NOT show Campaign Spells as a top-level tab', () => {

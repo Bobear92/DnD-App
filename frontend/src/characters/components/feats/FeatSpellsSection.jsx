@@ -1,6 +1,7 @@
 import React from 'react';
 import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
 import SpellList from '@/characters/components/spells/SpellList';
+import SpellAddPicker from '@/characters/components/spells/SpellAddPicker';
 import { RestResourceControl } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 
@@ -16,7 +17,7 @@ import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects'
  *   onChange       (patch) => void — persists a free-cast use or a ritual-book edit (autoSaveClassPatch)
  *   readOnly       hides the Use/recover + ritual add/remove controls
  */
-export default function FeatSpellsSection({ feats = [], characterData = {}, onChange, readOnly = false }) {
+export default function FeatSpellsSection({ feats = [], characterData = {}, onChange, readOnly = false, campaignId }) {
   const { cantrips, leveled, freeCasts, ritualBooks } = getFeatGrantedSpells(feats);
   const spells = [...cantrips, ...leveled];
   if (spells.length === 0 && ritualBooks.length === 0) return null;
@@ -40,12 +41,24 @@ export default function FeatSpellsSection({ feats = [], characterData = {}, onCh
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Ritual Book · {book.source}</div>
           <SpellList
             spells={book.spells}
-            onAdd={readOnly ? undefined : (name) => updateRitualBook(book.featIndex, [...book.spells, name])}
             onRemove={readOnly ? undefined : (name) => updateRitualBook(book.featIndex, book.spells.filter((n) => n !== name))}
             readOnly={readOnly}
             label="Click a spell for details · cast as a ritual only (no spell slot)"
-            placeholder="Add a ritual spell you found…"
           />
+          {/* A ritual you copy into the book must be a real ritual spell from your list. */}
+          {!readOnly && (
+            <SpellAddPicker
+              className={book.spellList}
+              campaignId={campaignId}
+              spells={book.spells}
+              onAdd={(name) => updateRitualBook(book.featIndex, [...book.spells, name])}
+              onRemove={(name) => updateRitualBook(book.featIndex, book.spells.filter((n) => n !== name))}
+              minSpellLevel={1}
+              ritualOnly
+              label="Copy a ritual into the book"
+              testId={`ritual-add-${book.source}`}
+            />
+          )}
         </div>
       ))}
 

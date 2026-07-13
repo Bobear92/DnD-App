@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SpellList from '@/characters/components/spells/SpellList';
 
+let mockEdition = '5e';
 vi.mock('@/campaigns/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 42 } }),
+  useCampaign: () => ({ campaign: { id: 42, edition: mockEdition } }),
 }));
 
 const CATALOG = [
@@ -47,7 +48,29 @@ describe('SpellList', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    mockEdition = '5e';
     mockFetchEmpty();
+  });
+
+  // ── Edition ────────────────────────────────────────────────────────────
+  // The catalog request must carry the campaign's edition, or a 2024 campaign reads
+  // 2014 spell text (e.g. the wrong Blade Ward — a different spell in 2024).
+  describe('edition', () => {
+    it("requests the campaign's edition", async () => {
+      mockFetchCatalog();
+      render(<SpellList spells={['Fireball']} label="Spells" />);
+      await waitFor(() => expect(fetch).toHaveBeenCalled());
+      expect(fetch.mock.calls[0][0]).toContain('edition=5e');
+      expect(fetch.mock.calls[0][0]).toContain('campaign_id=42');
+    });
+
+    it('requests 5.5e text for a 2024 campaign', async () => {
+      mockEdition = '5.5e';
+      mockFetchCatalog();
+      render(<SpellList spells={['Fireball']} label="Spells" />);
+      await waitFor(() => expect(fetch).toHaveBeenCalled());
+      expect(fetch.mock.calls[0][0]).toContain('edition=5.5e');
+    });
   });
 
   // ── Empty state ────────────────────────────────────────────────────────
@@ -204,55 +227,15 @@ describe('SpellList', () => {
     );
   });
 
-  // ── Add spell ───────────────────────────────────────────────────────────
-  it('shows the add input when onAdd is provided and readOnly=false', () => {
-    render(<SpellList spells={[]} onAdd={vi.fn()} label="Spells" readOnly={false} />);
-    expect(screen.getByPlaceholderText('Add spell…')).toBeInTheDocument();
-  });
-
-  it('hides the add input when onAdd is not provided', () => {
+  // ── No free-text add ────────────────────────────────────────────────────
+  // A character may only know spells that exist in the compendium, so SpellList is
+  // display+remove only. Every add goes through a catalog picker (SpellAddPicker /
+  // ClassSpellBrowser / SpellPickerCreation). This guards the input never coming back.
+  it('never renders a free-text add input', () => {
     render(<SpellList spells={[]} label="Spells" readOnly={false} />);
-    expect(screen.queryByPlaceholderText('Add spell…')).not.toBeInTheDocument();
-  });
-
-  it('hides the add input when readOnly=true even if onAdd is provided', () => {
-    render(<SpellList spells={[]} onAdd={vi.fn()} label="Spells" readOnly />);
-    expect(screen.queryByPlaceholderText('Add spell…')).not.toBeInTheDocument();
-  });
-
-  it('calls onAdd with the trimmed value when the + button is clicked', () => {
-    const onAdd = vi.fn();
-    render(<SpellList spells={[]} onAdd={onAdd} label="Spells" readOnly={false} />);
-    fireEvent.change(screen.getByPlaceholderText('Add spell…'), { target: { value: ' Fireball ' } });
-    fireEvent.click(screen.getByTestId('spell-add-button'));
-    expect(onAdd).toHaveBeenCalledWith('Fireball');
-  });
-
-  it('calls onAdd when Enter is pressed in the add input', () => {
-    const onAdd = vi.fn();
-    render(<SpellList spells={[]} onAdd={onAdd} label="Spells" readOnly={false} />);
-    const input = screen.getByPlaceholderText('Add spell…');
-    fireEvent.change(input, { target: { value: 'Magic Missile' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(onAdd).toHaveBeenCalledWith('Magic Missile');
-  });
-
-  it('does not call onAdd when the spell is already in the list', () => {
-    const onAdd = vi.fn();
-    render(<SpellList spells={['Fireball']} onAdd={onAdd} isCantrips label="Spells" readOnly={false} />);
-    const input = screen.getByPlaceholderText('Add spell…');
-    fireEvent.change(input, { target: { value: 'Fireball' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(onAdd).not.toHaveBeenCalled();
-  });
-
-  it('clears the input after a successful add', () => {
-    const onAdd = vi.fn();
-    render(<SpellList spells={[]} onAdd={onAdd} label="Spells" readOnly={false} />);
-    const input = screen.getByPlaceholderText('Add spell…');
-    fireEvent.change(input, { target: { value: 'Fireball' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(input).toHaveValue('');
+    expect(screen.queryByPlaceholderText(/add .*spell/i)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/add .*cantrip/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('spell-add-button')).not.toBeInTheDocument();
   });
 
   // ── Remove spell ────────────────────────────────────────────────────────
@@ -266,11 +249,6 @@ describe('SpellList', () => {
   it('hides remove buttons when readOnly=true', () => {
     render(<SpellList spells={['Fire Bolt']} onRemove={vi.fn()} isCantrips label="Cantrips" readOnly />);
     expect(screen.queryByTestId('remove-spell-Fire Bolt')).not.toBeInTheDocument();
-  });
-
-  it('uses a custom placeholder when the placeholder prop is provided', () => {
-    render(<SpellList spells={[]} onAdd={vi.fn()} label="Spells" placeholder="Add prepared spell…" readOnly={false} />);
-    expect(screen.getByPlaceholderText('Add prepared spell…')).toBeInTheDocument();
   });
 
   // ── Cast spell button ───────────────────────────────────────────────────

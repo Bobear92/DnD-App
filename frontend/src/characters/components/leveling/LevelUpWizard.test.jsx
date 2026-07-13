@@ -23,10 +23,16 @@ vi.mock('@/characters/components/subclass/SubclassPickerWithDetail', () => ({
 
 // SpellList reads CampaignContext + fetches the catalog — mock it to a single add button.
 vi.mock('@/characters/components/spells/SpellList', () => ({
-  default: ({ label, spells = [], onAdd }) => (
+  // SpellList is display+remove only — there is no free-text add anywhere in the app, so the
+  // mock has no add button either. Adds happen through the ClassSpellBrowser mock below.
+  default: ({ label, spells = [], onRemove, lockedSpells = [] }) => (
     <div data-testid={`spelllist-${label}`}>
       <span data-testid={`spelllist-count-${label}`}>{spells.length}</span>
-      <button type="button" onClick={() => onAdd?.(`${label} Pick`)}>{`add:${label}`}</button>
+      <span data-testid={`spelllist-spells-${label}`}>{spells.join(',')}</span>
+      {/* A locked spell renders NO remove button — the refusal is visible, not silent. */}
+      {spells.filter((s) => !lockedSpells.includes(s)).map((s) => (
+        <button key={s} type="button" onClick={() => onRemove?.(s)}>{`remove:${s}`}</button>
+      ))}
     </div>
   ),
 }));
@@ -34,16 +40,21 @@ vi.mock('@/characters/components/spells/SpellList', () => ({
 // The browse picker in the New Spells step (fetches the spell catalog in the real component).
 // The mock exposes the class list + level bounds it was given and an add button.
 vi.mock('@/characters/components/spells/ClassSpellBrowser', () => ({
-  default: ({ className, minSpellLevel, maxSpellLevel, onAdd, grantedSpells = [] }) => {
-    const kind = minSpellLevel === 0 ? 'cantrips' : 'spells';
+  default: ({ className, minSpellLevel, maxSpellLevel, onAdd, preparedSpells = [], grantedSpells = [], schools = null }) => {
+    // A school-restricted browser (the 5e Eldritch Knight's Abjuration/Evocation slots) is a
+    // distinct picker from the unrestricted one, so it gets its own test id.
+    const kind = minSpellLevel === 0 ? 'cantrips' : schools ? 'restricted' : 'spells';
+    const base = { cantrips: 'Browse Cantrip', restricted: 'Browse Restricted', spells: 'Browse Spell' }[kind];
+    // Each click picks a DISTINCT spell (the real browser offers a whole catalog, not one
+    // button), so a test can fill a page to its quota by clicking N times.
+    const pick = `${base} ${preparedSpells.length + 1}`;
     return (
       <div data-testid={`csb-${kind}`}>
         <span data-testid={`csb-class-${kind}`}>{className}</span>
         <span data-testid={`csb-max-${kind}`}>{String(maxSpellLevel)}</span>
         <span data-testid={`csb-granted-${kind}`}>{grantedSpells.join(',')}</span>
-        <button type="button" onClick={() => onAdd?.(kind === 'cantrips' ? 'Browse Cantrip' : 'Browse Spell')}>
-          {`csb-add:${kind}`}
-        </button>
+        <span data-testid={`csb-schools-${kind}`}>{(schools ?? []).join(',')}</span>
+        <button type="button" onClick={() => onAdd?.(pick)}>{`csb-add:${kind}`}</button>
       </div>
     );
   },
@@ -146,6 +157,27 @@ const CAMPAIGN_ASI_AND_FEAT = { id: 1, edition: '5e', asi_feat_mode: 'asi_and_fe
 function chooseTakeAverage() {
   fireEvent.click(screen.getByText('Take Average'));
   fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+}
+
+function nextStep() {
+  fireEvent.click(screen.getByTestId('wizard-next'));
+}
+
+/**
+ * Pick from a page's compendium browser until its quota is met.
+ * A spell page won't let you leave it part-filled, so a test that only wants to *reach* a
+ * later page has to actually make this page's choices first — same as a real player.
+ */
+function fillSpellPage(kind) {
+  for (let i = 0; i < 12 && screen.getByTestId('wizard-next').disabled; i++) {
+    fireEvent.click(screen.getByText(`csb-add:${kind}`));
+  }
+}
+
+/** Fill the active spell page to its quota, then move on. */
+function advanceSpellPage(kind) {
+  fillSpellPage(kind);
+  nextStep();
 }
 
 describe('LevelUpWizard', () => {
@@ -1318,8 +1350,8 @@ describe('LevelUpWizard', () => {
       );
       chooseTakeAverage();                                            // hp → features
       fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
-      expect(screen.getByText('add:Cantrips Known')).toBeInTheDocument();
-      expect(screen.getByText('add:Spells Known')).toBeInTheDocument();
+      expect(screen.getByTestId('spelllist-Cantrips Known')).toBeInTheDocument();
+      expect(screen.getByTestId('spelllist-Spells Known')).toBeInTheDocument();
     });
 
     it('includes chosen cantrips and spells in onComplete for a known caster', async () => {
@@ -1334,8 +1366,8 @@ describe('LevelUpWizard', () => {
       );
       chooseTakeAverage();                                            // hp → features
       fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
-      fireEvent.click(screen.getByText('add:Cantrips Known'));
-      fireEvent.click(screen.getByText('add:Spells Known'));
+      fireEvent.click(screen.getByText('csb-add:cantrips'));
+      fireEvent.click(screen.getByText('csb-add:spells'));
       fireEvent.click(screen.getByRole('button', { name: /Next/i })); // spells → confirm
       fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
 
@@ -1343,8 +1375,8 @@ describe('LevelUpWizard', () => {
         expect(onComplete).toHaveBeenCalledWith(
           2,
           expect.objectContaining({
-            cantrips: expect.arrayContaining(['Fire Bolt', 'Cantrips Known Pick']),
-            known_spells: expect.arrayContaining(['Magic Missile', 'Spells Known Pick']),
+            cantrips: expect.arrayContaining(['Fire Bolt', 'Browse Cantrip 2']),
+            known_spells: expect.arrayContaining(['Magic Missile', 'Browse Spell 2']),
           })
         );
       });
@@ -1361,14 +1393,17 @@ describe('LevelUpWizard', () => {
           onClose={vi.fn()}
         />
       );
-      // No New Spells step before the subclass is chosen.
-      expect(screen.queryByText('New Spells')).not.toBeInTheDocument();
+      // No spell steps before the subclass is chosen. (A 5e EK gets three: Cantrips,
+      // Abjuration & Evocation, Any School — the step labels, not one "New Spells".)
+      expect(screen.queryByText('Any School')).not.toBeInTheDocument();
       chooseTakeAverage(); // hp → subclass
       fireEvent.click(screen.getByText('Eldritch Knight'));
-      expect(screen.getByText('New Spells')).toBeInTheDocument();
-      // Choosing a non-caster subclass instead removes it again.
+      expect(screen.getByText('Cantrips')).toBeInTheDocument();
+      expect(screen.getByText('Abjuration & Evocation')).toBeInTheDocument();
+      expect(screen.getByText('Any School')).toBeInTheDocument();
+      // Choosing a non-caster subclass instead removes them again.
       fireEvent.click(screen.getByText('Champion'));
-      expect(screen.queryByText('New Spells')).not.toBeInTheDocument();
+      expect(screen.queryByText('Any School')).not.toBeInTheDocument();
     });
 
     it('shows the EK targets (2 cantrips / 3 spells at L3) from the subclass progression', () => {
@@ -1382,12 +1417,17 @@ describe('LevelUpWizard', () => {
       );
       chooseTakeAverage();                                            // hp → subclass
       fireEvent.click(screen.getByText('Eldritch Knight'));
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // subclass → features
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
-      expect(screen.getByText('2')).toBeInTheDocument();  // cantrips target
-      expect(screen.getByText('3')).toBeInTheDocument();  // spells-known target
-      expect(screen.getByText('add:Cantrips Known')).toBeInTheDocument();
-      expect(screen.getByText('add:Spells Known')).toBeInTheDocument();
+      nextStep(); // subclass → features
+      nextStep(); // features → spells: cantrips
+      expect(screen.getByTestId('spelllist-Cantrips Known')).toBeInTheDocument();
+      expect(screen.getByTestId('spelllist-count-Cantrips Known')).toHaveTextContent('0');
+      // Each leveled category is its own page, and you must fill one to reach the next.
+      advanceSpellPage('cantrips'); // → Abjuration & Evocation
+      expect(screen.getByTestId('ek-count-restricted')).toHaveTextContent('0/2');
+      expect(screen.queryByTestId('ek-count-any')).not.toBeInTheDocument();
+      advanceSpellPage('restricted'); // → Any School
+      expect(screen.getByTestId('ek-count-any')).toHaveTextContent('0/1');
+      expect(screen.queryByTestId('ek-count-restricted')).not.toBeInTheDocument();
     });
 
     it('shows the New Spells step for an existing Eldritch Knight at a later level-up (L3→4)', () => {
@@ -1400,7 +1440,8 @@ describe('LevelUpWizard', () => {
           onClose={vi.fn()}
         />
       );
-      expect(screen.getByText('New Spells')).toBeInTheDocument();
+      expect(screen.getByText('Cantrips')).toBeInTheDocument();
+      expect(screen.getByText('Any School')).toBeInTheDocument();
     });
 
     it('includes chosen cantrips and spells in onComplete for an EK Fighter (2024 too)', async () => {
@@ -1419,19 +1460,22 @@ describe('LevelUpWizard', () => {
           onClose={vi.fn()}
         />
       );
-      chooseTakeAverage();                                            // hp → features
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
-      fireEvent.click(screen.getByText('add:Cantrips Known'));
-      fireEvent.click(screen.getByText('add:Spells Known'));
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // spells → confirm
+      chooseTakeAverage(); // hp → features
+      nextStep();          // features → spells (one combined page in 2024)
+      // At L5 a 2024 EK knows 2 cantrips and 4 spells; it starts with 1 of each.
+      fireEvent.click(screen.getByText('csb-add:cantrips'));
+      fireEvent.click(screen.getByText('csb-add:spells'));
+      fireEvent.click(screen.getByText('csb-add:spells'));
+      fireEvent.click(screen.getByText('csb-add:spells'));
+      nextStep();          // spells → confirm
       fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
 
       await waitFor(() => {
         expect(onComplete).toHaveBeenCalledWith(
           5,
           expect.objectContaining({
-            cantrips: expect.arrayContaining(['Fire Bolt', 'Cantrips Known Pick']),
-            known_spells: expect.arrayContaining(['Shield', 'Spells Known Pick']),
+            cantrips: expect.arrayContaining(['Fire Bolt', 'Browse Cantrip 2']),
+            known_spells: expect.arrayContaining(['Shield', 'Browse Spell 2']),
           })
         );
       });
@@ -1448,10 +1492,14 @@ describe('LevelUpWizard', () => {
       );
       chooseTakeAverage();                                            // hp → subclass
       fireEvent.click(screen.getByText('Eldritch Knight'));
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // subclass → features
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
+      nextStep(); // subclass → features
+      nextStep(); // features → cantrips page
       // EK learns from the Wizard list; third-caster slots at L3 = 2× L1 → max spell level 1.
       expect(screen.getByTestId('csb-class-cantrips')).toHaveTextContent('Wizard');
+      advanceSpellPage('cantrips'); // → Abjuration & Evocation page
+      expect(screen.getByTestId('csb-class-restricted')).toHaveTextContent('Wizard');
+      expect(screen.getByTestId('csb-max-restricted')).toHaveTextContent('1');
+      advanceSpellPage('restricted'); // → Any School page
       expect(screen.getByTestId('csb-class-spells')).toHaveTextContent('Wizard');
       expect(screen.getByTestId('csb-max-spells')).toHaveTextContent('1');
     });
@@ -1468,19 +1516,19 @@ describe('LevelUpWizard', () => {
           onClose={vi.fn()}
         />
       );
-      chooseTakeAverage();                                            // hp → features
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
-      fireEvent.click(screen.getByText('csb-add:cantrips'));
-      fireEvent.click(screen.getByText('csb-add:spells'));
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // spells → confirm
+      chooseTakeAverage();          // hp → features
+      nextStep();                   // features → cantrips page
+      advanceSpellPage('cantrips');   // fill 2 cantrips → Abjuration & Evocation
+      advanceSpellPage('restricted'); // fill 3 restricted → Any School
+      advanceSpellPage('spells');     // fill the 1 any-school slot → confirm
       fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
 
       await waitFor(() => {
         expect(onComplete).toHaveBeenCalledWith(
           5,
           expect.objectContaining({
-            cantrips: expect.arrayContaining(['Browse Cantrip']),
-            known_spells: expect.arrayContaining(['Browse Spell']),
+            cantrips: expect.arrayContaining(['Browse Cantrip 1', 'Browse Cantrip 2']),
+            known_spells: expect.arrayContaining(['Browse Restricted 1', 'Browse Spell 1']),
           })
         );
       });
@@ -1505,11 +1553,12 @@ describe('LevelUpWizard', () => {
           onClose={vi.fn()}
         />
       );
-      chooseTakeAverage();                                            // hp → features
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → spells
+      chooseTakeAverage();          // hp → features
+      nextStep();                   // features → cantrips page
       expect(screen.getByTestId('csb-granted-cantrips')).toHaveTextContent('Fire Bolt');
-      // The leveled-spell browser gets no race grants.
-      expect(screen.getByTestId('csb-granted-spells')).toHaveTextContent(/^$/);
+      // The leveled-spell browsers (later pages) get no race grants.
+      advanceSpellPage('cantrips'); // → Abjuration & Evocation page
+      expect(screen.getByTestId('csb-granted-restricted')).toHaveTextContent(/^$/);
     });
 
     it('a known-caster class (Sorcerer) gets a browser for its own class list', () => {
@@ -1544,5 +1593,309 @@ describe('LevelUpWizard', () => {
       );
       expect(screen.queryByText('New Spells')).not.toBeInTheDocument();
     });
+  });
+});
+
+// ── Eldritch Knight spell schools + swapping ─────────────────────────────────
+// 5e: leveled spells must be Abjuration/Evocation, EXCEPT the spells learned at levels
+// 3/8/14/20 (four "any school" slots). 2024 dropped the restriction. Both editions may
+// swap one leveled spell per Fighter level; 2024 may swap a cantrip too, 5e may not.
+// The slot a spell occupies is RECORDED (ek_spell_slots) — never inferred from its school.
+describe('LevelUpWizard — Eldritch Knight spell schools', () => {
+  /** A 5e EK at `level` with the given known spells + slot map. */
+  const ek = (level, character_data = {}) => ({
+    ...FIGHTER_L2, level,
+    character_data: { hp_max: 36, subclass: 'Eldritch Knight', ...character_data },
+  });
+
+  const next = () => fireEvent.click(screen.getByTestId('wizard-next'));
+
+  /** hp → features → the first spell page (none of these levels are ASI levels).
+   *  A 5e EK splits the spell step into three pages: cantrips → restricted → any school.
+   *  A page won't let you leave it part-filled, so reaching a later page means making the
+   *  earlier page's choices — exactly what a player has to do. */
+  const toSpellsStep = () => {
+    chooseTakeAverage();
+    next();
+  };
+  const toRestrictedPage = () => { toSpellsStep(); advanceSpellPage('cantrips'); };
+  const toAnyPage = () => { toRestrictedPage(); advanceSpellPage('restricted'); };
+
+  const renderWiz = (character, campaign, onComplete = vi.fn()) => {
+    render(<LevelUpWizard character={character} campaign={campaign} onComplete={onComplete} onClose={vi.fn()} />);
+    return onComplete;
+  };
+
+  it('5e gives each choice its own page — cantrips, then Abjuration & Evocation, then Any School', () => {
+    renderWiz(ek(4), CAMPAIGN_5E);
+    toSpellsStep();
+    // Page 1: cantrips only — neither leveled category is on it.
+    expect(screen.getByTestId('spelllist-Cantrips Known')).toBeInTheDocument();
+    expect(screen.queryByTestId('ek-section-restricted')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ek-section-any')).not.toBeInTheDocument();
+    // Page 2: the restricted slots alone. At L5 that's 3 of the 4 known spells.
+    advanceSpellPage('cantrips');
+    expect(screen.getByTestId('ek-section-restricted')).toBeInTheDocument();
+    expect(screen.getByTestId('ek-count-restricted')).toHaveTextContent('0/3');
+    expect(screen.queryByTestId('ek-section-any')).not.toBeInTheDocument();
+    // Page 3: the any-school slot alone (the one earned at L3).
+    advanceSpellPage('restricted');
+    expect(screen.getByTestId('ek-section-any')).toBeInTheDocument();
+    expect(screen.getByTestId('ek-count-any')).toHaveTextContent('0/1');
+    expect(screen.queryByTestId('ek-section-restricted')).not.toBeInTheDocument();
+  });
+
+  it('5e offers only Abjuration/Evocation in the restricted browser, the whole list in the any-school one', () => {
+    renderWiz(ek(4), CAMPAIGN_5E);
+    toRestrictedPage();
+    expect(screen.getByTestId('csb-schools-restricted')).toHaveTextContent('Abjuration,Evocation');
+    expect(screen.getByTestId('csb-class-restricted')).toHaveTextContent('Wizard');
+    // The any-school browser passes no school filter — every Wizard spell is legal there.
+    advanceSpellPage('restricted');
+    expect(screen.getByTestId('csb-schools-spells')).toHaveTextContent('');
+  });
+
+  it('5e records the slot each spell was learned under (not the spell school)', async () => {
+    const onComplete = renderWiz(ek(4), CAMPAIGN_5E, vi.fn().mockResolvedValue(undefined));
+    toRestrictedPage();
+    advanceSpellPage('restricted'); // fill the 3 restricted slots → any-school page
+    advanceSpellPage('spells');     // fill the 1 any-school slot → confirm
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+
+    await waitFor(() => {
+      expect(onComplete).toHaveBeenCalledWith(5, expect.objectContaining({
+        known_spells: expect.arrayContaining(['Browse Restricted 1', 'Browse Spell 1']),
+        // Every pick is filed under the slot whose page it was chosen on.
+        ek_spell_slots: {
+          'Browse Restricted 1': 'restricted',
+          'Browse Restricted 2': 'restricted',
+          'Browse Restricted 3': 'restricted',
+          'Browse Spell 1': 'any',
+        },
+      }));
+    });
+  });
+
+  it('2024 has no school split — one unrestricted list', () => {
+    renderWiz(ek(4), CAMPAIGN_2024);
+    toSpellsStep();
+    expect(screen.queryByTestId('ek-section-restricted')).not.toBeInTheDocument();
+    expect(screen.getByTestId('spelllist-Spells Known')).toBeInTheDocument();
+    expect(screen.getByTestId('csb-schools-spells')).toHaveTextContent('');
+  });
+
+  it('2024 stores no slot map (nothing to restrict a later swap to)', async () => {
+    const onComplete = renderWiz(ek(4), CAMPAIGN_2024, vi.fn().mockResolvedValue(undefined));
+    toSpellsStep();
+    // One combined page in 2024: fill both quotas (2 cantrips, 4 spells) to move on.
+    for (let i = 0; i < 2; i++) fireEvent.click(screen.getByText('csb-add:cantrips'));
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByText('csb-add:spells'));
+    next();
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+    await waitFor(() => expect(onComplete).toHaveBeenCalled());
+    expect(onComplete.mock.calls[0][1]).not.toHaveProperty('ek_spell_slots');
+  });
+
+  it('a spell shows in the slot it was RECORDED in, even when its school says otherwise', () => {
+    // Shield is an Abjuration, but this EK learned it in the any-school slot at L3.
+    renderWiz(ek(4, {
+      known_spells: ['Shield', 'Magic Missile'],
+      ek_spell_slots: { Shield: 'any', 'Magic Missile': 'restricted' },
+    }), CAMPAIGN_5E);
+    toRestrictedPage();
+    expect(screen.getByTestId('spelllist-spells-Abjuration & Evocation Spells')).toHaveTextContent('Magic Missile');
+    advanceSpellPage('restricted');
+    expect(screen.getByTestId('spelllist-spells-Any School')).toHaveTextContent('Shield');
+  });
+
+  it('5e: swapping a restricted spell frees a slot in the restricted list only', () => {
+    renderWiz(ek(4, {
+      known_spells: ['Shield', 'Magic Missile'],
+      ek_spell_slots: { Shield: 'any', 'Magic Missile': 'restricted' },
+    }), CAMPAIGN_5E);
+    toRestrictedPage();
+    expect(screen.getByTestId('ek-count-restricted')).toHaveTextContent('1/3');
+    fireEvent.click(screen.getByText('remove:Magic Missile'));
+    // The freed slot reopens in the RESTRICTED category...
+    expect(screen.getByTestId('ek-count-restricted')).toHaveTextContent('0/3');
+    // ...and the any-school page is untouched (Shield still occupies its slot).
+    advanceSpellPage('restricted'); // refill the restricted quota so Next is allowed
+    expect(screen.getByTestId('ek-count-any')).toHaveTextContent('1/1');
+  });
+
+  it('allows only ONE leveled spell swap per level', () => {
+    renderWiz(ek(4, {
+      known_spells: ['Shield', 'Magic Missile'],
+      ek_spell_slots: { Shield: 'restricted', 'Magic Missile': 'restricted' },
+    }), CAMPAIGN_5E);
+    toRestrictedPage();
+    fireEvent.click(screen.getByText('remove:Shield'));
+    expect(screen.getByTestId('ek-count-restricted')).toHaveTextContent('1/3');
+    // The swap budget is spent, so the other spell you already knew LOSES its remove button —
+    // a visible refusal, not a button that silently does nothing.
+    expect(screen.queryByText('remove:Magic Missile')).not.toBeInTheDocument();
+    expect(screen.getByTestId('ek-swap-spent-note')).toBeInTheDocument();
+  });
+
+  it('a spell picked during THIS level-up can still be changed after the swap is spent', () => {
+    renderWiz(ek(4, {
+      known_spells: ['Shield', 'Magic Missile', 'Thunderwave'],
+      ek_spell_slots: { Shield: 'restricted', 'Magic Missile': 'restricted', Thunderwave: 'restricted' },
+    }), CAMPAIGN_5E);
+    toRestrictedPage();
+    fireEvent.click(screen.getByText('remove:Shield'));      // spend the swap
+    fireEvent.click(screen.getByText('csb-add:restricted')); // pick its replacement
+    // The replacement is not a spell you "already knew", so it stays removable — you can
+    // change your mind about this level's pick without it counting as a second swap.
+    expect(screen.getByText('remove:Browse Restricted 3')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('remove:Browse Restricted 3'));
+    expect(screen.getByTestId('ek-count-restricted')).toHaveTextContent('2/3');
+  });
+
+  it('blocks Next on a half-finished swap (a spell removed and not replaced)', () => {
+    // A FULL restricted list at L5 (3 of them), so the page starts complete and the only
+    // thing that can break it is the swap itself.
+    renderWiz(ek(4, {
+      known_spells: ['Shield', 'Magic Missile', 'Thunderwave'],
+      ek_spell_slots: { Shield: 'restricted', 'Magic Missile': 'restricted', Thunderwave: 'restricted' },
+    }), CAMPAIGN_5E);
+    toRestrictedPage();
+    expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+    fireEvent.click(screen.getByText('remove:Shield'));
+    // You can't leave this page mid-swap.
+    expect(screen.getByTestId('wizard-next')).toBeDisabled();
+    // Replacing it from the same category completes the swap.
+    fireEvent.click(screen.getByText('csb-add:restricted'));
+    expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+  });
+
+  it('blocks Next until the page quota is met, and says how many are still missing', () => {
+    renderWiz(ek(4), CAMPAIGN_5E);
+    toSpellsStep(); // cantrips page — 0 of 2 chosen
+    expect(screen.getByTestId('wizard-next')).toBeDisabled();
+    expect(screen.getByTestId('spell-page-incomplete')).toHaveTextContent('Choose 2 more cantrips to continue.');
+
+    fireEvent.click(screen.getByText('csb-add:cantrips'));
+    expect(screen.getByTestId('wizard-next')).toBeDisabled(); // 1 of 2 — still short
+    expect(screen.getByTestId('spell-page-incomplete')).toHaveTextContent('Choose 1 more cantrip to continue.');
+
+    fireEvent.click(screen.getByText('csb-add:cantrips'));
+    expect(screen.getByTestId('wizard-next')).not.toBeDisabled();
+    expect(screen.queryByTestId('spell-page-incomplete')).not.toBeInTheDocument();
+
+    // The same gate applies to the next page — the restricted picks can't be skipped either.
+    nextStep();
+    expect(screen.getByTestId('wizard-next')).toBeDisabled();
+    expect(screen.getByTestId('spell-page-incomplete')).toHaveTextContent('Choose 3 more spells to continue.');
+  });
+
+  it('5e shows NO cantrip page on a level that grants no cantrip — they can never be swapped', () => {
+    // L4→5: cantrips known stays 2, and 5e can't swap one, so the page would be a dead end.
+    renderWiz(ek(4, { cantrips: ['Fire Bolt', 'Blade Ward'] }), CAMPAIGN_5E);
+    expect(screen.queryByText('Cantrips')).not.toBeInTheDocument(); // no step label
+    toSpellsStep(); // hp → features → straight to the first LEVELED page
+    expect(screen.getByTestId('ek-section-restricted')).toBeInTheDocument();
+    expect(screen.queryByTestId('spelllist-Cantrips Known')).not.toBeInTheDocument();
+  });
+
+  it('5e shows the cantrip page on a level that DOES grant one (L10), and old cantrips stay permanent', () => {
+    // L9→10: cantrips known rises 2 → 3, so there is a real choice to make.
+    renderWiz(ek(9, { cantrips: ['Fire Bolt', 'Blade Ward'] }), CAMPAIGN_5E);
+    expect(screen.getByText('Cantrips')).toBeInTheDocument();
+    toSpellsStep();
+    expect(screen.getByTestId('spelllist-Cantrips Known')).toBeInTheDocument();
+    expect(screen.getByTestId('ek-cantrip-permanent-note')).toBeInTheDocument();
+    // The two already known can't be given up — they have no remove button at all.
+    expect(screen.queryByText('remove:Fire Bolt')).not.toBeInTheDocument();
+    expect(screen.queryByText('remove:Blade Ward')).not.toBeInTheDocument();
+    expect(screen.getByTestId('spelllist-count-Cantrips Known')).toHaveTextContent('2');
+    expect(screen.getByTestId('spell-page-incomplete')).toHaveTextContent('Choose 1 more cantrip to continue.');
+  });
+
+  it('5e still shows the cantrip page when the character is owed one it never picked', () => {
+    renderWiz(ek(4, { cantrips: ['Fire Bolt'] }), CAMPAIGN_5E); // 1 of 2 known
+    toSpellsStep();
+    expect(screen.getByTestId('spelllist-Cantrips Known')).toBeInTheDocument();
+    expect(screen.getByTestId('spell-page-incomplete')).toHaveTextContent('Choose 1 more cantrip to continue.');
+  });
+
+  it('2024 may swap one cantrip per level — but only one', () => {
+    renderWiz(ek(4, { cantrips: ['Fire Bolt', 'Blade Ward'] }), CAMPAIGN_2024);
+    toSpellsStep();
+    expect(screen.queryByTestId('ek-cantrip-permanent-note')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('remove:Fire Bolt'));
+    expect(screen.getByTestId('spelllist-count-Cantrips Known')).toHaveTextContent('1');
+    // One cantrip swap per level — the other one is now locked (no remove button).
+    expect(screen.queryByText('remove:Blade Ward')).not.toBeInTheDocument();
+  });
+
+  it('each spell page explains only its own budget', () => {
+    renderWiz(ek(4), CAMPAIGN_5E);
+    toSpellsStep();
+    expect(screen.getByTestId('spell-step-intro')).toHaveTextContent(/cantrips are cast at will/i);
+    advanceSpellPage('cantrips');
+    expect(screen.getByTestId('spell-step-intro')).toHaveTextContent(/Abjuration and Evocation/i);
+    advanceSpellPage('restricted');
+    expect(screen.getByTestId('spell-step-intro')).toHaveTextContent(/any school/i);
+  });
+
+  it('the one-swap budget is shared ACROSS the two leveled pages, not one per page', () => {
+    renderWiz(ek(4, {
+      known_spells: ['Shield', 'Magic Missile', 'Burning Hands'],
+      ek_spell_slots: { Shield: 'restricted', 'Magic Missile': 'restricted', 'Burning Hands': 'any' },
+    }), CAMPAIGN_5E);
+    toRestrictedPage();
+    // Spend the swap on the restricted page, then refill so we can move on.
+    fireEvent.click(screen.getByText('remove:Shield'));
+    advanceSpellPage('restricted');
+    // The any-school page must now refuse a second swap — the budget is one spell per level —
+    // and it says so, rather than leaving a remove button that does nothing.
+    expect(screen.getByTestId('ek-count-any')).toHaveTextContent('1/1');
+    expect(screen.queryByText('remove:Burning Hands')).not.toBeInTheDocument();
+    expect(screen.getByTestId('ek-swap-spent-note')).toBeInTheDocument();
+  });
+
+  it('a 2024 EK keeps ONE combined page (no split)', () => {
+    renderWiz(ek(4), CAMPAIGN_2024);
+    toSpellsStep();
+    // Cantrips and the leveled list share the page, and there is no per-category page.
+    expect(screen.getByTestId('spelllist-Cantrips Known')).toBeInTheDocument();
+    expect(screen.getByTestId('spelllist-Spells Known')).toBeInTheDocument();
+    expect(screen.queryByTestId('ek-section-restricted')).not.toBeInTheDocument();
+  });
+
+  it('L3→4: the any-school spell can be swapped out on its page', () => {
+    // A real level-3 EK: 2 cantrips, 3 spells (2 restricted + the 1 any-school slot from L3).
+    // At L4 the restricted quota rises to 3, so the restricted page is owed one pick — but the
+    // any-school spell must still be swappable on its own page.
+    renderWiz(ek(3, {
+      cantrips: ['Fire Bolt', 'Blade Ward'],
+      known_spells: ['Shield', 'Magic Missile', 'Burning Hands'],
+      ek_spell_slots: { Shield: 'restricted', 'Magic Missile': 'restricted', 'Burning Hands': 'any' },
+    }), CAMPAIGN_5E);
+
+    // Level 4 is an ASI level for a Fighter, so the spell pages sit behind the ASI steps.
+    chooseTakeAverage();                                  // hp → features
+    nextStep();                                           // features → ASI-or-Feat choice
+    fireEvent.click(screen.getByTestId('asi-choice-asi'));
+    nextStep();                                           // → ability scores
+    fireEvent.click(screen.getByTestId('asi-inc-strength'));
+    fireEvent.click(screen.getByTestId('asi-inc-dexterity'));
+    nextStep();                                           // → spells (no cantrip page at L4)
+
+    expect(screen.getByTestId('ek-section-restricted')).toBeInTheDocument();
+    advanceSpellPage('restricted'); // fill the owed 3rd restricted slot → any-school page
+
+    expect(screen.getByTestId('ek-count-any')).toHaveTextContent('1/1');
+    fireEvent.click(screen.getByText('remove:Burning Hands'));
+    expect(screen.getByTestId('ek-count-any')).toHaveTextContent('0/1');
+  });
+
+  it('a known-caster CLASS (Sorcerer) is unaffected — no school split, no swap cap', () => {
+    renderWiz(SORCERER_L1, CAMPAIGN_5E);
+    toSpellsStep();
+    expect(screen.queryByTestId('ek-section-restricted')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('remove:Magic Missile'));
+    expect(screen.getByTestId('spelllist-count-Spells Known')).toHaveTextContent('0');
   });
 });

@@ -18,7 +18,13 @@ import SpellList from '@/characters/components/spells/SpellList';
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import { computeRaceGrantedCantrips } from '@/characters/components/race/raceCantrips';
 import { CLASS_PROGRESSION } from '@/characters/components/classData/classProgressionTables';
-import { getSubclassCaster } from '@/characters/components/classData/subclassCasterData';
+import {
+  getSubclassCaster,
+  ekSpellSlots,
+  ekSpellsInSlot,
+  EK_SLOT_RESTRICTED,
+  EK_SLOT_ANY,
+} from '@/characters/components/classData/subclassCasterData';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { getHpBonusesPerLevel, hpRollBase, effectiveMaxHp } from '@/characters/components/combat/combatBonuses';
 import { getManeuvers, maneuversKnownAtLevel } from '@/characters/components/classData/maneuversData';
@@ -151,6 +157,9 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const [subclassChoice, setSubclassChoice] = useState('');
   const [cantrips, setCantrips] = useState(character.character_data?.cantrips ?? []);
   const [knownSpells, setKnownSpells] = useState(character.character_data?.known_spells ?? []);
+  // Eldritch Knight: which slot category each known spell occupies ({ name: 'restricted'|'any' }).
+  // The category belongs to the SLOT, not to the spell's school, so it is recorded at pick time.
+  const [ekSlots, setEkSlots] = useState(() => ({ ...ekSpellSlots(character.character_data) }));
   const [grantPicks, setGrantPicks] = useState({}); // { [grant.key]: [chosen value names] } — subclass grants
   const [asiAlloc, setAsiAlloc] = useState({}); // { [abilityKey]: 0|1|2 } — points added this ASI
   const [maneuverPicks, setManeuverPicks] = useState([]); // new maneuvers chosen this level-up
@@ -210,6 +219,79 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     }
     return subclassCaster ? maxCastableLevel(subclassCaster.slotsForLevel(newLevel)) : null;
   })();
+
+  // ── Eldritch Knight spell rules ──
+  // A 5e EK splits its known spells into two categories: Abjuration/Evocation-restricted
+  // slots, and the four "any school" slots earned at levels 3, 8, 14 and 20. The 2024 EK
+  // has no restriction (one plain list). Both editions may swap one leveled spell each
+  // Fighter level; the 2024 EK may swap one cantrip too, while 5e cantrips are permanent.
+  const ekRestricted = subclassCaster?.restrictedSchools ?? null;
+  const ekAnyTarget = ekRestricted ? subclassCaster.anySlotsAt(newLevel) : null;
+  const ekRestrictedTarget = ekRestricted ? subclassCaster.restrictedSlotsAt(newLevel) : null;
+  const ekFreeLevelsLabel = ekRestricted ? subclassCaster.freeSchoolLevels.join(', ') : '';
+  const ekRestrictedChosen = ekRestricted ? ekSpellsInSlot(knownSpells, ekSlots, EK_SLOT_RESTRICTED) : [];
+  const ekAnyChosen = ekRestricted ? ekSpellsInSlot(knownSpells, ekSlots, EK_SLOT_ANY) : [];
+
+  // Swap budget: how many already-known spells/cantrips this level-up has dropped so far,
+  // vs. how many it is allowed to drop. Removing a spell frees a slot in ITS OWN category,
+  // so a 5e swap is forced to stay abjuration/evocation ↔ abjuration/evocation by the
+  // per-category counts alone — no separate "swap mode" is needed.
+  const priorKnown = character.character_data?.known_spells ?? [];
+  const priorCantrips = character.character_data?.cantrips ?? [];
+  const leveledSwapLimit = subclassCaster?.leveledSwapPerLevel ?? Infinity;
+  const cantripSwapLimit = subclassCaster ? (subclassCaster.cantripSwapPerLevel ?? 0) : Infinity;
+  const leveledSwapsUsed = priorKnown.filter((n) => !knownSpells.includes(n)).length;
+  const cantripSwapsUsed = priorCantrips.filter((n) => !cantrips.includes(n)).length;
+  const canSwapLeveled = leveledSwapsUsed < leveledSwapLimit;
+  // A cantrip may always be dropped while OVER the target (trimming an over-full list);
+  // dropping one at/below target is a swap, which 5e never allows.
+  const canSwapCantrip = cantrips.length > (cantripsTarget ?? 0) || cantripSwapsUsed < cantripSwapLimit;
+
+  // Spells you already knew coming into this level-up that you may NOT give up right now —
+  // either the level's one swap is already spent, or (5e cantrips) they can never be swapped.
+  // Passed to the lists/browsers so the remove affordance disappears instead of silently
+  // doing nothing. Spells picked DURING this level-up are always removable (they're not prior).
+  const lockedLeveled = canSwapLeveled ? [] : priorKnown;
+  const lockedCantrips = canSwapCantrip ? [] : priorCantrips;
+  const swapSpent = leveledSwapLimit !== Infinity && leveledSwapsUsed >= leveledSwapLimit;
+
+  // Guarded mutators — enforce the swap budget at the source, so every picker obeys it
+  // without each one re-implementing the rule.
+  const removeKnownSpell = (name) => {
+    if (!knownSpells.includes(name)) return;
+    if (priorKnown.includes(name) && !canSwapLeveled) return; // swap budget spent
+    setKnownSpells((s) => removeName(s, name));
+    setEkSlots(({ [name]: _dropped, ...rest }) => rest);
+  };
+  const addKnownSpell = (name, slot = EK_SLOT_RESTRICTED) => {
+    setKnownSpells((s) => addUnique(s, name));
+    if (ekRestricted) setEkSlots((m) => ({ ...m, [name]: slot }));
+  };
+  const removeCantrip = (name) => {
+    if (priorCantrips.includes(name) && !canSwapCantrip) return;
+    setCantrips((c) => removeName(c, name));
+  };
+
+  // The two leveled-spell categories a restricted caster picks from. When the spell step is
+  // split (below) each gets its own page; the combined page would render both.
+  const EK_SECTIONS = ekRestricted ? [
+    {
+      key: 'restricted',
+      slot: EK_SLOT_RESTRICTED,
+      title: `${ekRestricted.join(' & ')} Spells`,
+      chosen: ekRestrictedChosen,
+      target: ekRestrictedTarget,
+      schools: ekRestricted,
+    },
+    {
+      key: 'any',
+      slot: EK_SLOT_ANY,
+      title: 'Any School',
+      chosen: ekAnyChosen,
+      target: ekAnyTarget,
+      schools: null,
+    },
+  ] : [];
 
   // The class feature tables carry generic placeholders at subclass-feature levels (e.g.
   // "Martial Archetype Feature" → "You gain a feature from your Martial Archetype."). By the
@@ -275,6 +357,29 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     (asiFeatMode === 'asi_or_feat' && asiChoice === 'feat')
   );
 
+  // Spell steps. A school-restricted caster (5e Eldritch Knight) has three separate
+  // choices to make — cantrips, then the Abjuration/Evocation slots, then the any-school
+  // slots — and stacking all three on one page (each with its own browser) is a wall of
+  // UI. Split them into a page each; everyone else keeps the single combined page.
+  // The cantrip page is only worth showing when there is actually a cantrip decision to make.
+  // A 5e Eldritch Knight's cantrips are PERMANENT (no swapping), so the page appears only on
+  // the levels that grant a new one (L3 and L10) — or when the character is owed one it never
+  // picked. Where cantrips CAN be swapped (2024), the page always appears, since choosing to
+  // swap one is itself a decision available every level.
+  const cantripsOwed = (cantripsTarget ?? 0) - priorCantrips.length;
+  const needsCantripPage = cantripSwapLimit > 0 || cantripsOwed > 0;
+
+  const spellSteps = !isKnownCaster
+    ? []
+    : ekRestricted
+      ? [...(needsCantripPage ? ['spells-cantrips'] : []), 'spells-restricted', 'spells-any']
+      : ['spells'];
+  const spellStepLabels = !isKnownCaster
+    ? []
+    : ekRestricted
+      ? [...(needsCantripPage ? ['Cantrips'] : []), ekRestricted.join(' & '), 'Any School']
+      : ['New Spells'];
+
   const STEPS = [
     'hp',
     ...(needsSubclass ? ['subclass'] : []),
@@ -282,12 +387,53 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     ...(needsAsiChoice ? ['asi_choice'] : []),
     ...(wantsAsiStep ? ['asi'] : []),
     ...(wantsFeatStep ? ['feat'] : []),
-    ...(isKnownCaster ? ['spells'] : []),
+    ...spellSteps,
     ...(needsSubclassGrants ? ['subclass-grants'] : []),
     ...(needsLevelChoices ? ['level-choices'] : []),
     ...(needsManeuvers ? ['maneuvers'] : []),
     'confirm',
   ];
+  // What the active spell page shows: which leveled category (none on the cantrip page) and
+  // the copy explaining that page's budget. Keeping this here means the JSX below stays one
+  // layout instead of three near-copies.
+  const activeStep = STEPS[step];
+  const ekSectionsForStep = !ekRestricted
+    ? []
+    : activeStep === 'spells-restricted' ? EK_SECTIONS.filter((s) => s.key === 'restricted')
+    : activeStep === 'spells-any' ? EK_SECTIONS.filter((s) => s.key === 'any')
+    : activeStep === 'spells' ? EK_SECTIONS
+    : []; // 'spells-cantrips' — no leveled list on the cantrip page
+  // How far the ACTIVE spell page is from its quota — drives the "choose N more" hint that
+  // explains the disabled Next button (negative = too many chosen).
+  const spellPageShortfall = (() => {
+    if (!subclassCaster) return 0;
+    switch (activeStep) {
+      case 'spells-cantrips': return (cantripsTarget ?? 0) - cantrips.length;
+      case 'spells-restricted': return (ekRestrictedTarget ?? 0) - ekRestrictedChosen.length;
+      case 'spells-any': return (ekAnyTarget ?? 0) - ekAnyChosen.length;
+      default: return 0;
+    }
+  })();
+  const spellPageNoun = activeStep === 'spells-cantrips' ? 'cantrip' : 'spell';
+
+  const spellPage = {
+    'spells-cantrips': {
+      intro: `Cantrips are cast at will and never use a spell slot. At level ${newLevel} you know ${cantripsTarget} ${cantripsTarget === 1 ? 'cantrip' : 'cantrips'} from the ${spellListClass} list.`,
+      swappable: cantripSwapLimit > 0,
+      swapNoun: 'cantrip',
+    },
+    'spells-restricted': {
+      intro: `Most of your spells must come from the ${ekRestricted ? ekRestricted.join(' and ') : ''} schools. At level ${newLevel} you know ${ekRestrictedTarget} of them.`,
+      swappable: leveledSwapLimit > 0,
+      swapNoun: 'spell',
+    },
+    'spells-any': {
+      intro: `The spells you learn at levels ${ekFreeLevelsLabel} may come from ANY school on the ${spellListClass} list — not just ${ekRestricted ? ekRestricted.join(' and ') : ''}. At level ${newLevel} you have ${ekAnyTarget} such ${ekAnyTarget === 1 ? 'spell' : 'spells'}.`,
+      swappable: leveledSwapLimit > 0,
+      swapNoun: 'spell',
+    },
+  }[activeStep] ?? {};
+
   const STEP_LABELS = [
     'Hit Points',
     ...(needsSubclass ? ['Subclass'] : []),
@@ -295,7 +441,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     ...(needsAsiChoice ? ['ASI or Feat'] : []),
     ...(wantsAsiStep ? ['Ability Scores'] : []),
     ...(wantsFeatStep ? ['Feat'] : []),
-    ...(isKnownCaster ? ['New Spells'] : []),
+    ...spellStepLabels,
     ...(needsSubclassGrants ? [subclassGrantsLabel] : []),
     ...(needsLevelChoices ? [levelChoicesLabel] : []),
     ...(needsManeuvers ? ['Maneuvers'] : []),
@@ -555,6 +701,29 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     if (STEPS[step] === 'level-choices') {
       return levelChoices.every((c) => (levelChoicePicks[c.key]?.length || 0) >= levelChoiceRequired(c));
     }
+    // A subclass caster (Eldritch Knight) must leave each spell page with a LEGAL list: never
+    // over its target, and never below where it started — so a swap can't be left half-finished
+    // (a spell dropped and not replaced). Being *under* target is allowed: that's an owed slot
+    // the character can still fill, the same latitude the sheet gives elsewhere.
+    if (subclassCaster && STEPS[step].startsWith('spells')) {
+      // You may not leave a spell page part-filled. The page's quota must be exactly met —
+      // under-filled (a spell you're entitled to but haven't picked, or a swap you started and
+      // didn't finish) blocks Next, and over-filled does too. Each page gates only its own
+      // quota, so an incomplete cantrip list stops you before the leveled pages.
+      const complete = (chosen, target) => target == null || chosen === target;
+
+      switch (STEPS[step]) {
+        case 'spells-cantrips':
+          return complete(cantrips.length, cantripsTarget);
+        case 'spells-restricted':
+          return complete(ekRestrictedChosen.length, ekRestrictedTarget);
+        case 'spells-any':
+          return complete(ekAnyChosen.length, ekAnyTarget);
+        default: // 'spells' — the combined page (unrestricted 2024 EK)
+          return complete(cantrips.length, cantripsTarget)
+            && complete(knownSpells.length, knownTarget);
+      }
+    }
     return true;
   };
 
@@ -629,6 +798,11 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       ...(newRolls != null ? { hp_rolls: newRolls } : {}),
       ...(subclassChoice ? { subclass: subclassChoice } : {}),
       ...(isKnownCaster ? { cantrips, known_spells: knownSpells } : {}),
+      // Eldritch Knight (5e): the slot category each known spell was learned under, so a later
+      // swap can be held to the same category. Pruned to the spells actually known.
+      ...(ekRestricted
+        ? { ek_spell_slots: Object.fromEntries(knownSpells.map((n) => [n, ekSlots[n] ?? EK_SLOT_RESTRICTED])) }
+        : {}),
       ...grantPatch,
       ...featProfPatch,
       ...(maneuversChanged ? { maneuvers: mergedManeuvers } : {}),
@@ -1085,20 +1259,59 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
           </div>
         )}
 
-        {/* ── Step: Spells (known casters) ── */}
-        {STEPS[step] === 'spells' && (
+        {/* ── Steps: Spells (known casters) ──
+            A school-restricted caster (5e Eldritch Knight) gets a PAGE PER CHOICE — cantrips,
+            then the Abjuration/Evocation slots, then the any-school slots — because stacking
+            all three (each with its own browser) on one page is unreadable. Every other known
+            caster keeps the single combined page. Both layouts compose the same blocks. */}
+        {STEPS[step]?.startsWith('spells') && (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              As a <span className="font-medium text-foreground">{character.char_class}</span>, you choose your
-              spells when you level up. At level {newLevel} you should know{' '}
-              {cantripsTarget != null && (
-                <><span className="font-medium text-foreground">{cantripsTarget}</span> cantrips and </>
-              )}
-              <span className="font-medium text-foreground">{knownTarget ?? '—'}</span> spells.
-              {' '}You may also <span className="font-medium text-foreground">replace</span> one spell you already know — remove it and add another.
-            </p>
+            {/* Intro — the whole budget on the combined page, just this page's slice when split. */}
+            {STEPS[step] === 'spells' ? (
+              <p className="text-sm text-muted-foreground">
+                As a <span className="font-medium text-foreground">{character.char_class}</span>, you choose your
+                spells when you level up. At level {newLevel} you should know{' '}
+                {cantripsTarget != null && (
+                  <><span className="font-medium text-foreground">{cantripsTarget}</span> cantrips and </>
+                )}
+                <span className="font-medium text-foreground">{knownTarget ?? '—'}</span> spells.
+                {' '}You may also <span className="font-medium text-foreground">replace</span> one spell you already know — remove it and add another.
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground" data-testid="spell-step-intro">
+                  {spellPage.intro}
+                  {spellPage.swappable && (
+                    <span data-testid="ek-swap-note">
+                      {' '}You may also <span className="font-medium text-foreground">replace</span> one
+                      {' '}{spellPage.swapNoun} you already know — remove it here and add another
+                      {' '}<span className="font-medium text-foreground">from this list</span>.
+                    </span>
+                  )}
+                </p>
+                {/* Why the spells you already knew have no remove button any more. */}
+                {swapSpent && (
+                  <p className="text-xs text-muted-foreground italic" data-testid="ek-swap-spent-note">
+                    You've used this level's one spell swap, so the spells you already knew are locked.
+                    Anything you picked during this level-up can still be changed.
+                  </p>
+                )}
+                {/* Why Next is disabled — you can't move on with the page part-filled. */}
+                {spellPageShortfall !== 0 && (
+                  <p
+                    className="text-xs text-amber-600 dark:text-amber-500"
+                    data-testid="spell-page-incomplete"
+                  >
+                    {spellPageShortfall > 0
+                      ? `Choose ${spellPageShortfall} more ${spellPageNoun}${spellPageShortfall === 1 ? '' : 's'} to continue.`
+                      : `Remove ${-spellPageShortfall} ${spellPageNoun}${spellPageShortfall === -1 ? '' : 's'} to continue.`}
+                  </p>
+                )}
+              </>
+            )}
 
-            {cantripsTarget != null && (
+            {/* Cantrips — the combined page and the dedicated cantrip page share this block. */}
+            {(STEPS[step] === 'spells' || STEPS[step] === 'spells-cantrips') && cantripsTarget != null && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-muted-foreground">Cantrips</span>
@@ -1106,12 +1319,17 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                     {cantrips.length}/{cantripsTarget}
                   </span>
                 </div>
+                {/* 5e Eldritch Knight cantrips are permanent — 2024 may swap one per level. */}
+                {subclassCaster && cantripSwapLimit === 0 && (
+                  <p className="text-xs text-muted-foreground italic" data-testid="ek-cantrip-permanent-note">
+                    Cantrips you already know are permanent — they can&apos;t be swapped on level-up.
+                  </p>
+                )}
                 <SpellList
                   spells={cantrips}
-                  onAdd={n => setCantrips(c => addUnique(c, n))}
-                  onRemove={n => setCantrips(c => removeName(c, n))}
+                  lockedSpells={lockedCantrips}
+                  onRemove={removeCantrip}
                   label="Cantrips Known"
-                  placeholder="Add cantrip…"
                   isCantrips
                 />
                 {spellListClass && (
@@ -1124,9 +1342,10 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                       className={spellListClass}
                       campaignId={campaign?.id}
                       preparedSpells={cantrips}
+                      lockedSpells={lockedCantrips}
                       prepareLimit={cantripsTarget}
                       onAdd={n => setCantrips(c => addUnique(c, n))}
-                      onRemove={n => setCantrips(c => removeName(c, n))}
+                      onRemove={removeCantrip}
                       minSpellLevel={0}
                       maxSpellLevel={0}
                       grantedSpells={raceGrantedCantrips}
@@ -1137,39 +1356,83 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Spells</span>
-                <span className={cn('text-xs', knownTarget != null && knownSpells.length > knownTarget ? 'text-amber-600' : 'text-muted-foreground')}>
-                  {knownSpells.length}{knownTarget != null ? `/${knownTarget}` : ''}
-                </span>
-              </div>
-              <SpellList
-                spells={knownSpells}
-                onAdd={n => setKnownSpells(s => addUnique(s, n))}
-                onRemove={n => setKnownSpells(s => removeName(s, n))}
-                label="Spells Known"
-                placeholder="Add spell…"
-              />
-              {spellListClass && maxKnownSpellLevel > 0 && (
-                <div className="rounded-md border p-3 space-y-2" data-testid="spell-browser">
-                  <div className="text-xs font-medium text-muted-foreground">
-                    Browse the {spellListClass} spell list · up to level {maxKnownSpellLevel}
-                  </div>
-                  <ClassSpellBrowser
-                    mode="learn"
-                    className={spellListClass}
-                    campaignId={campaign?.id}
-                    preparedSpells={knownSpells}
-                    prepareLimit={knownTarget}
-                    onAdd={n => setKnownSpells(s => addUnique(s, n))}
-                    onRemove={n => setKnownSpells(s => removeName(s, n))}
-                    minSpellLevel={1}
-                    maxSpellLevel={maxKnownSpellLevel}
-                  />
+            {/* Leveled spells — one school category per page for a restricted caster. */}
+            {ekSectionsForStep.map(({ key, slot, title, chosen, target, schools }) => (
+              <div key={key} className="space-y-1.5" data-testid={`ek-section-${key}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">{title}</span>
+                  <span
+                    className={cn('text-xs', chosen.length === target ? 'text-muted-foreground' : 'text-amber-600')}
+                    data-testid={`ek-count-${key}`}
+                  >
+                    {chosen.length}/{target}
+                  </span>
                 </div>
-              )}
-            </div>
+                <SpellList
+                  spells={chosen}
+                  lockedSpells={lockedLeveled}
+                  onRemove={removeKnownSpell}
+                  label={title}
+                />
+                {spellListClass && maxKnownSpellLevel > 0 && (
+                  <div className="rounded-md border p-3 space-y-2" data-testid={`ek-browser-${key}`}>
+                    <div className="text-xs font-medium text-muted-foreground">
+                      Browse {schools ? schools.join(' & ') : `the whole ${spellListClass} list`} · up to level {maxKnownSpellLevel}
+                    </div>
+                    <ClassSpellBrowser
+                      mode="learn"
+                      className={spellListClass}
+                      campaignId={campaign?.id}
+                      preparedSpells={chosen}
+                      lockedSpells={lockedLeveled}
+                      prepareLimit={target}
+                      onAdd={n => addKnownSpell(n, slot)}
+                      onRemove={removeKnownSpell}
+                      minSpellLevel={1}
+                      maxSpellLevel={maxKnownSpellLevel}
+                      schools={schools}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Unrestricted known caster — one plain leveled list on the combined page. */}
+            {STEPS[step] === 'spells' && !ekRestricted && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Spells</span>
+                  <span className={cn('text-xs', knownTarget != null && knownSpells.length > knownTarget ? 'text-amber-600' : 'text-muted-foreground')}>
+                    {knownSpells.length}{knownTarget != null ? `/${knownTarget}` : ''}
+                  </span>
+                </div>
+                <SpellList
+                  spells={knownSpells}
+                  lockedSpells={lockedLeveled}
+                  onRemove={removeKnownSpell}
+                  label="Spells Known"
+                />
+                {spellListClass && maxKnownSpellLevel > 0 && (
+                  <div className="rounded-md border p-3 space-y-2" data-testid="spell-browser">
+                    <div className="text-xs font-medium text-muted-foreground">
+                      Browse the {spellListClass} spell list · up to level {maxKnownSpellLevel}
+                    </div>
+                    <ClassSpellBrowser
+                      mode="learn"
+                      className={spellListClass}
+                      campaignId={campaign?.id}
+                      preparedSpells={knownSpells}
+                      lockedSpells={lockedLeveled}
+                      prepareLimit={knownTarget}
+                      onAdd={n => addKnownSpell(n)}
+                      onRemove={removeKnownSpell}
+                      minSpellLevel={1}
+                      maxSpellLevel={maxKnownSpellLevel}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

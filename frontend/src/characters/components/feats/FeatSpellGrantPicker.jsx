@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
+import { useCampaign } from '@/campaigns/CampaignContext';
 import { cn } from '@/lib/utils';
 
 // Spellcasting ability conferred when a spell-grant feat derives it from the chosen class
@@ -92,17 +93,18 @@ export function resolveSpellGrantValue(spec, value) {
  * the `free_casts` list) at acquisition. Changing the source resets the spell picks.
  */
 export default function FeatSpellGrantPicker({ spec, value = null, onChange, campaignId, testIdPrefix = 'feat-spell' }) {
+  const edition = useCampaign()?.campaign?.edition;
   const [allSpells, setAllSpells] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     let active = true;
-    encyclopediaService.getSpells(campaignId).then((spells) => {
+    encyclopediaService.getSpells(campaignId, edition).then((spells) => {
       if (active) { setAllSpells(Array.isArray(spells) ? spells : []); setLoading(false); }
     });
     return () => { active = false; };
-  }, [campaignId]);
+  }, [campaignId, edition]);
 
   const v = value || { source: '', ability: '', cantrips: [], leveled: [] };
   const classes = useMemo(() => sourceClassesOf(spec, v.source).map((c) => c.toLowerCase()), [spec, v.source]);

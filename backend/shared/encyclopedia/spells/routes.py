@@ -24,10 +24,11 @@ def create_spell(
 @router.get("", response_model=List[SpellResponse])
 def get_all_spells(
     campaign_id: Optional[int] = Query(None),
+    edition: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return service.get_all_spells(db, campaign_id)
+    return service.get_all_spells(db, campaign_id, edition)
 
 
 @router.get("/{spell_id}", response_model=SpellResponse)

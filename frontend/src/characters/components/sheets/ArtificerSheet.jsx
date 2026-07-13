@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import SpellList from '@/characters/components/spells/SpellList';
+import SpellAddPicker from '@/characters/components/spells/SpellAddPicker';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
@@ -339,7 +340,6 @@ export default function ArtificerSheet({
                 spells={data.prepared_spells ?? []}
                 readOnly={true}
                 label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepLimit} · Long Rest`}
-                placeholder=""
                 onCastSpell={!readOnly ? handleCastSpell : undefined}
                 availableSlots={!readOnly ? availableSlots : undefined}
               />
@@ -351,12 +351,23 @@ export default function ArtificerSheet({
                   </div>
                   <SpellList
                     spells={data.spell_storing ?? []}
-                    onAdd={n => addSpell('spell_storing', n)}
                     onRemove={n => removeSpell('spell_storing', n)}
                     readOnly={readOnly}
                     label="Stored Spell"
-                    placeholder="Stored spell…"
                   />
+                  {!readOnly && (
+                    <SpellAddPicker
+                      className="Artificer"
+                      campaignId={campaignId}
+                      spells={data.spell_storing ?? []}
+                      onAdd={n => addSpell('spell_storing', n)}
+                      onRemove={n => removeSpell('spell_storing', n)}
+                      minSpellLevel={1}
+                      maxSpellLevel={2}
+                      label="Store a spell"
+                      testId="spell-storing-add"
+                    />
+                  )}
                 </div>
               )}
             </div>

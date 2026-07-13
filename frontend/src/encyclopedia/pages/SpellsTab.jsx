@@ -39,7 +39,7 @@ function schoolColor(school) {
   return SCHOOL_COLORS[school] ?? { bg: 'bg-muted', ring: 'ring-muted', pill: 'bg-muted text-foreground' };
 }
 
-function SpellDetailDialog({ spell, isGm, campaignId, onClose, onOverrideCreated }) {
+function SpellDetailDialog({ spell, isGm, campaignId, edition = '5e', onClose, onOverrideCreated }) {
   const navigate = useNavigate();
   const [overriding, setOverriding] = useState(false);
   const [error, setError] = useState('');
@@ -55,6 +55,9 @@ function SpellDetailDialog({ spell, isGm, campaignId, onClose, onOverrideCreated
     try {
       const created = await encyclopediaService.createSpell({
         name: spell.name,
+        // Store under the edition being browsed, not the system row's — that row may be
+        // a 5e fallback shown to a 2024 campaign, and the override belongs to 2024.
+        edition,
         level: spell.level,
         school: spell.school,
         casting_time: spell.casting_time,
@@ -176,7 +179,7 @@ function SpellDetailDialog({ spell, isGm, campaignId, onClose, onOverrideCreated
   );
 }
 
-export default function SpellsTab({ isGm, campaignId }) {
+export default function SpellsTab({ isGm, campaignId, edition = '5e' }) {
   const [spells, setSpells] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -187,7 +190,7 @@ export default function SpellsTab({ isGm, campaignId }) {
 
   const load = () => {
     setLoading(true);
-    encyclopediaService.getSpells(campaignId).then((data) => {
+    encyclopediaService.getSpells(campaignId, edition).then((data) => {
       setSpells(data);
       setLoading(false);
     });
@@ -195,7 +198,7 @@ export default function SpellsTab({ isGm, campaignId }) {
 
   useEffect(() => {
     load();
-  }, [campaignId]);
+  }, [campaignId, edition]);
 
   const filtered = spells.filter((s) => {
     if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -349,6 +352,7 @@ export default function SpellsTab({ isGm, campaignId }) {
         spell={selectedSpell}
         isGm={isGm}
         campaignId={campaignId}
+        edition={edition}
         onClose={() => setSelectedSpell(null)}
         onOverrideCreated={load}
       />

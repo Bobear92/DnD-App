@@ -1822,6 +1822,7 @@ export default function CharacterDetail() {
                             characterData={classSection.draft ?? character.character_data ?? {}}
                             onChange={autoSaveClassPatch}
                             readOnly={!showEditable}
+                            campaignId={campaignId}
                           />
                         </div>
                       )}

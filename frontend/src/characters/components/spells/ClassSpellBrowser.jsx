@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Lock, Unlock, ExternalLink, Search } from 'lucide-react';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
+import { useCampaign } from '@/campaigns/CampaignContext';
 import { cn } from '@/lib/utils';
 
 export function maxCastableLevel(slots) {
@@ -27,18 +28,23 @@ export default function ClassSpellBrowser({
   mode = 'prepare',  // 'prepare' (daily prep + lock flow) | 'learn' (known-caster picks — no lock UI)
   grantedSpells = [], // spells already granted from elsewhere (race cantrips) — shown non-selectable
   grantedLabel = 'Already granted',
+  schools = null,    // e.g. ['Abjuration','Evocation'] — narrows the list to those schools (5e Eldritch Knight); null = every school
+  ritualOnly = false, // only ritual-tagged spells are legal picks (Ritual Caster's book)
+  lockedSpells = [],  // chosen spells that can't be given up right now — shown "Locked", not "Remove"
   onLock,
   onUnlock,
 }) {
+  const edition = useCampaign()?.campaign?.edition;
   const [spells, setSpells] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState(null);
+  const [schoolFilter, setSchoolFilter] = useState(null); // view-only narrowing within the legal set
   const [expandedId, setExpandedId] = useState(null); // spell whose full description is shown
   const isLearn = mode === 'learn';
 
   useEffect(() => {
-    encyclopediaService.getSpells(campaignId).then(allSpells => {
+    encyclopediaService.getSpells(campaignId, edition).then(allSpells => {
       const classSpells = allSpells.filter(s => {
         if (!s.classes) return false;
         const names = s.classes.split(',').map(n => n.trim().toLowerCase());
@@ -47,9 +53,27 @@ export default function ClassSpellBrowser({
       setSpells(classSpells);
       setLoading(false);
     });
-  }, [campaignId, className, maxSpellLevel, minSpellLevel]);
+  }, [campaignId, edition, className, maxSpellLevel, minSpellLevel]);
 
-  const filtered = spells.filter(s => {
+  // A `schools` restriction narrows the catalog itself (not just the view) — a spell of
+  // another school is not a legal pick, so it must not be offered at all.
+  const schoolSet = schools ? schools.map(s => s.toLowerCase()) : null;
+
+  // Spells the character is actually ALLOWED to pick here. The school dropdown then narrows
+  // the VIEW within that legal set — so it offers the restricted pair (Abjuration/Evocation)
+  // on a restricted picker, and every school actually present in the list otherwise.
+  const legal = spells.filter(s => {
+    if (schoolSet && !schoolSet.includes((s.school || '').toLowerCase())) return false;
+    if (ritualOnly && !s.ritual) return false;
+    return true;
+  });
+
+  const schoolOptions = (
+    schools ?? [...new Set(legal.map(s => s.school).filter(Boolean))]
+  ).slice().sort((a, b) => a.localeCompare(b));
+
+  const filtered = legal.filter(s => {
+    if (schoolFilter && (s.school || '').toLowerCase() !== schoolFilter.toLowerCase()) return false;
     if (levelFilter !== null && s.level !== levelFilter) return false;
     if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -143,6 +167,22 @@ export default function ClassSpellBrowser({
               ))}
             </select>
           )}
+          {/* School filter — narrows the view within the legal set. Leveled spells only: a
+              cantrip list is short enough that filtering it is clutter. Also pointless with
+              only one school to choose between. */}
+          {maxSpellLevel > 0 && schoolOptions.length > 1 && (
+            <select
+              className="rounded-md border bg-background px-2 py-1 text-sm min-w-[130px]"
+              data-testid="spell-school-filter"
+              value={schoolFilter ?? ''}
+              onChange={e => setSchoolFilter(e.target.value || null)}
+            >
+              <option value="">All Schools</option>
+              {schoolOptions.map(sc => (
+                <option key={sc} value={sc}>{sc}</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -151,7 +191,11 @@ export default function ClassSpellBrowser({
         <div className="text-sm text-muted-foreground italic py-6 text-center">Loading spells…</div>
       ) : levels.length === 0 ? (
         <div className="text-sm text-muted-foreground italic py-6 text-center">
-          {search ? 'No spells match your search.' : 'No spells available at your current level.'}
+          {search
+            ? 'No spells match your search.'
+            : schoolFilter
+              ? `No ${schoolFilter} spells available at your current level.`
+              : 'No spells available at your current level.'}
         </div>
       ) : (
         <div className="space-y-4">
@@ -196,6 +240,15 @@ export default function ClassSpellBrowser({
                             className="text-xs py-0 px-1.5 shrink-0 border-violet-400/60 text-violet-500 dark:text-violet-400"
                           >
                             {grantedLabel}
+                          </Badge>
+                        ) : isPrepared && lockedSpells.includes(spell.name) ? (
+                          // Chosen, but not givable-up right now (permanent, or the swap is spent).
+                          <Badge
+                            variant="outline"
+                            data-testid={`spell-locked-${spell.id}`}
+                            className="text-xs py-0 px-1.5 shrink-0 text-muted-foreground"
+                          >
+                            Locked
                           </Badge>
                         ) : isPrepared ? (
                           <Button

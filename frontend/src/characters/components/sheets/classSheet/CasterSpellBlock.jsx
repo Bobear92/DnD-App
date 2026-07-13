@@ -18,10 +18,14 @@ import {
 import { Lock, Unlock, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import SpellList from '@/characters/components/spells/SpellList';
+import SpellAddPicker from '@/characters/components/spells/SpellAddPicker';
 import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import SpellPickerCreation from '@/characters/components/sheets/classSheet/SpellPickerCreation';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
+import {
+  ekSpellSlots, ekSpellsInSlot, EK_SLOT_RESTRICTED, EK_SLOT_ANY,
+} from '@/characters/components/classData/subclassCasterData';
 
 const abMod = (score) => Math.floor(((score ?? 10) - 10) / 2);
 
@@ -102,6 +106,39 @@ export default function CasterSpellBlock({
     // until the header GM Edit toggle is on, so the sheet never reads as "re-choose spells".
     const canEditLists = isGm && gmEdit && !readOnly;
     const maxKnownLevel = maxCastableLevel(slotsTable);
+
+    // School-restricted known caster (5e Eldritch Knight): two categories instead of one list.
+    // GM Edit ignores the school restriction on the free-text add (per house rule), but the slot
+    // is still recorded so a later level-up swap stays in the right category.
+    const known = data.known_spells ?? [];
+    const slotMap = ekSpellSlots(data);
+    const addKnownInSlot = (name, slot) => {
+      if (known.includes(name)) return;
+      onChange?.({ known_spells: [...known, name], ek_spell_slots: { ...slotMap, [name]: slot } });
+    };
+    const removeKnownSpell = (name) => {
+      const { [name]: _dropped, ...rest } = slotMap;
+      onChange?.({ known_spells: known.filter((s) => s !== name), ek_spell_slots: rest });
+    };
+    const ekSections = caster.restrictedSchools ? [
+      {
+        key: 'restricted',
+        slot: EK_SLOT_RESTRICTED,
+        title: `${caster.restrictedSchools.join(' & ')} Spells`,
+        spells: ekSpellsInSlot(known, slotMap, EK_SLOT_RESTRICTED),
+        limit: caster.restrictedSlotsAt(level),
+        schools: caster.restrictedSchools,
+      },
+      {
+        key: 'any',
+        slot: EK_SLOT_ANY,
+        title: 'Any School',
+        spells: ekSpellsInSlot(known, slotMap, EK_SLOT_ANY),
+        limit: caster.anySlotsAt(level),
+        schools: null,
+      },
+    ] : null;
+
     return (
       <div className="space-y-4" data-testid="known-caster-block">
         {caster.note && (
@@ -110,11 +147,9 @@ export default function CasterSpellBlock({
         {slotGrid}
         <SpellList
           spells={data.cantrips ?? []}
-          onAdd={canEditLists ? (n) => addSpell('cantrips', n) : undefined}
           onRemove={canEditLists ? (n) => removeSpell('cantrips', n) : undefined}
           readOnly={readOnly}
           label={`Cantrips Known${cantripLimit != null ? ` — ${(data.cantrips ?? []).length}/${cantripLimit}` : ''}`}
-          placeholder="Add cantrip…"
           isCantrips={true}
         />
         {canEditLists && caster.spellList && (
@@ -135,31 +170,68 @@ export default function CasterSpellBlock({
             />
           </div>
         )}
-        <SpellList
-          spells={data.known_spells ?? []}
-          onAdd={canEditLists ? (n) => addSpell('known_spells', n) : undefined}
-          onRemove={canEditLists ? (n) => removeSpell('known_spells', n) : undefined}
-          readOnly={readOnly}
-          label={`Spells Known${knownLimit != null ? ` — ${(data.known_spells ?? []).length}/${knownLimit}` : ''}`}
-          placeholder="Add spell…"
-          onCastSpell={!readOnly ? handleCastSpell : undefined}
-          availableSlots={!readOnly ? availableSlots : undefined}
-        />
-        {canEditLists && caster.spellList && maxKnownLevel > 0 && (
-          <div className="rounded-md border p-3 space-y-2" data-testid="gm-spell-browser">
-            <div className="text-xs font-medium text-muted-foreground">GM — edit spells from the {caster.spellList} list · up to level {maxKnownLevel}</div>
-            <ClassSpellBrowser
-              mode="learn"
-              className={caster.spellList}
-              campaignId={campaignId}
-              preparedSpells={data.known_spells ?? []}
-              prepareLimit={knownLimit}
-              onAdd={(n) => addSpell('known_spells', n)}
-              onRemove={(n) => removeSpell('known_spells', n)}
-              minSpellLevel={1}
-              maxSpellLevel={maxKnownLevel}
+        {/* A school-restricted known caster (5e Eldritch Knight) keeps its spells in two
+            categories — Abjuration/Evocation slots, and the "any school" slots earned at
+            levels 3/8/14/20. The slot each spell occupies is recorded on character_data
+            (ek_spell_slots), so it is shown here rather than guessed from the spell's school:
+            a Shield learned in the any-school slot is still an any-school spell. */}
+        {ekSections ? ekSections.map(({ key, slot, title, spells, limit, schools }) => (
+          <div key={key} className="space-y-2" data-testid={`ek-known-${key}`}>
+            <SpellList
+              spells={spells}
+              onRemove={canEditLists ? removeKnownSpell : undefined}
+              readOnly={readOnly}
+              label={`${title} — ${spells.length}/${limit}`}
+              onCastSpell={!readOnly ? handleCastSpell : undefined}
+              availableSlots={!readOnly ? availableSlots : undefined}
             />
+            {canEditLists && caster.spellList && maxKnownLevel > 0 && (
+              <div className="rounded-md border p-3 space-y-2" data-testid={`gm-spell-browser-${key}`}>
+                <div className="text-xs font-medium text-muted-foreground">
+                  GM — edit {schools ? schools.join(' & ') : 'any-school'} spells · up to level {maxKnownLevel}
+                </div>
+                <ClassSpellBrowser
+                  mode="learn"
+                  className={caster.spellList}
+                  campaignId={campaignId}
+                  preparedSpells={spells}
+                  prepareLimit={limit}
+                  onAdd={(n) => addKnownInSlot(n, slot)}
+                  onRemove={removeKnownSpell}
+                  minSpellLevel={1}
+                  maxSpellLevel={maxKnownLevel}
+                  schools={schools}
+                />
+              </div>
+            )}
           </div>
+        )) : (
+          <>
+            <SpellList
+              spells={data.known_spells ?? []}
+              onRemove={canEditLists ? (n) => removeSpell('known_spells', n) : undefined}
+              readOnly={readOnly}
+              label={`Spells Known${knownLimit != null ? ` — ${(data.known_spells ?? []).length}/${knownLimit}` : ''}`}
+              onCastSpell={!readOnly ? handleCastSpell : undefined}
+              availableSlots={!readOnly ? availableSlots : undefined}
+            />
+            {canEditLists && caster.spellList && maxKnownLevel > 0 && (
+              <div className="rounded-md border p-3 space-y-2" data-testid="gm-spell-browser">
+                <div className="text-xs font-medium text-muted-foreground">GM — edit spells from the {caster.spellList} list · up to level {maxKnownLevel}</div>
+                <ClassSpellBrowser
+                  mode="learn"
+                  className={caster.spellList}
+                  campaignId={campaignId}
+                  preparedSpells={data.known_spells ?? []}
+                  prepareLimit={knownLimit}
+                  onAdd={(n) => addSpell('known_spells', n)}
+                  onRemove={(n) => removeSpell('known_spells', n)}
+                  minSpellLevel={1}
+                  maxSpellLevel={maxKnownLevel}
+                />
+              </div>
+            )}
+          </>
         )}
         {!canEditLists && !readOnly && (
           <p className="text-xs text-muted-foreground italic" data-testid="known-lists-note">
@@ -270,12 +342,11 @@ export default function CasterSpellBlock({
             </>
           )}
           {slotGrid}
-          <SpellList spells={data.cantrips ?? []} onAdd={(n) => addSpell('cantrips', n)} onRemove={(n) => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" placeholder="Add cantrip…" isCantrips={true} />
+          <SpellList spells={data.cantrips ?? []} onRemove={(n) => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" isCantrips={true} />
           <SpellList
             spells={prepared}
             readOnly={true}
             label={`Prepared Spells — ${prepared.length}/${prepareLimit} · Long Rest`}
-            placeholder=""
             onCastSpell={!readOnly ? handleCastSpell : undefined}
             availableSlots={!readOnly ? availableSlots : undefined}
           />
@@ -349,10 +420,25 @@ export default function CasterSpellBlock({
             )}
           </div>
 
-          <SpellList spells={spellbook} onAdd={(n) => addSpell('spellbook', n)} onRemove={(n) => removeSpell('spellbook', n)} readOnly={readOnly} label="Spellbook (all known spells)" placeholder="Add spell to spellbook…" />
+          <SpellList spells={spellbook} onRemove={(n) => removeSpell('spellbook', n)} readOnly={readOnly} label="Spellbook (all known spells)" />
+
+          {/* Copying a spell into the spellbook goes through the compendium — never free text. */}
+          {!readOnly && caster.spellList && (
+            <SpellAddPicker
+              className={caster.spellList}
+              campaignId={campaignId}
+              spells={spellbook}
+              onAdd={(n) => addSpell('spellbook', n)}
+              onRemove={(n) => removeSpell('spellbook', n)}
+              minSpellLevel={1}
+              maxSpellLevel={maxCastableLevel(slotsTable)}
+              label="Add a spell to the spellbook"
+              testId="spellbook-add"
+            />
+          )}
 
           {prepared.filter((s) => !spellbook.includes(s)).length > 0 && (
-            <SpellList spells={prepared.filter((s) => !spellbook.includes(s))} onRemove={!playerLocked ? (n) => removeSpell('prepared_spells', n) : undefined} readOnly={readOnly || playerLocked} label="Other Prepared Spells" placeholder="" />
+            <SpellList spells={prepared.filter((s) => !spellbook.includes(s))} onRemove={!playerLocked ? (n) => removeSpell('prepared_spells', n) : undefined} readOnly={readOnly || playerLocked} label="Other Prepared Spells" />
           )}
 
           <div className="pt-2 border-t">

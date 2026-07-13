@@ -11,12 +11,26 @@ vi.mock('@/characters/components/spells/SpellLevelTabs', () => ({
   ),
 }));
 vi.mock('@/characters/components/spells/SpellList', () => ({
-  default: ({ spells = [], onAdd, onRemove }) => (
+  default: ({ spells = [], onRemove }) => (
     <div data-testid="spell-list">
       {spells.map((n) => <span key={n} data-testid={`sl-${n}`}>{n}</span>)}
-      {onAdd && <button type="button" data-testid="sl-add" onClick={() => onAdd('Identify')}>add</button>}
       {onRemove && <button type="button" data-testid="sl-remove" onClick={() => onRemove(spells[0])}>remove</button>}
     </div>
+  ),
+}));
+// A ritual is copied into the book from the compendium (ritual-tagged spells of the feat's
+// chosen class) — there is no free-text add anywhere in the app.
+vi.mock('@/characters/components/spells/SpellAddPicker', () => ({
+  default: ({ className, ritualOnly, onAdd }) => (
+    <button
+      type="button"
+      data-testid="sl-add"
+      data-class={className}
+      data-ritual-only={String(!!ritualOnly)}
+      onClick={() => onAdd('Identify')}
+    >
+      add
+    </button>
   ),
 }));
 
@@ -71,9 +85,13 @@ describe('FeatSpellsSection', () => {
 
   it('renders a growable Ritual Book (Ritual Caster) with add/remove that persists onto the feat', () => {
     const onChange = vi.fn();
-    render(<FeatSpellsSection feats={[{ name: 'Alert' }, RITUAL_CASTER]} characterData={{}} onChange={onChange} />);
+    render(<FeatSpellsSection feats={[{ name: 'Alert' }, RITUAL_CASTER]} characterData={{}} onChange={onChange} campaignId={1} />);
     expect(screen.getByTestId('ritual-book-Ritual Caster')).toBeInTheDocument();
     expect(screen.getByTestId('sl-Detect Magic')).toBeInTheDocument();
+
+    // The picker is scoped to ritual spells of the feat's chosen class.
+    expect(screen.getByTestId('sl-add')).toHaveAttribute('data-class', 'Wizard');
+    expect(screen.getByTestId('sl-add')).toHaveAttribute('data-ritual-only', 'true');
 
     // Adding appends to the right feat instance's ritual_book and emits a { feats } patch.
     fireEvent.click(screen.getByTestId('sl-add'));
