@@ -779,19 +779,26 @@ export function buildActionEconomy({
     });
   }
 
-  // Spells, classified by casting_time.
+  // Spells — collapse to a single "Cast a Spell" entry per casting-time bucket the
+  // character actually has a castable spell in, rather than listing every spell (which
+  // cluttered the tab). The full spell list, slots, and casting live on the Spells tab.
+  // Only appears when the character can cast a spell with that casting time.
+  const spellCastTabs = new Set();
   for (const name of characterSpellNames(characterData)) {
     const spell = spellIndex[(name || '').toLowerCase()];
     if (!spell) continue; // unknown to the compendium — can't classify
     const cls = classifyCastingTime(spell.casting_time);
     if (!cls) continue; // longer-than-a-turn casting time — not a combat action
-    const lvl = spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`;
-    push(cls.tab, {
-      key: `spell:${name}`,
-      name,
+    spellCastTabs.add(cls.tab);
+  }
+  for (const tab of ['action', 'bonus', 'reaction']) {
+    if (!spellCastTabs.has(tab)) continue;
+    push(tab, {
+      key: `spell:${tab}`,
+      name: 'Cast a Spell',
       source: 'Spell',
-      cost: cls.cost,
-      detail: spell.school ? `${lvl} · ${spell.school}` : lvl,
+      cost: ECONOMY_COST_LABEL[tab],
+      detail: 'See the Spells tab for your spells, slots, and casting details.',
     });
   }
 

@@ -176,14 +176,14 @@ describe('ActionEconomyTab', () => {
   it("shows a can't-cast note under the Spell section while wearing non-proficient armor", async () => {
     const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
     renderTab({ charClass: 'Wizard', inventory: [chainMailEntry], characterData: { prepared_spells: ['Fireball'] } });
-    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Cast a Spell')).toBeInTheDocument());
     expect(screen.getByTestId('ae-armor-spells')).toHaveTextContent(/can't cast spells while wearing Chain Mail/i);
   });
 
   it('no armor-spells note when the worn armor is proficient', async () => {
     const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
     renderTab({ charClass: 'Fighter', inventory: [chainMailEntry], characterData: { prepared_spells: ['Fireball'] } });
-    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Cast a Spell')).toBeInTheDocument());
     expect(screen.queryByTestId('ae-armor-spells')).not.toBeInTheDocument();
   });
 
@@ -265,7 +265,7 @@ describe('ActionEconomyTab', () => {
 
   it('shows a ranged-spell spacing note under the Spell section', async () => {
     renderTab({ characterData: { prepared_spells: ['Fireball'] } });
-    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Cast a Spell')).toBeInTheDocument());
     expect(screen.getByTestId('ae-spacing-spells')).toHaveTextContent(/ranged attack roll/i);
     expect(screen.getByTestId('spacing-learn-more-spells')).toHaveAttribute('href', '/campaigns/1/encyclopedia/mechanics/spacing');
   });
@@ -290,17 +290,20 @@ describe('ActionEconomyTab', () => {
     expect(encyclopediaService.getSpells).not.toHaveBeenCalled();
   });
 
-  it('fetches and buckets known spells by casting time', async () => {
+  it('collapses known spells into one "Cast a Spell" entry per casting-time bucket', async () => {
     renderTab({ characterData: { prepared_spells: ['Healing Word', 'Shield', 'Fireball'] } });
     await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(1, '5e'));
-    // Fireball (action) shows on the default Actions tab
-    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
-    // Healing Word is a bonus action
+    // A single "Cast a Spell" entry shows on the default Actions tab — not each spell
+    await waitFor(() => expect(screen.getByText('Cast a Spell')).toBeInTheDocument());
+    expect(screen.queryByText('Fireball')).not.toBeInTheDocument();
+    // The bonus-action spell collapses to a "Cast a Spell" bonus entry
     fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
-    expect(screen.getByText('Healing Word')).toBeInTheDocument();
-    // Shield is a reaction
+    expect(screen.getByText('Cast a Spell')).toBeInTheDocument();
+    expect(screen.queryByText('Healing Word')).not.toBeInTheDocument();
+    // The reaction spell collapses to a "Cast a Spell" reaction entry
     fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
-    expect(screen.getByText('Shield')).toBeInTheDocument();
+    expect(screen.getByText('Cast a Spell')).toBeInTheDocument();
+    expect(screen.queryByText('Shield')).not.toBeInTheDocument();
   });
 
   it('shows Two-Weapon Fighting with main-hand/off-hand weapon rows on the Action+Bonus tab', () => {

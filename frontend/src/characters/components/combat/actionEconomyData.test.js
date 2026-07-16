@@ -321,18 +321,32 @@ describe('buildActionEconomy — Fighter', () => {
     expect(ec.action.map((e) => e.name)).toContain('Study'); // 2024 universal action
   });
 
-  it('buckets a known spell by its casting time', () => {
+  it('collapses known spells into one "Cast a Spell" entry per casting-time bucket', () => {
     const args = fighterArgs(3, '5e');
-    args.characterData = { prepared_spells: ['Healing Word', 'Shield', 'Fireball'] };
+    args.characterData = { prepared_spells: ['Healing Word', 'Shield', 'Fireball', 'Mage Hand'] };
     args.spellIndex = {
       'healing word': { casting_time: '1 bonus action', level: 1, school: 'Evocation' },
       shield: { casting_time: '1 reaction', level: 1, school: 'Abjuration' },
       fireball: { casting_time: '1 action', level: 3, school: 'Evocation' },
+      'mage hand': { casting_time: '1 action', level: 0, school: 'Conjuration' },
     };
     const ec = buildActionEconomy(args);
-    expect(ec.bonus.map((e) => e.name)).toContain('Healing Word');
-    expect(ec.reaction.map((e) => e.name)).toContain('Shield');
-    expect(ec.action.map((e) => e.name)).toContain('Fireball');
+    // Individual spells are no longer listed — one generic entry per bucket.
+    const spellActions = ec.action.filter((e) => e.source === 'Spell');
+    expect(spellActions).toHaveLength(1);
+    expect(spellActions[0].name).toBe('Cast a Spell');
+    expect(ec.action.map((e) => e.name)).not.toContain('Fireball');
+    expect(ec.action.map((e) => e.name)).not.toContain('Mage Hand');
+    expect(ec.bonus.find((e) => e.source === 'Spell').name).toBe('Cast a Spell');
+    expect(ec.reaction.find((e) => e.source === 'Spell').name).toBe('Cast a Spell');
+  });
+
+  it('shows no "Cast a Spell" entry when the character can cast nothing', () => {
+    const args = fighterArgs(3, '5e');
+    const ec = buildActionEconomy(args);
+    expect(ec.action.some((e) => e.source === 'Spell')).toBe(false);
+    expect(ec.bonus.some((e) => e.source === 'Spell')).toBe(false);
+    expect(ec.reaction.some((e) => e.source === 'Spell')).toBe(false);
   });
 
   it('falls back to an Unarmed Strike when no weapons are equipped', () => {
