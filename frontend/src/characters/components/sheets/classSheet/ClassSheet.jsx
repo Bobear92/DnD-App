@@ -235,7 +235,7 @@ export default function ClassSheet({
   ) : null;
 
   const restResourcesBlock = (!creation && config.restResources?.length > 0) ? (
-    <RestResourceTracker resources={config.restResources} level={level} data={data} onChange={onChange} readOnly={readOnly} />
+    <RestResourceTracker resources={config.restResources} level={level} data={data} onChange={onChange} readOnly={readOnly} isGm={isGm} />
   ) : null;
 
   const notesBlock = config.notes?.map((n) => (
@@ -274,7 +274,7 @@ export default function ClassSheet({
   // shown in the subclass features area once the subclass is chosen.
   const SubclassPanel = !creation && data.subclass ? config.subclassPanels?.[data.subclass] : null;
   const subclassPanelBlock = SubclassPanel ? (
-    <SubclassPanel data={data} onChange={onChange} level={level} readOnly={readOnly} edition={config.edition} gmEdit={gmEdit} scores={scores} />
+    <SubclassPanel data={data} onChange={onChange} level={level} readOnly={readOnly} edition={config.edition} gmEdit={gmEdit} isGm={isGm} scores={scores} />
   ) : null;
 
   // Subclass grants surfaced on the sheet (class-pool picks like Champion's Additional Fighting

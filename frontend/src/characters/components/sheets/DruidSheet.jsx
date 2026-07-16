@@ -16,6 +16,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { DRUID_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
+import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
@@ -186,14 +187,7 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
             <div className="text-sm font-medium">Wild Shape (Short Rest)</div>
             <div className="text-xs text-muted-foreground">{wildShapeTotal - wildShapeUsed} / {wildShapeTotal} remaining · Max {wildShapeMaxCR(level)}</div>
           </div>
-          {!readOnly && (
-            <div className="flex items-center gap-1">
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('wild_shape_used', Math.max(0, wildShapeUsed - 1))} disabled={wildShapeUsed <= 0}>−</button>
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('wild_shape_used', Math.min(wildShapeTotal, wildShapeUsed + 1))} disabled={wildShapeUsed >= wildShapeTotal}>+</button>
-            </div>
-          )}
+          <RestUseSteppers usedKey="wild_shape_used" used={wildShapeUsed} total={wildShapeTotal} onChange={onChange} readOnly={readOnly} isGm={isGm} label="Wild Shape" />
         </div>
       )}
 

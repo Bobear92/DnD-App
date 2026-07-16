@@ -13,6 +13,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { PALADIN_SUBCLASSES_2024 as SUBCLASSES } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
+import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import { cn } from '@/lib/utils';
@@ -211,12 +212,15 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
                 onChange={e => set('lay_on_hands_heal_amount', parseInt(e.target.value) || 1)}
                 className="w-16 h-7 text-xs text-center" />
               <div className="flex gap-1">
-                <button className="h-6 px-2 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                  onClick={() => set('lay_on_hands_used', Math.max(0, lohUsed - (data.lay_on_hands_heal_amount ?? 1)))}
-                  disabled={lohUsed <= 0}>−</button>
+                {/* Recover (−) is GM-only; a player spends (+) and the pool refills on a long rest. */}
+                {isGm && (
+                  <button className="h-6 px-2 rounded border text-xs hover:bg-muted disabled:opacity-40"
+                    onClick={() => set('lay_on_hands_used', Math.max(0, lohUsed - (data.lay_on_hands_heal_amount ?? 1)))}
+                    disabled={lohUsed <= 0} aria-label="Recover Lay on Hands">−</button>
+                )}
                 <button className="h-6 px-2 rounded border text-xs hover:bg-muted disabled:opacity-40"
                   onClick={() => set('lay_on_hands_used', Math.min(lohPool, lohUsed + (data.lay_on_hands_heal_amount ?? 1)))}
-                  disabled={lohUsed >= lohPool}>+</button>
+                  disabled={lohUsed >= lohPool} aria-label="Use Lay on Hands">+</button>
               </div>
             </div>
           )}
@@ -262,16 +266,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
               <div className="text-sm font-medium">Channel Divinity (Short Rest)</div>
               <div className="text-xs text-muted-foreground">{cdUses - (data.channel_divinity_used ?? 0)} / {cdUses} remaining</div>
             </div>
-            {!readOnly && (
-              <div className="flex items-center gap-1">
-                <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                  onClick={() => set('channel_divinity_used', Math.max(0, (data.channel_divinity_used ?? 0) - 1))}
-                  disabled={(data.channel_divinity_used ?? 0) <= 0}>−</button>
-                <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                  onClick={() => set('channel_divinity_used', Math.min(cdUses, (data.channel_divinity_used ?? 0) + 1))}
-                  disabled={(data.channel_divinity_used ?? 0) >= cdUses}>+</button>
-              </div>
-            )}
+            <RestUseSteppers usedKey="channel_divinity_used" used={data.channel_divinity_used ?? 0} total={cdUses} onChange={onChange} readOnly={readOnly} isGm={isGm} label="Channel Divinity" />
           </div>
         </>
       )}

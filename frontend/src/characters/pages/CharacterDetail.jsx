@@ -1491,6 +1491,7 @@ export default function CharacterDetail() {
                     }
                     readOnly={!showEditable}
                     gmEdit={gmEdit}
+                    isGm={isGm && !playerView}
                     level={identity.draft?.level ?? character.level}
                     section="stats"
                     scores={identity.draft ?? {}}
@@ -1654,6 +1655,7 @@ export default function CharacterDetail() {
                     onChange={patch => classSection.setDraft(d => ({ ...d, ...patch }))}
                     readOnly={!showEditable}
                     gmEdit={gmEdit}
+                    isGm={isGm && !playerView}
                     level={identity.draft?.level ?? character.level}
                     section="features"
                     scores={identity.draft ?? {}}
@@ -1732,6 +1734,7 @@ export default function CharacterDetail() {
                   campaignId={campaignId}
                   onChange={autoSaveClassPatch}
                   readOnly={!showEditable}
+                  isGm={isGm && !playerView}
                 />
               )}
             </TabsContent>
@@ -1822,6 +1825,7 @@ export default function CharacterDetail() {
                             characterData={classSection.draft ?? character.character_data ?? {}}
                             onChange={autoSaveClassPatch}
                             readOnly={!showEditable}
+                            isGm={isGm && !playerView}
                             campaignId={campaignId}
                           />
                         </div>

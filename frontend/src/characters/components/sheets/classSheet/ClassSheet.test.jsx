@@ -225,6 +225,21 @@ describe('ClassSheet — rest resources are use-buttons (Epic 3)', () => {
     expect(onChange).toHaveBeenCalledWith({ second_wind_used: 1 });
   });
 
+  it('a player sees Use but no − recover button (a use returns only from a rest)', () => {
+    fighter({ data: { ...FIGHTER_DATA, second_wind_used: 1 } });
+    const row = screen.getByTestId('rest-resource-second_wind_used');
+    expect(within(row).getByRole('button', { name: /Use Second Wind/i })).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /Recover Second Wind/i })).not.toBeInTheDocument();
+  });
+
+  it('the GM (isGm) gets the − recover button to correct the count', () => {
+    const onChange = vi.fn();
+    fighter({ data: { ...FIGHTER_DATA, second_wind_used: 1 }, onChange, isGm: true });
+    const row = screen.getByTestId('rest-resource-second_wind_used');
+    fireEvent.click(within(row).getByRole('button', { name: /Recover Second Wind/i }));
+    expect(onChange).toHaveBeenCalledWith({ second_wind_used: 0 });
+  });
+
   it('hides rest resources during creation (level 1)', () => {
     render(<FighterSheet data={FIGHTER_DATA} level={1} section="all" creation />);
     expect(screen.queryByText('Second Wind (Short Rest)')).not.toBeInTheDocument();

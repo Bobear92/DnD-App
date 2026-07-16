@@ -98,6 +98,21 @@ describe('ActionEconomyTab', () => {
     expect(screen.getByRole('button', { name: /Use Second Wind/i })).toBeDisabled();
   });
 
+  it('does NOT show a player the − recover button for a spent feature (spend-only; returns on a rest)', () => {
+    renderTab({ level: 2, characterData: { action_surge_used: 1 }, onChange: vi.fn() });
+    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    expect(screen.getByRole('button', { name: /Use Action Surge/i })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Recover Action Surge/i })).not.toBeInTheDocument();
+  });
+
+  it('gives the GM (isGm) a − recover button to correct a spent feature', () => {
+    const onChange = vi.fn();
+    renderTab({ level: 2, characterData: { action_surge_used: 1 }, onChange, isGm: true });
+    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    fireEvent.click(screen.getByRole('button', { name: /Recover Action Surge/i }));
+    expect(onChange).toHaveBeenCalledWith({ action_surge_used: 0 });
+  });
+
   it('hides the Use button in readOnly mode', () => {
     renderTab({ readOnly: true });
     fireEvent.click(screen.getByTestId('ae-subtab-bonus'));

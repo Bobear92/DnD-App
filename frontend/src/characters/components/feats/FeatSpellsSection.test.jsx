@@ -69,13 +69,20 @@ describe('FeatSpellsSection', () => {
     expect(onChange).toHaveBeenCalledWith({ feat_freecast_mage_armor_used: 1 });
   });
 
-  it('reflects an already-used free cast and recovers it', () => {
+  it('lets the GM recover an already-used free cast (− is GM-only)', () => {
     const onChange = vi.fn();
-    render(<FeatSpellsSection feats={[MAGIC_INITIATE]} characterData={{ feat_freecast_mage_armor_used: 1 }} onChange={onChange} />);
-    // Use is disabled (0 remaining); the − recover button restores it.
+    render(<FeatSpellsSection feats={[MAGIC_INITIATE]} characterData={{ feat_freecast_mage_armor_used: 1 }} onChange={onChange} isGm />);
+    // Use is disabled (0 remaining); the GM's − recover button restores it.
     expect(screen.getByLabelText('Use Mage Armor')).toBeDisabled();
     fireEvent.click(screen.getByLabelText('Recover Mage Armor'));
     expect(onChange).toHaveBeenCalledWith({ feat_freecast_mage_armor_used: 0 });
+  });
+
+  it('does NOT show the − recover button to a player (spend-only; recharges on rest)', () => {
+    render(<FeatSpellsSection feats={[MAGIC_INITIATE]} characterData={{ feat_freecast_mage_armor_used: 1 }} onChange={vi.fn()} />);
+    // A player still sees Use (spend), but never a way to add the cast back.
+    expect(screen.getByLabelText('Use Mage Armor')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Recover Mage Armor')).not.toBeInTheDocument();
   });
 
   it('hides the Use/recover controls when readOnly', () => {

@@ -9,6 +9,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { MONK_SUBCLASSES_2024 as SUBCLASSES } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
+import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 
 function martialArtsDie(level) {
@@ -119,7 +120,7 @@ function WeaponMasteryList({ value, onChange, readOnly, max }) {
   );
 }
 
-export default function MonkSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', acExtra = null, maxHpNode = null }) {
+export default function MonkSheet({ data = {}, onChange, readOnly = false, isGm = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', acExtra = null, maxHpNode = null }) {
   if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
@@ -200,14 +201,7 @@ export default function MonkSheet({ data = {}, onChange, readOnly = false, level
             <div className="text-sm font-medium">Focus Points (Short Rest)</div>
             <div className="text-xs text-muted-foreground">{focusTotal - focusUsed} / {focusTotal} remaining</div>
           </div>
-          {!readOnly && (
-            <div className="flex items-center gap-1">
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('ki_used', Math.max(0, focusUsed - 1))} disabled={focusUsed <= 0}>−</button>
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('ki_used', Math.min(focusTotal, focusUsed + 1))} disabled={focusUsed >= focusTotal}>+</button>
-            </div>
-          )}
+          <RestUseSteppers usedKey="ki_used" used={focusUsed} total={focusTotal} onChange={onChange} readOnly={readOnly} isGm={isGm} label="Focus Point" />
         </div>
       )}
 

@@ -139,7 +139,7 @@ export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', ca
             return (
               <div key={r.key} className="flex items-center justify-between rounded-md border px-3 py-2" data-testid={`feat-resource-${r.key}`}>
                 <span className="text-sm font-medium">{row.label}</span>
-                <RestResourceControl row={row} onChange={onChange} readOnly={readOnly} idPrefix={`feat-${r.key}`} />
+                <RestResourceControl row={row} onChange={onChange} readOnly={readOnly} isGm={canManage} idPrefix={`feat-${r.key}`} />
               </div>
             );
           })}

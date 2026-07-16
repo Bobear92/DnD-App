@@ -19,6 +19,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { BARD_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
+import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 
 const BARD_SLOT_TABLE = {
   1:  [2,0,0,0,0,0,0,0,0], 2:  [3,0,0,0,0,0,0,0,0],
@@ -299,13 +300,8 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
               {level >= 5 ? `CHA mod uses — track manually` : `${1 - biUsed} / 1 remaining`}
             </div>
           </div>
-          {!readOnly && level < 5 && (
-            <div className="flex items-center gap-1">
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('bardic_inspiration_used', Math.max(0, biUsed - 1))} disabled={biUsed <= 0}>−</button>
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('bardic_inspiration_used', Math.min(1, biUsed + 1))} disabled={biUsed >= 1}>+</button>
-            </div>
+          {level < 5 && (
+            <RestUseSteppers usedKey="bardic_inspiration_used" used={biUsed} total={1} onChange={onChange} readOnly={readOnly} isGm={isGm} label="Bardic Inspiration" />
           )}
           {!readOnly && level >= 5 && (
             <Input type="number" value={data.bardic_inspiration_used ?? 0}

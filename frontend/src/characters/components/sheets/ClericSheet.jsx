@@ -16,6 +16,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { CLERIC_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
+import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
@@ -187,14 +188,7 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
             <div className="text-sm font-medium">Channel Divinity (Short Rest)</div>
             <div className="text-xs text-muted-foreground">{cdTotal - cdUsed} / {cdTotal} remaining</div>
           </div>
-          {!readOnly && (
-            <div className="flex items-center gap-1">
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('channel_divinity_used', Math.max(0, cdUsed - 1))} disabled={cdUsed <= 0}>−</button>
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('channel_divinity_used', Math.min(cdTotal, cdUsed + 1))} disabled={cdUsed >= cdTotal}>+</button>
-            </div>
-          )}
+          <RestUseSteppers usedKey="channel_divinity_used" used={cdUsed} total={cdTotal} onChange={onChange} readOnly={readOnly} isGm={isGm} label="Channel Divinity" />
         </div>
       )}
 
@@ -250,14 +244,7 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
                     <div className="text-sm font-medium">Channel Divinity (Short Rest)</div>
                     <div className="text-xs text-muted-foreground">{cdTotal - cdUsed} / {cdTotal} remaining</div>
                   </div>
-                  {!readOnly && (
-                    <div className="flex items-center gap-1">
-                      <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                        onClick={() => set('channel_divinity_used', Math.max(0, cdUsed - 1))} disabled={cdUsed <= 0}>−</button>
-                      <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                        onClick={() => set('channel_divinity_used', Math.min(cdTotal, cdUsed + 1))} disabled={cdUsed >= cdTotal}>+</button>
-                    </div>
-                  )}
+                  <RestUseSteppers usedKey="channel_divinity_used" used={cdUsed} total={cdTotal} onChange={onChange} readOnly={readOnly} isGm={isGm} label="Channel Divinity" />
                 </div>
               )}
               {/* Spell slots */}

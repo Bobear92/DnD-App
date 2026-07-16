@@ -12,6 +12,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { MONK_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
+import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 
 function martialArtsDie(level) {
   if (level >= 17) return 'd10';
@@ -92,7 +93,7 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [], rac
   );
 }
 
-export default function MonkSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, scores = {}, backgroundSkills = [], raceSkills = [], section = 'all', acExtra = null, maxHpNode = null }) {
+export default function MonkSheet({ data = {}, onChange, readOnly = false, isGm = false, level = 1, creation = false, scores = {}, backgroundSkills = [], raceSkills = [], section = 'all', acExtra = null, maxHpNode = null }) {
   if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
@@ -175,16 +176,7 @@ export default function MonkSheet({ data = {}, onChange, readOnly = false, level
             <div className="text-sm font-medium">Ki Points (Short Rest)</div>
             <div className="text-xs text-muted-foreground">{kiTotal - kiUsed} / {kiTotal} remaining</div>
           </div>
-          {!readOnly && (
-            <div className="flex items-center gap-1">
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('ki_used', Math.max(0, kiUsed - 1))}
-                disabled={kiUsed <= 0}>−</button>
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('ki_used', Math.min(kiTotal, kiUsed + 1))}
-                disabled={kiUsed >= kiTotal}>+</button>
-            </div>
-          )}
+          <RestUseSteppers usedKey="ki_used" used={kiUsed} total={kiTotal} onChange={onChange} readOnly={readOnly} isGm={isGm} label="Ki" />
         </div>
       )}
 

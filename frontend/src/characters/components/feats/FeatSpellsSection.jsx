@@ -15,9 +15,11 @@ import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects'
  *   feats          character_data.feats (each may carry a `choices.spell_grant` snapshot)
  *   characterData  for the free-cast `<key>_used` counters
  *   onChange       (patch) => void — persists a free-cast use or a ritual-book edit (autoSaveClassPatch)
- *   readOnly       hides the Use/recover + ritual add/remove controls
+ *   readOnly       hides the Use + ritual add/remove controls
+ *   isGm           shows the GM-only "−" recover control (a player spends only; the free
+ *                  cast returns from a long rest)
  */
-export default function FeatSpellsSection({ feats = [], characterData = {}, onChange, readOnly = false, campaignId }) {
+export default function FeatSpellsSection({ feats = [], characterData = {}, onChange, readOnly = false, isGm = false, campaignId }) {
   const { cantrips, leveled, freeCasts, ritualBooks } = getFeatGrantedSpells(feats);
   const spells = [...cantrips, ...leveled];
   if (spells.length === 0 && ritualBooks.length === 0) return null;
@@ -74,7 +76,7 @@ export default function FeatSpellsSection({ feats = [], characterData = {}, onCh
                   <span className="font-medium">{fc.name}</span>
                   <span className="text-xs text-muted-foreground"> · {fc.source}</span>
                 </div>
-                <RestResourceControl row={row} onChange={onChange} readOnly={readOnly} idPrefix="feat-freecast" />
+                <RestResourceControl row={row} onChange={onChange} readOnly={readOnly} isGm={isGm} idPrefix="feat-freecast" />
               </div>
             );
           })}

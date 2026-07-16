@@ -9,6 +9,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { BARBARIAN_SUBCLASSES_2024 as SUBCLASSES } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
+import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 
 function rageCount(level) {
@@ -117,7 +118,7 @@ function WeaponMasteryList({ value, onChange, readOnly, max }) {
   );
 }
 
-export default function BarbarianSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', acExtra = null, maxHpNode = null }) {
+export default function BarbarianSheet({ data = {}, onChange, readOnly = false, isGm = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', acExtra = null, maxHpNode = null }) {
   if (section === 'spells') return null;
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
@@ -192,13 +193,8 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
               {rages === '∞' ? 'Unlimited rages' : `${rages - usedRages} / ${rages} remaining`}
             </div>
           </div>
-          {!readOnly && rages !== '∞' && (
-            <div className="flex items-center gap-1">
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('rages_used', Math.max(0, usedRages - 1))} disabled={usedRages <= 0}>−</button>
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('rages_used', Math.min(rages, usedRages + 1))} disabled={usedRages >= rages}>+</button>
-            </div>
+          {rages !== '∞' && (
+            <RestUseSteppers usedKey="rages_used" used={usedRages} total={rages} onChange={onChange} readOnly={readOnly} isGm={isGm} label="Rage" />
           )}
         </div>
       )}

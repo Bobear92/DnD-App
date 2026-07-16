@@ -16,6 +16,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { PALADIN_FIGHTING_STYLES_5E, PALADIN_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
+import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
@@ -161,15 +162,12 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
             <span className="text-xs text-muted-foreground">
               {(data.divine_sense_total ?? (1 + Math.floor((data.charisma_modifier ?? 0)))) - (data.divine_sense_used ?? 0)} remaining
             </span>
-            {!readOnly && (
-              <div className="flex gap-1">
-                <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                  onClick={() => set('divine_sense_used', Math.max(0, (data.divine_sense_used ?? 0) - 1))}
-                  disabled={(data.divine_sense_used ?? 0) <= 0}>−</button>
-                <button className="h-6 w-6 rounded border text-xs hover:bg-muted"
-                  onClick={() => set('divine_sense_used', (data.divine_sense_used ?? 0) + 1)}>+</button>
-              </div>
-            )}
+            <RestUseSteppers
+              usedKey="divine_sense_used"
+              used={data.divine_sense_used ?? 0}
+              total={data.divine_sense_total ?? (1 + Math.floor((data.charisma_modifier ?? 0)))}
+              onChange={onChange} readOnly={readOnly} isGm={isGm} label="Divine Sense"
+            />
           </div>
         </div>
       )}

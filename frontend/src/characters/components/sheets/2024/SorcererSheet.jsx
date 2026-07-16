@@ -221,13 +221,25 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
             <div className="text-sm font-medium">Innate Sorcery (Long Rest)</div>
             <div className="text-xs text-muted-foreground">1 minute: advantage on spell attack rolls + DC +1</div>
           </div>
+          {/* A player may spend (Available→Used); only the GM can reset it (recharges on a long rest). */}
           {!readOnly && (
-            <button
-              className={`text-xs px-3 py-1 rounded border transition-colors ${
-                data.innate_sorcery_used ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'}`}
-              onClick={() => set('innate_sorcery_used', !data.innate_sorcery_used)}>
-              {data.innate_sorcery_used ? 'Used' : 'Available'}
-            </button>
+            data.innate_sorcery_used ? (
+              isGm ? (
+                <button
+                  className="text-xs px-3 py-1 rounded border transition-colors bg-muted text-muted-foreground"
+                  onClick={() => set('innate_sorcery_used', false)}>
+                  Used
+                </button>
+              ) : (
+                <span className="text-xs px-3 py-1 rounded border bg-muted text-muted-foreground">Used</span>
+              )
+            ) : (
+              <button
+                className="text-xs px-3 py-1 rounded border transition-colors bg-primary text-primary-foreground"
+                onClick={() => set('innate_sorcery_used', true)}>
+                Available
+              </button>
+            )
           )}
         </div>
       )}

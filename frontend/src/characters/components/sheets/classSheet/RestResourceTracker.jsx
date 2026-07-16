@@ -1,14 +1,15 @@
 /**
  * RestResourceTracker — use-button widget for class features that recharge on a rest
- * (Second Wind, Action Surge, Indomitable, …). Mirrors RacialResourceTracker's pattern:
- * clicking "Use" opens a confirmation dialog warning when it recharges, the "−" button
- * recovers a use, and only a GM-triggered rest restores them in bulk (backend).
+ * (Second Wind, Action Surge, Indomitable, …). Mirrors the spell-slot rule: a player may
+ * only SPEND a use (the "Use" button); the count comes back only from a rest (the GM's
+ * rest flow, backend). The "−" recover button is a GM-only correction control, gated on
+ * `isGm` — a player can never add a use back manually.
  *
  * Driven by a class config's `restResources` list via useRestResource.
  *
- * `RestResourceControl` is the reusable per-resource control (− / Use + confirm dialog).
- * It's exported so other views (e.g. the Action Economy tab) can attach the same Use
- * mechanic to a single resource without re-rendering the whole tracker list.
+ * `RestResourceControl` is the reusable per-resource control (Use + GM-only − + confirm
+ * dialog). It's exported so other views (e.g. the Action Economy tab) can attach the same
+ * Use mechanic to a single resource without re-rendering the whole tracker list.
  */
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -21,11 +22,50 @@ const rechargeText = (recharge) =>
   recharge === 'short' ? 'a short or long rest' : 'a long rest';
 
 /**
- * One resource's − / Use controls + the confirm dialog. Renders the count when
- * `showRemaining` (default true). `idPrefix` namespaces the confirm-button test id so
- * multiple instances on the page don't collide.
+ * RestUseSteppers — the compact − / + stepper the hand-written class sheets use inline for a
+ * rest-rechargeable count (rage, ki/focus, channel divinity, wild shape, bardic inspiration,
+ * pact slots, divine sense…). Same spend/recover rule as RestResourceControl but without the
+ * confirm dialog, so spending a point pool stays one click (a confirm per ki point would be
+ * painful). "+" SPENDS a use (increments `<usedKey>`) and is available to the player; "−"
+ * RECOVERS a use and is **GM-only** (gated on `isGm`) — a player can never add a use back;
+ * the count returns only from a rest (the GM's rest flow, backend). `readOnly` hides both.
  */
-export function RestResourceControl({ row, onChange, readOnly = false, showRemaining = true, idPrefix = 'rest' }) {
+export function RestUseSteppers({ usedKey, used = 0, total = 0, onChange, readOnly = false, isGm = false, label = 'resource' }) {
+  if (readOnly) return null;
+  const set = (value) => onChange?.({ [usedKey]: value });
+  return (
+    <div className="flex items-center gap-1">
+      {isGm && (
+        <button
+          type="button"
+          className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+          onClick={() => set(Math.max(0, used - 1))}
+          disabled={used <= 0}
+          aria-label={`Recover ${label}`}
+        >
+          −
+        </button>
+      )}
+      <button
+        type="button"
+        className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+        onClick={() => set(Math.min(total, used + 1))}
+        disabled={used >= total}
+        aria-label={`Use ${label}`}
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+/**
+ * One resource's Use control (+ GM-only − recover) + the confirm dialog. Renders the
+ * count when `showRemaining` (default true). `idPrefix` namespaces the confirm-button test
+ * id so multiple instances on the page don't collide. The "−" recover button appears only
+ * for the GM (`isGm`) — a player spends a use and it returns only from a rest.
+ */
+export function RestResourceControl({ row, onChange, readOnly = false, isGm = false, showRemaining = true, idPrefix = 'rest' }) {
   const [confirm, setConfirm] = useState(false);
   const set = (value) => onChange?.({ [row.key]: value });
 
@@ -36,15 +76,17 @@ export function RestResourceControl({ row, onChange, readOnly = false, showRemai
       )}
       {!readOnly && (
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-            disabled={row.used <= 0}
-            onClick={() => set(row.used - 1)}
-            aria-label={`Recover ${row.label}`}
-          >
-            −
-          </button>
+          {isGm && (
+            <button
+              type="button"
+              className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+              disabled={row.used <= 0}
+              onClick={() => set(row.used - 1)}
+              aria-label={`Recover ${row.label}`}
+            >
+              −
+            </button>
+          )}
           <Button
             type="button"
             size="sm"
@@ -85,7 +127,7 @@ export function RestResourceControl({ row, onChange, readOnly = false, showRemai
   );
 }
 
-export default function RestResourceTracker({ resources = [], level = 1, data = {}, onChange, readOnly = false }) {
+export default function RestResourceTracker({ resources = [], level = 1, data = {}, onChange, readOnly = false, isGm = false }) {
   const rows = useRestResource({ resources, level, data });
   if (rows.length === 0) return null;
 
@@ -105,7 +147,7 @@ export default function RestResourceTracker({ resources = [], level = 1, data = 
               </div>
             )}
           </div>
-          <RestResourceControl row={r} onChange={onChange} readOnly={readOnly} idPrefix="rest" />
+          <RestResourceControl row={r} onChange={onChange} readOnly={readOnly} isGm={isGm} idPrefix="rest" />
         </div>
       ))}
     </div>

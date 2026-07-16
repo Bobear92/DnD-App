@@ -17,7 +17,7 @@ import { abilityMod, profBonus } from '@/characters/components/inventory/invento
  *
  * Stores `character_data.maneuvers` (string[]) and `character_data.superiority_dice_used`.
  */
-export default function BattleMasterPanel({ data = {}, onChange, level = 1, readOnly = false, edition = '5e', gmEdit = false, scores = {} }) {
+export default function BattleMasterPanel({ data = {}, onChange, level = 1, readOnly = false, edition = '5e', gmEdit = false, isGm = false, scores = {} }) {
   const allManeuvers = getManeuvers(edition);
   const known = data.maneuvers || [];
   // The Martial Adept feat grants a Battle Master +1 superiority die (at the BM die size) and
@@ -75,7 +75,7 @@ export default function BattleMasterPanel({ data = {}, onChange, level = 1, read
         </div>
         <div className="flex items-center justify-between rounded-md border px-3 py-2" data-testid="superiority-dice">
           <span className="text-sm font-medium">Superiority Dice</span>
-          <RestResourceControl row={diceRow} onChange={onChange} readOnly={readOnly} idPrefix="superiority" />
+          <RestResourceControl row={diceRow} onChange={onChange} readOnly={readOnly} isGm={isGm} idPrefix="superiority" />
         </div>
         <div className="space-y-0.5">
           <p className="text-sm" data-testid="maneuver-save-dc">

@@ -167,12 +167,15 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
           </div>
           {!readOnly && (
             <div className="flex items-center gap-1">
-              <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
-                onClick={() => set('bardic_inspiration_used', Math.max(0, (data.bardic_inspiration_used ?? 0) - 1))}
-                disabled={(data.bardic_inspiration_used ?? 0) <= 0}>−</button>
+              {/* Recover (−) is GM-only; a player spends (+) and uses return on a short rest. */}
+              {isGm && (
+                <button className="h-6 w-6 rounded border text-xs hover:bg-muted disabled:opacity-40"
+                  onClick={() => set('bardic_inspiration_used', Math.max(0, (data.bardic_inspiration_used ?? 0) - 1))}
+                  disabled={(data.bardic_inspiration_used ?? 0) <= 0} aria-label="Recover Bardic Inspiration">−</button>
+              )}
               <span className="text-sm w-6 text-center">{data.bardic_inspiration_used ?? 0}</span>
               <button className="h-6 w-6 rounded border text-xs hover:bg-muted"
-                onClick={() => set('bardic_inspiration_used', (data.bardic_inspiration_used ?? 0) + 1)}>+</button>
+                onClick={() => set('bardic_inspiration_used', (data.bardic_inspiration_used ?? 0) + 1)} aria-label="Use Bardic Inspiration">+</button>
             </div>
           )}
         </div>

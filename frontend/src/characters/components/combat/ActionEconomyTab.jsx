@@ -55,7 +55,7 @@ function ToHitBreakdown({ toHit, breakdown, entryKey }) {
   );
 }
 
-function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
+function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId }) {
   // Great Weapon Master power attack: when a weapon entry carries a `powerAttack` variant,
   // a toggle swaps the displayed to-hit/damage between the normal and −5/+10 numbers.
   const [powerOn, setPowerOn] = useState(false);
@@ -176,7 +176,7 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
       </div>
       {/* Rest-rechargeable features get the same Use button as the Features tab. */}
       {resource && (
-        <RestResourceControl row={resource} onChange={onChange} readOnly={readOnly} idPrefix="ae-rest" />
+        <RestResourceControl row={resource} onChange={onChange} readOnly={readOnly} isGm={isGm} idPrefix="ae-rest" />
       )}
     </div>
   );
@@ -192,7 +192,7 @@ function ItemRow({ entry, resource, onChange, readOnly, campaignId }) {
 export default function ActionEconomyTab({
   charClass, subclass, level = 1, edition = '5e',
   characterData = {}, inventory = [], scores = {}, race, subrace, campaignId,
-  onChange, readOnly = false,
+  onChange, readOnly = false, isGm = false,
 }) {
   const [active, setActive] = useState('action');
   const [spellIndex, setSpellIndex] = useState({});
@@ -338,7 +338,7 @@ export default function ActionEconomyTab({
               )}
               <div className="space-y-2">
                 {list.map((e) => (
-                  <ItemRow key={e.key} entry={e} resource={resourceFor(e)} onChange={onChange} readOnly={readOnly} campaignId={campaignId} />
+                  <ItemRow key={e.key} entry={e} resource={resourceFor(e)} onChange={onChange} readOnly={readOnly} isGm={isGm} campaignId={campaignId} />
                 ))}
               </div>
             </div>
