@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
 import { useCampaign } from '@/campaigns/CampaignContext';
+import { summarizeUpcast, summarizeCantrip } from '@/characters/components/spells/spellUpcast';
 
 const LEVEL_LABELS = {
   0: 'Cantrips',
@@ -14,6 +15,21 @@ const LEVEL_LABELS = {
   4: '4th Level', 5: '5th Level', 6: '6th Level',
   7: '7th Level', 8: '8th Level', 9: '9th Level',
 };
+
+const ORDINALS = {
+  1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th',
+  6: '6th', 7: '7th', 8: '8th', 9: '9th',
+};
+
+// The slot levels a spell can be cast with: its own level and every higher level
+// the character still has an unspent slot in (upcasting). A spell can always be
+// cast with a slot ABOVE its base level even when its own level is exhausted.
+function castableSlotLevels(baseLevel, availableSlots) {
+  return Object.keys(availableSlots || {})
+    .map(Number)
+    .filter(l => l >= baseLevel && (availableSlots[l] ?? 0) > 0)
+    .sort((a, b) => a - b);
+}
 
 async function fetchSpellCatalog(campaignId, edition) {
   try {
@@ -54,8 +70,17 @@ async function fetchSpellCatalog(campaignId, edition) {
  *   label            string      section heading
  *   isCantrips       boolean     if true, skip API level lookup (always shown as Cantrips section)
  *   onCastSpell      (name, level)=>void  if provided, shows a Cast button per non-cantrip spell;
- *                                          clicking Cast opens a confirm dialog before firing this callback
- *   availableSlots   { [level]: number }  slots remaining per level; disables Cast when 0
+ *                                          clicking Cast opens a confirm dialog before firing this callback.
+ *                                          The dialog lets the player choose which slot level to spend
+ *                                          (upcasting) — every available slot at or above the spell's level.
+ *   availableSlots   { [level]: number }  slots remaining per level; disables Cast when none ≥ base level
+ *   spellSaveDc      number               the character's spell save DC (8 + PB + ability mod); when set,
+ *                                          the cast dialog shows "Save DC N (ABIL)" for save spells
+ *   spellAttackBonus number               the character's spell attack bonus (PB + ability mod); shown for
+ *                                          spell-attack spells in the cast dialog + on cantrip rows
+ *   characterLevel   number               the character's level; when set (cantrip lists only), each
+ *                                          cantrip row shows its computed damage-at-this-level + save DC /
+ *                                          attack bonus, so the player needn't open the description
  */
 export default function SpellList({
   spells = [],
@@ -66,6 +91,9 @@ export default function SpellList({
   isCantrips = false,
   onCastSpell,
   availableSlots,
+  spellSaveDc,
+  spellAttackBonus,
+  characterLevel,
   hideLevelHeadings = false,
 }) {
   const ctx = useCampaign();
@@ -73,8 +101,10 @@ export default function SpellList({
   const edition = ctx?.campaign?.edition;
   const [catalog, setCatalog] = useState([]);
   const [detailName, setDetailName] = useState(null);
-  // Pending cast awaiting confirmation: { name, level } or null
+  // Pending cast awaiting confirmation: { name, baseLevel, slotLevels } or null
   const [castConfirm, setCastConfirm] = useState(null);
+  // The slot level the player has chosen to spend for the pending cast (upcasting)
+  const [castSlotLevel, setCastSlotLevel] = useState(null);
 
   // Fetch the catalog regardless of isCantrips: cantrip grouping doesn't need it
   // (cantrips are forced to level 0), but the detail dialog does — without it,
@@ -110,6 +140,21 @@ export default function SpellList({
     setDetailName(name);
   };
 
+  // Cantrip rows show their scaling at a glance: damage dice at THIS character level (cantrips
+  // scale with character level, not slots) + the save DC / attack bonus, so the player doesn't
+  // have to open the description each time. Only when characterLevel is supplied (cantrip lists).
+  const cantripMeta = (name) => {
+    if (!isCantrips || characterLevel == null) return null;
+    const spell = spellMap[name];
+    if (!spell) return null;
+    const s = summarizeCantrip(spell, characterLevel, { saveDc: spellSaveDc, attackBonus: spellAttackBonus });
+    const parts = [];
+    if (s.damage) parts.push(`${s.damage.atLevel} damage`);
+    if (s.save) parts.push(`Save DC ${s.save.dc} (${s.save.ability})`);
+    if (s.attackBonus != null) parts.push(`Spell atk ${s.attackBonus >= 0 ? '+' : ''}${s.attackBonus}`);
+    return parts.length ? parts.join(' · ') : null;
+  };
+
   // Derive the open dialog's detail from the LIVE catalog (not captured at click-time), so a
   // spell clicked before the async catalog finishes loading fills in once it arrives instead
   // of being stuck on the "not in compendium" fallback.
@@ -140,25 +185,37 @@ export default function SpellList({
             <div className="rounded-md border divide-y">
               {names.map(name => {
                 const castable = onCastSpell && lvl > 0;
-                const slotsLeft = castable ? (availableSlots?.[lvl] ?? 0) : 0;
-                const castDisabled = castable && slotsLeft <= 0;
+                const slotLevels = castable ? castableSlotLevels(lvl, availableSlots) : [];
+                const castDisabled = castable && slotLevels.length === 0;
+                const meta = cantripMeta(name);
                 return (
                   <div key={name} className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/30 group">
-                    <button
-                      type="button"
-                      onClick={() => openDetail(name)}
-                      className="text-sm text-left hover:text-primary hover:underline flex-1 min-w-0 truncate"
-                    >
-                      {name}
-                    </button>
+                    <div className="flex-1 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => openDetail(name)}
+                        className="text-sm text-left hover:text-primary hover:underline w-full truncate block"
+                      >
+                        {name}
+                      </button>
+                      {meta && (
+                        <div data-testid={`cantrip-meta-${name}`} className="text-xs text-muted-foreground truncate">
+                          {meta}
+                        </div>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1 ml-2 flex-shrink-0">
                       {castable && (
                         <button
                           type="button"
                           data-testid={`cast-spell-${name}`}
                           disabled={castDisabled}
-                          onClick={() => !castDisabled && setCastConfirm({ name, level: lvl })}
-                          title={castDisabled ? 'No spell slots remaining at this level' : `Cast using a level ${lvl} slot`}
+                          onClick={() => {
+                            if (castDisabled) return;
+                            setCastConfirm({ name, baseLevel: lvl, slotLevels });
+                            setCastSlotLevel(slotLevels[0]);
+                          }}
+                          title={castDisabled ? 'No spell slots available at or above this level' : `Cast ${name}`}
                           className={`text-xs px-2 py-0.5 rounded border transition-colors ${
                             castDisabled
                               ? 'opacity-40 cursor-not-allowed bg-muted text-muted-foreground border-border'
@@ -189,32 +246,118 @@ export default function SpellList({
 
       <Dialog open={!!castConfirm} onOpenChange={open => !open && setCastConfirm(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Cast {castConfirm?.name}?</DialogTitle>
-            <DialogDescription>
-              This will use a level {castConfirm?.level} spell slot.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              data-testid="cast-cancel-button"
-              onClick={() => setCastConfirm(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              data-testid="cast-confirm-button"
-              onClick={() => {
-                if (castConfirm) onCastSpell?.(castConfirm.name, castConfirm.level);
-                setCastConfirm(null);
-              }}
-            >
-              Cast
-            </Button>
-          </DialogFooter>
+          {castConfirm && (() => {
+            const slotLevels = castConfirm.slotLevels ?? [];
+            const canUpcast = slotLevels.length > 1;
+            const spell = spellMap[castConfirm.name] ?? { level: castConfirm.baseLevel };
+            const summary = summarizeUpcast(spell, castSlotLevel, {
+              saveDc: spellSaveDc,
+              attackBonus: spellAttackBonus,
+            });
+            const isUpcast = summary.isUpcast;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Cast {castConfirm.name}?</DialogTitle>
+                  <DialogDescription>
+                    {canUpcast
+                      ? `Choose which spell slot to spend (level ${castConfirm.baseLevel} spell).`
+                      : `This will use a level ${castSlotLevel} spell slot.`}
+                  </DialogDescription>
+                </DialogHeader>
+
+                {canUpcast && (
+                  <div className="flex flex-wrap gap-1.5 py-1">
+                    {slotLevels.map(sl => (
+                      <button
+                        key={sl}
+                        type="button"
+                        data-testid={`cast-slot-${sl}`}
+                        onClick={() => setCastSlotLevel(sl)}
+                        className={`text-xs px-2.5 py-1 rounded border transition-colors ${
+                          castSlotLevel === sl
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background hover:bg-muted border-border'
+                        }`}
+                      >
+                        {ORDINALS[sl] ?? `L${sl}`}
+                        <span className="opacity-70"> ({availableSlots?.[sl] ?? 0} left)</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Computed figures the player asked for: what the save DC / attack / damage
+                    actually are at the chosen slot. Only shown when we can state them honestly. */}
+                {(summary.save || summary.attackBonus != null || summary.damage) && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" data-testid="cast-figures">
+                    {summary.damage && (
+                      <div data-testid="cast-damage">
+                        <span className="font-medium">
+                          {summary.damage.kind === 'healing' ? 'Healing: ' : 'Damage: '}
+                        </span>
+                        <span className={isUpcast ? 'text-primary font-semibold' : ''}>
+                          {summary.damage.atLevel}
+                        </span>
+                        {isUpcast && summary.damage.atLevel !== summary.damage.base && (
+                          <span className="text-muted-foreground"> (base {summary.damage.base})</span>
+                        )}
+                      </div>
+                    )}
+                    {summary.save && (
+                      <div data-testid="cast-save-dc">
+                        <span className="font-medium">Save DC: </span>
+                        {summary.save.dc} <span className="text-muted-foreground">({summary.save.ability})</span>
+                      </div>
+                    )}
+                    {summary.attackBonus != null && (
+                      <div data-testid="cast-attack">
+                        <span className="font-medium">Spell attack: </span>
+                        {summary.attackBonus >= 0 ? `+${summary.attackBonus}` : summary.attackBonus}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {summary.noExtraEffect ? (
+                  <div data-testid="cast-no-extra" className="rounded-md border p-2 text-xs text-muted-foreground">
+                    This spell does nothing extra when cast at a higher level.
+                  </div>
+                ) : (
+                  <div
+                    data-testid="cast-higher-level"
+                    className={`rounded-md border p-2 text-xs ${
+                      isUpcast ? 'border-primary/50 bg-primary/5' : 'text-muted-foreground'
+                    }`}
+                  >
+                    <span className="font-medium">At Higher Levels: </span>
+                    {summary.higherLevelText}
+                  </div>
+                )}
+
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    data-testid="cast-cancel-button"
+                    onClick={() => setCastConfirm(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    data-testid="cast-confirm-button"
+                    onClick={() => {
+                      onCastSpell?.(castConfirm.name, castSlotLevel);
+                      setCastConfirm(null);
+                    }}
+                  >
+                    Cast{isUpcast ? ` (level ${castSlotLevel})` : ''}
+                  </Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

@@ -22,11 +22,39 @@ const CATALOG = [
     name: 'Magic Missile', level: 1, school: 'Evocation',
     casting_time: '1 action', range: '120 feet', components: 'V, S',
     duration: 'Instantaneous', description: 'Three glowing darts strike.', classes: 'Sorcerer, Wizard',
+    higher_level: 'Creates one more dart for each slot level above 1st.',
   },
   {
     name: 'Fireball', level: 3, school: 'Evocation',
     casting_time: '1 action', range: '150 feet', components: 'V, S, M',
-    duration: 'Instantaneous', description: 'A fiery explosion erupts.', classes: 'Sorcerer, Wizard',
+    duration: 'Instantaneous',
+    description: 'Each creature in a 20-foot-radius sphere must make a Dexterity saving throw. A target takes 8d6 fire damage on a failed save.',
+    higher_level: 'When you cast this spell using a spell slot of 4th level or higher, the damage increases by 1d6 for each slot level above 3rd.',
+    classes: 'Sorcerer, Wizard',
+  },
+  {
+    name: 'Shield', level: 1, school: 'Abjuration',
+    casting_time: '1 reaction', range: 'Self', components: 'V, S',
+    duration: '1 round', description: 'An invisible barrier of magical force appears. You have a +5 bonus to AC.',
+    classes: 'Sorcerer, Wizard',
+  },
+  {
+    name: 'Fire Bolt', level: 0, school: 'Evocation',
+    casting_time: '1 action', range: '120 feet', components: 'V, S', duration: 'Instantaneous',
+    description: "Make a ranged spell attack against the target. On a hit, the target takes 1d10 fire damage.\n\nThis spell's damage increases by 1d10 when you reach 5th level (2d10), 11th level (3d10), and 17th level (4d10).",
+    classes: 'Sorcerer, Wizard',
+  },
+  {
+    name: 'Sacred Flame', level: 0, school: 'Evocation',
+    casting_time: '1 action', range: '60 feet', components: 'V, S', duration: 'Instantaneous',
+    description: "The target must succeed on a dexterity saving throw or take 1d8 radiant damage.\n\nThe spell's damage increases by 1d8 when you reach 5th level (2d8), 11th level (3d8), and 17th level (4d8).",
+    classes: 'Cleric',
+  },
+  {
+    name: 'Mage Hand', level: 0, school: 'Conjuration',
+    casting_time: '1 action', range: '30 feet', components: 'V, S', duration: '1 minute',
+    description: 'A spectral, floating hand appears at a point you choose within range.',
+    classes: 'Sorcerer, Wizard',
   },
 ];
 
@@ -198,7 +226,7 @@ describe('SpellList', () => {
       expect(screen.getByText('150 feet')).toBeInTheDocument();
       expect(screen.getByText('V, S, M')).toBeInTheDocument();
       expect(screen.getByText('Instantaneous')).toBeInTheDocument();
-      expect(screen.getByText('A fiery explosion erupts.')).toBeInTheDocument();
+      expect(screen.getByText(/8d6 fire damage/)).toBeInTheDocument();
       expect(screen.getByText(/Sorcerer, Wizard/)).toBeInTheDocument();
     });
   });
@@ -352,5 +380,180 @@ describe('SpellList', () => {
       availableSlots={{ 0: 99 }}
     />);
     expect(screen.queryByTestId('cast-spell-Fire Bolt')).not.toBeInTheDocument();
+  });
+
+  // ── Upcasting ───────────────────────────────────────────────────────────
+  describe('upcasting', () => {
+    it('enables Cast when only a HIGHER-level slot is available (base level exhausted)', async () => {
+      mockFetchCatalog();
+      render(<SpellList
+        spells={['Magic Missile']}
+        label="Prepared"
+        onCastSpell={vi.fn()}
+        availableSlots={{ 1: 0, 2: 1 }}
+      />);
+      await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
+      // Base-level (1) slots are gone but a 2nd-level slot is free → still castable.
+      expect(screen.getByTestId('cast-spell-Magic Missile')).not.toBeDisabled();
+    });
+
+    it('offers a slot chooser for each available level at or above the base, defaulting to the lowest', async () => {
+      mockFetchCatalog();
+      const onCastSpell = vi.fn();
+      render(<SpellList
+        spells={['Magic Missile']}
+        label="Prepared"
+        onCastSpell={onCastSpell}
+        availableSlots={{ 1: 2, 2: 1, 3: 1 }}
+      />);
+      await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
+      fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
+      expect(screen.getByTestId('cast-slot-1')).toBeInTheDocument();
+      expect(screen.getByTestId('cast-slot-2')).toBeInTheDocument();
+      expect(screen.getByTestId('cast-slot-3')).toBeInTheDocument();
+      // Default (no chooser interaction) spends the lowest available slot.
+      fireEvent.click(screen.getByTestId('cast-confirm-button'));
+      expect(onCastSpell).toHaveBeenCalledWith('Magic Missile', 1);
+    });
+
+    it('casts with the chosen higher slot level when upcast', async () => {
+      mockFetchCatalog();
+      const onCastSpell = vi.fn();
+      render(<SpellList
+        spells={['Magic Missile']}
+        label="Prepared"
+        onCastSpell={onCastSpell}
+        availableSlots={{ 1: 2, 2: 1, 3: 1 }}
+      />);
+      await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
+      fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
+      fireEvent.click(screen.getByTestId('cast-slot-3'));
+      fireEvent.click(screen.getByTestId('cast-confirm-button'));
+      expect(onCastSpell).toHaveBeenCalledWith('Magic Missile', 3);
+    });
+
+    it("shows the spell's At Higher Levels text in the cast dialog", async () => {
+      mockFetchCatalog();
+      render(<SpellList
+        spells={['Magic Missile']}
+        label="Prepared"
+        onCastSpell={vi.fn()}
+        availableSlots={{ 1: 2, 2: 1 }}
+      />);
+      await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
+      fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
+      expect(screen.getByTestId('cast-higher-level')).toHaveTextContent(/one more dart/i);
+    });
+
+    it('shows no slot chooser when only the base-level slot is available', async () => {
+      mockFetchCatalog();
+      render(<SpellList
+        spells={['Magic Missile']}
+        label="Prepared"
+        onCastSpell={vi.fn()}
+        availableSlots={{ 1: 2 }}
+      />);
+      await waitFor(() => screen.getByTestId('cast-spell-Magic Missile'));
+      fireEvent.click(screen.getByTestId('cast-spell-Magic Missile'));
+      expect(screen.queryByTestId('cast-slot-1')).not.toBeInTheDocument();
+      expect(screen.getByText(/this will use a level 1 spell slot/i)).toBeInTheDocument();
+    });
+
+    it('computes and shows the damage dice at the chosen upcast level (Fireball 5th → 10d6)', async () => {
+      mockFetchCatalog();
+      render(<SpellList
+        spells={['Fireball']}
+        label="Prepared"
+        onCastSpell={vi.fn()}
+        availableSlots={{ 3: 1, 4: 1, 5: 1 }}
+      />);
+      await waitFor(() => screen.getByTestId('cast-spell-Fireball'));
+      fireEvent.click(screen.getByTestId('cast-spell-Fireball'));
+      // Base level (3) shows 8d6.
+      expect(screen.getByTestId('cast-damage')).toHaveTextContent('8d6');
+      // Upcast to a 5th-level slot → 10d6.
+      fireEvent.click(screen.getByTestId('cast-slot-5'));
+      expect(screen.getByTestId('cast-damage')).toHaveTextContent('10d6');
+    });
+
+    it('shows the computed save DC for a save spell when spellSaveDc is provided', async () => {
+      mockFetchCatalog();
+      render(<SpellList
+        spells={['Fireball']}
+        label="Prepared"
+        onCastSpell={vi.fn()}
+        availableSlots={{ 3: 1 }}
+        spellSaveDc={15}
+      />);
+      await waitFor(() => screen.getByTestId('cast-spell-Fireball'));
+      fireEvent.click(screen.getByTestId('cast-spell-Fireball'));
+      expect(screen.getByTestId('cast-save-dc')).toHaveTextContent('15');
+      expect(screen.getByTestId('cast-save-dc')).toHaveTextContent('DEX');
+    });
+
+    it('notes when a spell does nothing extra at higher levels (no higher_level text)', async () => {
+      mockFetchCatalog();
+      render(<SpellList
+        spells={['Shield']}
+        label="Prepared"
+        onCastSpell={vi.fn()}
+        availableSlots={{ 1: 2, 2: 1 }}
+      />);
+      await waitFor(() => screen.getByTestId('cast-spell-Shield'));
+      fireEvent.click(screen.getByTestId('cast-spell-Shield'));
+      expect(screen.getByTestId('cast-no-extra')).toBeInTheDocument();
+      expect(screen.queryByTestId('cast-higher-level')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── Cantrip scaling on the row ──────────────────────────────────────────
+  describe('cantrip row scaling', () => {
+    it('shows damage-at-level + attack bonus on an attack cantrip row', async () => {
+      mockFetchCatalog();
+      render(<SpellList
+        spells={['Fire Bolt']}
+        label="Cantrips" isCantrips
+        characterLevel={11}
+        spellAttackBonus={7}
+      />);
+      await waitFor(() => screen.getByTestId('cantrip-meta-Fire Bolt'));
+      const meta = screen.getByTestId('cantrip-meta-Fire Bolt');
+      expect(meta).toHaveTextContent('3d10 damage');
+      expect(meta).toHaveTextContent('+7');
+    });
+
+    it('shows damage-at-level + save DC on a save cantrip row', async () => {
+      mockFetchCatalog();
+      render(<SpellList
+        spells={['Sacred Flame']}
+        label="Cantrips" isCantrips
+        characterLevel={5}
+        spellSaveDc={15}
+      />);
+      await waitFor(() => screen.getByTestId('cantrip-meta-Sacred Flame'));
+      const meta = screen.getByTestId('cantrip-meta-Sacred Flame');
+      expect(meta).toHaveTextContent('2d8 damage');
+      expect(meta).toHaveTextContent('Save DC 15 (DEX)');
+    });
+
+    it('shows no meta line for a utility cantrip (Mage Hand)', async () => {
+      mockFetchCatalog();
+      render(<SpellList
+        spells={['Mage Hand']}
+        label="Cantrips" isCantrips
+        characterLevel={11}
+        spellSaveDc={15}
+        spellAttackBonus={7}
+      />);
+      await waitFor(() => screen.getByText('Mage Hand'));
+      expect(screen.queryByTestId('cantrip-meta-Mage Hand')).not.toBeInTheDocument();
+    });
+
+    it('shows no meta line when characterLevel is not supplied', async () => {
+      mockFetchCatalog();
+      render(<SpellList spells={['Fire Bolt']} label="Cantrips" isCantrips spellAttackBonus={7} />);
+      await waitFor(() => screen.getByText('Fire Bolt'));
+      expect(screen.queryByTestId('cantrip-meta-Fire Bolt')).not.toBeInTheDocument();
+    });
   });
 });

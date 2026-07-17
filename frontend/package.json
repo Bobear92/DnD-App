@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "report:class-coverage": "node --import ./scripts/register-loader.mjs scripts/report-class-coverage.mjs"
+    "report:class-coverage": "node --import ./scripts/register-loader.mjs scripts/report-class-coverage.mjs",
+    "report:upcast-coverage": "node scripts/report-upcast-coverage.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

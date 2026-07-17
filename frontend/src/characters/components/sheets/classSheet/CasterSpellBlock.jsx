@@ -54,6 +54,12 @@ export default function CasterSpellBlock({
   const { spellSlots, availableSlots, setSlotUsed, handleCastSpell } = useSlotCaster({ slots: slotsTable, data, onChange });
 
   const abilityMod = abMod(abilityScores[caster.spellcastingAbility ?? 'intelligence']);
+  // Cast-dialog figures: the character's spell save DC + attack bonus (constant across slot
+  // levels). Passed to every SpellList with a Cast button so upcasting a save/attack spell
+  // shows the actual numbers.
+  const pb = Math.ceil(level / 4) + 1;
+  const spellSaveDc = 8 + pb + abilityMod;
+  const spellAttackBonus = pb + abilityMod;
   const prepareLimit = Math.max(1, level + abilityMod);
   const prepared = data.prepared_spells ?? [];
   const spellbook = data.spellbook ?? [];
@@ -151,6 +157,9 @@ export default function CasterSpellBlock({
           readOnly={readOnly}
           label={`Cantrips Known${cantripLimit != null ? ` — ${(data.cantrips ?? []).length}/${cantripLimit}` : ''}`}
           isCantrips={true}
+          characterLevel={level}
+          spellSaveDc={spellSaveDc}
+          spellAttackBonus={spellAttackBonus}
         />
         {canEditLists && caster.spellList && (
           <div className="rounded-md border p-3 space-y-2" data-testid="gm-cantrip-browser">
@@ -184,6 +193,8 @@ export default function CasterSpellBlock({
               label={`${title} — ${spells.length}/${limit}`}
               onCastSpell={!readOnly ? handleCastSpell : undefined}
               availableSlots={!readOnly ? availableSlots : undefined}
+              spellSaveDc={spellSaveDc}
+              spellAttackBonus={spellAttackBonus}
             />
             {canEditLists && caster.spellList && maxKnownLevel > 0 && (
               <div className="rounded-md border p-3 space-y-2" data-testid={`gm-spell-browser-${key}`}>
@@ -214,6 +225,8 @@ export default function CasterSpellBlock({
               label={`Spells Known${knownLimit != null ? ` — ${(data.known_spells ?? []).length}/${knownLimit}` : ''}`}
               onCastSpell={!readOnly ? handleCastSpell : undefined}
               availableSlots={!readOnly ? availableSlots : undefined}
+              spellSaveDc={spellSaveDc}
+              spellAttackBonus={spellAttackBonus}
             />
             {canEditLists && caster.spellList && maxKnownLevel > 0 && (
               <div className="rounded-md border p-3 space-y-2" data-testid="gm-spell-browser">
@@ -342,13 +355,15 @@ export default function CasterSpellBlock({
             </>
           )}
           {slotGrid}
-          <SpellList spells={data.cantrips ?? []} onRemove={(n) => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" isCantrips={true} />
+          <SpellList spells={data.cantrips ?? []} onRemove={(n) => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" isCantrips={true} characterLevel={level} spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus} />
           <SpellList
             spells={prepared}
             readOnly={true}
             label={`Prepared Spells — ${prepared.length}/${prepareLimit} · Long Rest`}
             onCastSpell={!readOnly ? handleCastSpell : undefined}
             availableSlots={!readOnly ? availableSlots : undefined}
+            spellSaveDc={spellSaveDc}
+            spellAttackBonus={spellAttackBonus}
           />
         </div>
       )}
