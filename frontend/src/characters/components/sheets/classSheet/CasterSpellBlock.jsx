@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import SpellList from '@/characters/components/spells/SpellList';
 import SpellAddPicker from '@/characters/components/spells/SpellAddPicker';
 import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
+import SpellSourceLevelView from '@/characters/components/spells/SpellSourceLevelView';
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import SpellPickerCreation from '@/characters/components/sheets/classSheet/SpellPickerCreation';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
@@ -42,6 +43,8 @@ export default function CasterSpellBlock({
   isGm = false,
   gmEdit = false,
   raceGrantedCantrips = [],
+  featSpells = null,
+  featTrackers = null,
 }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
@@ -86,6 +89,27 @@ export default function CasterSpellBlock({
     }
     onChange?.({ spell_slots: newSlots, arcane_recovery_used: true });
   };
+
+  // At-a-glance spellcasting summary (ability · save DC · attack bonus) — shown atop both the
+  // prepared and known layouts so the player doesn't have to open a Cast dialog to see the numbers.
+  const castingSummary = (
+    <div className="flex flex-wrap gap-4 rounded-md border bg-muted/30 px-3 py-2" data-testid="spell-casting-summary">
+      <div className="flex flex-col">
+        <span className="text-xs text-muted-foreground">Spellcasting Ability</span>
+        <span className="text-sm font-medium capitalize">{caster.spellcastingAbility ?? 'intelligence'}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="text-xs text-muted-foreground">Spell Save DC</span>
+        <span className="text-sm font-medium" data-testid="spell-save-dc">{spellSaveDc}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="text-xs text-muted-foreground">Spell Attack Bonus</span>
+        <span className="text-sm font-medium" data-testid="spell-attack-bonus">
+          {spellAttackBonus >= 0 ? '+' : ''}{spellAttackBonus}
+        </span>
+      </div>
+    </div>
+  );
 
   // Shared spell-slot tracker grid (used by both the prepared and the known layouts).
   // Players get no manual steppers — slots are spent via Cast and restored by GM rest.
@@ -145,107 +169,131 @@ export default function CasterSpellBlock({
       },
     ] : null;
 
+    const cantrips = data.cantrips ?? [];
+    const leveledKnown = data.known_spells ?? [];
+    // Extra spell SOURCES folded into the shared level strip (SpellSourceLevelView): racial cantrips
+    // + feat-granted spells. The strip computes levels/tabs/source-toggle; the class content per
+    // level (EK Abj/Evo + Any-School sections) is delegated back via renderClass below.
+    const racialCantrips = raceGrantedCantrips ?? [];
+    const featCantrips = featSpells?.cantrips ?? [];
+    const featLeveled = featSpells?.leveled ?? []; // [{ name, level }]
+
+    // GM editing tools — rendered once below the lists so they stay reachable regardless of which
+    // level tab is active. Each browser adds/removes from its category; the slot each 5e EK spell
+    // was learned under is recorded so a later swap lands back in the right category.
+    const gmEditors = canEditLists && caster.spellList ? (
+      <div className="space-y-3 rounded-md border border-dashed p-3" data-testid="gm-edit-spells">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">GM Edit — spells</div>
+        <div className="space-y-2" data-testid="gm-cantrip-browser">
+          <div className="text-xs font-medium text-muted-foreground">Cantrips — {caster.spellList} list</div>
+          <ClassSpellBrowser
+            mode="learn" className={caster.spellList} campaignId={campaignId}
+            preparedSpells={cantrips} prepareLimit={cantripLimit}
+            onAdd={(n) => addSpell('cantrips', n)} onRemove={(n) => removeSpell('cantrips', n)}
+            minSpellLevel={0} maxSpellLevel={0}
+            grantedSpells={raceGrantedCantrips} grantedLabel="Granted by their race"
+          />
+        </div>
+        {maxKnownLevel > 0 && (ekSections ? ekSections.map(({ key, slot, limit, schools }) => (
+          <div key={key} className="space-y-2" data-testid={`gm-spell-browser-${key}`}>
+            <div className="text-xs font-medium text-muted-foreground">
+              {schools ? schools.join(' & ') : 'Any-school'} spells · up to level {maxKnownLevel}
+            </div>
+            <ClassSpellBrowser
+              mode="learn" className={caster.spellList} campaignId={campaignId}
+              preparedSpells={ekSpellsInSlot(known, slotMap, slot)} prepareLimit={limit}
+              onAdd={(n) => addKnownInSlot(n, slot)} onRemove={removeKnownSpell}
+              minSpellLevel={1} maxSpellLevel={maxKnownLevel} schools={schools}
+            />
+          </div>
+        )) : (
+          <div className="space-y-2" data-testid="gm-spell-browser">
+            <div className="text-xs font-medium text-muted-foreground">Spells · up to level {maxKnownLevel}</div>
+            <ClassSpellBrowser
+              mode="learn" className={caster.spellList} campaignId={campaignId}
+              preparedSpells={leveledKnown} prepareLimit={knownLimit}
+              onAdd={(n) => addSpell('known_spells', n)} onRemove={(n) => removeSpell('known_spells', n)}
+              minSpellLevel={1} maxSpellLevel={maxKnownLevel}
+            />
+          </div>
+        ))}
+      </div>
+    ) : null;
+
+    // ── Class content per level (fed to SpellSourceLevelView; racial/feats live in the strip) ──
+    const classCantripsNode = (
+      <SpellList
+        spells={cantrips}
+        onRemove={canEditLists ? (n) => removeSpell('cantrips', n) : undefined}
+        readOnly={readOnly}
+        label={`Cantrips Known${cantripLimit != null ? ` — ${cantrips.length}/${cantripLimit}` : ''}`}
+        isCantrips
+        characterLevel={level}
+        spellSaveDc={spellSaveDc}
+        spellAttackBonus={spellAttackBonus}
+        levelTabs={false}
+      />
+    );
+    const classLeveledNode = (filterByLevel, atLevel) => (ekSections ? ekSections.map(({ key, title, spells, limit }) => {
+      const shown = filterByLevel ? atLevel(spells) : spells;
+      if (filterByLevel && shown.length === 0) return null;
+      return (
+        <div key={key} className="space-y-2" data-testid={`ek-known-${key}`}>
+          <SpellList
+            spells={shown}
+            onRemove={canEditLists ? removeKnownSpell : undefined}
+            readOnly={readOnly}
+            label={`${title} — ${spells.length}/${limit}`}
+            hideLevelHeadings={filterByLevel}
+            levelTabs={false}
+            onCastSpell={!readOnly ? handleCastSpell : undefined}
+            availableSlots={!readOnly ? availableSlots : undefined}
+            spellSaveDc={spellSaveDc}
+            spellAttackBonus={spellAttackBonus}
+          />
+        </div>
+      );
+    }) : (
+      <SpellList
+        spells={filterByLevel ? atLevel(leveledKnown) : leveledKnown}
+        onRemove={canEditLists ? (n) => removeSpell('known_spells', n) : undefined}
+        readOnly={readOnly}
+        label={`Spells Known${knownLimit != null ? ` — ${leveledKnown.length}/${knownLimit}` : ''}`}
+        hideLevelHeadings={filterByLevel}
+        levelTabs={false}
+        onCastSpell={!readOnly ? handleCastSpell : undefined}
+        availableSlots={!readOnly ? availableSlots : undefined}
+        spellSaveDc={spellSaveDc}
+        spellAttackBonus={spellAttackBonus}
+      />
+    ));
+
     return (
       <div className="space-y-4" data-testid="known-caster-block">
         {caster.note && (
           <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{caster.note}</div>
         )}
+        {castingSummary}
         {slotGrid}
-        <SpellList
-          spells={data.cantrips ?? []}
-          onRemove={canEditLists ? (n) => removeSpell('cantrips', n) : undefined}
-          readOnly={readOnly}
-          label={`Cantrips Known${cantripLimit != null ? ` — ${(data.cantrips ?? []).length}/${cantripLimit}` : ''}`}
-          isCantrips={true}
+
+        <SpellSourceLevelView
+          campaignId={campaignId}
+          classCantrips={cantrips}
+          classLeveledNames={leveledKnown}
+          racialCantrips={racialCantrips}
+          featCantrips={featCantrips}
+          featLeveled={featLeveled}
+          featTrackers={featTrackers}
           characterLevel={level}
           spellSaveDc={spellSaveDc}
           spellAttackBonus={spellAttackBonus}
+          renderClass={(l, { atLevel }) => (l == null
+            ? <>{classCantripsNode}{classLeveledNode(false, atLevel)}</>
+            : l === 0 ? classCantripsNode : classLeveledNode(true, atLevel))}
         />
-        {canEditLists && caster.spellList && (
-          <div className="rounded-md border p-3 space-y-2" data-testid="gm-cantrip-browser">
-            <div className="text-xs font-medium text-muted-foreground">GM — edit cantrips from the {caster.spellList} list</div>
-            <ClassSpellBrowser
-              mode="learn"
-              className={caster.spellList}
-              campaignId={campaignId}
-              preparedSpells={data.cantrips ?? []}
-              prepareLimit={cantripLimit}
-              onAdd={(n) => addSpell('cantrips', n)}
-              onRemove={(n) => removeSpell('cantrips', n)}
-              minSpellLevel={0}
-              maxSpellLevel={0}
-              grantedSpells={raceGrantedCantrips}
-              grantedLabel="Granted by their race"
-            />
-          </div>
-        )}
-        {/* A school-restricted known caster (5e Eldritch Knight) keeps its spells in two
-            categories — Abjuration/Evocation slots, and the "any school" slots earned at
-            levels 3/8/14/20. The slot each spell occupies is recorded on character_data
-            (ek_spell_slots), so it is shown here rather than guessed from the spell's school:
-            a Shield learned in the any-school slot is still an any-school spell. */}
-        {ekSections ? ekSections.map(({ key, slot, title, spells, limit, schools }) => (
-          <div key={key} className="space-y-2" data-testid={`ek-known-${key}`}>
-            <SpellList
-              spells={spells}
-              onRemove={canEditLists ? removeKnownSpell : undefined}
-              readOnly={readOnly}
-              label={`${title} — ${spells.length}/${limit}`}
-              onCastSpell={!readOnly ? handleCastSpell : undefined}
-              availableSlots={!readOnly ? availableSlots : undefined}
-              spellSaveDc={spellSaveDc}
-              spellAttackBonus={spellAttackBonus}
-            />
-            {canEditLists && caster.spellList && maxKnownLevel > 0 && (
-              <div className="rounded-md border p-3 space-y-2" data-testid={`gm-spell-browser-${key}`}>
-                <div className="text-xs font-medium text-muted-foreground">
-                  GM — edit {schools ? schools.join(' & ') : 'any-school'} spells · up to level {maxKnownLevel}
-                </div>
-                <ClassSpellBrowser
-                  mode="learn"
-                  className={caster.spellList}
-                  campaignId={campaignId}
-                  preparedSpells={spells}
-                  prepareLimit={limit}
-                  onAdd={(n) => addKnownInSlot(n, slot)}
-                  onRemove={removeKnownSpell}
-                  minSpellLevel={1}
-                  maxSpellLevel={maxKnownLevel}
-                  schools={schools}
-                />
-              </div>
-            )}
-          </div>
-        )) : (
-          <>
-            <SpellList
-              spells={data.known_spells ?? []}
-              onRemove={canEditLists ? (n) => removeSpell('known_spells', n) : undefined}
-              readOnly={readOnly}
-              label={`Spells Known${knownLimit != null ? ` — ${(data.known_spells ?? []).length}/${knownLimit}` : ''}`}
-              onCastSpell={!readOnly ? handleCastSpell : undefined}
-              availableSlots={!readOnly ? availableSlots : undefined}
-              spellSaveDc={spellSaveDc}
-              spellAttackBonus={spellAttackBonus}
-            />
-            {canEditLists && caster.spellList && maxKnownLevel > 0 && (
-              <div className="rounded-md border p-3 space-y-2" data-testid="gm-spell-browser">
-                <div className="text-xs font-medium text-muted-foreground">GM — edit spells from the {caster.spellList} list · up to level {maxKnownLevel}</div>
-                <ClassSpellBrowser
-                  mode="learn"
-                  className={caster.spellList}
-                  campaignId={campaignId}
-                  preparedSpells={data.known_spells ?? []}
-                  prepareLimit={knownLimit}
-                  onAdd={(n) => addSpell('known_spells', n)}
-                  onRemove={(n) => removeSpell('known_spells', n)}
-                  minSpellLevel={1}
-                  maxSpellLevel={maxKnownLevel}
-                />
-              </div>
-            )}
-          </>
-        )}
+
+        {gmEditors}
+
         {!canEditLists && !readOnly && (
           <p className="text-xs text-muted-foreground italic" data-testid="known-lists-note">
             {isGm
@@ -299,8 +347,32 @@ export default function CasterSpellBlock({
   // ── Play: only in the spells section ─────────────────────────────────────────
   if (section !== 'all' && section !== 'spells') return null;
 
+  // Prepared caster (Wizard…): the "Prepared" view uses the same shared level strip + Class/Racial/
+  // Feats source fold as the known caster — cantrips + prepared spells are the class content per level.
+  const playRacialCantrips = raceGrantedCantrips ?? [];
+  const playFeatCantrips = featSpells?.cantrips ?? [];
+  const playFeatLeveled = featSpells?.leveled ?? [];
+  const preparedCantripsNode = (
+    <SpellList spells={data.cantrips ?? []} onRemove={(n) => removeSpell('cantrips', n)} readOnly={readOnly}
+      label="Cantrips Known" isCantrips characterLevel={level} spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus} levelTabs={false} />
+  );
+  const preparedLeveledNode = (filterByLevel, atLevel) => (
+    <SpellList
+      spells={filterByLevel ? atLevel(prepared) : prepared}
+      readOnly={true}
+      label={`Prepared Spells — ${prepared.length}/${prepareLimit} · Long Rest`}
+      hideLevelHeadings={filterByLevel}
+      levelTabs={false}
+      onCastSpell={!readOnly ? handleCastSpell : undefined}
+      availableSlots={!readOnly ? availableSlots : undefined}
+      spellSaveDc={spellSaveDc}
+      spellAttackBonus={spellAttackBonus}
+    />
+  );
+
   return (
     <div className="space-y-4">
+      {castingSummary}
       <div className="flex gap-1 border-b">
         {[['prepared', 'Prepared'], ['prepare', 'Prepare Spells']].map(([tab, lbl]) => (
           <button key={tab} type="button" onClick={() => setSpellSubTab(tab)}
@@ -355,15 +427,20 @@ export default function CasterSpellBlock({
             </>
           )}
           {slotGrid}
-          <SpellList spells={data.cantrips ?? []} onRemove={(n) => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" isCantrips={true} characterLevel={level} spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus} />
-          <SpellList
-            spells={prepared}
-            readOnly={true}
-            label={`Prepared Spells — ${prepared.length}/${prepareLimit} · Long Rest`}
-            onCastSpell={!readOnly ? handleCastSpell : undefined}
-            availableSlots={!readOnly ? availableSlots : undefined}
+          <SpellSourceLevelView
+            campaignId={campaignId}
+            classCantrips={data.cantrips ?? []}
+            classLeveledNames={prepared}
+            racialCantrips={playRacialCantrips}
+            featCantrips={playFeatCantrips}
+            featLeveled={playFeatLeveled}
+            featTrackers={featTrackers}
+            characterLevel={level}
             spellSaveDc={spellSaveDc}
             spellAttackBonus={spellAttackBonus}
+            renderClass={(l, { atLevel }) => (l == null
+              ? <>{preparedCantripsNode}{preparedLeveledNode(false, atLevel)}</>
+              : l === 0 ? preparedCantripsNode : preparedLeveledNode(true, atLevel))}
           />
         </div>
       )}

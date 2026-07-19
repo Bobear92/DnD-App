@@ -1051,7 +1051,7 @@ describe('CharacterDetail', () => {
       expect(screen.getByTestId('ritual-book-Ritual Caster')).toBeInTheDocument();
     });
 
-    it('shows Class + Feats spell-source sub-tabs for a Wizard with Magic Initiate', async () => {
+    it('folds feat spells into the strip for a Wizard (data-driven caster) — no top-level Feats source', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,
         data: { ...BASE_CHARACTER, char_class: 'Wizard', character_data: { skill_proficiencies: [], feats: [
@@ -1060,8 +1060,11 @@ describe('CharacterDetail', () => {
       });
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
-      expect(screen.getByTestId('spell-source-class')).toBeInTheDocument();
-      expect(screen.getByTestId('spell-source-feats')).toBeInTheDocument();
+      // The Wizard's spell section renders via the data-driven CasterSpellBlock, so racial + feat
+      // spells fold INTO the level strip — there is no top-level Class/Racial/Feats source toggle.
+      // (No catalog is mocked here, so the strip is in its flat fallback and shows the feat content.)
+      expect(screen.queryByTestId('spell-source-feats')).not.toBeInTheDocument();
+      expect(screen.getByTestId('spell-source-feats-content')).toBeInTheDocument();
     });
 
     it('non-spellcasting Fighter has exactly 5 tabs; spellcasting Wizard has 6', async () => {

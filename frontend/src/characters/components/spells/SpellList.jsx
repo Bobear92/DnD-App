@@ -6,6 +6,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useCampaign } from '@/campaigns/CampaignContext';
 import { summarizeUpcast, summarizeCantrip } from '@/characters/components/spells/spellUpcast';
 
@@ -15,6 +16,10 @@ const LEVEL_LABELS = {
   4: '4th Level', 5: '5th Level', 6: '6th Level',
   7: '7th Level', 8: '8th Level', 9: '9th Level',
 };
+
+// Compact per-tab label ("Cantrips", "1st", "2nd" …, "Other" for spells not in the catalog).
+const LEVEL_TAB_LABELS = { 0: 'Cantrips', 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th', 6: '6th', 7: '7th', 8: '8th', 9: '9th' };
+const levelTabLabel = (lvl) => (lvl === -1 ? 'Other' : (LEVEL_TAB_LABELS[lvl] ?? `L${lvl}`));
 
 const ORDINALS = {
   1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th',
@@ -95,6 +100,7 @@ export default function SpellList({
   spellAttackBonus,
   characterLevel,
   hideLevelHeadings = false,
+  levelTabs = true,
 }) {
   const ctx = useCampaign();
   const campaignId = ctx?.campaign?.id;
@@ -105,6 +111,8 @@ export default function SpellList({
   const [castConfirm, setCastConfirm] = useState(null);
   // The slot level the player has chosen to spend for the pending cast (upcasting)
   const [castSlotLevel, setCastSlotLevel] = useState(null);
+  // Active level sub-tab (when a list spans >1 level it breaks into Cantrips/1st/2nd… tabs)
+  const [activeTab, setActiveTab] = useState(null);
 
   // Fetch the catalog regardless of isCantrips: cantrip grouping doesn't need it
   // (cantrips are forced to level 0), but the detail dialog does — without it,
@@ -135,6 +143,15 @@ export default function SpellList({
   const sortedLevels = Object.keys(grouped)
     .map(Number)
     .sort((a, b) => (a === -1 ? 1 : b === -1 ? -1 : a - b));
+
+  // When the list spans more than one level, break it into per-level sub-tabs so it doesn't get
+  // crowded (Cantrips / 1st / 2nd …). Only the active level's spells render. A single-level list
+  // (including any cantrips-only list) shows no tab bar and renders as before.
+  const tabsActive = levelTabs && sortedLevels.length > 1;
+  const activeLevel = tabsActive
+    ? (sortedLevels.includes(activeTab) ? activeTab : sortedLevels[0])
+    : null;
+  const visibleLevels = tabsActive ? [activeLevel] : sortedLevels;
 
   const openDetail = (name) => {
     setDetailName(name);
@@ -169,7 +186,26 @@ export default function SpellList({
         <div className="rounded-md border p-2 text-xs text-muted-foreground italic">None added</div>
       )}
 
-      {sortedLevels.map(lvl => {
+      {tabsActive && (
+        <div className="flex flex-wrap gap-1.5" data-testid="spell-level-tabs">
+          {sortedLevels.map(lvl => (
+            <button
+              key={lvl}
+              type="button"
+              data-testid={`spell-level-tab-${lvl}`}
+              onClick={() => setActiveTab(lvl)}
+              className={cn(
+                'rounded-md border px-2.5 py-1 text-xs transition-colors',
+                activeLevel === lvl ? 'border-primary bg-primary/10 font-medium' : 'border-border hover:border-primary/50',
+              )}
+            >
+              {levelTabLabel(lvl)} ({grouped[lvl].length})
+            </button>
+          ))}
+        </div>
+      )}
+
+      {visibleLevels.map(lvl => {
         const names = grouped[lvl];
         if (!names?.length) return null;
         const heading = isCantrips
@@ -177,7 +213,7 @@ export default function SpellList({
           : (lvl === -1 ? 'Other Spells' : (LEVEL_LABELS[lvl] ?? `Level ${lvl}`));
         return (
           <div key={lvl}>
-            {!hideLevelHeadings && (
+            {!hideLevelHeadings && !tabsActive && (
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pb-1 pt-1">
                 {heading}
               </div>

@@ -1759,10 +1759,26 @@ export default function CharacterDetail() {
                   const featData = classSection.draft?.feats ?? character.character_data?.feats ?? [];
                   const fg = getFeatGrantedSpells(featData);
                   const hasFeat = fg.cantrips.length + fg.leveled.length + fg.ritualBooks.length > 0;
+                  // Data-driven casters (Wizard + Eldritch Knight, via CasterSpellBlock) render the
+                  // unified level strip, so racial + feat spells fold INTO it (Class/Racial/Feats become
+                  // a per-level source toggle) rather than showing as top-level sources. The hand-written
+                  // caster sheets don't use the strip yet, so they keep the top-level source toggle.
+                  const foldSources = isCaster && !!getClassConfig(character.char_class, edition);
+                  const featTrackersNode = hasFeat ? (
+                    <FeatSpellsSection
+                      feats={featData}
+                      characterData={classSection.draft ?? character.character_data ?? {}}
+                      onChange={autoSaveClassPatch}
+                      readOnly={!showEditable}
+                      isGm={isGm && !playerView}
+                      campaignId={campaignId}
+                      showSpellTabs={false}
+                    />
+                  ) : null;
                   const sources = [
                     isCaster && { key: 'class', label: 'Class' },
-                    raceGrantedCantrips.length > 0 && { key: 'racial', label: 'Racial' },
-                    hasFeat && { key: 'feats', label: 'Feats' },
+                    !foldSources && raceGrantedCantrips.length > 0 && { key: 'racial', label: 'Racial' },
+                    !foldSources && hasFeat && { key: 'feats', label: 'Feats' },
                   ].filter(Boolean);
                   const active = sources.some(s => s.key === spellSource) ? spellSource : sources[0]?.key;
                   return (
@@ -1802,6 +1818,9 @@ export default function CharacterDetail() {
                             abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
                             campaignId={campaignId}
                             isGm={isGm && !playerView}
+                            raceGrantedCantrips={foldSources ? raceGrantedCantrips : []}
+                            featSpells={foldSources ? { cantrips: fg.cantrips.map((c) => c.name), leveled: fg.leveled } : null}
+                            featTrackers={foldSources ? featTrackersNode : null}
                           />
                         </SectionCard>
                       )}

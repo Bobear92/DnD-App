@@ -18,8 +18,11 @@ import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects'
  *   readOnly       hides the Use + ritual add/remove controls
  *   isGm           shows the GM-only "−" recover control (a player spends only; the free
  *                  cast returns from a long rest)
+ *   showSpellTabs  when false, render ONLY the ritual books + free-cast trackers (skip the
+ *                  per-level SpellLevelTabs) — used when an outer level strip already lists the
+ *                  feat spells by level (the EK Spells-tab fold), so the levels aren't shown twice
  */
-export default function FeatSpellsSection({ feats = [], characterData = {}, onChange, readOnly = false, isGm = false, campaignId }) {
+export default function FeatSpellsSection({ feats = [], characterData = {}, onChange, readOnly = false, isGm = false, campaignId, showSpellTabs = true }) {
   const { cantrips, leveled, freeCasts, ritualBooks } = getFeatGrantedSpells(feats);
   const spells = [...cantrips, ...leveled];
   if (spells.length === 0 && ritualBooks.length === 0) return null;
@@ -34,7 +37,7 @@ export default function FeatSpellsSection({ feats = [], characterData = {}, onCh
 
   return (
     <div className="space-y-3" data-testid="feat-spells-section">
-      {spells.length > 0 && (
+      {showSpellTabs && spells.length > 0 && (
         <SpellLevelTabs spells={spells} testIdPrefix="feat-spell-tab" emptyText="No feat spells." />
       )}
 

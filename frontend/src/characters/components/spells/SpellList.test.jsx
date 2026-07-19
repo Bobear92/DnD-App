@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import SpellList from '@/characters/components/spells/SpellList';
 
 let mockEdition = '5e';
@@ -150,22 +150,49 @@ describe('SpellList', () => {
     expect(spellButtons[2]).toHaveTextContent('Prestidigitation');
   });
 
-  // ── Level grouping ─────────────────────────────────────────────────────
-  it('groups spells into the correct level sections from the catalog', async () => {
+  // ── Level grouping → per-level sub-tabs ─────────────────────────────────
+  it('breaks a multi-level list into per-level sub-tabs, showing only the active level', async () => {
     mockFetchCatalog();
     render(<SpellList spells={['Magic Missile', 'Fireball']} label="Spells Known" />);
+    await waitFor(() => expect(screen.getByTestId('spell-level-tabs')).toBeInTheDocument());
+    // A tab per present level, each with its count; the stacked "1st Level" headings are gone.
+    expect(screen.getByTestId('spell-level-tab-1')).toHaveTextContent('1st (1)');
+    expect(screen.getByTestId('spell-level-tab-3')).toHaveTextContent('3rd (1)');
+    expect(screen.queryByText('1st Level')).not.toBeInTheDocument();
+    // Defaults to the lowest level: 1st shown, 3rd hidden until its tab is clicked.
+    expect(screen.getByText('Magic Missile')).toBeInTheDocument();
+    expect(screen.queryByText('Fireball')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('spell-level-tab-3'));
+    expect(screen.getByText('Fireball')).toBeInTheDocument();
+    expect(screen.queryByText('Magic Missile')).not.toBeInTheDocument();
+  });
+
+  it('does not show sub-tabs (or a level heading) when the list is a single level', async () => {
+    mockFetchCatalog();
+    render(<SpellList spells={['Magic Missile']} label="Spells Known" />);
+    await waitFor(() => expect(screen.getByText('Magic Missile')).toBeInTheDocument());
+    expect(screen.queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
+    // A single-level list keeps its stacked heading (no tab needed).
+    expect(screen.getByText('1st Level')).toBeInTheDocument();
+    expect(screen.queryByText('3rd Level')).not.toBeInTheDocument();
+  });
+
+  it('does not tab a cantrips-only list (all one level)', async () => {
+    mockFetchCatalog();
+    render(<SpellList spells={['Fire Bolt', 'Mage Hand']} isCantrips label="Cantrips" />);
+    await waitFor(() => expect(screen.getByText('Fire Bolt')).toBeInTheDocument());
+    expect(screen.queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
+    expect(screen.getByText('Mage Hand')).toBeInTheDocument();
+  });
+
+  it('respects levelTabs={false} — stacks all levels with headings, no tab bar', async () => {
+    mockFetchCatalog();
+    render(<SpellList spells={['Magic Missile', 'Fireball']} label="Spells Known" levelTabs={false} />);
     await waitFor(() => expect(screen.getByText('1st Level')).toBeInTheDocument());
     expect(screen.getByText('3rd Level')).toBeInTheDocument();
     expect(screen.getByText('Magic Missile')).toBeInTheDocument();
     expect(screen.getByText('Fireball')).toBeInTheDocument();
-  });
-
-  it('only shows a level section when the character has a spell at that level', async () => {
-    mockFetchCatalog();
-    render(<SpellList spells={['Magic Missile']} label="Spells Known" />);
-    await waitFor(() => expect(screen.getByText('1st Level')).toBeInTheDocument());
-    expect(screen.queryByText('3rd Level')).not.toBeInTheDocument();
-    expect(screen.queryByText('2nd Level')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
   });
 
   it('sorts spells alphabetically within each level section', async () => {
@@ -186,13 +213,13 @@ describe('SpellList', () => {
     expect(screen.getByText('Weird Homebrew Spell')).toBeInTheDocument();
   });
 
-  it('places known-level sections before "Other Spells"', async () => {
+  it('orders the level sub-tabs with known levels before "Other"', async () => {
     mockFetchCatalog();
     render(<SpellList spells={['Magic Missile', 'Homebrew Spell']} label="Spells Known" />);
-    await waitFor(() => expect(screen.getByText('1st Level')).toBeInTheDocument());
-    const headings = screen.getAllByText(/^(1st Level|Other Spells)$/);
-    expect(headings[0]).toHaveTextContent('1st Level');
-    expect(headings[1]).toHaveTextContent('Other Spells');
+    await waitFor(() => expect(screen.getByTestId('spell-level-tabs')).toBeInTheDocument());
+    const tabs = within(screen.getByTestId('spell-level-tabs')).getAllByRole('button');
+    expect(tabs[0]).toHaveTextContent('1st');
+    expect(tabs[1]).toHaveTextContent('Other');
   });
 
   // ── API call ────────────────────────────────────────────────────────────

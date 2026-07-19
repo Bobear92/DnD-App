@@ -1,11 +1,20 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FighterSheet5e as FighterSheet, FighterSheet2024 } from '@/characters/components/sheets/classSheet/configs';
 
 // The Eldritch Knight known-caster block renders an encyclopedia Link.
 vi.mock('react-router-dom', () => ({
   Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
 }));
+
+// The known-caster block fetches the spell catalog (via encyclopediaService) to build its unified
+// level strip. Default to an empty catalog so every existing test sees the flat (un-tabbed) list;
+// the level-strip tests set `mockSpellCatalog` to a catalog with levels before rendering.
+let mockSpellCatalog = [];
+vi.mock('@/encyclopedia/encyclopediaService', () => ({
+  default: { getSpells: vi.fn(() => Promise.resolve(mockSpellCatalog)) },
+}));
+beforeEach(() => { mockSpellCatalog = []; });
 
 // Spells are only ever added from the compendium, so the GM's add path IS this browser.
 // Mock it to a single add button per category (the gm-*-browser test ids live on the
@@ -325,6 +334,19 @@ describe('ClassSheet — Eldritch Knight subclass caster', () => {
     expect(screen.queryByText('Prepare Spells')).not.toBeInTheDocument();
   });
 
+  it('shows a spellcasting summary (ability · save DC · attack bonus) for an EK', () => {
+    render(
+      <FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1}
+        abilityScores={{ intelligence: 16 }} />
+    );
+    const summary = screen.getByTestId('spell-casting-summary');
+    expect(summary).toBeInTheDocument();
+    expect(summary).toHaveTextContent(/intelligence/i);
+    // pb 2 (L3) + INT mod +3 → DC 13, attack +5
+    expect(screen.getByTestId('spell-save-dc')).toHaveTextContent('13');
+    expect(screen.getByTestId('spell-attack-bonus')).toHaveTextContent('+5');
+  });
+
   it('renders nothing in the spells section before the subclass caster unlocks (L2)', () => {
     const { container } = render(
       <FighterSheet data={{ ...FIGHTER_DATA, subclass: 'Eldritch Knight' }} level={2} section="spells" campaignId={1} />
@@ -405,5 +427,177 @@ describe('ClassSheet — Eldritch Knight subclass caster', () => {
     render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} readOnly isGm />);
     expect(screen.queryByTestId('slot-inc-1')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '−' })).not.toBeInTheDocument();
+  });
+
+  it('with no catalog loaded, falls back to the flat stacked list (no level strip)', () => {
+    // mockSpellCatalog stays [] → useTabs false → cantrips + both category lists render at once.
+    render(<FighterSheet data={EK_DATA} level={3} section="spells" campaignId={1} />);
+    expect(screen.queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
+    expect(screen.getByTestId('ek-known-restricted')).toBeInTheDocument();
+    expect(screen.getByTestId('ek-known-any')).toBeInTheDocument();
+  });
+});
+
+describe('ClassSheet — Eldritch Knight unified spell level strip', () => {
+  // A richer EK with spells at cantrip / 1st / 2nd so the strip spans three tabs. 2nd level has
+  // BOTH a restricted (Shatter) and any-school (Mirror Image, Misty Step) spell so a leveled tab
+  // can show both category sections.
+  const EK_MULTI = {
+    hp_max: 52,
+    subclass: 'Eldritch Knight',
+    cantrips: ['Fire Bolt', 'Blade Ward'],
+    known_spells: ['Shield', 'Burning Hands', 'Shatter', 'Mirror Image', 'Misty Step'],
+    ek_spell_slots: {
+      Shield: 'restricted', 'Burning Hands': 'restricted', Shatter: 'restricted',
+      'Mirror Image': 'any', 'Misty Step': 'any',
+    },
+    spell_slots: { 1: { total: 4, used: 0 }, 2: { total: 2, used: 0 } },
+  };
+  const CATALOG = [
+    { name: 'Fire Bolt', level: 0 }, { name: 'Blade Ward', level: 0 },
+    { name: 'Shield', level: 1 }, { name: 'Burning Hands', level: 1 },
+    { name: 'Shatter', level: 2 }, { name: 'Mirror Image', level: 2 }, { name: 'Misty Step', level: 2 },
+  ];
+  const renderMulti = (props = {}) =>
+    render(<FighterSheet data={EK_MULTI} level={7} section="spells" campaignId={1} {...props} />);
+
+  it('shows ONE level strip (Cantrips / 1st / 2nd) with per-level counts and no others', async () => {
+    mockSpellCatalog = CATALOG;
+    renderMulti();
+    await screen.findByTestId('spell-level-tabs');
+    expect(screen.getByTestId('spell-level-tab-0')).toHaveTextContent('Cantrips (2)');
+    expect(screen.getByTestId('spell-level-tab-1')).toHaveTextContent('1st (2)');
+    expect(screen.getByTestId('spell-level-tab-2')).toHaveTextContent('2nd (3)');
+    expect(screen.queryByTestId('spell-level-tab-3')).not.toBeInTheDocument();
+  });
+
+  it('defaults to the Cantrips tab: cantrips shown in a tab, no category sections', async () => {
+    mockSpellCatalog = CATALOG;
+    renderMulti();
+    await screen.findByTestId('spell-level-tabs');
+    expect(screen.getByText('Fire Bolt')).toBeInTheDocument();
+    expect(screen.getByText('Blade Ward')).toBeInTheDocument();
+    expect(screen.queryByTestId('ek-known-restricted')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shield')).not.toBeInTheDocument();
+  });
+
+  it('the 1st-level tab shows only the Abj/Evo section (Any School hidden — no 1st-level spell)', async () => {
+    mockSpellCatalog = CATALOG;
+    renderMulti();
+    await screen.findByTestId('spell-level-tabs');
+    fireEvent.click(screen.getByTestId('spell-level-tab-1'));
+    expect(screen.getByTestId('ek-known-restricted')).toHaveTextContent(/Abjuration & Evocation Spells/);
+    expect(screen.getByText('Shield')).toBeInTheDocument();
+    expect(screen.getByText('Burning Hands')).toBeInTheDocument();
+    expect(screen.queryByText('Fire Bolt')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ek-known-any')).not.toBeInTheDocument();
+  });
+
+  it('the 2nd-level tab shows BOTH sections, each keeping its full x/y capacity label', async () => {
+    mockSpellCatalog = CATALOG;
+    renderMulti();
+    await screen.findByTestId('spell-level-tabs');
+    fireEvent.click(screen.getByTestId('spell-level-tab-2'));
+    // Restricted section — only its 2nd-level spell (Shatter), but the label counts all 3 restricted.
+    const restricted = screen.getByTestId('ek-known-restricted');
+    expect(restricted).toHaveTextContent(/Abjuration & Evocation Spells — 3\//);
+    expect(within(restricted).getByText('Shatter')).toBeInTheDocument();
+    // Any-School section — both its 2nd-level spells, label counts the 2 any-school known.
+    const any = screen.getByTestId('ek-known-any');
+    expect(any).toHaveTextContent(/Any School — 2\//);
+    expect(within(any).getByText('Mirror Image')).toBeInTheDocument();
+    expect(within(any).getByText('Misty Step')).toBeInTheDocument();
+    // 1st-level Abj/Evo spells are on the other tab.
+    expect(screen.queryByText('Shield')).not.toBeInTheDocument();
+  });
+
+  it('does not show the strip when spells span only one level (cantrips only)', async () => {
+    mockSpellCatalog = CATALOG;
+    render(
+      <FighterSheet
+        data={{ ...EK_MULTI, known_spells: [], ek_spell_slots: {} }}
+        level={7} section="spells" campaignId={1}
+      />
+    );
+    await screen.findByText('Fire Bolt');
+    expect(screen.queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
+  });
+});
+
+describe('ClassSheet — EK spell strip folds Racial + Feat sources', () => {
+  const EK = {
+    hp_max: 52,
+    subclass: 'Eldritch Knight',
+    cantrips: ['Fire Bolt'],
+    known_spells: ['Shield'],
+    ek_spell_slots: { Shield: 'restricted' },
+    spell_slots: { 1: { total: 2, used: 0 } },
+  };
+  const CATALOG = [{ name: 'Fire Bolt', level: 0 }, { name: 'Shield', level: 1 }];
+  const FOLD_PROPS = {
+    raceGrantedCantrips: ['Prestidigitation'],
+    featSpells: { cantrips: ['Guidance'], leveled: [{ name: 'Bless', level: 1 }] },
+    featTrackers: <div data-testid="feat-trackers-test">trackers</div>,
+  };
+  const renderFold = () =>
+    render(<FighterSheet data={EK} level={7} section="spells" campaignId={1} {...FOLD_PROPS} />);
+
+  it('Cantrips tab shows a Class/Racial/Feats source toggle; Class is the default', async () => {
+    mockSpellCatalog = CATALOG;
+    renderFold();
+    await screen.findByTestId('spell-level-tabs');
+    // Level counts fold in every source: 3 cantrips (Fire Bolt + Prestidigitation + Guidance).
+    expect(screen.getByTestId('spell-level-tab-0')).toHaveTextContent('Cantrips (3)');
+    const tabs = screen.getByTestId('spell-source-tabs');
+    expect(within(tabs).getByTestId('spell-source-class')).toBeInTheDocument();
+    expect(within(tabs).getByTestId('spell-source-racial')).toBeInTheDocument();
+    expect(within(tabs).getByTestId('spell-source-feats')).toBeInTheDocument();
+    // Class content is the default.
+    expect(screen.getByText('Fire Bolt')).toBeInTheDocument();
+    expect(screen.queryByText('Prestidigitation')).not.toBeInTheDocument();
+  });
+
+  it('switching to Racial shows the race-granted cantrips', async () => {
+    mockSpellCatalog = CATALOG;
+    renderFold();
+    await screen.findByTestId('spell-source-racial');
+    fireEvent.click(screen.getByTestId('spell-source-racial'));
+    const racial = screen.getByTestId('spell-source-racial-content');
+    expect(within(racial).getByText('Prestidigitation')).toBeInTheDocument();
+    expect(screen.queryByText('Fire Bolt')).not.toBeInTheDocument();
+  });
+
+  it('switching to Feats shows the feat spells + the trackers node', async () => {
+    mockSpellCatalog = CATALOG;
+    renderFold();
+    await screen.findByTestId('spell-source-feats');
+    fireEvent.click(screen.getByTestId('spell-source-feats'));
+    const feats = screen.getByTestId('spell-source-feats-content');
+    expect(within(feats).getByText('Guidance')).toBeInTheDocument();
+    expect(screen.getByTestId('feat-trackers-test')).toBeInTheDocument();
+  });
+
+  it('the 1st-level tab shows a Class/Feats toggle (no Racial — race grants only cantrips)', async () => {
+    mockSpellCatalog = CATALOG;
+    renderFold();
+    await screen.findByTestId('spell-level-tabs');
+    fireEvent.click(screen.getByTestId('spell-level-tab-1'));
+    const tabs = screen.getByTestId('spell-source-tabs');
+    expect(within(tabs).getByTestId('spell-source-class')).toBeInTheDocument();
+    expect(within(tabs).getByTestId('spell-source-feats')).toBeInTheDocument();
+    expect(within(tabs).queryByTestId('spell-source-racial')).not.toBeInTheDocument();
+    // Class content by default → the restricted Shield.
+    expect(screen.getByText('Shield')).toBeInTheDocument();
+    // Feat leveled spell appears under the Feats source.
+    fireEvent.click(screen.getByTestId('spell-source-feats'));
+    expect(within(screen.getByTestId('spell-source-feats-content')).getByText('Bless')).toBeInTheDocument();
+  });
+
+  it('shows no source toggle at a level where only the class has spells', async () => {
+    mockSpellCatalog = CATALOG;
+    // No racial, no feats → class-only strip, no source toggle on any tab.
+    render(<FighterSheet data={EK} level={7} section="spells" campaignId={1} />);
+    await screen.findByText('Fire Bolt');
+    expect(screen.queryByTestId('spell-source-tabs')).not.toBeInTheDocument();
   });
 });

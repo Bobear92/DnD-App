@@ -153,6 +153,8 @@ export default function ClassSheet({
   backgroundSkills = [],
   raceSkills = [],
   raceGrantedCantrips = [],
+  featSpells = null,
+  featTrackers = null,
   section = 'all',
   scores = {},
   abilityScores = {},
@@ -448,6 +450,8 @@ export default function ClassSheet({
           isGm={isGm}
           gmEdit={gmEdit}
           raceGrantedCantrips={raceGrantedCantrips}
+          featSpells={featSpells}
+          featTrackers={featTrackers}
         />
       )}
 

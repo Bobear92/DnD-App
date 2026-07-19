@@ -61,6 +61,15 @@ describe('FeatSpellsSection', () => {
     expect(fc).toHaveTextContent('Magic Initiate');
   });
 
+  it('showSpellTabs={false} renders only the trackers (an outer level strip lists the spells)', () => {
+    render(<FeatSpellsSection feats={[MAGIC_INITIATE]} characterData={{}} onChange={vi.fn()} showSpellTabs={false} />);
+    // The per-level spell tabs / lists are suppressed…
+    expect(screen.queryByTestId('slt-Fire Bolt')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('slt-Mage Armor')).not.toBeInTheDocument();
+    // …but the free-cast tracker still shows.
+    expect(screen.getByTestId('feat-freecast-Mage Armor')).toBeInTheDocument();
+  });
+
   it('using the free cast persists the slugified used key via onChange', () => {
     const onChange = vi.fn();
     render(<FeatSpellsSection feats={[MAGIC_INITIATE]} characterData={{}} onChange={onChange} />);
