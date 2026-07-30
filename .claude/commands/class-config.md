@@ -67,6 +67,9 @@ ongoing work this skill covers.
    `data-testid`. The bar: **`CharacterCreate.test.jsx` + `CharacterDetail.test.jsx` must pass unchanged.**
 2. Write `configs/xxx.js` exporting `XXX_5E` / `XXX_2024`. Reuse `classChoicesData.js`,
    `classFeatures5e.js`/`classFeatures2024.js`, `classProgressionTables.js` for options/features/slots.
+   **Register it in `configs/index.jsx`'s `CONFIGS`** — the golden-config contract
+   (`classData/configContracts.test.js`) then validates the new config's shape automatically
+   (a malformed field / wrong-width slot table / edition mismatch fails `npm test`).
 3. If the class needs a block `ClassSheet` doesn't have yet (a class-specific resource tracker, a known-caster
    spell picker, metamagic, etc.), **add a config-driven block to `ClassSheet`/a shared component** — never
    fork per-class JSX back into the config. Subclass/racial trackers stay as their own components

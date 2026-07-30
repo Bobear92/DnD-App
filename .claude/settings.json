@@ -3,6 +3,20 @@
     "allow": ["Bash(git push origin main)"]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node c:/Users/rober/Documents/Projects/dnd-app/.claude/hooks/nth-variant-nudge.mjs",
+            "timeout": 10,
+            "statusMessage": "Checking for Nth-variant fan-out..."
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

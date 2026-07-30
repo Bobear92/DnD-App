@@ -10,7 +10,9 @@ import ClassSheet from '@/characters/components/sheets/classSheet/ClassSheet';
 import { FIGHTER_5E, FIGHTER_2024 } from '@/characters/components/sheets/classSheet/configs/fighter';
 import { WIZARD_5E, WIZARD_2024 } from '@/characters/components/sheets/classSheet/configs/wizard';
 
-const CONFIGS = {
+// Exported so the config-contract test (and future CI checks) can validate the LIVE registry —
+// a class added here is then auto-guarded by the golden-config fixture.
+export const CONFIGS = {
   '5e': { Fighter: FIGHTER_5E, Wizard: WIZARD_5E },
   '5.5e': { Fighter: FIGHTER_2024, Wizard: WIZARD_2024 },
 };

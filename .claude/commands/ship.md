@@ -39,6 +39,24 @@ cd frontend && npm test -- --run
 
 All tests must pass. Fix failures before continuing — do not skip or suppress.
 
+`npm test` also runs the **coverage ratchet** (`scripts/coverage-ratchet.test.js`) and the
+**config-contract fixture** (`configContracts.test.js`) — a class-feature mechanization regression
+or a malformed data-driven config fails here.
+
+## Step 3b — Backend coverage gate (only if backend changed)
+
+The feat-effects gate reads the seeded dev DB, so it isn't a pytest test — run it here:
+
+```bash
+cd backend && source venv/Scripts/activate && python report_feat_effects.py --check
+```
+
+Exit 0 = OK. If it reports a **regression**, a feat lost its mechanized `effects` — fix it, don't
+lower the baseline. If it says coverage **improved**, ratchet the floor up so the gain can't be
+silently undone: `python report_feat_effects.py --write-baseline` and commit the updated
+`feat_coverage_baseline.json`. (Mirror on the frontend: `npm run coverage:baseline` after
+mechanizing more class features.)
+
 ## Step 4 — Audit CLAUDE.md
 
 Update these sections as needed:

@@ -1,0 +1,16 @@
+{
+  "editions": {
+    "5.5e": {
+      "mechanized": 52,
+      "total": 73
+    },
+    "5e": {
+      "mechanized": 31,
+      "total": 41
+    }
+  },
+  "overall": {
+    "mechanized": 83,
+    "total": 114
+  }
+}
