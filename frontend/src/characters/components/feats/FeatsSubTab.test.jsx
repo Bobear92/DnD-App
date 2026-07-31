@@ -63,7 +63,10 @@ describe('FeatsSubTab', () => {
   it('renders an owned feat with its resolved description and prerequisite', async () => {
     render(<FeatsSubTab feats={[{ id: 11, name: 'Grappler' }]} campaignId={1} edition="5e" />);
     expect(await screen.findByTestId('feat-row-Grappler')).toBeInTheDocument();
-    expect(screen.getByText('Grab on.')).toBeInTheDocument();
+    // The row renders from the `feats` prop immediately, but the description + prerequisite
+    // only arrive once the catalogue fetch resolves — so wait on the resolved text itself.
+    // Anchoring on the row instead is a race that passes locally and fails on CI.
+    expect(await screen.findByText('Grab on.')).toBeInTheDocument();
     expect(screen.getByText(/Strength 13 or higher/)).toBeInTheDocument();
   });
 
