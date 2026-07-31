@@ -91,7 +91,7 @@ Update these sections as needed:
 - **Database schema**: table count (currently 37), new table definitions
 - **Backend structure tree**: new modules/files
 - **API endpoints tables**: new routes
-- **Frontend file tree**: new components/pages with descriptions and test counts
+- **Frontend catalog** → `docs/frontend-map.md` (NOT CLAUDE.md): new components/pages with descriptions, per-page UI behaviours
 - **Implemented routes table**: new routes with status
 - **Test file listing**: new test files with test counts
 - **What's NOT Built Yet**: remove items just completed, add newly deferred items
