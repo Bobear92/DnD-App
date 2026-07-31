@@ -240,6 +240,7 @@ Always:
 1. Register the router in `backend/main.py`
 2. Import the new models in `migrations/env.py` (see above — critical, do this before running autogenerate)
 3. Run `alembic revision --autogenerate -m "add <table>"` then `alembic upgrade head`
+   - **Open the generated file and confirm it is not empty.** If the dev DB already has the table (created by `Base.metadata.create_all`, e.g. by running the app or the test bootstrap), autogenerate sees no diff and writes a `pass` body — the table then exists nowhere in the chain and a fresh database fails at the next migration that references it. This happened for real: `c54f8b027131` shipped empty and broke every from-scratch build.
    - If the migration creates a table with an existing PG enum, replace `op.create_table()` with raw `op.execute("""CREATE TABLE...""")`
    - If adding a new SQLAlchemy Enum column, manually add `op.execute("CREATE TYPE ...")` before the column
 4. Write tests in `backend/tests/test_<module>.py` — tests ship with the feature, never deferred

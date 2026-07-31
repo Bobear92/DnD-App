@@ -1206,6 +1206,13 @@ alembic upgrade head
 (Postgres service + `pytest`, then seeds feats and runs `report_feat_effects.py --check`). This is
 the durable hard gate; the frontend ratchet is *also* enforced every turn locally by the Stop hook.
 
+**Migrations are only exercised from scratch in CI.** `pytest` builds the test schema with
+`create_all`, so it never runs the alembic chain; the backend job's feat-coverage step creates an
+empty DB and runs `alembic upgrade head`, which is the sole from-scratch migration gate. Autogenerate
+run against a dev DB that already has the tables produces an **empty** migration (this is how
+`c54f8b027131` shipped with a `pass` body and broke the chain) — after `alembic revision
+--autogenerate`, open the file and confirm it isn't empty.
+
 ### Backend Server Restart — REQUIRED After Every Backend Change
 
 **The user cannot see or access the terminal Claude uses to run the server. Claude must restart the server itself** after every backend change — do not ask the user to do it.

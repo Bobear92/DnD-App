@@ -13,8 +13,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: npm
@@ -50,8 +50,8 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dnd_app_dev
       SECRET_KEY: ci-test-secret
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
@@ -62,7 +62,19 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dnd_app_dev
         run: |
-          PGPASSWORD=postgres createdb -h localhost -U postgres dnd_app_dev || true
+          # Create the DB via psycopg2 (already a dependency) rather than the `createdb` binary,
+          # which is not guaranteed to be on the runner image.
+          python - <<'PY'
+          import psycopg2
+          from psycopg2 import errors
+          conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+          conn.autocommit = True
+          try:
+              conn.cursor().execute("CREATE DATABASE dnd_app_dev")
+          except errors.DuplicateDatabase:
+              pass
+          PY
+          # Also the from-scratch migration gate: the chain must upgrade cleanly on an empty DB.
           alembic upgrade head
           python seed_feats.py
           python report_feat_effects.py --check
