@@ -137,13 +137,14 @@ describe('CampaignSpellsTab', () => {
     await waitFor(() => screen.getByText('Delete Campaign Spell'));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(encyclopediaService.deleteSpell).toHaveBeenCalledWith(10));
-    // Should reload — getSpells called twice (initial + after delete)
-    expect(encyclopediaService.getSpells).toHaveBeenCalledTimes(2);
+    // Should reload — getSpells called twice (initial + after delete). The reload is queued in
+    // deleteSpell's continuation, so await the second call rather than asserting it synchronously.
+    await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledTimes(2));
   });
 
   it('filters by search term', async () => {
     renderTab();
-    await waitFor(() => screen.getByTestId('campaign-spell-search'));
+    await screen.findByText('Shadow Bolt');
     fireEvent.change(screen.getByTestId('campaign-spell-search'), { target: { value: 'shadow' } });
     expect(screen.getByText('Shadow Bolt')).toBeInTheDocument();
     expect(screen.queryByText('Custom Fire')).not.toBeInTheDocument();

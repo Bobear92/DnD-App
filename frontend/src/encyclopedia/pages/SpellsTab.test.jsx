@@ -88,7 +88,9 @@ describe('SpellsTab', () => {
 
   it('filters spells by name search', async () => {
     renderTab();
-    await waitFor(() => screen.getByTestId('spell-search'));
+    // Gate on a loaded SPELL, not on the search box — the filter bar renders above the
+    // loading branch, so waiting for it does not mean the fetch has resolved.
+    await screen.findByText('Fireball');
     fireEvent.change(screen.getByTestId('spell-search'), { target: { value: 'fire' } });
     expect(screen.getByText('Fireball')).toBeInTheDocument();
     expect(screen.queryByText('Detect Magic')).not.toBeInTheDocument();
@@ -96,7 +98,7 @@ describe('SpellsTab', () => {
 
   it('filters spells by school', async () => {
     renderTab();
-    await waitFor(() => screen.getByTestId('school-filter-Divination'));
+    await screen.findByText('Detect Magic');
     fireEvent.click(screen.getByTestId('school-filter-Divination'));
     await waitFor(() => expect(screen.queryByText('Fireball')).not.toBeInTheDocument());
     expect(screen.getByText('Detect Magic')).toBeInTheDocument();
@@ -104,7 +106,7 @@ describe('SpellsTab', () => {
 
   it('filters spells by level', async () => {
     renderTab();
-    await waitFor(() => screen.getByTestId('level-filter'));
+    await screen.findByText('Fireball');
     fireEvent.change(screen.getByTestId('level-filter'), { target: { value: '3' } });
     await waitFor(() => expect(screen.queryByText('Detect Magic')).not.toBeInTheDocument());
     expect(screen.getByText('Fireball')).toBeInTheDocument();
@@ -112,7 +114,7 @@ describe('SpellsTab', () => {
 
   it('filters spells by class', async () => {
     renderTab();
-    await waitFor(() => screen.getByTestId('class-filter'));
+    await screen.findByText('Detect Magic');
     fireEvent.change(screen.getByTestId('class-filter'), { target: { value: 'Bard' } });
     await waitFor(() => expect(screen.queryByText('Fireball')).not.toBeInTheDocument());
     expect(screen.getByText('Detect Magic')).toBeInTheDocument();
@@ -139,7 +141,7 @@ describe('SpellsTab', () => {
 
   it('shows empty state when no spells match filters', async () => {
     renderTab();
-    await waitFor(() => screen.getByTestId('spell-search'));
+    await screen.findByText('Fireball');
     fireEvent.change(screen.getByTestId('spell-search'), { target: { value: 'xyznonexistent' } });
     expect(screen.getByText('No spells match your filters.')).toBeInTheDocument();
   });
@@ -197,6 +199,7 @@ describe('SpellsTab', () => {
     await waitFor(() => expect(encyclopediaService.createSpell).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Fireball', owner_type: 'campaign', owner_id: 1 })
     ));
-    expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/encyclopedia/spells/99');
+    // navigate happens in createSpell's continuation — await it rather than asserting sync.
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/encyclopedia/spells/99'));
   });
 });

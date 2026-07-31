@@ -63,7 +63,7 @@ describe('ItemsTab', () => {
 
   it('filters by name search', async () => {
     renderTab();
-    await waitFor(() => screen.getByTestId('item-search'));
+    await screen.findByText('Dagger');
     fireEvent.change(screen.getByTestId('item-search'), { target: { value: 'dag' } });
     expect(screen.getByText('Dagger')).toBeInTheDocument();
     expect(screen.queryByText('Longsword')).not.toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('ItemsTab', () => {
 
   it('filters by a config dropdown (weapon_category)', async () => {
     renderTab();
-    await waitFor(() => screen.getByTestId('item-filter-weapon_category'));
+    await screen.findByText('Dagger');
     fireEvent.change(screen.getByTestId('item-filter-weapon_category'), { target: { value: 'Simple' } });
     await waitFor(() => expect(screen.queryByText('Longsword')).not.toBeInTheDocument());
     expect(screen.getByText('Dagger')).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('ItemsTab', () => {
 
   it('shows empty state when nothing matches', async () => {
     renderTab();
-    await waitFor(() => screen.getByTestId('item-search'));
+    await screen.findByText('Longsword');
     fireEvent.change(screen.getByTestId('item-search'), { target: { value: 'zzzz' } });
     expect(screen.getByText('No weapons match your filters.')).toBeInTheDocument();
   });
@@ -139,6 +139,7 @@ describe('ItemsTab', () => {
       'weapons',
       expect.objectContaining({ name: 'Longsword', owner_type: 'campaign', owner_id: 1 })
     ));
-    expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/encyclopedia/items/weapons/99');
+    // navigate happens in createItem's continuation — await it rather than asserting sync.
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/encyclopedia/items/weapons/99'));
   });
 });

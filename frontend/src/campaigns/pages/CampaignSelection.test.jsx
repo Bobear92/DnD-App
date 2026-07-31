@@ -155,7 +155,11 @@ describe('CampaignSelection — create campaign', () => {
     await waitFor(() =>
       expect(campaignService.getAllCampaigns).toHaveBeenCalledTimes(2)
     );
-    expect(screen.queryByRole('heading', { name: 'Create New Campaign' })).toBeNull();
+    // Closing the modal is a separate state update in createCampaign's continuation, so it
+    // can land after the reload call — await the end state instead of asserting it synchronously.
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Create New Campaign' })).toBeNull()
+    );
   });
 });
 

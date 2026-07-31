@@ -66,7 +66,7 @@ describe('ItemEditPage — new', () => {
       'weapons',
       expect.objectContaining({ name: 'Test Blade', owner_type: 'campaign', owner_id: 1 })
     ));
-    expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/encyclopedia/items/weapons/99', { replace: true });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/encyclopedia/items/weapons/99', { replace: true }));
   });
 
   it('coerces number fields (armor) to integers in the payload', async () => {
@@ -118,7 +118,7 @@ describe('ItemEditPage — edit', () => {
     await waitFor(() => screen.getByTestId('delete-item-page-btn'));
     fireEvent.click(screen.getByTestId('delete-item-page-btn'));
     await waitFor(() => expect(itemService.deleteItem).toHaveBeenCalledWith('weapons', '3'));
-    expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/encyclopedia', { replace: true });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/encyclopedia', { replace: true }));
     window.confirm.mockRestore();
   });
 });

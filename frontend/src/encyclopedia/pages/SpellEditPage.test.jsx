@@ -112,10 +112,10 @@ describe('SpellEditPage — new spell', () => {
         })
       )
     );
-    expect(mockNavigate).toHaveBeenCalledWith(
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(
       '/campaigns/1/encyclopedia/spells/99',
       { replace: true }
-    );
+    ));
   });
 
   it('shows error and does not call createSpell when name is empty', async () => {
@@ -209,7 +209,7 @@ describe('SpellEditPage — edit existing spell', () => {
     await waitFor(() =>
       expect(encyclopediaService.deleteSpell).toHaveBeenCalledWith('42')
     );
-    expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/encyclopedia', { replace: true });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/campaigns/1/encyclopedia', { replace: true }));
   });
 
   it('does not call deleteSpell when confirm is cancelled', async () => {

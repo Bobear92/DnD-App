@@ -171,9 +171,10 @@ describe('SpellList', () => {
     mockFetchCatalog();
     render(<SpellList spells={['Magic Missile']} label="Spells Known" />);
     await waitFor(() => expect(screen.getByText('Magic Missile')).toBeInTheDocument());
+    // A single-level list keeps its stacked heading (no tab needed). The level comes from the
+    // fetched catalog, so wait on the heading before asserting what is absent.
+    expect(await screen.findByText('1st Level')).toBeInTheDocument();
     expect(screen.queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
-    // A single-level list keeps its stacked heading (no tab needed).
-    expect(screen.getByText('1st Level')).toBeInTheDocument();
     expect(screen.queryByText('3rd Level')).not.toBeInTheDocument();
   });
 

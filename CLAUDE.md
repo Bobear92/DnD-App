@@ -1130,6 +1130,19 @@ frontend/src/
 - **Error states:** API failures surface an error message; navigation and context updates do NOT happen
 - **Auth/GM gating:** GM-only elements are hidden in player view; restricted actions are blocked
 
+### Async anchoring — the CI-only flake (READ BEFORE WRITING AN `await` IN A TEST)
+**Await the thing the assertion depends on, not whatever renders first.** Mocked services resolve
+instantly locally but not on a loaded runner, so a test that gates on synchronously-rendered chrome
+(a row built from props, a search box that renders above the `loading` branch, a filter control) and
+then asserts synchronously on *fetched* content passes locally and fails in CI. Three fixes, by shape:
+- Asserting on fetched content → `await screen.findByText('<fetched value>')`, not `findByTestId` on a prop-rendered wrapper.
+- Asserting a *negative* (`queryBy…` is null/absent) → wait for the loaded state first, or it passes trivially against an empty page.
+- Asserting a side effect of a service call (`navigate`, a reload) → `await waitFor(() => expect(...))`; it runs in the call's continuation, so it is not there yet when the call itself resolves.
+
+Run `SLOW_MOCKS=1 npm test` (harness in `src/test/setup.js`) to surface these deterministically — it
+defers every `mockResolvedValue` by 50ms. It found 20 real latent flakes across 9 files after one
+reached CI. Not part of the default run or CI; see the file for its one known artifact.
+
 ### Mocking patterns
 ```js
 // Mock a service module

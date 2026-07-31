@@ -102,6 +102,9 @@ describe('FeatsSubTab', () => {
     const onChange = vi.fn();
     render(<FeatsSubTab feats={[{ id: 11, name: 'Grappler' }]} campaignId={1} edition="5e" canManage onChange={onChange} />);
     fireEvent.click(await screen.findByTestId('feats-add-btn'));
+    // Wait for the fetched catalogue to populate the picker — otherwise the negative
+    // assertion below passes trivially against an empty list.
+    await screen.findByTestId('add-pick-10');
     // Grappler already owned → not offered; Alert + Tough are.
     expect(screen.queryByTestId('add-pick-11')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('add-pick-10'));
@@ -118,7 +121,7 @@ describe('FeatsSubTab', () => {
     const onChange = vi.fn();
     render(<FeatsSubTab feats={[]} campaignId={1} edition="5e" canManage onChange={onChange} />);
     fireEvent.click(await screen.findByTestId('feats-add-btn'));
-    fireEvent.click(screen.getByTestId('add-pick-12')); // Tough — no effects in the catalogue
+    fireEvent.click(await screen.findByTestId('add-pick-12')); // Tough — no effects in the catalogue
     expect(onChange).toHaveBeenCalledWith({ feats: [{ id: 12, name: 'Tough' }] });
   });
 

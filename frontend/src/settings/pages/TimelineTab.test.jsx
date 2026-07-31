@@ -121,8 +121,8 @@ describe('TimelineTab — no eras (landing)', () => {
 
   it('player sees "not set up" message — no Set Up button', async () => {
     renderTab(false);
-    await waitFor(() => expect(screen.queryByText('Set Up Timeline')).toBeNull());
-    expect(screen.getByText(/No timeline has been set up/i)).toBeTruthy();
+    expect(await screen.findByText(/No timeline has been set up/i)).toBeTruthy();
+    expect(screen.queryByText('Set Up Timeline')).toBeNull();
   });
 
   it('clicking Set Up Timeline shows primary era form', async () => {
