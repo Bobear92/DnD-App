@@ -11,6 +11,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { ROGUE_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
+import Field from '@/characters/components/sheets/Field';
 
 const ALL_SKILLS = [
   'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics', 'Deception',
@@ -36,13 +37,6 @@ export default function RogueSheet({ data = {}, onChange, readOnly = false, leve
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

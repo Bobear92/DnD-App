@@ -17,6 +17,7 @@ import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestR
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import { cn } from '@/lib/utils';
+import Field from '@/characters/components/sheets/Field';
 
 const SPELL_SLOTS = {
   1:  [2, 0, 0, 0, 0, 0, 0, 0, 0], 2:  [3, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -115,13 +116,6 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
   const { spellSlots, availableSlots, setSlotUsed, handleCastSpell } = useSlotCaster({ slots, data, onChange });
   const cdUses = channelDivinityUses(level);
 
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

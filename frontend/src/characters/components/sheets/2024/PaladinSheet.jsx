@@ -17,6 +17,7 @@ import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestR
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import { cn } from '@/lib/utils';
+import Field from '@/characters/components/sheets/Field';
 
 // Paladin is half-caster; in 2024 slots start at L1
 const PALADIN_SLOTS = {
@@ -145,13 +146,6 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
   const cdUses = channelDivinityUses(level);
   const maxSpellLevel = maxCastableLevel(slots);
 
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

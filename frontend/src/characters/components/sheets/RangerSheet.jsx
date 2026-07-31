@@ -17,6 +17,7 @@ import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassP
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { RANGER_FIGHTING_STYLES_5E, RANGER_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
+import Field from '@/characters/components/sheets/Field';
 
 const FAVORED_ENEMY_OPTIONS = [
   'Aberrations', 'Beasts', 'Celestials', 'Constructs', 'Dragons',
@@ -183,13 +184,6 @@ export default function RangerSheet({ data = {}, onChange, readOnly = false, lev
   const terrains = Array.isArray(data.favored_terrain) ? data.favored_terrain : data.favored_terrain ? [data.favored_terrain] : [];
   const slots = slotsForLevel(level);
   const { spellSlots, availableSlots, setSlotUsed, handleCastSpell } = useSlotCaster({ slots, data, onChange });
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

@@ -20,6 +20,7 @@ import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { BARD_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
+import Field from '@/characters/components/sheets/Field';
 
 const BARD_SLOT_TABLE = {
   1:  [2,0,0,0,0,0,0,0,0], 2:  [3,0,0,0,0,0,0,0,0],
@@ -233,13 +234,6 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
   const biDie = bardicInspirationDie(level);
   const biUsed = data.bardic_inspiration_used ?? 0;
 
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

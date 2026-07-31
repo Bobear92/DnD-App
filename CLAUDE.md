@@ -1143,6 +1143,16 @@ Run `SLOW_MOCKS=1 npm test` (harness in `src/test/setup.js`) to surface these de
 defers every `mockResolvedValue` by 50ms. It found 20 real latent flakes across 9 files after one
 reached CI. Not part of the default run or CI; see the file for its one known artifact.
 
+### Never declare a component inside a component
+A component defined in another component's body is a **new component type every render**, so React
+unmounts and remounts its whole subtree, destroying local state underneath. This shipped as a real
+bug: all 20 hand-written class sheets declared their own `Field` in-render, so any parent re-render
+(a late fetch during creation, an autosave on the live sheet) wiped a half-typed custom instrument
+or closed an open subclass dialog. Declare components at **module scope** and pass what they need as
+props; `Field` is now shared from `@/characters/components/sheets/Field`.
+`src/test/noNestedComponents.test.js` fails the build on any new occurrence (ESLint is not the gate
+here — `npx eslint .` currently reports ~376 pre-existing errors, so a rule there would go unread).
+
 ### Mocking patterns
 ```js
 // Mock a service module

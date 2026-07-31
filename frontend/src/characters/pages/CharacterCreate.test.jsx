@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import CharacterCreate from './CharacterCreate';
@@ -120,25 +120,11 @@ async function selectClass(cls) {
   await waitFor(() => expect(screen.getByPlaceholderText('Enter a name…')).toBeInTheDocument());
 }
 
-// The identity step kicks off races/backgrounds/feats fetches. Let them settle before the test
-// interacts with the class sheet: a late arrival re-renders the sheet and resets local state in
-// its pickers/dialogs — dropped keystrokes, a dialog that never opens. Reproduce the failures
-// this prevents with `SLOW_MOCKS=1 npm test` (see src/test/setup.js).
-async function settleIdentityFetches() {
-  const pending = [
-    ...featService.getFeats.mock.results,
-    ...referenceService.getRaces.mock.results,
-    ...referenceService.getBackgrounds.mock.results,
-  ].map((r) => r.value);
-  await act(async () => { await Promise.allSettled(pending); });
-}
-
 async function advanceToFeatures(cls, name = 'Thorin') {
   await selectClass(cls);
   fireEvent.change(screen.getByPlaceholderText('Enter a name…'), { target: { value: name } });
   fireEvent.click(screen.getByTestId('identity-next'));
   await waitFor(() => expect(screen.getByText(`${cls} Features`)).toBeInTheDocument());
-  await settleIdentityFetches();
 }
 
 // Assigns a valid standard spread: STR=15, DEX=14, CON=10 (unchanged), INT=12, WIS=13, CHA=8

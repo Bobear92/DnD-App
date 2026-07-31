@@ -28,15 +28,7 @@ import SkillProficiencyPicker from '@/characters/components/sheets/classSheet/Sk
 import { useLockedChoice } from '@/characters/components/sheets/classSheet/hooks/useLockedChoice';
 import { getEarnedSubclassGrants, availableGrantOptions } from '@/characters/components/classData/subclassGrants';
 import { getSubclassCaster } from '@/characters/components/classData/subclassCasterData';
-
-function Field({ label, children }) {
-  return (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
-}
+import Field from '@/characters/components/sheets/Field';
 
 function WeaponMasteryList({ value = [], onChange, readOnly, max }) {
   const [input, setInput] = useState('');

@@ -18,6 +18,7 @@ import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeat
 import DraconicAncestorPicker from '@/characters/components/subclass/DraconicAncestorPicker';
 import { isDraconicSorcerer } from '@/characters/components/combat/combatBonuses';
 import { METAMAGIC_OPTIONS as METAMAGIC_POOL, metamagicKnownAtLevel } from '@/characters/components/classData/levelChoicesData';
+import Field from '@/characters/components/sheets/Field';
 
 // Names only — canonical pool (with descriptions) + count live in levelChoicesData,
 // shared with the LevelUpWizard's Metamagic step.
@@ -169,13 +170,6 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
   const sorceryUsed = data.sorcery_points_used ?? 0;
   const mmMax = metamagicCount(level);
 
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

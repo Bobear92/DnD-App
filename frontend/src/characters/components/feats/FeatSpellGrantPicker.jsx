@@ -92,6 +92,35 @@ export function resolveSpellGrantValue(spec, value) {
  * `resolveSpellGrantValue` turns it into the `choices.spell_grant` snapshot (adding `fixed` +
  * the `free_casts` list) at acquisition. Changing the source resets the spell picks.
  */
+// Module scope on purpose: declaring this inside the picker made it a new component type
+// each render, remounting the grid. See src/test/noNestedComponents.test.js.
+function SlotGrid({ spells, isSelected, atLimit, onToggle, idFor }) {
+  return (
+  <div className="max-h-44 overflow-y-auto pr-1 grid grid-cols-2 gap-1.5">
+    {spells.map((s) => {
+      const sel = isSelected(s.name);
+      const disabled = atLimit && !sel;
+      return (
+        <button
+          key={s.id ?? s.name}
+          type="button"
+          disabled={disabled}
+          onClick={() => onToggle(s.name)}
+          data-testid={idFor(s.name)}
+          className={cn(
+            'rounded-md border px-2 py-1.5 text-xs text-left transition-colors',
+            sel ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
+            disabled && 'opacity-40 cursor-not-allowed',
+          )}
+        >
+          {s.name}
+        </button>
+      );
+    })}
+  </div>
+  );
+}
+
 export default function FeatSpellGrantPicker({ spec, value = null, onChange, campaignId, testIdPrefix = 'feat-spell' }) {
   const edition = useCampaign()?.campaign?.edition;
   const [allSpells, setAllSpells] = useState([]);
@@ -144,30 +173,6 @@ export default function FeatSpellGrantPicker({ spec, value = null, onChange, cam
     emit({ leveled: [...v.leveled, { name, level }] });
   };
 
-  const SlotGrid = ({ spells, isSelected, atLimit, onToggle, idFor }) => (
-    <div className="max-h-44 overflow-y-auto pr-1 grid grid-cols-2 gap-1.5">
-      {spells.map((s) => {
-        const sel = isSelected(s.name);
-        const disabled = atLimit && !sel;
-        return (
-          <button
-            key={s.id ?? s.name}
-            type="button"
-            disabled={disabled}
-            onClick={() => onToggle(s.name)}
-            data-testid={idFor(s.name)}
-            className={cn(
-              'rounded-md border px-2 py-1.5 text-xs text-left transition-colors',
-              sel ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
-              disabled && 'opacity-40 cursor-not-allowed',
-            )}
-          >
-            {s.name}
-          </button>
-        );
-      })}
-    </div>
-  );
 
   return (
     <div className="space-y-3 rounded-md border bg-muted/30 p-3" data-testid={`${testIdPrefix}-picker`}>

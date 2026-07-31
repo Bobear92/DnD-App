@@ -13,6 +13,7 @@ import { WARLOCK_SUBCLASSES_2024 as SUBCLASSES, PACT_BOONS_2024 as PACT_BOONS } 
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { eldritchInvocationsKnownAtLevel } from '@/characters/components/classData/levelChoicesData';
+import Field from '@/characters/components/sheets/Field';
 
 const PACT_SLOTS = {
   1:  [1, 1], 2:  [2, 1], 3:  [2, 2], 4:  [2, 2],
@@ -158,13 +159,6 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
   for (let l = 1; l <= slotLevel; l++) pactAvailableSlots[l] = slotCount - slotsUsed;
   const handleCastSpell = () => set('pact_slots_used', Math.min(slotCount, slotsUsed + 1));
   const maxInvocations = invocationCount(level);
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

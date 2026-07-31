@@ -22,6 +22,7 @@ import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import DraconicAncestorPicker from '@/characters/components/subclass/DraconicAncestorPicker';
 import { isDraconicSorcerer } from '@/characters/components/combat/combatBonuses';
 import { METAMAGIC_OPTIONS as METAMAGIC_POOL, metamagicKnownAtLevel } from '@/characters/components/classData/levelChoicesData';
+import Field from '@/characters/components/sheets/Field';
 
 // Names only — the canonical pool (with descriptions) and count live in levelChoicesData,
 // shared with the LevelUpWizard's Metamagic step so picks land in the same array.
@@ -186,13 +187,6 @@ export default function SorcererSheet({ data = {}, onChange, readOnly = false, l
       onChange?.({ metamagic: [...current, option] });
     }
   };
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

@@ -21,6 +21,7 @@ import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spe
 import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
 import { cn } from '@/lib/utils';
+import Field from '@/characters/components/sheets/Field';
 
 // Paladin spell slot table (half-caster)
 const PALADIN_SLOTS = {
@@ -74,13 +75,6 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
   const layOnHandsPool = level * 5;
   const divineSmiteUnlocked = level >= 2;
   const extraAttack = level >= 5;
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

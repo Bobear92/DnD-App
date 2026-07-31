@@ -11,6 +11,7 @@ import { BARBARIAN_SUBCLASSES_2024 as SUBCLASSES } from '@/characters/components
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
+import Field from '@/characters/components/sheets/Field';
 
 function rageCount(level) {
   if (level >= 17) return '∞';
@@ -126,13 +127,6 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
   const rages = rageCount(level);
   const rageDmg = rageDamage(level);
   const usedRages = data.rages_used ?? 0;
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

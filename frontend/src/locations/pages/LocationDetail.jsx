@@ -54,6 +54,31 @@ const EMPTY_EDIT_FORM = (loc) => ({
   points_of_interest: loc.points_of_interest || '',
 });
 
+// Module scope on purpose: components declared inside another component are a new type on every
+// render, remounting their subtree. See src/test/noNestedComponents.test.js.
+function SaveResetButtons({ onReset, onSave, saving }) {
+  return (
+    <div className="flex gap-2 pt-2 border-t">
+      <Button size="sm" onClick={onSave} disabled={saving}>
+        {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
+        {saving ? 'Saving…' : 'Save Changes'}
+      </Button>
+      <Button size="sm" variant="outline" onClick={onReset}>Reset</Button>
+    </div>
+  );
+}
+
+// Read-only text block — only rendered in player view when non-empty.
+function PlayerField({ label, value }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">{label}</p>
+      <p className="whitespace-pre-wrap text-sm">{value}</p>
+    </div>
+  );
+}
+
 export default function LocationDetail() {
   const navigate = useNavigate();
   const { campaignId, locationId } = useParams();
@@ -439,29 +464,8 @@ export default function LocationDetail() {
 
   // ── Info tab helpers ──────────────────────────────────────────────────────
 
-  const SaveResetButtons = ({ onReset }) => (
-    <div className="flex gap-2 pt-2 border-t">
-      <Button size="sm" onClick={handleSaveEdit} disabled={saving}>
-        {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
-        {saving ? 'Saving…' : 'Save Changes'}
-      </Button>
-      <Button size="sm" variant="outline" onClick={onReset}>Reset</Button>
-    </div>
-  );
-
   const field = (key) => editForm[key] ?? '';
   const setField = (key) => (e) => setEditForm(f => ({ ...f, [key]: e.target.value }));
-
-  // Render a read-only text block — only shown in player view if non-empty
-  const PlayerField = ({ label, value }) => {
-    if (!value) return null;
-    return (
-      <div>
-        <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">{label}</p>
-        <p className="whitespace-pre-wrap text-sm">{value}</p>
-      </div>
-    );
-  };
 
   if (loading) {
     return (
@@ -905,7 +909,7 @@ export default function LocationDetail() {
                         <input type="checkbox" id="ev-visible" checked={editForm.is_visible_to_players || false} onChange={(e) => setEditForm(f => ({ ...f, is_visible_to_players: e.target.checked }))} className="w-4 h-4" />
                         <Label htmlFor="ev-visible" className="cursor-pointer">Visible to players</Label>
                       </div>
-                      <SaveResetButtons onReset={() => setEditForm(EMPTY_EDIT_FORM(location))} />
+                      <SaveResetButtons onSave={handleSaveEdit} saving={saving} onReset={() => setEditForm(EMPTY_EDIT_FORM(location))} />
                     </CardContent>
                   </Card>
 
@@ -918,7 +922,7 @@ export default function LocationDetail() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <Textarea placeholder="Private notes only you can see…" rows={8} value={field('gm_notes')} onChange={setField('gm_notes')} />
-                      <SaveResetButtons onReset={() => setEditForm(f => ({ ...f, gm_notes: location.gm_notes || '' }))} />
+                      <SaveResetButtons onSave={handleSaveEdit} saving={saving} onReset={() => setEditForm(f => ({ ...f, gm_notes: location.gm_notes || '' }))} />
                     </CardContent>
                   </Card>
                 </div>
@@ -948,7 +952,7 @@ export default function LocationDetail() {
                         <Label>Economy</Label>
                         <Textarea placeholder="Trade goods, wealth level, what's bought/sold…" rows={2} value={field('economy')} onChange={setField('economy')} />
                       </div>
-                      <SaveResetButtons onReset={() => setEditForm(f => ({ ...f, history: location.history || '', rumors: location.rumors || '', government: location.government || '', religion: location.religion || '', economy: location.economy || '' }))} />
+                      <SaveResetButtons onSave={handleSaveEdit} saving={saving} onReset={() => setEditForm(f => ({ ...f, history: location.history || '', rumors: location.rumors || '', government: location.government || '', religion: location.religion || '', economy: location.economy || '' }))} />
                     </CardContent>
                   </Card>
 
@@ -977,7 +981,7 @@ export default function LocationDetail() {
                         <Label>Animal Life</Label>
                         <Textarea placeholder="Notable fauna…" rows={2} value={field('animal_life')} onChange={setField('animal_life')} />
                       </div>
-                      <SaveResetButtons onReset={() => setEditForm(f => ({ ...f, weather: location.weather || '', climate: location.climate || '', terrain: location.terrain || '', plant_life: location.plant_life || '', animal_life: location.animal_life || '' }))} />
+                      <SaveResetButtons onSave={handleSaveEdit} saving={saving} onReset={() => setEditForm(f => ({ ...f, weather: location.weather || '', climate: location.climate || '', terrain: location.terrain || '', plant_life: location.plant_life || '', animal_life: location.animal_life || '' }))} />
                     </CardContent>
                   </Card>
                 </div>
@@ -999,7 +1003,7 @@ export default function LocationDetail() {
                         <Label>Points of Interest</Label>
                         <Textarea placeholder="Named sub-locations worth noting…" rows={3} value={field('points_of_interest')} onChange={setField('points_of_interest')} />
                       </div>
-                      <SaveResetButtons onReset={() => setEditForm(f => ({ ...f, threats: location.threats || '', available_services: location.available_services || '', points_of_interest: location.points_of_interest || '' }))} />
+                      <SaveResetButtons onSave={handleSaveEdit} saving={saving} onReset={() => setEditForm(f => ({ ...f, threats: location.threats || '', available_services: location.available_services || '', points_of_interest: location.points_of_interest || '' }))} />
                     </CardContent>
                   </Card>
                 </div>
@@ -1079,7 +1083,7 @@ export default function LocationDetail() {
                           </div>
                         </div>
 
-                        <SaveResetButtons onReset={() => setEditForm(f => ({
+                        <SaveResetButtons onSave={handleSaveEdit} saving={saving} onReset={() => setEditForm(f => ({
                           ...f,
                           parent_location_id: location.parent_location_id ?? null,
                           is_top_level: location.is_top_level ?? false,

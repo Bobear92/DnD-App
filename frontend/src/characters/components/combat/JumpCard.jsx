@@ -11,6 +11,17 @@ import { hasFeat, remarkableAthlete } from '@/characters/components/combat/comba
  * examples — no need to repeat them here). Display-only (no save) — derived from
  * the character's Strength + Athlete feat.
  */
+// Module scope on purpose: a component declared inside another component is a new type on
+// every render, which remounts its subtree. See src/test/noNestedComponents.test.js.
+function Stat({ label, value, testid }) {
+  return (
+    <div className="rounded-md border py-2 text-center">
+      <div className="text-[10px] text-muted-foreground uppercase leading-tight">{label}</div>
+      <div className="font-bold" data-testid={testid}>{value} ft</div>
+    </div>
+  );
+}
+
 export default function JumpCard({ strength, feats = [], charClass, subclass, level, edition }) {
   const { campaignId } = useParams();
 
@@ -18,13 +29,6 @@ export default function JumpCard({ strength, feats = [], charClass, subclass, le
   // Only 5e's Remarkable Athlete adds a jump bonus; the 2024 version grants advantage instead.
   const raJump = !!remarkableAthlete({ charClass, subclass, level, edition })?.jumpStrBonus;
   const j = computeJump(strength, { athlete, remarkableAthlete: raJump });
-
-  const Stat = ({ label, value, testid }) => (
-    <div className="rounded-md border py-2 text-center">
-      <div className="text-[10px] text-muted-foreground uppercase leading-tight">{label}</div>
-      <div className="font-bold" data-testid={testid}>{value} ft</div>
-    </div>
-  );
 
   return (
     <div className="rounded-lg border border-border bg-card p-4" data-testid="jump-card">

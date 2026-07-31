@@ -13,6 +13,7 @@ import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { MONK_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
+import Field from '@/characters/components/sheets/Field';
 
 function martialArtsDie(level) {
   if (level >= 17) return 'd10';
@@ -106,13 +107,6 @@ export default function MonkSheet({ data = {}, onChange, readOnly = false, isGm 
   const unarmoredAC = 10 + dexMod + wisMod;
   const dexStr = dexMod >= 0 ? `+${dexMod}` : `${dexMod}`;
   const wisStr = wisMod >= 0 ? `+${wisMod}` : `${wisMod}`;
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

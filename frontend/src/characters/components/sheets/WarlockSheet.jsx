@@ -19,6 +19,7 @@ import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { eldritchInvocationsKnownAtLevel } from '@/characters/components/classData/levelChoicesData';
 import WeaponDesignationPanel from '@/characters/components/inventory/WeaponDesignationPanel';
 import { hexWeaponUid, HEX_WARRIOR_NOTE, canBeHexWeapon } from '@/characters/components/inventory/weaponBondData';
+import Field from '@/characters/components/sheets/Field';
 
 // Pact Magic slot table: [slot_count, slot_level]
 const PACT_SLOTS = {
@@ -169,13 +170,6 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
   const pactAvailableSlots = {};
   for (let l = 1; l <= slotLevel; l++) pactAvailableSlots[l] = slotCount - slotsUsed;
   const handleCastSpell = () => set('pact_slots_used', Math.min(slotCount, slotsUsed + 1));
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

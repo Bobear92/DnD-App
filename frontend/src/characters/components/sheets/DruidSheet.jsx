@@ -21,6 +21,7 @@ import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spe
 import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
 import { cn } from '@/lib/utils';
+import Field from '@/characters/components/sheets/Field';
 
 const WIZARD_SLOTS = {
   1:  [2,0,0,0,0,0,0,0,0], 2:  [3,0,0,0,0,0,0,0,0],
@@ -123,13 +124,6 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
   const { spellSlots, availableSlots, setSlotUsed, handleCastSpell } = useSlotCaster({ slots, data, onChange });
   const wildShapeUsed = data.wild_shape_used ?? 0;
   const wildShapeTotal = 2;
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

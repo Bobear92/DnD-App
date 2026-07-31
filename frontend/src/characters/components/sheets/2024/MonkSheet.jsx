@@ -11,6 +11,7 @@ import { MONK_SUBCLASSES_2024 as SUBCLASSES } from '@/characters/components/clas
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
+import Field from '@/characters/components/sheets/Field';
 
 function martialArtsDie(level) {
   if (level >= 17) return 'd12';
@@ -129,13 +130,6 @@ export default function MonkSheet({ data = {}, onChange, readOnly = false, isGm 
   const focusUsed = data.ki_used ?? 0;
   const die = martialArtsDie(level);
   const movement = unarmoredMovement(level);
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">

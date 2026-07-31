@@ -15,6 +15,7 @@ import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { BARD_SUBCLASSES_2024 as SUBCLASSES } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
+import Field from '@/characters/components/sheets/Field';
 
 const ALL_SKILLS = [
   'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics', 'Deception',
@@ -104,13 +105,6 @@ export default function BardSheet({ data = {}, onChange, readOnly = false, level
 
   const expertiseMax = level >= 10 ? 4 : 2;
 
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
 
   return (
     <div className="space-y-4">
