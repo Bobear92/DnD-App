@@ -19,6 +19,8 @@ When a change touches **3 or more files**, state a brief plan before editing:
 
 Post the checklist, then proceed. This prevents wrong-approach detours.
 
+For a **large multi-slice feature** (repeats a pattern across many units — all remaining classes/subclasses/feats, a new edition's system, wiring every class into the action economy), use the **`/to-tickets` skill** instead of an inline checklist: it decomposes the goal into an ordered, proven-slice-first worklist persisted to `docs/tickets/<slug>.md` (see `docs/tickets/README.md`), so the work is resumable across sessions and driven off the machine worklists (coverage reports + `docs/character-system-backlog.md`). Often follows a `/grill` GO.
+
 ### Preserved intent rule
 **Never re-introduce a feature, field, or component the user has explicitly removed.** If something is absent from the codebase, assume it was removed on purpose and confirm before adding it back.
 
@@ -48,7 +50,7 @@ When unsure whether a tripwire applies, raise it anyway — a 10-second flag is 
    `git checkout main && git pull --ff-only && git checkout -b feature/<short-name>`
    Never accumulate unrelated work on one long-lived branch (a 10-commit / 100-file branch means `main` was stale for too long).
 2. **Develop on the branch** — commit as you go; write tests alongside each change (see Post-Turn Requirements). Commit/push only when the user asks.
-3. **Ship (`/ship`)** — run the full test suite → audit CLAUDE.md → commit on the feature branch → **fast-forward `main` to the branch (`git merge --ff-only`) and push `main`** → delete the feature branch (local + remote). The `/ship` skill automates this final step (branch-aware).
+3. **Ship (`/ship`)** — run the full test suite + coverage gates → **verify runtime changes end-to-end** (Step 3c: drive the real app for any product-source change, skip for docs/tests/tooling-only) → audit CLAUDE.md → commit on the feature branch → **fast-forward `main` to the branch (`git merge --ff-only`) and push `main`** → delete the feature branch (local + remote). The `/ship` skill automates this final step (branch-aware).
 4. **Next feature** starts from a fresh branch off the new `main`.
 
 Commit messages end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`. Keep merges fast-forward (no merge commits); if `--ff-only` fails because `main` moved, rebase the feature branch on `main`, re-run tests, then merge.

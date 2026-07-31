@@ -57,6 +57,34 @@ silently undone: `python report_feat_effects.py --write-baseline` and commit the
 `feat_coverage_baseline.json`. (Mirror on the frontend: `npm run coverage:baseline` after
 mechanizing more class features.)
 
+## Step 3c — Verify runtime changes end-to-end
+
+Green tests are not proof the feature works in the running app — the documented failure mode is a
+stale uvicorn worker serving cached modules while the DB and schema files were correct. This step
+drives the *actual* app for any change with a runtime surface.
+
+**First decide if it applies.** Look at the Step 1 changed-files list:
+- **SKIP** when the diff touches only tests (`*.test.*`), docs (`*.md`), tooling/config (`.claude/**`,
+  `.github/**`, `scripts/**`, `*.json`, baselines) — there's no runtime behavior to observe. State
+  "verify: skipped (no runtime surface)" and move on. (This session's tooling/docs ship would skip.)
+- **RUN** when the diff touches product source: frontend `src/**/*.{jsx,js}` (non-test) or backend
+  `routes.py`/`service.py`/`models.py`/`schemas.py`.
+
+**When it applies, invoke the `verify` skill scoped to the changed flow.** It picks the best
+available driving method; the repo essentials it should cover:
+- **Backend changed** → `bash scripts/restart-backend.sh` (kills stale python first), then
+  `sleep 4 && curl -s http://localhost:8000/docs >/dev/null && echo up`, then `curl` the *specific*
+  changed endpoint(s) with a real token and read the actual JSON — confirm the new field/behavior is
+  really served, not just asserted in a test.
+- **Frontend changed** → `npm run build` must succeed (catches what jsdom tests don't), then drive
+  the changed flow in the real app. Playwright + Chromium are installed (no config yet — write an
+  ad-hoc script under a scratch dir): log in as the test GM (`gm@dnd.com` / `password123`), navigate
+  to the changed page, exercise it, and assert the visible outcome. Servers must be up
+  (`scripts/restart-frontend.sh` ensures the backend too).
+
+Observe behavior, don't just re-run tests. If verification fails, fix before committing — do not
+ship on green tests alone.
+
 ## Step 4 — Audit CLAUDE.md
 
 Update these sections as needed:
