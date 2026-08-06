@@ -217,6 +217,72 @@ export function validateSubclassCaster(caster, label = 'subclass caster') {
 // automatically. Edition keys are checked here; class/edition self-consistency for
 // class configs is checked in validateClassConfigRegistry.
 
+// ── Caster descriptors (hand-written sheets delegating to the shared CasterSpellBlock) ────────
+//
+// Adding a class to CASTER_DESCRIPTORS is what switches its sheet onto the unified Spells-tab
+// layout, so a malformed entry silently breaks that class's spells tab. These checks are the gate.
+
+export const CASTER_KINDS = ['prepare', 'known', 'pact', 'spellbook'];
+
+// Slot rows differ by caster: full casters are 9 wide (1st–9th), half casters 5 wide (1st–5th),
+// and Pact Magic is a [slotCount, slotLevel] pair rather than a per-level row.
+const casterSlotRowProblem = (kind) => (v) => {
+  if (kind === 'pact') {
+    if (!isArr(v) || v.length !== 2) return 'pact slots must return [slotCount, slotLevel]';
+    if (!v.every((n) => isInt(n) && n >= 0)) return 'pact [slotCount, slotLevel] must be non-negative integers';
+    if (v[1] > 9) return `pact slot level ${v[1]} exceeds 9`;
+    return null;
+  }
+  if (!isArr(v) || (v.length !== 9 && v.length !== 5)) return 'must return a 9- or 5-length slot array';
+  if (!v.every((n) => isNum(n) && n >= 0)) return 'slot counts must be non-negative numbers';
+  return null;
+};
+
+export function validateCasterDescriptor(d, label = 'caster descriptor') {
+  const e = [];
+  if (!isObj(d)) return [`${label}: not an object`];
+  if (!isStr(d.className)) e.push(`${label}.className must be a string`);
+  if (!EDITIONS.includes(d.edition)) e.push(`${label}.edition must be one of ${EDITIONS.join(' | ')}`);
+  if (!CASTER_KINDS.includes(d.kind)) e.push(`${label}.kind must be one of ${CASTER_KINDS.join(' | ')}`);
+  if (!isStr(d.spellcastingAbility)) e.push(`${label}.spellcastingAbility must be a string`);
+  if (!isStr(d.spellList)) e.push(`${label}.spellList must be a string`);
+  // The character_data key the sheet reads/writes. Never inferred from `kind` — the 5e Ranger keeps
+  // a spells-KNOWN list under `prepared_spells`, and a conversion must not migrate it.
+  if (!isStr(d.listKey)) e.push(`${label}.listKey must be a string`);
+  if (!isLevel(d.startsAtLevel)) e.push(`${label}.startsAtLevel must be a level 1..20`);
+  eachLevel(d.slotsForLevel, `${label}.slotsForLevel`, casterSlotRowProblem(d.kind), e);
+  // Only prepare-style casters have a preparation limit; it takes (level, abilityMod).
+  if (d.prepareLimit != null) {
+    if (!isFn(d.prepareLimit)) e.push(`${label}.prepareLimit must be a function`);
+    else {
+      const v = d.prepareLimit(5, 3);
+      if (!isInt(v) || v < 1) e.push(`${label}.prepareLimit(5, 3) must return a positive integer`);
+    }
+  } else if (d.kind === 'prepare') {
+    e.push(`${label}.prepareLimit is required for kind 'prepare'`);
+  }
+  if (d.cantripPicker != null && typeof d.cantripPicker !== 'boolean') {
+    e.push(`${label}.cantripPicker must be a boolean`);
+  }
+  return e;
+}
+
+export function validateCasterDescriptorTable(table) {
+  const e = [];
+  if (!isArr(table)) return ['CASTER_DESCRIPTORS: not an array'];
+  const seen = new Set();
+  table.forEach((d, i) => {
+    const label = isObj(d) && isStr(d.className) ? `${d.className}/${d.edition}` : `CASTER_DESCRIPTORS[${i}]`;
+    e.push(...validateCasterDescriptor(d, label));
+    // One descriptor per class+edition — a duplicate means getCasterDescriptor silently wins on the
+    // first and the second entry is dead code.
+    const key = `${d?.className}|${d?.edition}`;
+    if (seen.has(key)) e.push(`${label}: duplicate descriptor for this class + edition`);
+    seen.add(key);
+  });
+  return e;
+}
+
 export function validateClassConfigRegistry(registry) {
   const e = [];
   if (!isObj(registry)) return ['class config registry: not an object'];
