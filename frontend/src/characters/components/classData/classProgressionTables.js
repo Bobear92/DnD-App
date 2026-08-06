@@ -6,6 +6,9 @@
 // ─── Shared spell slot arrays ────────────────────────────────────────────────
 
 // Full-caster slots (spell levels 1–9), levels 1–20
+// Exported (as FULL_CASTER_SLOTS etc. below) so the caster descriptors that drive the shared
+// Spells-tab layout read the SAME table the progression display uses — before this, four sheets
+// each carried their own copy of this array.
 const FC = [
   [2,0,0,0,0,0,0,0,0],[3,0,0,0,0,0,0,0,0],[4,2,0,0,0,0,0,0,0],[4,3,0,0,0,0,0,0,0],
   [4,3,2,0,0,0,0,0,0],[4,3,3,0,0,0,0,0,0],[4,3,3,1,0,0,0,0,0],[4,3,3,2,0,0,0,0,0],
@@ -31,6 +34,18 @@ const HC_PAL_2024 = [
   [4,3,3,1,0],[4,3,3,1,0],[4,3,3,2,0],[4,3,3,2,0],
   [4,3,3,3,1],[4,3,3,3,1],[4,3,3,3,2],[4,3,3,3,2],
 ];
+
+// Pact Magic slots (Warlock): a SINGLE slot level, all slots at that level, short-rest recovery.
+// [count, level] per character level 1–20.
+const PACT = [
+  [1,1],[2,1],[2,2],[2,2],[2,3],[2,3],[2,4],[2,4],[2,5],[2,5],
+  [3,5],[3,5],[3,5],[3,5],[3,5],[3,5],[4,5],[4,5],[4,5],[4,5],
+];
+
+export const FULL_CASTER_SLOTS = FC;
+export const HALF_CASTER_SLOTS = HC;
+export const HALF_CASTER_SLOTS_FROM_L1 = HC_PAL_2024;
+export const PACT_MAGIC_SLOTS = PACT;
 
 // ─── Shared column definitions ────────────────────────────────────────────────
 

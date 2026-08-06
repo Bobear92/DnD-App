@@ -45,6 +45,7 @@ export default function CasterSpellBlock({
   raceGrantedCantrips = [],
   featSpells = null,
   featTrackers = null,
+  extras = null,
 }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
@@ -63,15 +64,20 @@ export default function CasterSpellBlock({
   const pb = Math.ceil(level / 4) + 1;
   const spellSaveDc = 8 + pb + abilityMod;
   const spellAttackBonus = pb + abilityMod;
-  const prepareLimit = Math.max(1, level + abilityMod);
-  const prepared = data.prepared_spells ?? [];
+  // Which `character_data` key holds the leveled list, and how big it may get. Both are
+  // descriptor-driven so a hand-written sheet keeps its existing storage key (the 5e Ranger, for
+  // one, stores a 2014 spells-KNOWN list under `prepared_spells`) instead of being migrated.
+  const kind = caster.kind ?? 'spellbook';
+  const listKey = caster.listKey ?? 'prepared_spells';
+  const prepareLimit = (caster.prepareLimit ?? ((l, m) => Math.max(1, l + m)))(level, abilityMod);
+  const prepared = data[listKey] ?? [];
   const spellbook = data.spellbook ?? [];
   const locked = data.prepared_locked ?? false;
   const playerLocked = locked && !isGm;
   const togglePrepared = (spell) => {
     if (playerLocked) return;
-    if (prepared.includes(spell)) onChange?.({ prepared_spells: prepared.filter((s) => s !== spell) });
-    else if (prepared.length < prepareLimit) onChange?.({ prepared_spells: [...prepared, spell] });
+    if (prepared.includes(spell)) onChange?.({ [listKey]: prepared.filter((s) => s !== spell) });
+    else if (prepared.length < prepareLimit) onChange?.({ [listKey]: [...prepared, spell] });
   };
 
   const recoveryLevels = caster.arcaneRecovery ? Math.ceil(level / 2) : 0;
@@ -346,15 +352,36 @@ export default function CasterSpellBlock({
 
   // ── Play: only in the spells section ─────────────────────────────────────────
   if (section !== 'all' && section !== 'spells') return null;
+  // Half-casters (and any class whose spellcasting unlocks after level 1) render nothing until
+  // they actually get slots — the hand-written sheets expressed this as a `hasCasting &&` guard.
+  if (caster.startsAtLevel && level < caster.startsAtLevel) return null;
 
   // Prepared caster (Wizard…): the "Prepared" view uses the same shared level strip + Class/Racial/
   // Feats source fold as the known caster — cantrips + prepared spells are the class content per level.
   const playRacialCantrips = raceGrantedCantrips ?? [];
   const playFeatCantrips = featSpells?.cantrips ?? [];
   const playFeatLeveled = featSpells?.leveled ?? [];
+  const maxPrepareLevel = maxCastableLevel(slotsTable);
   const preparedCantripsNode = (
-    <SpellList spells={data.cantrips ?? []} onRemove={(n) => removeSpell('cantrips', n)} readOnly={readOnly}
-      label="Cantrips Known" isCantrips characterLevel={level} spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus} levelTabs={false} />
+    <>
+      <SpellList spells={data.cantrips ?? []} onRemove={(n) => removeSpell('cantrips', n)} readOnly={readOnly}
+        label="Cantrips Known" isCantrips characterLevel={level} spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus} levelTabs={false} />
+      {/* Classes that pick cantrips from their list on the sheet (Cleric, Druid…) rather than only
+          at level-up (Wizard) keep their inline add-picker. */}
+      {caster.cantripPicker && !readOnly && caster.spellList && (
+        <SpellAddPicker
+          className={caster.spellList}
+          campaignId={campaignId}
+          spells={data.cantrips ?? []}
+          onAdd={(n) => addSpell('cantrips', n)}
+          onRemove={(n) => removeSpell('cantrips', n)}
+          minSpellLevel={0}
+          maxSpellLevel={0}
+          label="Add a cantrip"
+          testId="cantrip-add"
+        />
+      )}
+    </>
   );
   const preparedLeveledNode = (filterByLevel, atLevel) => (
     <SpellList
@@ -386,6 +413,10 @@ export default function CasterSpellBlock({
 
       {spellSubTab === 'prepared' && (
         <div className="space-y-4">
+          {/* Class-specific spell-adjacent trackers the owning sheet passes in (Cleric's Channel
+              Divinity, Sorcerer's Sorcery Points, Artificer's Spell-Storing Item). They sat inside
+              the spells section before the sheet delegated here, and must stay there. */}
+          {extras}
           {caster.arcaneRecovery && (
             <>
               <div className="flex items-center justify-between rounded-md border px-3 py-2">
@@ -445,7 +476,27 @@ export default function CasterSpellBlock({
         </div>
       )}
 
-      {spellSubTab === 'prepare' && (
+      {/* ── Prepare from the FULL class list (Cleric, Druid, Paladin, Ranger 2024, Artificer) ──
+          These classes have no spellbook: every spell on the class list is a candidate, so the
+          browser owns the whole flow (search/filter, prepare limit, and the lock/unlock that
+          commits the day's preparation). */}
+      {spellSubTab === 'prepare' && kind === 'prepare' && (
+        <ClassSpellBrowser
+          className={caster.spellList}
+          campaignId={campaignId}
+          preparedSpells={prepared}
+          prepareLimit={prepareLimit}
+          onAdd={(n) => addSpell(listKey, n)}
+          onRemove={(n) => removeSpell(listKey, n)}
+          locked={locked}
+          isGm={isGm}
+          maxSpellLevel={maxPrepareLevel}
+          onLock={() => set('prepared_locked', true)}
+          onUnlock={() => set('prepared_locked', false)}
+        />
+      )}
+
+      {spellSubTab === 'prepare' && kind !== 'prepare' && (
         <div className="space-y-4">
           {playerLocked ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/20 px-3 py-2.5 flex items-center gap-2">
@@ -530,7 +581,7 @@ export default function CasterSpellBlock({
           )}
 
           {prepared.filter((s) => !spellbook.includes(s)).length > 0 && (
-            <SpellList spells={prepared.filter((s) => !spellbook.includes(s))} onRemove={!playerLocked ? (n) => removeSpell('prepared_spells', n) : undefined} readOnly={readOnly || playerLocked} label="Other Prepared Spells" />
+            <SpellList spells={prepared.filter((s) => !spellbook.includes(s))} onRemove={!playerLocked ? (n) => removeSpell(listKey, n) : undefined} readOnly={readOnly || playerLocked} label="Other Prepared Spells" />
           )}
 
           <div className="pt-2 border-t">

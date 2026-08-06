@@ -36,6 +36,7 @@ import { computePassiveScores } from '@/characters/components/skills/passiveSkil
 import { skillBreakdown, saveBreakdown, abilityPart, buildBreakdown } from '@/characters/components/skills/skillMath';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
+import { getCasterDescriptor } from '@/characters/components/classData/casterDescriptors';
 import { MaxHpValue } from '@/characters/components/combat/CombatBonusInline';
 import { hpRollBase, effectiveMaxHp as computeEffectiveMaxHp, remarkableAthlete } from '@/characters/components/combat/combatBonuses';
 import { draconicLabel } from '@/characters/components/subclass/draconicData';
@@ -1816,11 +1817,17 @@ export default function CharacterDetail() {
                   const featData = classSection.draft?.feats ?? character.character_data?.feats ?? [];
                   const fg = getFeatGrantedSpells(featData);
                   const hasFeat = fg.cantrips.length + fg.leveled.length + fg.ritualBooks.length > 0;
-                  // Data-driven casters (Wizard + Eldritch Knight, via CasterSpellBlock) render the
-                  // unified level strip, so racial + feat spells fold INTO it (Class/Racial/Feats become
-                  // a per-level source toggle) rather than showing as top-level sources. The hand-written
-                  // caster sheets don't use the strip yet, so they keep the top-level source toggle.
-                  const foldSources = isCaster && !!getClassConfig(character.char_class, edition);
+                  // Casters that render through the shared CasterSpellBlock show the unified level
+                  // strip, so racial + feat spells fold INTO it (Class/Racial/Feats become a per-level
+                  // source toggle) rather than showing as top-level sources. That's true for a
+                  // data-driven config (Wizard, Eldritch Knight) OR a hand-written sheet that has been
+                  // converted to delegate — which is exactly what having a caster descriptor means.
+                  // A character with only racial/feat spells and no class casting keeps the top-level
+                  // toggle, since there is no strip to fold into.
+                  const foldSources = isCaster && (
+                    !!getClassConfig(character.char_class, edition)
+                    || !!getCasterDescriptor(character.char_class, edition)
+                  );
                   const featTrackersNode = hasFeat ? (
                     <FeatSpellsSection
                       feats={featData}

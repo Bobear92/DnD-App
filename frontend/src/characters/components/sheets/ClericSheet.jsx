@@ -2,14 +2,12 @@
  * Cleric (5e) — class-specific character_data section.
  * d8, full caster, Channel Divinity, Divine Domain subclass (level 1).
  */
-import React, { useState } from 'react';
+import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
-import SpellList from '@/characters/components/spells/SpellList';
-import SpellAddPicker from '@/characters/components/spells/SpellAddPicker';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
@@ -17,28 +15,13 @@ import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
 import { CLERIC_SUBCLASSES_5E } from '@/characters/components/classData/classChoicesData';
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
-import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
-import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
-import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
-import { cn } from '@/lib/utils';
+import CasterSpellBlock from '@/characters/components/sheets/classSheet/CasterSpellBlock';
+import { getCasterDescriptor } from '@/characters/components/classData/casterDescriptors';
 import Field from '@/characters/components/sheets/Field';
 
-const WIZARD_SLOTS = {
-  1:  [2,0,0,0,0,0,0,0,0], 2:  [3,0,0,0,0,0,0,0,0],
-  3:  [4,2,0,0,0,0,0,0,0], 4:  [4,3,0,0,0,0,0,0,0],
-  5:  [4,3,2,0,0,0,0,0,0], 6:  [4,3,3,0,0,0,0,0,0],
-  7:  [4,3,3,1,0,0,0,0,0], 8:  [4,3,3,2,0,0,0,0,0],
-  9:  [4,3,3,3,1,0,0,0,0], 10: [4,3,3,3,2,0,0,0,0],
-  11: [4,3,3,3,2,1,0,0,0], 12: [4,3,3,3,2,1,0,0,0],
-  13: [4,3,3,3,2,1,1,0,0], 14: [4,3,3,3,2,1,1,0,0],
-  15: [4,3,3,3,2,1,1,1,0], 16: [4,3,3,3,2,1,1,1,0],
-  17: [4,3,3,3,2,1,1,1,1], 18: [4,3,3,3,3,1,1,1,1],
-  19: [4,3,3,3,3,2,1,1,1], 20: [4,3,3,3,3,2,2,1,1],
-};
-
-function slotsForLevel(level) {
-  return WIZARD_SLOTS[Math.min(Math.max(level, 1), 20)];
-}
+// The full-caster slot table + prepare limit now live in the shared descriptor (which reads the
+// same progression table the class overview renders), so this sheet no longer carries its own copy.
+const CLERIC_CASTER = getCasterDescriptor('Cleric', '5e');
 
 function channelDivinityUses(level) {
   if (level >= 18) return 3;
@@ -107,24 +90,13 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [], rac
 
 const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
 
-export default function ClericSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', abilityScores = {}, campaignId, isGm = false, acExtra = null, maxHpNode = null }) {
+export default function ClericSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', abilityScores = {}, campaignId, isGm = false, gmEdit = false, acExtra = null, maxHpNode = null, raceGrantedCantrips = [], featSpells = null, featTrackers = null }) {
   const set = (key, value) => onChange?.({ [key]: value });
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
-  const addSpell = (key, name) => { const l = data[key] ?? []; if (!l.includes(name)) onChange?.({ [key]: [...l, name] }); };
-  const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
 
-  const [spellSubTab, setSpellSubTab] = useState('prepared');
-
-  const wisMod = abMod(abilityScores.wisdom);
-  const prepareLimit = Math.max(1, level + wisMod);
-
-  const slots = slotsForLevel(level);
-  const maxSpellLevel = maxCastableLevel(slots);
-  const { spellSlots, availableSlots, setSlotUsed, handleCastSpell } = useSlotCaster({ slots, data, onChange });
   const cdTotal = channelDivinityUses(level);
   const cdUsed = data.channel_divinity_used ?? 0;
-
 
   return (
     <div className="space-y-4">
@@ -215,72 +187,34 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
           <div className="text-xs text-muted-foreground">All slots recover on a Long Rest</div>
         </div>
       )}
+      {/* Spells — delegated to the shared CasterSpellBlock so this sheet gets the unified layout
+          (one level strip spanning Class/Racial/Feats). Channel Divinity rides along in `extras`
+          because it belongs inside the spells section, not the Features tab. */}
       {!creation && (section === 'all' || section === 'spells') && (
-        <div className="space-y-4">
-          {/* Sub-tab nav */}
-          <div className="flex gap-1 border-b">
-            {[['prepared', 'Prepared'], ['prepare', 'Prepare Spells']].map(([tab, label]) => (
-              <button key={tab} type="button" onClick={() => setSpellSubTab(tab)}
-                className={cn('px-3 py-1.5 text-sm font-medium -mb-px border-b-2 transition-colors',
-                  spellSubTab === tab ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-                )}>
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {spellSubTab === 'prepared' && (
-            <div className="space-y-4">
-              {/* Channel Divinity tracker (spell-related feature) */}
-              {!creation && (
-                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <div>
-                    <div className="text-sm font-medium">Channel Divinity (Short Rest)</div>
-                    <div className="text-xs text-muted-foreground">{cdTotal - cdUsed} / {cdTotal} remaining</div>
-                  </div>
-                  <RestUseSteppers usedKey="channel_divinity_used" used={cdUsed} total={cdTotal} onChange={onChange} readOnly={readOnly} isGm={isGm} label="Channel Divinity" />
-                </div>
-              )}
-              {/* Spell slots */}
-              <SpellSlotTracker slots={slots} spellSlots={spellSlots} onSetSlotUsed={setSlotUsed} readOnly={readOnly} isGm={isGm} />
-              {/* Cantrips */}
-              <>
-                <SpellList spells={data.cantrips ?? []} onRemove={n => removeSpell('cantrips', n)} readOnly={readOnly} label="Cantrips Known" isCantrips={true} />
-                {!readOnly && (
-                <SpellAddPicker
-                  className="Cleric"
-                  campaignId={campaignId}
-                  spells={data.cantrips ?? []}
-                  onAdd={n => addSpell('cantrips', n)}
-                  onRemove={n => removeSpell('cantrips', n)}
-                  minSpellLevel={0}
-                  maxSpellLevel={0}
-                  label="Add a cantrip"
-                  testId="cantrip-add"
-                />
-                )}
-              </>
-              {/* Prepared spells (read-only reference — manage in Prepare Spells tab) */}
-              <SpellList spells={data.prepared_spells ?? []} readOnly={true} label={`Prepared Spells — ${(data.prepared_spells ?? []).length}/${prepareLimit} · Long Rest`} onCastSpell={!readOnly ? handleCastSpell : undefined} availableSlots={!readOnly ? availableSlots : undefined} />
+        <CasterSpellBlock
+          caster={CLERIC_CASTER}
+          data={data}
+          onChange={onChange}
+          readOnly={readOnly}
+          level={level}
+          section="spells"
+          abilityScores={abilityScores}
+          campaignId={campaignId}
+          isGm={isGm}
+          gmEdit={gmEdit}
+          raceGrantedCantrips={raceGrantedCantrips}
+          featSpells={featSpells}
+          featTrackers={featTrackers}
+          extras={(
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div>
+                <div className="text-sm font-medium">Channel Divinity (Short Rest)</div>
+                <div className="text-xs text-muted-foreground">{cdTotal - cdUsed} / {cdTotal} remaining</div>
+              </div>
+              <RestUseSteppers usedKey="channel_divinity_used" used={cdUsed} total={cdTotal} onChange={onChange} readOnly={readOnly} isGm={isGm} label="Channel Divinity" />
             </div>
           )}
-
-          {spellSubTab === 'prepare' && (
-            <ClassSpellBrowser
-              className="Cleric"
-              campaignId={campaignId}
-              preparedSpells={data.prepared_spells ?? []}
-              prepareLimit={prepareLimit}
-              onAdd={n => addSpell('prepared_spells', n)}
-              onRemove={n => removeSpell('prepared_spells', n)}
-              locked={data.prepared_locked ?? false}
-              isGm={isGm}
-              maxSpellLevel={maxSpellLevel}
-              onLock={() => set('prepared_locked', true)}
-              onUnlock={() => set('prepared_locked', false)}
-            />
-          )}
-        </div>
+        />
       )}
 
       {/* Class features */}
