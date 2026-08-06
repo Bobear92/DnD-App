@@ -194,7 +194,8 @@ FEAT_EFFECTS_5E = {
     "Observant": [
         _abil_choice(["intelligence", "wisdom"]),
         {"kind": "stat_mod", "stat": "passive_perception", "amount": 5, "label": "+5 passive Perception"},
-        _note("Also +5 passive Investigation; can read lips."),
+        {"kind": "stat_mod", "stat": "passive_investigation", "amount": 5, "label": "+5 passive Investigation"},
+        _note("Can read lips."),
     ],
     "Polearm Master": [
         _action("Polearm Butt (Bonus Attack)", "bonus",

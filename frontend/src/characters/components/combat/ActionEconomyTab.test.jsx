@@ -407,11 +407,21 @@ describe('ActionEconomyTab', () => {
     expect(screen.queryByTestId('ae-eldritch-weapon:w1:0')).not.toBeInTheDocument();
   });
 
-  it('appends the Arcane Charge rider to Action Surge for an Eldritch Knight at L15', () => {
+  it('shows Arcane Charge on its own line under Action Surge for an Eldritch Knight at L15', () => {
     renderTab({ subclass: 'Eldritch Knight', level: 15 });
     fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
-    expect(screen.getByText(/Arcane Charge/)).toBeInTheDocument();
-    expect(screen.getByText(/teleport up to 30 ft/i)).toBeInTheDocument();
+    const rider = screen.getByTestId('ae-rider-arcane-charge');
+    expect(rider).toHaveTextContent('Arcane Charge');
+    expect(rider).toHaveTextContent(/teleport up to 30 ft/i);
+    // It is a separate element from the Action Surge description, not run into it.
+    expect(screen.getByText(/take one additional action for free/i)).not.toBe(rider);
+    expect(screen.getByText(/take one additional action for free/i)).not.toHaveTextContent(/Arcane Charge/);
+  });
+
+  it('shows no rider line for a Champion at L15', () => {
+    renderTab({ subclass: 'Champion', level: 15 });
+    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    expect(screen.queryByTestId('ae-rider-arcane-charge')).not.toBeInTheDocument();
   });
 });
 

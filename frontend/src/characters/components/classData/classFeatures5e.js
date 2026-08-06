@@ -459,7 +459,7 @@ export const CLASS_FEATURES_5E = {
     ],
     2: [
       { name: 'Fighting Style', description: 'Adopt a fighting style specialty: Defense (+1 AC while wearing armor), Dueling (+2 damage with one-handed weapon), Great Weapon Fighting (reroll 1s and 2s on damage), or Protection (impose disadvantage on attacks against adjacent allies when you have a shield).' },
-      { name: 'Spellcasting (half-caster, starts L2)', description: 'You gain the ability to cast paladin spells, starting at 2nd level. Charisma is your spellcasting ability. You prepare spells equal to your Charisma modifier + half your paladin level, rounded down. Spell slots are as a half-caster (1st-level slots at 2nd, up to 5th-level slots at 17th).' },
+      { name: 'Spellcasting (half-caster)', description: 'You gain the ability to cast paladin spells, starting at 2nd level. Charisma is your spellcasting ability. You prepare spells equal to your Charisma modifier + half your paladin level, rounded down. Spell slots are as a half-caster (1st-level slots at 2nd, up to 5th-level slots at 17th).' },
       { name: 'Divine Smite', description: 'When you hit a creature with a melee weapon attack, you can expend one spell slot to deal radiant damage to the target. The extra damage is 2d8 for a 1st-level slot, plus 1d8 for each spell level higher (maximum 5d8). The damage increases by 1d8 against undead or fiends.' },
     ],
     3: [
@@ -521,7 +521,7 @@ export const CLASS_FEATURES_5E = {
     ],
     2: [
       { name: 'Fighting Style', description: 'Choose a fighting style specialty from: Archery (+2 to ranged attack rolls), Defense (+1 AC while wearing armor), Dueling (+2 damage with one-handed weapon), or Two-Weapon Fighting (add ability modifier to off-hand attacks).' },
-      { name: 'Spellcasting (half-caster, starts L1)', description: 'You have learned to use the magical essence of nature to cast spells. Wisdom is your spellcasting ability. Ranger spell slots start at 1st level (2 slots), scaling to 3rd-level slots by 9th level.' },
+      { name: 'Spellcasting (half-caster)', description: 'You have learned to use the magical essence of nature to cast spells. Wisdom is your spellcasting ability. Ranger spell slots start at 1st level (2 slots), scaling to 3rd-level slots by 9th level.' },
     ],
     3: [
       { name: 'Ranger Archetype', description: 'You choose an archetype that you strive to emulate, such as Hunter or Beast Master. Your choice grants you features at 3rd, 7th, 11th, and 15th level.' },

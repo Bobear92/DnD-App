@@ -391,7 +391,7 @@ export default function WarlockSheet({ data = {}, onChange, readOnly = false, le
       {showFeatures && level >= 11 && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Mystic Arcanum</span>
-          {' '}— 6th level (L11), 7th (L13), 8th (L15), 9th (L17). One casting each per long rest. Track with your spell list.
+          {' '}— 6th level at level 11, 7th at 13, 8th at 15, 9th at 17. One casting each per long rest. Track with your spell list.
         </div>
       )}
 

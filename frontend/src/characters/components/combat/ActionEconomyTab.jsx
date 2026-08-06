@@ -98,6 +98,18 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId }) {
         ) : (
           entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>
         )}
+        {/* Riders: separate features that hang off this entry (e.g. Arcane Charge on Action
+            Surge). Given their own indented line so they don't read as part of the base rule. */}
+        {entry.riders?.map((rider) => (
+          <p
+            key={rider.source}
+            className="text-xs text-muted-foreground mt-1.5 border-l-2 border-border pl-2"
+            data-testid={`ae-rider-${rider.source.toLowerCase().replace(/\s+/g, '-')}`}
+          >
+            <span className="font-medium text-foreground">{rider.source}</span>
+            {rider.text ? ` — ${rider.text}` : ''}
+          </p>
+        ))}
         {entry.powerAttack && (
           <button
             type="button"

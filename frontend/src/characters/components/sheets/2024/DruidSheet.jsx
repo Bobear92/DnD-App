@@ -122,7 +122,7 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
       <div className="grid grid-cols-1 gap-3">
         <div className="rounded-md border px-3 py-2 text-center">
           <div className="text-xs text-muted-foreground">Wild Shape Max</div>
-          <div className="font-bold text-lg">{level >= 2 ? wildShapeMaxCR(level) : 'L2+'}</div>
+          <div className="font-bold text-lg">{level >= 2 ? wildShapeMaxCR(level) : 'Level 2+'}</div>
         </div>
       </div>
       )}
@@ -164,7 +164,7 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
 
       {/* Primal Order (L1) */}
       {showFeatures && (
-      <Field label="Primal Order (L1)">
+      <Field label="Primal Order">
         {readOnly ? (
           <div className="text-sm py-2">{data.primal_order || '—'}</div>
         ) : (
@@ -192,8 +192,8 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
       {/* Wild Resurgence (L5) */}
       {level >= 5 && showFeatures && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">Wild Resurgence (L5)</span>
-          {' '}— 1×/day: expend a Wild Shape use to regain a L1 spell slot, or expend a spell slot to regain a Wild Shape use.
+          <span className="font-medium text-foreground">Wild Resurgence</span>
+          {' '}— 1×/day: expend a Wild Shape use to regain a 1st-level spell slot, or expend a spell slot to regain a Wild Shape use.
         </div>
       )}
 

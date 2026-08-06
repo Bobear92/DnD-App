@@ -32,6 +32,9 @@ import InventoryTab from '@/characters/components/inventory/InventoryTab';
 import ActionEconomyTab from '@/characters/components/combat/ActionEconomyTab';
 import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
 import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '@/characters/components/feats/featEffects';
+import { computePassiveScores } from '@/characters/components/skills/passiveSkills';
+import { skillBreakdown, saveBreakdown, abilityPart, buildBreakdown } from '@/characters/components/skills/skillMath';
+import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { MaxHpValue } from '@/characters/components/combat/CombatBonusInline';
 import { hpRollBase, effectiveMaxHp as computeEffectiveMaxHp, remarkableAthlete } from '@/characters/components/combat/combatBonuses';
@@ -174,6 +177,9 @@ export default function CharacterDetail() {
   const [gmEdit, setGmEdit] = useState(false); // GM Edit toggle: unlocks permanent choices (Epic 1)
   const [featuresSubTab, setFeaturesSubTab] = useState('class'); // 'class' | 'feats'
   const [statsSubTab, setStatsSubTab] = useState('identity'); // 'identity' | 'abilities' | 'hp'
+  // Which derived number has its arithmetic expanded: 'initiative' | `save:${ability}` |
+  // `passive:${key}`. One at a time. (Skills keep their own equivalent state in SkillsDisplay.)
+  const [openStat, setOpenStat] = useState(null);
   const [spellSource, setSpellSource] = useState('class'); // Spells tab source sub-tab: 'class' | 'racial' | 'feats'
 
   const [xpInput, setXpInput] = useState('');
@@ -1341,17 +1347,15 @@ export default function CharacterDetail() {
                   </div>
 
                   {/* Derived stats row (Inspiration has its own card below) */}
-                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                  <div className="grid grid-cols-2 gap-2 text-center text-sm">
                     <div className="rounded-md border py-2">
                       <div className="text-[10px] text-muted-foreground uppercase">Prof. Bonus</div>
                       <div className="font-bold">+{pb}</div>
                     </div>
-                    <div className="rounded-md border py-2">
+                    <div className="rounded-md border py-2 px-2">
                       <div className="text-[10px] text-muted-foreground uppercase">Initiative</div>
                       {(() => {
                         const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
-                        const bonus = getFeatStatMods(feats, 'initiative', { pb });
-                        const total = mod(identity.draft.dexterity) + bonus;
                         const sources = getFeatStatModSources(feats, 'initiative', { pb });
                         const ra = remarkableAthlete({
                           charClass: character.char_class,
@@ -1359,9 +1363,26 @@ export default function CharacterDetail() {
                           level: character.level,
                           edition,
                         });
+                        const breakdown = buildBreakdown({
+                          parts: [
+                            abilityPart('dexterity', identity.draft.dexterity),
+                            ...sources.map((s) => ({ key: `feat-${s.source}`, label: s.source, value: s.amount })),
+                          ],
+                          notes: [ra?.advantageInitiative && 'Advantage — Remarkable Athlete'],
+                        });
                         return (
                           <>
-                            <div className="font-bold" data-testid="initiative-value">{total >= 0 ? `+${total}` : total}</div>
+                            <BreakdownValue
+                              testId="initiative-value"
+                              label="Initiative"
+                              breakdown={breakdown}
+                              className="font-bold"
+                              expanded={openStat === 'initiative'}
+                              onToggle={() => setOpenStat(openStat === 'initiative' ? null : 'initiative')}
+                            />
+                            {openStat === 'initiative' && (
+                              <BreakdownPanel testId="initiative-breakdown" breakdown={breakdown} />
+                            )}
                             {sources.length > 0 && (
                               <div className="text-[9px] text-emerald-600 leading-tight" data-testid="initiative-feat-note">
                                 {sources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
@@ -1376,23 +1397,40 @@ export default function CharacterDetail() {
                         );
                       })()}
                     </div>
-                    <div className="rounded-md border py-2">
-                      <div className="text-[10px] text-muted-foreground uppercase">Passive Perc.</div>
-                      {(() => {
-                        const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
-                        const bonus = getFeatStatMods(feats, 'passive_perception', { pb });
-                        const sources = getFeatStatModSources(feats, 'passive_perception', { pb });
-                        return (
-                          <>
-                            <div className="font-bold" data-testid="passive-perception-value">{10 + mod(identity.draft.wisdom) + pb + bonus}</div>
-                            {sources.length > 0 && (
-                              <div className="text-[9px] text-emerald-600 leading-tight" data-testid="passive-perception-feat-note">
-                                {sources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
+                  </div>
+
+                  {/* Passive scores — 10 + the skill's own modifier, so proficiency and
+                      expertise count. Only the three passives tables actually use. */}
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Passive Scores</div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                      {computePassiveScores({
+                        abilityScores: identity.draft,
+                        pb,
+                        classData: classSection.draft ?? character.character_data ?? {},
+                        feats: classSection.draft?.feats ?? character.character_data?.feats ?? [],
+                      }).map((p) => (
+                        <div key={p.key} className="rounded-md border py-2 px-2" data-testid={`passive-${p.key}`}>
+                          <div className="text-[10px] text-muted-foreground uppercase">{p.label}</div>
+                          <BreakdownValue
+                            testId={`passive-${p.key}-value`}
+                            label={`passive ${p.label}`}
+                            breakdown={p.breakdown}
+                            signed={false}
+                            className="font-bold"
+                            expanded={openStat === `passive:${p.key}`}
+                            onToggle={() => setOpenStat(openStat === `passive:${p.key}` ? null : `passive:${p.key}`)}
+                          />
+                          {p.featSources.length > 0 && (
+                            <div className="text-[9px] text-emerald-600 leading-tight mt-0.5" data-testid={`passive-${p.key}-feat-note`}>
+                              {p.featSources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
+                            </div>
+                          )}
+                          {openStat === `passive:${p.key}` && (
+                            <BreakdownPanel testId={`passive-${p.key}-breakdown`} breakdown={p.breakdown} signed={false} />
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -1403,23 +1441,42 @@ export default function CharacterDetail() {
                       {ABILITY_LABELS.map(({ key, abbrev, save }) => {
                         const featSaves = getFeatSaveProficiencies(classSection.draft?.feats ?? character.character_data?.feats ?? []);
                         const isProficient = (savingThrows.draft?.[save] ?? false) || featSaves.includes(key);
-                        const bonus = mod(identity.draft[key]) + (isProficient ? pb : 0);
+                        const armorDisadvantage = Boolean(nonProfArmor) && (key === 'strength' || key === 'dexterity');
+                        const breakdown = saveBreakdown({
+                          ability: key,
+                          abilityScore: identity.draft[key],
+                          pb,
+                          isProficient,
+                          notes: [armorDisadvantage && `Disadvantage — wearing ${nonProfArmor.name} without proficiency`],
+                        });
                         return (
-                          <div key={key} data-testid={`save-${key}`} className="flex items-center gap-2 rounded border px-2 py-1.5 text-sm">
-                            {showEditable ? (
-                              <button
-                                type="button"
-                                onClick={() => savingThrows.setDraft(d => ({ ...d, [save]: !d[save] }))}
-                                className={cn(
-                                  'h-3.5 w-3.5 rounded-sm border flex-shrink-0 transition-colors',
-                                  isProficient ? 'bg-primary border-primary' : 'bg-background border-border'
-                                )}
+                          <div key={key} data-testid={`save-${key}`} className="rounded border px-2 py-1.5 text-sm">
+                            <div className="flex items-center gap-2">
+                              {showEditable ? (
+                                <button
+                                  type="button"
+                                  onClick={() => savingThrows.setDraft(d => ({ ...d, [save]: !d[save] }))}
+                                  className={cn(
+                                    'h-3.5 w-3.5 rounded-sm border flex-shrink-0 transition-colors',
+                                    isProficient ? 'bg-primary border-primary' : 'bg-background border-border'
+                                  )}
+                                />
+                              ) : (
+                                <div className={cn('h-3.5 w-3.5 rounded-sm border flex-shrink-0', isProficient ? 'bg-primary border-primary' : 'bg-muted border-border')} />
+                              )}
+                              <span className="flex-1 text-xs">{abbrev}</span>
+                              <BreakdownValue
+                                testId={`save-bonus-${key}`}
+                                label={`the ${abbrev} saving throw`}
+                                breakdown={breakdown}
+                                className="font-medium text-xs"
+                                expanded={openStat === `save:${key}`}
+                                onToggle={() => setOpenStat(openStat === `save:${key}` ? null : `save:${key}`)}
                               />
-                            ) : (
-                              <div className={cn('h-3.5 w-3.5 rounded-sm border flex-shrink-0', isProficient ? 'bg-primary border-primary' : 'bg-muted border-border')} />
+                            </div>
+                            {openStat === `save:${key}` && (
+                              <BreakdownPanel testId={`save-breakdown-${key}`} breakdown={breakdown} />
                             )}
-                            <span className="flex-1 text-xs">{abbrev}</span>
-                            <span className="font-medium text-xs">{bonus >= 0 ? `+${bonus}` : bonus}</span>
                           </div>
                         );
                       })}
@@ -2030,6 +2087,8 @@ function SectionCard({ title, subtitle, children, isDirty, onSave, onReset, canE
 }
 
 function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition, readOnly, nonProfArmorName }) {
+  // Which skill's arithmetic is currently expanded (one at a time).
+  const [openSkill, setOpenSkill] = useState(null);
   const storedProfs = classData?.skill_proficiencies ?? [];
   const expertiseSkills = classData?.expertise_skills ?? [];
   // Existing characters created before race-granted skills were saved into the
@@ -2063,58 +2122,122 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
   // Worn non-proficient armor: disadvantage on every STR/DEX ability check.
   if (nonProfArmorName) legendParts.push(`"dis" = disadvantage (wearing ${nonProfArmorName} without proficiency)`);
 
+  const rows = SKILL_MAP.map(({ skill, ability }) => {
+    const isProf = skillProfs.includes(skill);
+    const isExpert = expertiseSkills.includes(skill);
+    // Remarkable Athlete only helps checks that don't already use PB → non-proficient skills.
+    // 5e: ½-PB numeric on STR/DEX/CON skills. 2024: advantage on Athletics.
+    const raNumeric = raBonus > 0 && !isProf && !isExpert && raBonusAbilities.includes(ability);
+    const raAdvantage = !isExpert && raAdvSkills.includes(skill);
+    const armorDisadvantage = Boolean(nonProfArmorName) && (ability === 'strength' || ability === 'dexterity');
+
+    return {
+      skill,
+      ability,
+      isProf,
+      isExpert,
+      isFromBg: bgGranted.includes(skill),
+      isFromRace: raceGranted.includes(skill),
+      isFromFeat: featGranted.includes(skill),
+      isFromRA: raNumeric || raAdvantage,
+      raAdvantage,
+      armorDisadvantage,
+      breakdown: skillBreakdown({
+        skill,
+        ability,
+        abilityScore: identityDraft[ability],
+        pb,
+        isProficient: isProf,
+        isExpert,
+        halfProficiency: raNumeric ? raBonus : 0,
+        notes: [
+          raAdvantage && 'Advantage — Remarkable Athlete',
+          armorDisadvantage && `Disadvantage — wearing ${nonProfArmorName} without proficiency`,
+        ],
+      }),
+    };
+  });
+
+  // Split into two alphabetical columns (top-to-bottom per column, not left-to-right)
+  // so each column reads as its own list and the divider between them means something.
+  const half = Math.ceil(rows.length / 2);
+  const columns = [rows.slice(0, half), rows.slice(half)];
+
   return (
     <div>
       <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Skills</div>
-      <div className="grid grid-cols-2 gap-1">
-        {SKILL_MAP.map(({ skill, ability }) => {
-          const base = mod(identityDraft[ability]);
-          const isProf = skillProfs.includes(skill);
-          const isExpert = expertiseSkills.includes(skill);
-          const isFromBg = bgGranted.includes(skill);
-          const isFromRace = raceGranted.includes(skill);
-          const isFromFeat = featGranted.includes(skill);
-          // Remarkable Athlete only helps checks that don't already use PB → non-proficient skills.
-          // 5e: ½-PB numeric on STR/DEX/CON skills. 2024: advantage on Athletics.
-          const raNumeric = raBonus > 0 && !isProf && !isExpert && raBonusAbilities.includes(ability);
-          const raAdvantage = !isExpert && raAdvSkills.includes(skill);
-          const isFromRA = raNumeric || raAdvantage;
-          const bonus = base + (isExpert ? pb * 2 : isProf ? pb : raNumeric ? raBonus : 0);
-          return (
-            <div key={skill} className="flex items-center gap-2 text-xs py-0.5">
-              <div className={cn(
-                'h-3 w-3 rounded-sm border flex-shrink-0',
-                isExpert
-                  ? 'bg-purple-500 border-purple-500'
-                  : isProf
-                    ? (isFromBg
-                        ? 'bg-amber-500 border-amber-500'
-                        : isFromRace
-                          ? 'bg-emerald-500 border-emerald-500'
-                          : isFromFeat
-                            ? 'bg-sky-500 border-sky-500'
-                            : 'bg-primary border-primary')
-                    : isFromRA
-                      ? 'bg-teal-400 border-teal-400'
-                      : 'bg-muted border-border'
-              )} />
-              <span className="flex-1 truncate">{skill}</span>
-              {raAdvantage && (
-                <span className="text-[9px] font-semibold text-teal-600 uppercase" data-testid={`skill-advantage-${skill}`}>adv</span>
-              )}
-              {nonProfArmorName && (ability === 'strength' || ability === 'dexterity') && (
-                <span className="text-[9px] font-semibold text-amber-600 uppercase" data-testid={`skill-armor-dis-${skill}`}>dis</span>
-              )}
-              <span className="font-medium tabular-nums text-muted-foreground">
-                {bonus >= 0 ? `+${bonus}` : bonus}
-              </span>
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+        {columns.map((column, i) => (
+          <div key={i} className={cn(i === 1 && 'sm:border-l sm:border-border sm:pl-4')}>
+            {column.map((row) => (
+              <SkillRow
+                key={row.skill}
+                row={row}
+                expanded={openSkill === row.skill}
+                onToggle={() => setOpenSkill(openSkill === row.skill ? null : row.skill)}
+              />
+            ))}
+          </div>
+        ))}
       </div>
-      <p className="text-[10px] text-muted-foreground mt-1">
+      <p className="text-[10px] text-muted-foreground mt-2">
         {legendParts.join(' · ')}
       </p>
+      <p className="text-[10px] text-muted-foreground/70 mt-0.5">Click a bonus to see how it is calculated.</p>
+    </div>
+  );
+}
+
+// One skill line: proficiency swatch, name, governing ability, and a bonus button that
+// expands the arithmetic. Module scope — a component declared inside another component
+// remounts its subtree on every parent render and would collapse this open row.
+function SkillRow({ row, expanded, onToggle }) {
+  const { skill, isProf, isExpert, isFromBg, isFromRace, isFromFeat, isFromRA, raAdvantage, armorDisadvantage, breakdown } = row;
+
+  return (
+    <div className="py-0.5">
+      <div className="flex items-center gap-2 text-xs">
+        <div className={cn(
+          'h-3 w-3 rounded-sm border flex-shrink-0',
+          isExpert
+            ? 'bg-purple-500 border-purple-500'
+            : isProf
+              ? (isFromBg
+                  ? 'bg-amber-500 border-amber-500'
+                  : isFromRace
+                    ? 'bg-emerald-500 border-emerald-500'
+                    : isFromFeat
+                      ? 'bg-sky-500 border-sky-500'
+                      : 'bg-primary border-primary')
+              : isFromRA
+                ? 'bg-teal-400 border-teal-400'
+                : 'bg-muted border-border'
+        )} />
+        <span className="flex-1 truncate">{skill}</span>
+        <span
+          className="text-[9px] font-medium text-muted-foreground/70 uppercase tabular-nums w-7 text-right flex-shrink-0"
+          data-testid={`skill-ability-${skill}`}
+        >
+          {breakdown.abilityAbbrev}
+        </span>
+        {raAdvantage && (
+          <span className="text-[9px] font-semibold text-teal-600 uppercase" data-testid={`skill-advantage-${skill}`}>adv</span>
+        )}
+        {armorDisadvantage && (
+          <span className="text-[9px] font-semibold text-amber-600 uppercase" data-testid={`skill-armor-dis-${skill}`}>dis</span>
+        )}
+        <BreakdownValue
+          testId={`skill-bonus-${skill}`}
+          label={skill}
+          breakdown={breakdown}
+          expanded={expanded}
+          onToggle={onToggle}
+          className={cn('font-medium w-8 text-right', !expanded && 'text-muted-foreground')}
+        />
+      </div>
+      {expanded && (
+        <BreakdownPanel testId={`skill-breakdown-${skill}`} breakdown={breakdown} className="ml-5 mb-1.5" />
+      )}
     </div>
   );
 }

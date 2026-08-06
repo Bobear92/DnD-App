@@ -943,17 +943,23 @@ describe('buildActionEconomy — Eldritch Knight (Fighter subclass)', () => {
     expect(buildActionEconomy({ ...ekArgs(7), subclass: 'Champion' })['action+bonus'].find((e) => e.key === 'war-magic')).toBeFalsy();
   });
 
-  it('appends the Arcane Charge teleport rider to Action Surge at L15', () => {
+  it('attaches Arcane Charge to Action Surge as its own rider at L15', () => {
     const ec = buildActionEconomy(ekArgs(15));
     const surge = ec.no_action.find((e) => e.key === 'feature:Action Surge');
-    expect(surge.detail).toMatch(/Arcane Charge/);
-    expect(surge.detail).toMatch(/teleport up to 30 ft/i);
+    expect(surge.riders).toHaveLength(1);
+    expect(surge.riders[0].source).toBe('Arcane Charge');
+    expect(surge.riders[0].text).toMatch(/teleport up to 30 ft/i);
+    // It stays OUT of the base detail — run into that text it reads as part of Action Surge.
+    expect(surge.detail).not.toMatch(/Arcane Charge/);
+    // The level it was gained is not printed here — the tab shows what you can do now,
+    // and the entry only appears once you have the feature anyway.
+    expect(surge.riders[0].text).not.toMatch(/L15/);
     // Not before L15, and not for other subclasses.
     const l14 = buildActionEconomy(ekArgs(14)).no_action.find((e) => e.key === 'feature:Action Surge');
-    expect(l14.detail).not.toMatch(/Arcane Charge/);
+    expect(l14.riders ?? []).toHaveLength(0);
     const champ = buildActionEconomy({ ...ekArgs(15), subclass: 'Champion' })
       .no_action.find((e) => e.key === 'feature:Action Surge');
-    expect(champ.detail).not.toMatch(/Arcane Charge/);
+    expect(champ.riders ?? []).toHaveLength(0);
   });
 
   it('rides the Eldritch Strike note onto real weapon attacks at L10 (not unarmed, not non-EK)', () => {

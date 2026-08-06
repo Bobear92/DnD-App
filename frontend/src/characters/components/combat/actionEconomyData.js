@@ -653,7 +653,7 @@ export function buildActionEconomy({
             warning: weaponRow.warning ?? null,
           },
         ],
-        detail: `Cast a ${improved ? 'spell (Improved War Magic, L18)' : 'cantrip'} with your action, then make one weapon attack with ${weaponRow.name} as a bonus action. Casting replaces the Attack action, so Extra Attack doesn't apply that turn.`,
+        detail: `Cast a ${improved ? 'spell (Improved War Magic)' : 'cantrip'} with your action, then make one weapon attack with ${weaponRow.name} as a bonus action. Casting replaces the Attack action, so Extra Attack doesn't apply that turn.`,
       });
     }
   }
@@ -726,12 +726,20 @@ export function buildActionEconomy({
     });
   }
 
-  // Arcane Charge (Eldritch Knight L15) — a rider on Action Surge, so it's appended to the
-  // Action Surge entry rather than listed as its own action (it costs nothing extra).
+  // Arcane Charge (Eldritch Knight L15) — it costs nothing extra, so it hangs off the Action
+  // Surge entry rather than being its own action. It goes in `riders` (its own labelled line)
+  // instead of being appended to `detail`: run into the base text it reads as something Action
+  // Surge always does, which it is not.
   if (charClass === 'Fighter' && subclass === 'Eldritch Knight' && level >= 15) {
     const surge = buckets.no_action.find((e) => e.key === 'feature:Action Surge');
     if (surge) {
-      surge.detail += ' Arcane Charge (L15): when you use Action Surge, you can teleport up to 30 ft to an unoccupied space you can see, before or after the extra action.';
+      surge.riders = [
+        ...(surge.riders || []),
+        {
+          source: 'Arcane Charge',
+          text: 'When you use Action Surge, you can teleport up to 30 ft to an unoccupied space you can see, before or after the extra action.',
+        },
+      ];
     }
   }
 

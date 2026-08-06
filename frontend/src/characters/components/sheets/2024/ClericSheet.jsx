@@ -165,7 +165,7 @@ export default function ClericSheet({ data = {}, onChange, readOnly = false, lev
 
       {/* Divine Order (L1) */}
       {showFeatures && (
-      <Field label="Divine Order (L1)">
+      <Field label="Divine Order">
         {readOnly ? (
           <div className="text-sm py-2">{data.divine_order || '—'}</div>
         ) : (

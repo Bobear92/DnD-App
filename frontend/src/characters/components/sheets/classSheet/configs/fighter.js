@@ -75,7 +75,7 @@ export const FIGHTER_2024 = {
   weaponMastery: { label: 'Weapon Mastery', max: weaponMasteryMax, note: 'weapons, change on long rest' },
   restResources: REST_RESOURCES,
   notes: [
-    { label: 'Tactical Mind (L2)', text: 'When you fail an ability check, expend one Action Surge use to add 1d10 to the check.', minLevel: 2 },
+    { label: 'Tactical Mind', text: 'When you fail an ability check, expend one Action Surge use to add 1d10 to the check.', minLevel: 2 },
   ],
   subclass: { label: 'Warrior Subclass', options: FIGHTER_SUBCLASSES_2024, unlockLevel: 3, subclassEdition: '5.5e' },
   subclassPanels: FIGHTER_SUBCLASS_PANELS,

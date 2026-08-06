@@ -89,7 +89,7 @@ export const WIZARD_2024 = {
     },
   ],
   notes: [
-    { label: 'Scholar (L2)', text: '1×/short rest: add d6 + INT modifier to Arcana, History, Nature, or Religion check.', minLevel: 2 },
+    { label: 'Scholar', text: '1×/short rest: add d6 + INT modifier to Arcana, History, Nature, or Religion check.', minLevel: 2 },
   ],
   subclass: { label: 'Arcane Tradition (Subclass)', options: WIZARD_SUBCLASSES_2024, unlockLevel: 3, subclassEdition: '5.5e' },
   asiLevels: ASI_LEVELS,

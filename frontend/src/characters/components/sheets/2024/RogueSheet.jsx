@@ -170,20 +170,21 @@ export default function RogueSheet({ data = {}, onChange, readOnly = false, leve
       </Field>
       )}
 
-      {/* Cunning Action */}
-      {showFeatures && (
+      {/* Cunning Action — gained at level 2, so it is level-gated rather than labelled with
+          the level it arrives at. */}
+      {showFeatures && level >= 2 && (
       <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">Cunning Action (L2)</span>
+        <span className="font-medium text-foreground">Cunning Action</span>
         {' '}— Bonus Action: Dash, Disengage, or Hide.
         {level >= 5 && ' Uncanny Dodge active.'}
       </div>
       )}
 
-      {/* Steady Aim (L3) */}
+      {/* Steady Aim */}
       {showFeatures && level >= 3 && (
         <div className="flex items-center justify-between rounded-md border px-3 py-2">
           <div>
-            <div className="text-sm font-medium">Steady Aim (L3)</div>
+            <div className="text-sm font-medium">Steady Aim</div>
             <div className="text-xs text-muted-foreground">Bonus Action: gain advantage on next attack; speed becomes 0 until next turn</div>
           </div>
         </div>

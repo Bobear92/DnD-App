@@ -1526,6 +1526,219 @@ describe('CharacterDetail', () => {
     });
   });
 
+  // ── Ability column + click-to-see-the-math on each skill row ───────────
+  describe('SkillsDisplay ability labels and bonus breakdown', () => {
+    it('labels each skill with its governing ability', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('skill-ability-Perception')).toHaveTextContent('WIS'));
+      expect(screen.getByTestId('skill-ability-Athletics')).toHaveTextContent('STR');
+      expect(screen.getByTestId('skill-ability-Investigation')).toHaveTextContent('INT');
+      expect(screen.getByTestId('skill-ability-Persuasion')).toHaveTextContent('CHA');
+    });
+
+    it('shows no breakdown until the bonus is clicked', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('skill-bonus-Perception')).toBeInTheDocument());
+      expect(screen.queryByTestId('skill-breakdown-Perception')).not.toBeInTheDocument();
+    });
+
+    it('expands the arithmetic when the bonus is clicked (non-proficient skill)', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      // BASE_CHARACTER: WIS 12 → +1, not proficient in Perception
+      await waitFor(() => expect(screen.getByTestId('skill-bonus-Perception')).toHaveTextContent('+1'));
+      fireEvent.click(screen.getByTestId('skill-bonus-Perception'));
+      const breakdown = screen.getByTestId('skill-breakdown-Perception');
+      expect(breakdown).toHaveTextContent('WIS modifier');
+      expect(breakdown).toHaveTextContent('Total');
+      expect(breakdown).not.toHaveTextContent('Proficiency bonus');
+    });
+
+    it('shows the proficiency line for a proficient skill', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      // BASE_CHARACTER is proficient in Athletics: STR 16 → +3, prof +3 → +6
+      await waitFor(() => expect(screen.getByTestId('skill-bonus-Athletics')).toHaveTextContent('+6'));
+      fireEvent.click(screen.getByTestId('skill-bonus-Athletics'));
+      const breakdown = screen.getByTestId('skill-breakdown-Athletics');
+      expect(breakdown).toHaveTextContent('STR modifier');
+      expect(breakdown).toHaveTextContent('Proficiency bonus');
+    });
+
+    it('collapses when the same bonus is clicked again', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('skill-bonus-Athletics')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('skill-bonus-Athletics'));
+      expect(screen.getByTestId('skill-breakdown-Athletics')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('skill-bonus-Athletics'));
+      expect(screen.queryByTestId('skill-breakdown-Athletics')).not.toBeInTheDocument();
+    });
+
+    it('keeps only one breakdown open at a time', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('skill-bonus-Athletics')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('skill-bonus-Athletics'));
+      fireEvent.click(screen.getByTestId('skill-bonus-Perception'));
+      expect(screen.queryByTestId('skill-breakdown-Athletics')).not.toBeInTheDocument();
+      expect(screen.getByTestId('skill-breakdown-Perception')).toBeInTheDocument();
+    });
+
+    it('shows the expertise doubling in the breakdown', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            skill_proficiencies: ['Athletics', 'Stealth'],
+            expertise_skills: ['Stealth'],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      // DEX 12 → +1, expertise 2×3 = +6 → +7
+      await waitFor(() => expect(screen.getByTestId('skill-bonus-Stealth')).toHaveTextContent('+7'));
+      fireEvent.click(screen.getByTestId('skill-bonus-Stealth'));
+      expect(screen.getByTestId('skill-breakdown-Stealth')).toHaveTextContent('Expertise (2 × proficiency +3)');
+    });
+
+    it('renders a negative bonus with a minus sign', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      // CHA 8 → −1, not proficient in Deception
+      await waitFor(() => expect(screen.getByTestId('skill-bonus-Deception')).toHaveTextContent('−1'));
+    });
+  });
+
+  // ── Click-to-see-the-math on saving throws, passive scores and initiative ───────────
+  describe('derived stat breakdowns', () => {
+    it('expands a saving throw breakdown showing the ability modifier and proficiency', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      // Fighter: STR 16 → +3, proficient in STR saves, PB +3 → +6
+      await waitFor(() => expect(screen.getByTestId('save-bonus-strength')).toHaveTextContent('+6'));
+      expect(screen.queryByTestId('save-breakdown-strength')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('save-bonus-strength'));
+      const breakdown = screen.getByTestId('save-breakdown-strength');
+      expect(breakdown).toHaveTextContent('STR modifier');
+      expect(breakdown).toHaveTextContent('Proficiency bonus');
+      expect(breakdown).toHaveTextContent('Total');
+    });
+
+    it('omits the proficiency line for a save the character is not proficient in', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      // Fighter is NOT proficient in DEX saves: DEX 12 → +1
+      await waitFor(() => expect(screen.getByTestId('save-bonus-dexterity')).toHaveTextContent('+1'));
+      fireEvent.click(screen.getByTestId('save-bonus-dexterity'));
+      expect(screen.getByTestId('save-breakdown-dexterity')).not.toHaveTextContent('Proficiency bonus');
+    });
+
+    it('expands a passive score breakdown showing the flat base of 10', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('passive-insight-value')).toBeInTheDocument());
+      expect(screen.queryByTestId('passive-insight-breakdown')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('passive-insight-value'));
+      const breakdown = screen.getByTestId('passive-insight-breakdown');
+      expect(breakdown).toHaveTextContent('Base');
+      expect(breakdown).toHaveTextContent('WIS modifier');
+    });
+
+    it('expands an initiative breakdown from the DEX modifier', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('initiative-value')).toHaveTextContent('+1'));
+      expect(screen.queryByTestId('initiative-breakdown')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('initiative-value'));
+      expect(screen.getByTestId('initiative-breakdown')).toHaveTextContent('DEX modifier');
+    });
+
+    it('lists a feat contribution as its own line in the initiative breakdown', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{ id: 1, name: 'Alert', level: 4, effects: [{ kind: 'stat_mod', stat: 'initiative', amount: 5 }] }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('initiative-value')).toHaveTextContent('+6'));
+      fireEvent.click(screen.getByTestId('initiative-value'));
+      const breakdown = screen.getByTestId('initiative-breakdown');
+      expect(breakdown).toHaveTextContent('DEX modifier');
+      expect(breakdown).toHaveTextContent('Alert');
+    });
+
+    it('lists a feat contribution as its own line in a passive breakdown', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{
+              id: 2,
+              name: 'Observant',
+              level: 4,
+              effects: [{ kind: 'stat_mod', stat: 'passive_investigation', amount: 5 }],
+            }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('passive-investigation-value')).toHaveTextContent('15'));
+      fireEvent.click(screen.getByTestId('passive-investigation-value'));
+      expect(screen.getByTestId('passive-investigation-breakdown')).toHaveTextContent('Observant');
+    });
+
+    it('keeps only one derived-stat breakdown open at a time', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('initiative-value')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('initiative-value'));
+      expect(screen.getByTestId('initiative-breakdown')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('save-bonus-strength'));
+      expect(screen.queryByTestId('initiative-breakdown')).not.toBeInTheDocument();
+      expect(screen.getByTestId('save-breakdown-strength')).toBeInTheDocument();
+    });
+
+    it('surfaces the armor disadvantage as a note on STR and DEX saves', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          char_class: 'Wizard', // not proficient with heavy armor
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            inventory: [{
+              uid: 'a1', category: 'armor', name: 'Chain Mail', armor_type: 'Heavy',
+              armor_class: 16, equipped: true, quantity: 1,
+            }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('save-bonus-strength')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('save-bonus-strength'));
+      expect(screen.getByTestId('save-breakdown-strength')).toHaveTextContent(/Disadvantage/);
+      // A save unaffected by armor carries no such note
+      fireEvent.click(screen.getByTestId('save-bonus-wisdom'));
+      expect(screen.getByTestId('save-breakdown-wisdom')).not.toHaveTextContent(/Disadvantage/);
+    });
+  });
+
   // ── Conditional skill legend (expertise + background source) ───────────
   describe('SkillsDisplay legend', () => {
     it('hides "Purple = expertise" when the character has no expertise', async () => {
@@ -1849,16 +2062,95 @@ describe('CharacterDetail', () => {
       });
       renderDetail();
       await openStatsSubTab('abilities');
-      // BASE_CHARACTER WIS 12 → +1, level 5 prof +3, base 10 = 14, plus Observant +5 = 19
-      await waitFor(() => expect(screen.getByTestId('passive-perception-value')).toHaveTextContent('19'));
+      // BASE_CHARACTER WIS 12 → +1, not proficient in Perception, base 10 = 11, plus Observant +5 = 16
+      await waitFor(() => expect(screen.getByTestId('passive-perception-value')).toHaveTextContent('16'));
       expect(screen.getByTestId('passive-perception-feat-note')).toHaveTextContent('+5 Observant');
     });
 
-    it('shows plain passive Perception with no feat note when no feat modifies it', async () => {
+    it('adds a feat passive_investigation stat_mod (Observant +5)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{
+              id: 2,
+              name: 'Observant',
+              level: 4,
+              effects: [
+                { kind: 'stat_mod', stat: 'passive_perception', amount: 5 },
+                { kind: 'stat_mod', stat: 'passive_investigation', amount: 5 },
+              ],
+            }],
+          },
+        },
+      });
       renderDetail();
       await openStatsSubTab('abilities');
-      await waitFor(() => expect(screen.getByTestId('passive-perception-value')).toHaveTextContent('14'));
+      // INT 10 → +0, not proficient in Investigation, base 10 = 10, plus Observant +5 = 15
+      await waitFor(() => expect(screen.getByTestId('passive-investigation-value')).toHaveTextContent('15'));
+      expect(screen.getByTestId('passive-investigation-feat-note')).toHaveTextContent('+5 Observant');
+      // Insight is untouched by Observant: WIS +1, no proficiency → 11
+      expect(screen.getByTestId('passive-insight-value')).toHaveTextContent('11');
+      expect(screen.queryByTestId('passive-insight-feat-note')).not.toBeInTheDocument();
+    });
+
+    it('renders all three passive scores', async () => {
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('passive-perception')).toBeInTheDocument());
+      expect(screen.getByTestId('passive-investigation')).toBeInTheDocument();
+      expect(screen.getByTestId('passive-insight')).toBeInTheDocument();
+    });
+
+    it('does NOT add the proficiency bonus to a passive the character is not proficient in', async () => {
+      renderDetail(); // BASE_CHARACTER is proficient in Athletics only
+      await openStatsSubTab('abilities');
+      // WIS 12 → +1, base 10 = 11. The +3 proficiency bonus must NOT apply.
+      await waitFor(() => expect(screen.getByTestId('passive-perception-value')).toHaveTextContent('11'));
       expect(screen.queryByTestId('passive-perception-feat-note')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('passive-perception-value'));
+      expect(screen.getByTestId('passive-perception-breakdown')).not.toHaveTextContent('Proficiency bonus');
+    });
+
+    it('adds the proficiency bonus to a passive the character IS proficient in', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: { ...BASE_CHARACTER.character_data, skill_proficiencies: ['Athletics', 'Perception'] },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      // WIS +1, prof +3, base 10 = 14
+      await waitFor(() => expect(screen.getByTestId('passive-perception-value')).toHaveTextContent('14'));
+      fireEvent.click(screen.getByTestId('passive-perception-value'));
+      const breakdown = screen.getByTestId('passive-perception-breakdown');
+      expect(breakdown).toHaveTextContent('Base');
+      expect(breakdown).toHaveTextContent('WIS modifier');
+      expect(breakdown).toHaveTextContent('Proficiency bonus');
+    });
+
+    it('doubles the proficiency bonus on a passive with expertise', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            skill_proficiencies: ['Athletics', 'Insight'],
+            expertise_skills: ['Insight'],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      // WIS +1, expertise 2×3 = +6, base 10 = 17
+      await waitFor(() => expect(screen.getByTestId('passive-insight-value')).toHaveTextContent('17'));
+      fireEvent.click(screen.getByTestId('passive-insight-value'));
+      expect(screen.getByTestId('passive-insight-breakdown')).toHaveTextContent('Expertise (2 × proficiency +3)');
     });
 
     it('shows the central speed annotation for a hand-written class (Barbarian + Mobile)', async () => {
