@@ -5,6 +5,18 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node c:/Users/rober/Documents/Projects/dnd-app/.claude/hooks/feature-branch-guard.mjs",
+            "timeout": 10,
+            "statusMessage": "Checking you are on a feature branch..."
+          }
+        ]
+      },
+      {
         "matcher": "Write",
         "hooks": [
           {

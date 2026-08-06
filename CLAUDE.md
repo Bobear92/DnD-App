@@ -55,6 +55,12 @@ When unsure whether a tripwire applies, raise it anyway — a 10-second flag is 
 
 Commit messages end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`. Keep merges fast-forward (no merge commits); if `--ff-only` fails because `main` moved, rebase the feature branch on `main`, re-run tests, then merge.
 
+**This is enforced, not just documented** (it was skipped once and a whole feature landed as a direct commit on `main`):
+- `.claude/hooks/feature-branch-guard.mjs` — a `PreToolUse(Write|Edit)` hook blocks the FIRST edit of a repo file while `main`/`master` is checked out, with instructions to branch. Fires once per session, so re-issuing gets through when you genuinely need `main`.
+- `.githooks/pre-commit` — the tool-agnostic backstop: refuses a commit on `main` whatever is driving git. **One-time setup per clone: `git config core.hooksPath .githooks`.** `git merge --ff-only` creates no commit, so /ship's merge is unaffected; the escape hatch is `git commit --no-verify`.
+
+Uncommitted work carries across `git checkout -b`, so branching late is always safe — nothing already edited is lost.
+
 ---
 
 ## What This Is
@@ -952,6 +958,8 @@ pytest -v                     # verbose (show each test name)
 
 ### Test database
 Tests run against `dnd_app_test` (never `dnd_app_dev`). The database is derived automatically from `DATABASE_URL` in `backend/.env`. Tables are created once per session and wiped between each test — no manual setup needed.
+
+**NEVER run two pytest sessions against this repo at the same time.** The session fixture does `DROP SCHEMA public CASCADE` + `CREATE SCHEMA public` at session START, so two concurrent runs destroy each other's schema mid-test. The symptom is a terrifying mass failure (one collision produced **427 failed / 270 errors**) that looks exactly like a catastrophic regression but is pure interference — re-running alone gives a clean pass. This includes backgrounding one run and starting another in the foreground. If you see a sudden mass failure, check for a concurrent run BEFORE debugging the code.
 
 The session fixture does `DROP SCHEMA public CASCADE` + `CREATE SCHEMA public` at **session start** (not just end) so that stale schemas from model changes or interrupted runs never cause `UndefinedColumn` failures. Never change this to `create_all`-only — it won't pick up new columns on existing tables.
 

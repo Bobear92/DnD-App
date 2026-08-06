@@ -1,0 +1,32 @@
+#!/bin/sh
+# Refuse commits directly on the trunk.
+#
+# CLAUDE.md → Development Workflow: work happens on short-lived feature branches and reaches `main`
+# only via a fast-forward merge at ship time. This is the tool-agnostic backstop for that rule —
+# it fires whatever is driving git (Claude, the IDE, the terminal). The earlier, friendlier
+# checkpoint is .claude/hooks/feature-branch-guard.mjs, which interrupts at the first EDIT.
+#
+# Enable once per clone:
+#     git config core.hooksPath .githooks
+#
+# `git merge --ff-only` does not create a commit, so /ship's merge to main is unaffected.
+# Genuine exception (resolving a merge, an emergency fix): git commit --no-verify
+
+branch=$(git branch --show-current)
+
+if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
+  echo "⛔ Refusing to commit directly on '$branch'."
+  echo
+  echo "   main is the deployable trunk — work lands there via a fast-forward merge at ship time,"
+  echo "   not as a direct commit. Your staged changes are untouched; move them to a branch:"
+  echo
+  echo "       git checkout -b feature/<short-name>"
+  echo "       git commit ..."
+  echo
+  echo "   Then /ship (or: git checkout main && git merge --ff-only feature/<short-name>)."
+  echo
+  echo "   Genuinely need this commit on '$branch'?  git commit --no-verify"
+  exit 1
+fi
+
+exit 0

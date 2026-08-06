@@ -4,6 +4,13 @@ description: Run the backend test suite and report results
 
 Run the backend integration tests for this D&D app.
 
+> **Never run two pytest sessions concurrently.** The session fixture does
+> `DROP SCHEMA public CASCADE` on `dnd_app_test` at session start, so a second run destroys the
+> first one's schema mid-test. It looks like a catastrophic regression (one collision produced
+> 427 failed / 270 errors) but is pure interference. Before starting a run, make sure no other
+> pytest is already going — including one you backgrounded. If a run comes back with mass
+> failures, re-run it alone before debugging anything.
+
 ## Steps
 
 1. Activate the virtual environment and run pytest from `backend/`:
