@@ -1051,6 +1051,41 @@ describe('CharacterDetail', () => {
       expect(screen.getByTestId('ritual-book-Ritual Caster')).toBeInTheDocument();
     });
 
+    // Arcane Archer Lore grants a cantrip to a Fighter — a non-caster — so the Spells tab has to
+    // appear at all, with its own Subclass source.
+    it('shows the Spells tab + Subclass source for an Arcane Archer with a granted cantrip', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            subclass: 'Arcane Archer',
+            subclass_cantrips: ['Druidcraft'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
+      // Only source present → renders directly, no toggle buttons.
+      expect(screen.getByTestId('subclass-cantrips')).toHaveTextContent('Arcane Archer Cantrips');
+      expect(screen.getByTestId('subclass-cantrips')).toHaveTextContent('Druidcraft');
+    });
+
+    it('does NOT show the Spells tab for an Arcane Archer who has not picked the cantrip yet', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Arcane Archer' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByRole('tab', { name: /Spells/i })).not.toBeInTheDocument();
+    });
+
     it('folds feat spells into the strip for a Wizard (data-driven caster) — no top-level Feats source', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,

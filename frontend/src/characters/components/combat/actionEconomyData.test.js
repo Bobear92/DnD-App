@@ -828,6 +828,65 @@ describe('buildActionEconomy — Fighter', () => {
   });
 });
 
+describe('buildActionEconomy — Arcane Archer (Fighter subclass)', () => {
+  const aaArgs = (level, extra = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Arcane Archer',
+    level,
+    edition: '5e',
+    characterData: {},
+    inventory: [],
+    attacks: [{ uid: 'b1', name: 'Longbow', toHit: '+7', damage: '1d8 + 4 piercing', proficient: true }],
+    scores: { dexterity: 18 },
+    spellIndex: {},
+    ...extra,
+  });
+
+  it('adds Arcane Shot as a no-action rider from L3, tied to its rest resource', () => {
+    const shot = buildActionEconomy(aaArgs(3)).no_action.find((e) => e.name === 'Arcane Shot');
+    expect(shot).toBeTruthy();
+    expect(shot.source).toBe('Subclass');
+    expect(shot.cost).toBe('no action');
+    expect(shot.resourceKey).toBe('arcane_shot_used');
+  });
+
+  it('names the options the character actually knows', () => {
+    const shot = buildActionEconomy(aaArgs(3, {
+      characterData: { arcane_shot_options: ['Bursting Arrow', 'Shadow Arrow'] },
+    })).no_action.find((e) => e.name === 'Arcane Shot');
+    expect(shot.detail).toMatch(/Options known: Bursting Arrow, Shadow Arrow/);
+  });
+
+  it('points at level-up when no options have been chosen', () => {
+    const shot = buildActionEconomy(aaArgs(3)).no_action.find((e) => e.name === 'Arcane Shot');
+    expect(shot.detail).toMatch(/no options chosen yet/i);
+  });
+
+  it('adds Curving Shot as a bonus action only from L7', () => {
+    expect(buildActionEconomy(aaArgs(3)).bonus.find((e) => e.name === 'Curving Shot')).toBeFalsy();
+    const curving = buildActionEconomy(aaArgs(7)).bonus.find((e) => e.name === 'Curving Shot');
+    expect(curving).toBeTruthy();
+    expect(curving.cost).toBe('bonus action');
+    expect(curving.detail).toMatch(/reroll/i);
+  });
+
+  it('adds nothing below the subclass level or for another subclass', () => {
+    expect(buildActionEconomy(aaArgs(2)).no_action.find((e) => e.name === 'Arcane Shot')).toBeFalsy();
+    const champ = buildActionEconomy({ ...aaArgs(7), subclass: 'Champion' });
+    expect(champ.no_action.find((e) => e.name === 'Arcane Shot')).toBeFalsy();
+  });
+
+  // Magic Arrow is passive and the 10/15/18 features are progression, not actions — they must
+  // stay out of the tab rather than appearing as things you can "do".
+  it('leaves the passive and progression features out of the action economy', () => {
+    const ec = buildActionEconomy(aaArgs(20));
+    const names = [...ec.action, ...ec.bonus, ...ec.reaction, ...ec.no_action].map((e) => e.name);
+    expect(names).not.toContain('Magic Arrow');
+    expect(names).not.toContain('Ever-Ready Shot');
+    expect(names).not.toContain('Superior Arcane Shot');
+  });
+});
+
 describe('buildActionEconomy — Eldritch Knight (Fighter subclass)', () => {
   const ekArgs = (level, edition = '5e', extra = {}) => ({
     charClass: 'Fighter',
@@ -898,6 +957,12 @@ describe('buildActionEconomy — Eldritch Knight (Fighter subclass)', () => {
     expect(champ.bonus.find((e) => e.name === 'Weapon Bond')).toBeFalsy();
     const low = buildActionEconomy(ekArgs(2));
     expect(low.bonus.find((e) => e.name === 'Weapon Bond')).toBeFalsy();
+  });
+
+  it('does not add Arcane Archer entries to an Eldritch Knight', () => {
+    const ec = buildActionEconomy(ekArgs(7));
+    expect(ec.no_action.find((e) => e.name === 'Arcane Shot')).toBeFalsy();
+    expect(ec.bonus.find((e) => e.name === 'Curving Shot')).toBeFalsy();
   });
 
   it('a weapon attack entry carries the hexNote from its attack row (Hex Warrior)', () => {

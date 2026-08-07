@@ -13,6 +13,15 @@
  *     storeField,             // character_data field the chosen NAMES are written to
  *     knownAtLevel(level)→n,  // cumulative count known at a level (drives the per-level delta)
  *     pool: [{ name, description }],
+ *     subclass?,              // when set, the choice belongs to that SUBCLASS, not the whole
+ *                             //   class — offered only to a character who has it (Arcane
+ *                             //   Archer's Arcane Shot). Everything else about the shape is
+ *                             //   identical, so a subclass pool costs no new step/component.
+ *     improvementAt?,         // level at which each pool option's `improvement` text applies
+ *                             //   (Arcane Shot's 18th-level upgrade). Rendered by
+ *                             //   KnownOptionsBlock, so the level lives in a gate not a label.
+ *     derived?(level, scores) // one computed line for the sheet — { label, value, note }
+ *                             //   (Arcane Shot's save DC = 8 + PB + INT).
  *   }
  *
  * Vertical slice: Sorcerer → Metamagic (both editions). Adding another class/choice is a pure
@@ -20,6 +29,10 @@
  * in `character_data[storeField]`, the same array the class sheet already reads, so the sheet's
  * existing display surfaces them with no extra wiring.
  */
+
+import {
+  ARCANE_SHOT_OPTIONS, ARCANE_SHOT_IMPROVE_LEVEL, arcaneShotKnownAtLevel, arcaneShotSaveDcParts,
+} from '@/characters/components/classData/arcaneShotData';
 
 const lc = (s) => (s || '').toLowerCase();
 const dedup = (arr) => [...new Set((arr || []).filter(Boolean))];
@@ -132,7 +145,36 @@ export function eldritchInvocationsKnownAtLevel(level, edition) {
   return is2024 ? 1 : 0;
 }
 
+// ── Fighter → Arcane Archer: Arcane Shot ──────────────────────────────────────
+// A SUBCLASS-scoped pool (the `subclass` field): same cumulative shape as Metamagic, so it
+// reuses the whole mechanism — the level-choices step, the replace-on-level-up swap, and the
+// no-doubling-up filter — with no new component. The option pool + progression live in
+// arcaneShotData.js (the reference data), the way maneuvers live in maneuversData.
+const ARCANE_ARCHER_SHOT = {
+  key: 'arcane_shot',
+  label: 'Arcane Shot Options',
+  subclass: 'Arcane Archer',
+  storeField: 'arcane_shot_options',
+  knownAtLevel: arcaneShotKnownAtLevel,
+  pool: ARCANE_SHOT_OPTIONS,
+  improvementAt: ARCANE_SHOT_IMPROVE_LEVEL,
+  derived: (level, scores = {}) => {
+    const { dc, pb, mod } = arcaneShotSaveDcParts(level, scores.intelligence);
+    return {
+      label: 'Arcane Shot save DC',
+      value: dc,
+      note: `8 + proficiency bonus (${pb}) + Intelligence modifier (${mod >= 0 ? `+${mod}` : mod}).`,
+    };
+  },
+};
+
 export const LEVEL_CHOICES = {
+  Fighter: {
+    '5e': [ARCANE_ARCHER_SHOT],
+    // No 2024 Arcane Archer exists (the 2024 PHB ships Battle Master, Champion, Eldritch
+    // Knight and Psi Warrior only), so there is deliberately no 5.5e entry.
+    '5.5e': [],
+  },
   Sorcerer: {
     '5e': [SORCERER_METAMAGIC],
     '5.5e': [SORCERER_METAMAGIC],
@@ -159,13 +201,34 @@ export const LEVEL_CHOICES = {
  * Pool choices the class gains when leveling from `oldLevel` to `newLevel`. Each returned
  * choice carries a resolved `count` = the delta in cumulative known options. Choices with a
  * zero delta at this level are omitted.
+ *
+ * `subclass` is optional — pass the character's subclass (the EFFECTIVE one, so a subclass
+ * chosen during the same level-up run counts) to include subclass-scoped pools like Arcane
+ * Shot. Omitting it yields class-wide pools only, which keeps existing 4-arg callers working.
  */
-export function getLevelChoices(charClass, edition, oldLevel, newLevel) {
+export function getLevelChoices(charClass, edition, oldLevel, newLevel, subclass = null) {
   const list = LEVEL_CHOICES[charClass]?.[normEdition(edition)] || [];
   const prev = Number(oldLevel ?? (Number(newLevel) - 1)) || 0;
   const out = [];
   for (const c of list) {
+    if (c.subclass && c.subclass !== subclass) continue;
     const count = Math.max(0, c.knownAtLevel(newLevel) - c.knownAtLevel(prev));
+    if (count > 0) out.push({ ...c, count });
+  }
+  return out;
+}
+
+/**
+ * Pool choices the character should ALREADY have by `level` — the sheet-side counterpart of
+ * getLevelChoices, used to display known options and detect owed slots. Each carries a
+ * resolved `count` = the cumulative number known at that level.
+ */
+export function getEarnedLevelChoices(charClass, edition, level, subclass = null) {
+  const list = LEVEL_CHOICES[charClass]?.[normEdition(edition)] || [];
+  const out = [];
+  for (const c of list) {
+    if (c.subclass && c.subclass !== subclass) continue;
+    const count = c.knownAtLevel(level);
     if (count > 0) out.push({ ...c, count });
   }
   return out;

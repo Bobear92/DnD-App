@@ -509,6 +509,9 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             if cd.get('subclass') == 'Battle Master':
                 patch['superiority_dice_used'] = 0
                 changes.append('Superiority Dice recovered')
+            if cd.get('subclass') == 'Arcane Archer':
+                patch['arcane_shot_used'] = 0
+                changes.append('Arcane Shot recovered')
         if cls == 'Bard' and (edition == '5.5e' or level >= 5):
             patch['bardic_inspiration_used'] = 0
             changes.append('Bardic Inspiration recovered')
@@ -565,6 +568,9 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             if cd.get('subclass') == 'Battle Master':
                 patch['superiority_dice_used'] = 0
                 changes.append('Superiority Dice recovered')
+            if cd.get('subclass') == 'Arcane Archer':
+                patch['arcane_shot_used'] = 0
+                changes.append('Arcane Shot recovered')
             if cd.get('subclass') == 'Eldritch Knight':
                 # Subclass caster: Fighter isn't in _SPELLCASTING_CLASSES, so reset the
                 # EK's spell slots here (same shape as the class-caster reset above).

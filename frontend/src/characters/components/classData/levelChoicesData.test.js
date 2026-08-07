@@ -5,6 +5,7 @@ import {
   ELDRITCH_INVOCATIONS_5E,
   eldritchInvocationsKnownAtLevel,
   getLevelChoices,
+  getEarnedLevelChoices,
   availablePoolOptions,
   applyLevelChoice,
 } from '@/characters/components/classData/levelChoicesData';
@@ -58,7 +59,62 @@ describe('getLevelChoices', () => {
   });
 
   it('returns nothing for classes without level choices', () => {
+    expect(getLevelChoices('Barbarian', '5e', 2, 3)).toEqual([]);
+  });
+});
+
+// A subclass-scoped pool (Arcane Archer's Arcane Shot) reuses the whole class-pool mechanism,
+// gated on the character's subclass so a Champion never sees it.
+describe('getLevelChoices — subclass-scoped pools', () => {
+  it('offers Arcane Shot to an Arcane Archer at level 3', () => {
+    const choices = getLevelChoices('Fighter', '5e', 2, 3, 'Arcane Archer');
+    expect(choices).toHaveLength(1);
+    expect(choices[0].key).toBe('arcane_shot');
+    expect(choices[0].storeField).toBe('arcane_shot_options');
+    expect(choices[0].count).toBe(2);
+  });
+
+  it('gives a delta of 1 at each later option level (7 / 10 / 15 / 18)', () => {
+    for (const [from, to] of [[6, 7], [9, 10], [14, 15], [17, 18]]) {
+      expect(getLevelChoices('Fighter', '5e', from, to, 'Arcane Archer')[0].count).toBe(1);
+    }
+  });
+
+  it('offers nothing at a Fighter level with no new option (3→4)', () => {
+    expect(getLevelChoices('Fighter', '5e', 3, 4, 'Arcane Archer')).toEqual([]);
+  });
+
+  it('is hidden from another subclass and from a subclass-less character', () => {
+    expect(getLevelChoices('Fighter', '5e', 2, 3, 'Champion')).toEqual([]);
     expect(getLevelChoices('Fighter', '5e', 2, 3)).toEqual([]);
+  });
+
+  it('has no 2024 Arcane Archer (the subclass does not exist in that edition)', () => {
+    expect(getLevelChoices('Fighter', '5.5e', 2, 3, 'Arcane Archer')).toEqual([]);
+  });
+
+  it('still returns class-wide pools when no subclass is passed', () => {
+    expect(getLevelChoices('Sorcerer', '5e', 2, 3)).toHaveLength(1);
+  });
+});
+
+describe('getEarnedLevelChoices', () => {
+  it('returns the cumulative count known at a level, not the delta', () => {
+    const earned = getEarnedLevelChoices('Fighter', '5e', 10, 'Arcane Archer');
+    expect(earned).toHaveLength(1);
+    expect(earned[0].count).toBe(4);
+  });
+
+  it('returns nothing before the subclass grants any options', () => {
+    expect(getEarnedLevelChoices('Fighter', '5e', 2, 'Arcane Archer')).toEqual([]);
+  });
+
+  it('respects the subclass gate', () => {
+    expect(getEarnedLevelChoices('Fighter', '5e', 10, 'Champion')).toEqual([]);
+  });
+
+  it('works for class-wide pools too', () => {
+    expect(getEarnedLevelChoices('Sorcerer', '5e', 17)[0].count).toBe(4);
   });
 });
 

@@ -555,7 +555,11 @@ export default function CharacterDetail() {
     (classSection.draft ?? character.character_data)?.subclass,
     character.level,
   );
-  const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || subclassCaster || raceGrantedCantrips.length > 0 || hasFeatSpells;
+  // Cantrips granted by a SUBCLASS feature (Arcane Archer Lore) — stored by the subclass-grant
+  // mechanism, shown as their own Spells-tab source the way race-granted cantrips are.
+  const subclassCantrips = (classSection.draft ?? character.character_data)?.subclass_cantrips ?? [];
+  const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || subclassCaster
+    || raceGrantedCantrips.length > 0 || subclassCantrips.length > 0 || hasFeatSpells;
   const tabCount = hasSpells ? 6 : 5;
 
   const calendarEras = calendar?.eras ?? [];
@@ -1841,6 +1845,10 @@ export default function CharacterDetail() {
                   ) : null;
                   const sources = [
                     isCaster && { key: 'class', label: 'Class' },
+                    // Subclass-granted cantrips (Arcane Archer Lore) have no fold path into the
+                    // shared level strip, so they always get their own source rather than
+                    // silently disappearing on a caster that folds.
+                    subclassCantrips.length > 0 && { key: 'subclass', label: 'Subclass' },
                     !foldSources && raceGrantedCantrips.length > 0 && { key: 'racial', label: 'Racial' },
                     !foldSources && hasFeat && { key: 'feats', label: 'Feats' },
                   ].filter(Boolean);
@@ -1887,6 +1895,19 @@ export default function CharacterDetail() {
                             featTrackers={foldSources ? featTrackersNode : null}
                           />
                         </SectionCard>
+                      )}
+
+                      {active === 'subclass' && (
+                        <div className="rounded-lg border bg-card p-4 space-y-2" data-testid="subclass-cantrips">
+                          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            {(classSection.draft ?? character.character_data)?.subclass} Cantrips
+                          </div>
+                          <SpellLevelTabs
+                            spells={subclassCantrips.map(name => ({ name, level: 0 }))}
+                            testIdPrefix="subclass-spell-tab"
+                          />
+                          <p className="text-xs text-muted-foreground">Always known. No spell slot required.</p>
+                        </div>
                       )}
 
                       {active === 'racial' && (

@@ -1273,6 +1273,108 @@ describe('LevelUpWizard', () => {
     });
   });
 
+  describe('level choices — Arcane Archer Arcane Shot (subclass-scoped pool)', () => {
+    // The whole point of the `subclass` field: a pool that belongs to a SUBCLASS, offered even
+    // when that subclass is picked during this same level-up run.
+    const ARCHER_L6 = {
+      ...FIGHTER_L2, level: 6,
+      character_data: {
+        hp_max: 52, subclass: 'Arcane Archer',
+        arcane_shot_options: ['Bursting Arrow', 'Shadow Arrow'],
+      },
+    };
+
+    it('offers Arcane Shot at L3 to a Fighter who picks Arcane Archer in the same run', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={FIGHTER_L2} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → subclass
+      fireEvent.click(screen.getByText('Arcane Archer'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // subclass → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → subclass-grants (Lore)
+      // Both Lore grants carry descriptions, so they render as option cards (clicked by name).
+      expect(screen.getByTestId('subclass-grant-arcane_archer_lore_skill')).toBeInTheDocument();
+      expect(screen.getByTestId('subclass-grant-arcane_archer_lore_cantrip')).toBeInTheDocument();
+      fireEvent.click(screen.getByText('Nature'));
+      fireEvent.click(screen.getByText('Druidcraft'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // subclass-grants → level-choices
+      expect(screen.getByTestId('level-choice-count-arcane_shot')).toHaveTextContent('0/2');
+      expect(screen.getByTestId('wizard-next')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('level-choice-arcane_shot-Bursting Arrow'));
+      fireEvent.click(screen.getByTestId('level-choice-arcane_shot-Shadow Arrow'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // level-choices → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(3, expect.objectContaining({
+        subclass: 'Arcane Archer',
+        skill_proficiencies: expect.arrayContaining(['Nature']),
+        subclass_cantrips: ['Druidcraft'],
+        arcane_shot_options: ['Bursting Arrow', 'Shadow Arrow'],
+      })));
+    });
+
+    it('offers one more option at L7 and hides the ones already known', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={ARCHER_L6} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → level-choices
+      expect(screen.getByTestId('level-choice-count-arcane_shot')).toHaveTextContent('0/1');
+      expect(screen.queryByTestId('level-choice-arcane_shot-Bursting Arrow')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('level-choice-arcane_shot-Seeking Arrow'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // level-choices → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(7, expect.objectContaining({
+        arcane_shot_options: ['Bursting Arrow', 'Shadow Arrow', 'Seeking Arrow'],
+      })));
+    });
+
+    // RAW: each time you gain a Fighter level you can replace one option you know. The generic
+    // level-choices swap covers it on the levels where a new option is also learned.
+    it('lets the player swap one known option when learning a new one', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={ARCHER_L6} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → level-choices
+      fireEvent.change(screen.getByTestId('level-choice-replace-arcane_shot'), { target: { value: 'Shadow Arrow' } });
+      expect(screen.getByTestId('level-choice-count-arcane_shot')).toHaveTextContent('0/2');
+      fireEvent.click(screen.getByTestId('level-choice-arcane_shot-Seeking Arrow'));
+      fireEvent.click(screen.getByTestId('level-choice-arcane_shot-Piercing Arrow'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // level-choices → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(7, expect.objectContaining({
+        arcane_shot_options: ['Bursting Arrow', 'Seeking Arrow', 'Piercing Arrow'],
+      })));
+    });
+
+    it('is never offered to another Fighter subclass', () => {
+      render(
+        <LevelUpWizard
+          character={{ ...ARCHER_L6, character_data: { hp_max: 52, subclass: 'Champion' } }}
+          campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()}
+        />
+      );
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → confirm
+      expect(screen.getByRole('button', { name: /Confirm Level Up/i })).toBeInTheDocument();
+      expect(screen.queryByTestId('level-choice-count-arcane_shot')).not.toBeInTheDocument();
+    });
+
+    it('does not prompt at a Fighter level that grants no new option (7 → 8)', () => {
+      render(
+        <LevelUpWizard
+          character={{ ...ARCHER_L6, level: 7 }}
+          campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()}
+        />
+      );
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → asi/confirm
+      expect(screen.queryByTestId('level-choice-count-arcane_shot')).not.toBeInTheDocument();
+    });
+  });
+
   describe('level choices — Warlock Eldritch Invocations', () => {
     // Warlock L1→2 learns its first 2 invocations (5e: none before L2). Known caster + L1 subclass.
     const WARLOCK_L1 = {

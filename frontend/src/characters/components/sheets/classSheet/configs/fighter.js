@@ -9,6 +9,7 @@ import {
   FIGHTER_FIGHTING_STYLES_5E, FIGHTER_FIGHTING_STYLES_2024,
   FIGHTER_SUBCLASSES_5E, FIGHTER_SUBCLASSES_2024,
 } from '@/characters/components/classData/classChoicesData';
+import { ARCANE_SHOT_USES } from '@/characters/components/classData/arcaneShotData';
 import BattleMasterPanel from '@/characters/components/subclass/BattleMasterPanel';
 import WeaponBondPanel from '@/characters/components/subclass/WeaponBondPanel';
 
@@ -32,6 +33,14 @@ const REST_RESOURCES = [
   {
     key: 'second_wind_used', label: 'Second Wind (Short Rest)', total: () => 1, recharge: 'short', minLevel: 1,
     description: 'Bonus action: regain 1d10 + your Fighter level HP.',
+  },
+  // Subclass-gated: only an Arcane Archer sees this row (useRestResource filters on `subclass`).
+  // RAW is a flat two uses at every level — see arcaneShotData for why the feature blurb's
+  // "extra use at 10th level" was dropped.
+  {
+    key: 'arcane_shot_used', label: 'Arcane Shot (Short Rest)', total: () => ARCANE_SHOT_USES,
+    recharge: 'short', minLevel: 3, subclass: 'Arcane Archer',
+    description: 'Apply one known Arcane Shot option to an arrow fired from a shortbow or longbow.',
   },
   {
     key: 'action_surge_used', label: 'Action Surge (Short Rest)', total: actionSurgeTotal, recharge: 'short', minLevel: 2,

@@ -267,6 +267,22 @@ describe('CharacterList — rest buttons (GM view)', () => {
     expect(screen.getByText('All spell slots')).toBeInTheDocument();
   });
 
+  it('rest summary lists Arcane Shot for an Arcane Archer on both rest types', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], character_data: { subclass: 'Arcane Archer' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('short-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a short rest/i));
+    expect(screen.getByText('Arcane Shot')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText('Arcane Shot')).toBeInTheDocument();
+  });
+
   it('confirmation dialog shows selected character names', async () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));

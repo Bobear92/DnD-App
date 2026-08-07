@@ -22,11 +22,18 @@
  *     storeField,                  // character_data array the picks merge into
  *     options: [{value, description?}],  // the pool (description → OptionCardPicker; else button grid)
  *     heldFrom: (characterData, ctx) => string[],  // names already held → excluded (no doubling up)
- *     surface: 'sheet' | 'banner',  // where the CHOSEN value is shown afterward (default 'sheet').
- *                                   //   'banner' = a proficiency that already surfaces in the
- *                                   //   Items-tab proficiency banners (don't also show it on the
- *                                   //   subclass sheet block). 'sheet' = a class-pool pick the
- *                                   //   ClassSheet renders in the subclass features area.
+ *     surface: 'sheet' | 'banner' | 'skills' | 'spells',
+ *                                   // where the CHOSEN value is shown afterward (default 'sheet').
+ *                                   //   'sheet'  = a class-pool pick the ClassSheet renders in
+ *                                   //              the subclass features area.
+ *                                   //   'banner' = a tool/weapon/armor proficiency, already shown
+ *                                   //              in the Items-tab proficiency banners.
+ *                                   //   'skills' = a skill proficiency, already shown in the
+ *                                   //              Abilities & Skills panel.
+ *                                   //   'spells' = a granted spell, already shown in the Spells
+ *                                   //              tab's Subclass source.
+ *                                   // Only 'sheet' renders in the ClassSheet grant block; the
+ *                                   // rest would be a duplicate of an existing surface.
  *   }
  *
  * Adding another subclass (any of these two kinds) is a pure data entry here; the LevelUpWizard
@@ -34,6 +41,7 @@
  */
 import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
 import { ARTISAN_TOOLS } from '@/characters/components/inventory/toolsData';
+import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 import { FIGHTER_FIGHTING_STYLES_5E, FIGHTER_FIGHTING_STYLES_2024 } from '@/characters/components/classData/classChoicesData';
 
 const lc = (s) => (s || '').toLowerCase();
@@ -48,6 +56,16 @@ const heldSkills = (cd) => cd.skill_proficiencies || [];
 const heldLanguages = (cd) => [
   ...(cd.race_languages || []), ...(cd.background_languages || []), ...(cd.subclass_languages || []),
 ];
+// A granted cantrip dedups against cantrips the character already knows from ANY source — a
+// High Elf who took Prestidigitation, or a Magic Initiate who took Druidcraft, isn't offered
+// the same cantrip twice.
+const heldCantrips = (cd) => [
+  ...(cd.subclass_cantrips || []),
+  ...(cd.cantrips || []),
+  ...(cd.cantrips_known || []),
+  cd.high_elf_cantrip,
+  ...getFeatGrantedSpells(cd.feats).cantrips.map((c) => c.name),
+];
 // A class-pool pick dedups against the base choice + any already picked (Champion: the base
 // fighting_style plus prior additional_fighting_styles).
 const heldFightingStyles = (cd) => [cd.fighting_style, ...(cd.additional_fighting_styles || [])];
@@ -61,10 +79,35 @@ const studentOfWar = {
   surface: 'banner', // the chosen tool shows in the Items-tab proficiency banner, not the sheet
 };
 
+// Arcane Archer Lore is TWO grants at the same level: a skill proficiency and a cantrip. Each
+// is surfaced by the panel that already owns that kind of thing (the Skills panel / the Spells
+// tab), so neither is repeated in the ClassSheet grant block.
+const arcaneArcherLore = [
+  {
+    level: 3, key: 'arcane_archer_lore_skill', label: 'Arcane Archer Lore — Skill', count: 1,
+    storeField: 'skill_proficiencies',
+    options: [
+      { value: 'Arcana', description: 'Your Intelligence (Arcana) checks measure your knowledge of spells, magic items, eldritch symbols and magical traditions.' },
+      { value: 'Nature', description: 'Your Intelligence (Nature) checks measure your knowledge of terrain, plants and animals, the weather, and natural cycles.' },
+    ],
+    heldFrom: heldSkills, surface: 'skills',
+  },
+  {
+    level: 3, key: 'arcane_archer_lore_cantrip', label: 'Arcane Archer Lore — Cantrip', count: 1,
+    storeField: 'subclass_cantrips',
+    options: [
+      { value: 'Prestidigitation', description: 'A minor magical trick: sensory effects, lighting or snuffing a small flame, cleaning or soiling an object, and other novice tricks.' },
+      { value: 'Druidcraft', description: 'Whisper to the spirits of nature: predict the weather, make a flower bloom, create a harmless sensory effect, or light or snuff a small flame.' },
+    ],
+    heldFrom: heldCantrips, surface: 'spells',
+  },
+];
+
 export const SUBCLASS_GRANTS = {
   Fighter: {
     '5e': {
       'Battle Master': [studentOfWar],
+      'Arcane Archer': arcaneArcherLore,
       Champion: [
         {
           level: 10, key: 'additional_fighting_style', label: 'Additional Fighting Style',
@@ -87,7 +130,7 @@ export const SUBCLASS_GRANTS = {
 };
 
 // Re-exported held resolvers so future skill/language grants can reference them by name.
-export const HELD_RESOLVERS = { heldTools, heldSkills, heldLanguages, heldFightingStyles };
+export const HELD_RESOLVERS = { heldTools, heldSkills, heldLanguages, heldFightingStyles, heldCantrips };
 
 function subclassGrantsFor(charClass, edition, subclass) {
   if (!subclass) return [];

@@ -119,6 +119,11 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
     'Eldritch Knight': {
       'Weapon Bond': { tab: 'bonus', cost: 'bonus action', description: "Summon a bonded weapon to your hand (bonus action). You can't be disarmed of a bonded weapon while it's on the same plane. Bonding takes a 1-hour ritual; you can bond up to two weapons, but can summon only one at a time." },
     },
+    'Arcane Archer': {
+      // Applying an option costs nothing — it rides on an arrow you were firing anyway.
+      'Arcane Shot': { tab: 'no_action', cost: 'no action', resourceKey: 'arcane_shot_used', description: 'When you fire an arrow from a shortbow or longbow as part of the Attack action, apply one of your known Arcane Shot options to it — one option per attack. Recharges on a short or long rest.' },
+      'Curving Shot': { tab: 'bonus', cost: 'bonus action', description: 'When you miss with a magic arrow, use a bonus action to reroll the attack against a different target within 60 feet of the original one.' },
+    },
   },
 };
 
@@ -713,6 +718,22 @@ export function buildActionEconomy({
         source: 'Subclass',
         cost: def.cost,
         detail: `${def.description} No weapon bonded yet — bond one from the Items tab (Weapons → Bonded Weapons).`,
+      });
+      continue;
+    }
+    // Arcane Shot with options chosen (level-up → arcane_shot_options): name them, so the tab
+    // says which effects are actually available instead of just "apply one of your options".
+    if (fname === 'Arcane Shot') {
+      const known = characterData.arcane_shot_options || [];
+      push(def.tab, {
+        key: `subclass:${fname}`,
+        name: fname,
+        source: 'Subclass',
+        cost: def.cost,
+        detail: known.length > 0
+          ? `${def.description} Options known: ${known.join(', ')}.`
+          : `${def.description} No options chosen yet — pick them at level-up.`,
+        resourceKey: def.resourceKey,
       });
       continue;
     }

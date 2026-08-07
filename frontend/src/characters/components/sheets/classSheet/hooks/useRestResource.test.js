@@ -37,6 +37,35 @@ describe('useRestResource', () => {
     expect(ind.remaining).toBe(0);
   });
 
+  // A subclass-gated resource (Arcane Archer's Arcane Shot uses) lets a subclass pool live in
+  // the class config as data instead of a bespoke panel.
+  describe('subclass gating', () => {
+    const arcaneShot = {
+      key: 'arcane_shot_used', label: 'Arcane Shot (Short Rest)', total: () => 2,
+      recharge: 'short', minLevel: 3, subclass: 'Arcane Archer',
+    };
+
+    it('shows a subclass resource only to that subclass', () => {
+      const rows = useRestResource({ resources: [arcaneShot], level: 3, data: { subclass: 'Arcane Archer' } });
+      expect(rows.map((r) => r.key)).toEqual(['arcane_shot_used']);
+      expect(rows[0].total).toBe(2);
+    });
+
+    it('hides it from another subclass and from a character with none', () => {
+      expect(useRestResource({ resources: [arcaneShot], level: 3, data: { subclass: 'Champion' } })).toEqual([]);
+      expect(useRestResource({ resources: [arcaneShot], level: 3, data: {} })).toEqual([]);
+    });
+
+    it('still honours minLevel for the matching subclass', () => {
+      expect(useRestResource({ resources: [arcaneShot], level: 2, data: { subclass: 'Arcane Archer' } })).toEqual([]);
+    });
+
+    it('leaves un-gated resources visible to every subclass', () => {
+      const rows = useRestResource({ resources: RESOURCES, level: 9, data: { subclass: 'Arcane Archer' } });
+      expect(rows).toHaveLength(3);
+    });
+  });
+
   it('passes a resource description through to the row', () => {
     const rows = useRestResource({
       resources: [{ key: 'x', label: 'X', total: () => 1, recharge: 'short', description: 'Does the thing.' }],

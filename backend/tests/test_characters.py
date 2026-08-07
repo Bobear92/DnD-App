@@ -643,6 +643,48 @@ class TestApplyRest:
         updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
         assert "superiority_dice_used" not in updated["character_data"]
 
+    def test_short_rest_resets_arcane_archer_shot_uses(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=3,
+            character_data={"subclass": "Arcane Archer", "arcane_shot_used": 2},
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert updated["character_data"]["arcane_shot_used"] == 0
+
+    def test_long_rest_resets_arcane_archer_shot_uses(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=3,
+            character_data={"subclass": "Arcane Archer", "arcane_shot_used": 2, "hp_max": 28},
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert updated["character_data"]["arcane_shot_used"] == 0
+
+    def test_non_arcane_archer_fighter_has_no_arcane_shot_reset(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._create_char(
+            client, h_gm, campaign_id, cls="Fighter", level=3,
+            character_data={"subclass": "Battle Master"},
+        )
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]},
+            headers=h_gm,
+        )
+        updated = client.get(f"/api/characters/{char_id}", headers=h_gm).json()
+        assert "arcane_shot_used" not in updated["character_data"]
+
     def test_long_rest_resets_feat_resource_pool(self, client):
         # Lucky's luck_points (long-rest) resets; Martial Adept's superiority die (short-rest) also resets on a long rest.
         h_gm, _, campaign_id = self._setup(client)

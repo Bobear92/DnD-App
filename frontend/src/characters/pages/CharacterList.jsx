@@ -57,6 +57,7 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
     if (cls === 'Fighter') {
       items.push('Action Surge & Second Wind');
       if (characterData?.subclass === 'Battle Master') items.push('Superiority Dice');
+      if (characterData?.subclass === 'Arcane Archer') items.push('Arcane Shot');
     }
     if (cls === 'Bard' && (is2024 || level >= 5)) items.push('Bardic Inspiration');
     if ((cls === 'Cleric' || cls === 'Paladin') && is2024) items.push('Channel Divinity');
@@ -77,6 +78,7 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
   else if (cls === 'Fighter') {
     items.push('Action Surge, Second Wind & Indomitable');
     if (characterData?.subclass === 'Battle Master') items.push('Superiority Dice');
+    if (characterData?.subclass === 'Arcane Archer') items.push('Arcane Shot');
     if (characterData?.subclass === 'Eldritch Knight') items.push('All spell slots');
   }
   else if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');

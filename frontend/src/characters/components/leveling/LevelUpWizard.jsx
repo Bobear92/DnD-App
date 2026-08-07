@@ -336,9 +336,13 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // one out frees a slot, so the player picks one extra new maneuver to fill it.
   const maneuverTarget = maneuverDelta + (maneuverReplace ? 1 : 0);
 
-  // Class-wide pool selections gained this level (Metamagic, etc.) — data-driven via
-  // levelChoicesData. Each carries a resolved `count` = the per-level delta to pick.
-  const levelChoices = getLevelChoices(character.char_class, edition, character.level ?? 1, newLevel);
+  // Pool selections gained this level (Metamagic, Eldritch Invocations, Arcane Shot, …) —
+  // data-driven via levelChoicesData. Each carries a resolved `count` = the per-level delta to
+  // pick. `effectiveSubclass` is passed so SUBCLASS-scoped pools are offered even when the
+  // subclass is chosen during this same run.
+  const levelChoices = getLevelChoices(
+    character.char_class, edition, character.level ?? 1, newLevel, effectiveSubclass,
+  );
   const needsLevelChoices = levelChoices.length > 0;
   const levelChoicesLabel = levelChoices.length === 1 ? levelChoices[0].label : 'Class Choices';
 

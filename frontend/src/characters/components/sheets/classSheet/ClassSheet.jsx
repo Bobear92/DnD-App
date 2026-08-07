@@ -26,7 +26,9 @@ import CasterSpellBlock from '@/characters/components/sheets/classSheet/CasterSp
 import RestResourceTracker from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import SkillProficiencyPicker from '@/characters/components/sheets/classSheet/SkillProficiencyPicker';
 import { useLockedChoice } from '@/characters/components/sheets/classSheet/hooks/useLockedChoice';
+import KnownOptionsBlock from '@/characters/components/sheets/classSheet/KnownOptionsBlock';
 import { getEarnedSubclassGrants, availableGrantOptions } from '@/characters/components/classData/subclassGrants';
+import { getEarnedLevelChoices } from '@/characters/components/classData/levelChoicesData';
 import { getSubclassCaster } from '@/characters/components/classData/subclassCasterData';
 import Field from '@/characters/components/sheets/Field';
 
@@ -272,13 +274,15 @@ export default function ClassSheet({
   ) : null;
 
   // Subclass grants surfaced on the sheet (class-pool picks like Champion's Additional Fighting
-  // Style — `surface !== 'banner'`; proficiency grants show in the Items-tab banners instead).
+  // Style — `surface: 'sheet'`, the default). Every other surface is displayed by whichever
+  // panel owns that kind of thing: 'banner' → the Items-tab proficiency banners, 'skills' →
+  // the Abilities & Skills panel, 'spells' → the Spells tab.
   // Chosen at level-up via the LevelUpWizard and stored in character_data[storeField]; shown
   // read-only here, with an owed slot (a character at/past the grant level with fewer picks than
   // its count — e.g. one who leveled before this feature existed) fillable inline.
   const subclassLevelChoiceBlock = !creation && data.subclass
     ? getEarnedSubclassGrants(config.className, config.edition, data.subclass, level)
-        .filter((g) => g.surface !== 'banner')
+        .filter((g) => (g.surface ?? 'sheet') === 'sheet')
         .map((g) => {
         const held = data[g.storeField] ?? [];
         const owed = !readOnly && held.length < g.count;
@@ -310,6 +314,20 @@ export default function ClassSheet({
         );
       })
     : null;
+
+  // Pool options the character should already know (Arcane Shot; Metamagic/Invocations once
+  // those classes are config-driven), shown read-only via the shared KnownOptionsBlock.
+  // Subclass-scoped pools go in the subclass area, class-wide pools with the class features.
+  const earnedPools = !creation
+    ? getEarnedLevelChoices(config.className, config.edition, level, data.subclass)
+    : [];
+  const poolBlock = (subclassScoped) => (
+    <KnownOptionsBlock
+      choices={earnedPools.filter((c) => !!c.subclass === subclassScoped)}
+      data={data} onChange={onChange} level={level}
+      readOnly={readOnly} gmEdit={gmEdit} scores={scores}
+    />
+  );
 
   const featuresListBlock = <FeaturesList features={config.features} level={level} creation={creation} />;
 
@@ -347,6 +365,7 @@ export default function ClassSheet({
       {lockedChoicesBlock}
       {weaponMasteryBlock}
       {restResourcesBlock}
+      {poolBlock(false)}
       {notesBlock}
       {featuresListBlock}
       {asiBlock}
@@ -361,6 +380,7 @@ export default function ClassSheet({
       )}
       {subclassPanelBlock}
       {subclassLevelChoiceBlock}
+      {poolBlock(true)}
       {portentBlock}
     </>
   );
@@ -425,6 +445,8 @@ export default function ClassSheet({
       {showFeatures && subclassFieldBlock}
       {showFeatures && subclassPanelBlock}
       {showFeatures && subclassLevelChoiceBlock}
+      {showFeatures && poolBlock(false)}
+      {showFeatures && poolBlock(true)}
       {showFeatures && portentBlock}
 
       {/* Caster spell UI (creation pickers + play sub-tabs) */}

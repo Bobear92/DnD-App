@@ -96,6 +96,8 @@ export function validateClassConfig(config, label = 'class config') {
     if (!isLevel(r?.minLevel)) e.push(`${L}.minLevel must be a level 1..20`);
     eachLevel(r?.total, `${L}.total`, nonNegNumber, e);
     if (r?.description != null && !isStr(r.description)) e.push(`${L}.description must be a string when present`);
+    // A subclass-gated resource (Arcane Shot uses) shows only for that subclass.
+    if (r?.subclass != null && !isStr(r.subclass)) e.push(`${L}.subclass must be a string when present`);
   });
 
   if (!isArr(config.notes)) e.push(`${label}.notes must be an array`);
@@ -157,6 +159,8 @@ export function validateLevelChoice(choice, label = 'level choice') {
   if (!isStr(choice.key)) e.push(`${label}.key must be a string`);
   if (!isStr(choice.label)) e.push(`${label}.label must be a string`);
   if (!isStr(choice.storeField)) e.push(`${label}.storeField must be a string`);
+  // A subclass-scoped pool (Arcane Shot) is offered only to that subclass.
+  if (choice.subclass != null && !isStr(choice.subclass)) e.push(`${label}.subclass must be a string when present`);
   validateKnownAtLevel(choice.knownAtLevel, `${label}.knownAtLevel`, e);
   if (!nonEmptyArr(choice.pool)) e.push(`${label}.pool must be a non-empty array`);
   else choice.pool.forEach((o, i) => {
@@ -167,6 +171,11 @@ export function validateLevelChoice(choice, label = 'level choice') {
   });
   return e;
 }
+
+// Where a chosen subclass grant is displayed. Only 'sheet' renders in the ClassSheet grant
+// block; the others are already shown by the panel that owns that kind of thing (Items-tab
+// proficiency banners, the Abilities & Skills panel, the Spells tab).
+export const SUBCLASS_GRANT_SURFACES = ['sheet', 'banner', 'skills', 'spells'];
 
 export function validateSubclassGrant(grant, label = 'subclass grant') {
   const e = [];
@@ -183,8 +192,8 @@ export function validateSubclassGrant(grant, label = 'subclass grant') {
     if (o?.description != null && !isStr(o.description)) e.push(`${L}.description must be a string when present`);
   });
   if (!isFn(grant.heldFrom)) e.push(`${label}.heldFrom must be a function`);
-  if (grant.surface != null && !['sheet', 'banner'].includes(grant.surface)) {
-    e.push(`${label}.surface must be 'sheet' or 'banner' when present`);
+  if (grant.surface != null && !SUBCLASS_GRANT_SURFACES.includes(grant.surface)) {
+    e.push(`${label}.surface must be one of ${SUBCLASS_GRANT_SURFACES.join(' / ')} when present`);
   }
   return e;
 }
