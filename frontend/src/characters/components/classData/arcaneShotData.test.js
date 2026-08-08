@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ARCANE_SHOT_OPTIONS, ARCANE_SHOT_USES,
   arcaneShotKnownAtLevel, arcaneShotImproved, arcaneShotSaveDc, getArcaneShotOptions,
+  isArcaneShotBow,
 } from '@/characters/components/classData/arcaneShotData';
 
 describe('arcaneShotData', () => {
@@ -51,6 +52,18 @@ describe('arcaneShotData', () => {
     expect(arcaneShotSaveDc(3, 16)).toBe(13); // 8 + 2 + 3
     expect(arcaneShotSaveDc(17, 16)).toBe(17); // 8 + 6 + 3
     expect(arcaneShotSaveDc(5, 8)).toBe(10); // 8 + 3 + (-1)
+  });
+
+  // RAW: "when you fire an arrow from a shortbow or longbow" — a crossbow fires bolts and
+  // never qualifies, however much its name looks like a bow.
+  it('recognises only shortbows and longbows as Arcane Shot weapons', () => {
+    for (const name of ['Shortbow', 'Longbow', 'longbow', 'Longbow +1', 'Elven Shortbow']) {
+      expect(isArcaneShotBow(name), name).toBe(true);
+    }
+    for (const name of ['Crossbow', 'Hand Crossbow', 'Light Crossbow', 'Heavy Crossbow',
+      'Sling', 'Dart', 'Longsword', 'Bow of Bows', '', null, undefined]) {
+      expect(isArcaneShotBow(name), String(name)).toBe(false);
+    }
   });
 
   it('resolves known option names to full options in pool order', () => {

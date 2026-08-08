@@ -29,6 +29,7 @@ function renderTab(props = {}) {
       edition={props.edition ?? '5e'}
       readOnly={props.readOnly ?? false}
       onChange={props.onChange ?? vi.fn()}
+      isGm={props.isGm ?? false}
     />
     </MemoryRouter>
   );
@@ -335,7 +336,7 @@ describe('InventoryTab', () => {
 
   it('opens the picker and adds the chosen item', async () => {
     const onChange = vi.fn();
-    renderTab({ onChange });
+    renderTab({ onChange, isGm: true }); // stocking weapons is GM-only
     fireEvent.click(screen.getByTestId('inv-add-btn'));
     await waitFor(() => expect(screen.getByTestId('item-picker-option-7')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('item-picker-option-7'));
@@ -359,7 +360,7 @@ describe('InventoryTab', () => {
 
   it('removing an item calls onChange without it', () => {
     const onChange = vi.fn();
-    renderTab({ inventory: [longsword], onChange });
+    renderTab({ inventory: [longsword], onChange, isGm: true }); // removing a weapon is GM-only
     fireEvent.click(screen.getByTestId('remove-item-w1'));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ inventory: [] }));
   });
@@ -491,7 +492,7 @@ describe('InventoryTab', () => {
       { id: 50, name: 'Arrows', category: 'Ammunition', quantity: '20', owner_type: 'system' },
       { id: 51, name: 'Backpack', category: 'Standard Gear', owner_type: 'system' },
     ]);
-    renderTab({ onChange });
+    renderTab({ onChange, isGm: true }); // stocking ammunition is GM-only
     fireEvent.click(screen.getByTestId('add-ammo-btn'));
     await waitFor(() => expect(screen.getByTestId('item-picker-option-50')).toBeInTheDocument());
     // non-ammo gear filtered out of the ammunition picker
@@ -508,6 +509,69 @@ describe('InventoryTab', () => {
     expect(screen.queryByTestId('add-ammo-btn')).not.toBeInTheDocument();
     // count is still shown read-only
     expect(screen.getByTestId('ammo-count-lb1')).toHaveTextContent('20');
+  });
+});
+
+// The party's armoury is the GM's to hand out: a player uses what they have but can't mint
+// or destroy weapons and ammunition. A quiver goes DOWN only by firing.
+describe('InventoryTab — GM-only stocking of weapons + ammunition', () => {
+  const bow = { uid: 'lb1', category: 'weapons', name: 'Longbow', weapon_category: 'Martial', weapon_type: 'ranged', damage: '1d8', damage_type: 'Piercing', properties: '["Ammunition", "Heavy", "Two-handed"]', quantity: 1 };
+  const quiver = { uid: 'am1', category: 'adventuring-gear', name: 'Arrows', item_category: 'Ammunition', quantity: 20 };
+  const player = (props = {}) => renderTab({ inventory: [longsword, bow, quiver], ...props });
+  const gm = (props = {}) => player({ isGm: true, ...props });
+
+  it('a player gets no Add Weapon button; the GM does', () => {
+    player();
+    expect(screen.queryByTestId('inv-add-btn')).not.toBeInTheDocument();
+    cleanup();
+    gm();
+    expect(screen.getByTestId('inv-add-btn')).toBeInTheDocument();
+  });
+
+  it('a player cannot delete a weapon; the GM can', () => {
+    player();
+    expect(screen.queryByTestId('remove-item-w1')).not.toBeInTheDocument();
+    cleanup();
+    gm();
+    expect(screen.getByTestId('remove-item-w1')).toBeInTheDocument();
+  });
+
+  it('a player gets no Add Ammunition button and cannot delete a stack', () => {
+    player();
+    expect(screen.queryByTestId('add-ammo-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('remove-item-am1')).not.toBeInTheDocument();
+    cleanup();
+    gm();
+    expect(screen.getByTestId('add-ammo-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('remove-item-am1')).toBeInTheDocument();
+  });
+
+  // The whole point: a player's ammo count moves only through the Use button.
+  it('a player cannot hand-edit the ammo count, but CAN still spend a round', () => {
+    const onChange = vi.fn();
+    player({ onChange });
+    expect(screen.queryByLabelText('Increase ammunition')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Decrease ammunition')).not.toBeInTheDocument();
+    expect(screen.getByTestId('ammo-qty-am1')).toHaveTextContent('20'); // still readable
+    fireEvent.click(screen.getByTestId('use-ammo-lb1'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      inventory: expect.arrayContaining([expect.objectContaining({ uid: 'am1', quantity: 19 })]),
+    }));
+  });
+
+  it('the GM keeps the ammo steppers', () => {
+    gm();
+    expect(screen.getByLabelText('Increase ammunition')).toBeInTheDocument();
+    expect(screen.getByLabelText('Decrease ammunition')).toBeInTheDocument();
+  });
+
+  // Scoped deliberately: only weapons + ammunition are GM-stocked.
+  it('leaves the other categories player-managed', () => {
+    const torch = { uid: 'g1', category: 'adventuring-gear', name: 'Torch', quantity: 1 };
+    renderTab({ inventory: [torch] });
+    fireEvent.click(screen.getByTestId('inv-category-adventuring-gear'));
+    expect(screen.getByTestId('inv-add-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('remove-item-g1')).toBeInTheDocument();
   });
 });
 

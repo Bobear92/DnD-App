@@ -828,6 +828,44 @@ describe('buildActionEconomy — Fighter', () => {
   });
 });
 
+// A weapon that fires ammunition carries the flag + uid the tab needs to render the shared
+// ammo control on its attack card (the control reads the live inventory itself).
+describe('buildActionEconomy — Ammunition weapons', () => {
+  const ammoArgs = (inventory, attacks) => ({
+    charClass: 'Fighter', subclass: null, level: 5, edition: '5e',
+    characterData: {}, inventory, attacks,
+    scores: { strength: 12, dexterity: 16 }, spellIndex: {},
+  });
+  const longbow = {
+    uid: 'lb1', category: 'weapons', name: 'Longbow', equipped: true,
+    properties: '["Ammunition", "Heavy", "Two-Handed"]', damage: '1d8', damage_type: 'Piercing',
+  };
+  const longsword = {
+    uid: 'ls1', category: 'weapons', name: 'Longsword', equipped: true,
+    properties: '["Versatile"]', damage: '1d8', damage_type: 'Slashing',
+  };
+  const atk = (uid, name) => ({ uid, name, toHit: '+6', damage: '1d8 + 3', proficient: true });
+
+  it('flags an Ammunition weapon and carries its uid', () => {
+    const bow = buildActionEconomy(ammoArgs([longbow], [atk('lb1', 'Longbow')]))
+      .action.find((e) => e.name === 'Longbow');
+    expect(bow.needsAmmo).toBe(true);
+    expect(bow.weaponUid).toBe('lb1');
+  });
+
+  it('does not flag a weapon without the Ammunition property', () => {
+    const sword = buildActionEconomy(ammoArgs([longsword], [atk('ls1', 'Longsword')]))
+      .action.find((e) => e.name === 'Longsword');
+    expect(sword.needsAmmo).toBe(false);
+  });
+
+  it('does not flag the unarmed-strike fallback (no weapon behind it)', () => {
+    const unarmed = buildActionEconomy(ammoArgs([], [])).action.find((e) => /unarmed/i.test(e.name));
+    expect(unarmed.needsAmmo).toBe(false);
+    expect(unarmed.weaponUid).toBeNull();
+  });
+});
+
 describe('buildActionEconomy — Arcane Archer (Fighter subclass)', () => {
   const aaArgs = (level, extra = {}) => ({
     charClass: 'Fighter',
@@ -842,24 +880,78 @@ describe('buildActionEconomy — Arcane Archer (Fighter subclass)', () => {
     ...extra,
   });
 
-  it('adds Arcane Shot as a no-action rider from L3, tied to its rest resource', () => {
-    const shot = buildActionEconomy(aaArgs(3)).no_action.find((e) => e.name === 'Arcane Shot');
-    expect(shot).toBeTruthy();
-    expect(shot.source).toBe('Subclass');
-    expect(shot.cost).toBe('no action');
-    expect(shot.resourceKey).toBe('arcane_shot_used');
+  // Arcane Shot rides on an arrow you were already firing, so it attaches to the bow attack
+  // card rather than floating as its own entry you'd have to cross-reference mid-combat.
+  it('attaches Arcane Shot to the bow attack instead of a standalone entry', () => {
+    const ec = buildActionEconomy(aaArgs(3, {
+      characterData: { arcane_shot_options: ['Bursting Arrow', 'Shadow Arrow'] },
+    }));
+    expect(ec.no_action.find((e) => e.name === 'Arcane Shot')).toBeFalsy();
+    const bow = ec.action.find((e) => e.name === 'Longbow');
+    expect(bow.arcaneShot).toBeTruthy();
+    expect(bow.arcaneShot.cost).toBe('no action');
+    // The uses are the one shared pool, so the bow card carries the same resource key.
+    expect(bow.resourceKey).toBe('arcane_shot_used');
   });
 
-  it('names the options the character actually knows', () => {
-    const shot = buildActionEconomy(aaArgs(3, {
+  it('spells out each known option (with its description) on the bow card', () => {
+    const bow = buildActionEconomy(aaArgs(3, {
       characterData: { arcane_shot_options: ['Bursting Arrow', 'Shadow Arrow'] },
-    })).no_action.find((e) => e.name === 'Arcane Shot');
-    expect(shot.detail).toMatch(/Options known: Bursting Arrow, Shadow Arrow/);
+    })).action.find((e) => e.name === 'Longbow');
+    expect(bow.arcaneShot.options.map((o) => o.name)).toEqual(['Bursting Arrow', 'Shadow Arrow']);
+    expect(bow.arcaneShot.options[0].description).toMatch(/detonates/i);
+    expect(bow.arcaneShot.emptyNote).toBeNull();
+    expect(bow.arcaneShot.note).toMatch(/Longbow/);
+  });
+
+  it('computes the save DC from level + Intelligence', () => {
+    // L7 → PB 3, INT 16 → +3 ⇒ 8 + 3 + 3 = 14
+    const bow = buildActionEconomy(aaArgs(7, { scores: { dexterity: 18, intelligence: 16 } }))
+      .action.find((e) => e.name === 'Longbow');
+    expect(bow.arcaneShot.saveDc).toBe(14);
+  });
+
+  it('shows the improved effects only from level 18', () => {
+    const at = (lvl) => buildActionEconomy(aaArgs(lvl, {
+      characterData: { arcane_shot_options: ['Bursting Arrow'] },
+    })).action.find((e) => e.name === 'Longbow').arcaneShot.options[0].improvement;
+    expect(at(17)).toBeNull();
+    expect(at(18)).toMatch(/4d6/);
   });
 
   it('points at level-up when no options have been chosen', () => {
-    const shot = buildActionEconomy(aaArgs(3)).no_action.find((e) => e.name === 'Arcane Shot');
-    expect(shot.detail).toMatch(/no options chosen yet/i);
+    const bow = buildActionEconomy(aaArgs(3)).action.find((e) => e.name === 'Longbow');
+    expect(bow.arcaneShot.options).toEqual([]);
+    expect(bow.arcaneShot.emptyNote).toMatch(/no options chosen yet/i);
+  });
+
+  // RAW is shortbow/longbow only — a crossbow never qualifies, so that archer keeps the
+  // standalone entry (with a hint) rather than silently losing the feature.
+  it('does not attach to a crossbow, and falls back to a standalone entry', () => {
+    const ec = buildActionEconomy(aaArgs(3, {
+      attacks: [{ uid: 'c1', name: 'Heavy Crossbow', toHit: '+7', damage: '1d10 + 4 piercing', proficient: true }],
+    }));
+    expect(ec.action.find((e) => e.name === 'Heavy Crossbow').arcaneShot).toBeUndefined();
+    const shot = ec.no_action.find((e) => e.name === 'Arcane Shot');
+    expect(shot).toBeTruthy();
+    expect(shot.detail).toMatch(/equip a shortbow or longbow/i);
+  });
+
+  it('falls back to a standalone entry when no weapon is equipped at all', () => {
+    const ec = buildActionEconomy(aaArgs(3, { attacks: [] }));
+    expect(ec.no_action.find((e) => e.name === 'Arcane Shot')).toBeTruthy();
+  });
+
+  it('attaches to every equipped bow (the pool is shared)', () => {
+    const ec = buildActionEconomy(aaArgs(3, {
+      attacks: [
+        { uid: 'b1', name: 'Longbow', toHit: '+7', damage: '1d8 + 4 piercing', proficient: true },
+        { uid: 'b2', name: 'Shortbow', toHit: '+7', damage: '1d6 + 4 piercing', proficient: true },
+      ],
+    }));
+    const bows = ec.action.filter((e) => e.arcaneShot);
+    expect(bows.map((e) => e.name)).toEqual(['Longbow', 'Shortbow']);
+    expect(ec.no_action.find((e) => e.name === 'Arcane Shot')).toBeFalsy();
   });
 
   it('adds Curving Shot as a bonus action only from L7', () => {

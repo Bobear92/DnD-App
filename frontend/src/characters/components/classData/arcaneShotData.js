@@ -94,6 +94,16 @@ export function arcaneShotSaveDcParts(level = 1, intelligenceScore = 10) {
   return { dc: 8 + pb + mod, pb, mod };
 }
 
+/**
+ * True for a weapon Arcane Shot can actually ride on. RAW is narrow: "when you fire an arrow
+ * from a shortbow or longbow" — so a crossbow (hand/light/heavy) does NOT qualify, and neither
+ * does any other ranged weapon. Matched on the weapon NAME so a magic variant ("Longbow +1")
+ * still counts.
+ */
+export function isArcaneShotBow(weaponName) {
+  return /\b(?:short|long)bow\b/i.test(weaponName || '');
+}
+
 /** The full option objects for a list of known names, in the canonical pool order. */
 export function getArcaneShotOptions(names = []) {
   const known = new Set(names.filter(Boolean));

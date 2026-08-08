@@ -25,8 +25,12 @@ import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feat
 import { hasFeat, critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
 import { bondedWeapons } from '@/characters/components/inventory/weaponBondData';
+import { weaponNeedsAmmo } from '@/characters/components/inventory/ammunitionData';
 import { remarkableAthleteMoveNote, eldritchStrikeNote } from '@/characters/components/subclass/subclassCombatNotes';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
+import {
+  isArcaneShotBow, getArcaneShotOptions, arcaneShotSaveDc, arcaneShotImproved,
+} from '@/characters/components/classData/arcaneShotData';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
 const ECONOMY_COST_LABEL = {
@@ -415,6 +419,11 @@ export function buildActionEconomy({
       eldritchStrikeNote: atk.uid ? eldritchStrike : null,
       // Hexblade Hex Warrior — this attack's numbers actually used Charisma.
       hexNote: atk.hexNote || null,
+      // A weapon with the Ammunition property fires from a stack in the inventory. The uid +
+      // flag are all the tab needs to render the shared ammo control (which reads the live
+      // inventory itself) on this attack's card.
+      weaponUid: atk.uid || null,
+      needsAmmo: !!(weapon && weaponNeedsAmmo(weapon)),
     });
   });
 
@@ -680,6 +689,36 @@ export function buildActionEconomy({
     });
   }
 
+  // Arcane Shot (Arcane Archer L3+) attaches to the bow attacks it can actually ride on, so
+  // the option you'd apply is read off the same card as the attack you're making — rather
+  // than a free-floating entry you have to cross-reference mid-combat. RAW limits it to a
+  // shortbow or longbow, so a crossbow-wielding archer gets nothing here (and falls back to
+  // the standalone entry below). The uses are the shared `arcane_shot_used` pool: attaching
+  // `resourceKey` gives every bow card the same Use button, spending from the one pool.
+  const arcaneShotBows = (charClass === 'Fighter' && subclass === 'Arcane Archer' && level >= 3)
+    ? buckets.action.filter((e) => e.source === 'Weapon' && isArcaneShotBow(e.name))
+    : [];
+  const arcaneShotBowKeys = arcaneShotBows.map((e) => e.key);
+  if (arcaneShotBows.length > 0) {
+    const known = characterData.arcane_shot_options || [];
+    const improved = arcaneShotImproved(level);
+    const options = getArcaneShotOptions(known).map((o) => ({
+      name: o.name,
+      description: o.description,
+      improvement: improved ? o.improvement : null,
+    }));
+    for (const entry of arcaneShotBows) {
+      entry.resourceKey = 'arcane_shot_used';
+      entry.arcaneShot = {
+        cost: 'no action',
+        saveDc: arcaneShotSaveDc(level, scores.intelligence),
+        note: `Apply one option to an arrow fired from your ${entry.name} as part of the Attack action — one option per attack. Recharges on a short or long rest.`,
+        options,
+        emptyNote: options.length === 0 ? 'No options chosen yet — pick them at level-up.' : null,
+      };
+    }
+  }
+
   // Subclass features (curated, level-gated by the SUBCLASS_DATA feature tables — the class
   // tables only carry placeholders at subclass levels, so they can't resolve these names).
   const subclassFeatureMap = is2024 ? SUBCLASS_FEATURE_ACTIONS_2024 : SUBCLASS_FEATURE_ACTIONS_5E;
@@ -721,18 +760,20 @@ export function buildActionEconomy({
       });
       continue;
     }
-    // Arcane Shot with options chosen (level-up → arcane_shot_options): name them, so the tab
-    // says which effects are actually available instead of just "apply one of your options".
+    // Arcane Shot rides on an arrow you were firing anyway, so it belongs ON the bow attack
+    // card (attached below), not as a free-floating entry. It only falls back to its own
+    // entry when no shortbow/longbow is equipped — otherwise the feature would vanish from
+    // the tab entirely (same fallback shape as Weapon Bond with nothing bonded).
     if (fname === 'Arcane Shot') {
+      if (arcaneShotBowKeys.length > 0) continue;
       const known = characterData.arcane_shot_options || [];
       push(def.tab, {
         key: `subclass:${fname}`,
         name: fname,
         source: 'Subclass',
         cost: def.cost,
-        detail: known.length > 0
-          ? `${def.description} Options known: ${known.join(', ')}.`
-          : `${def.description} No options chosen yet — pick them at level-up.`,
+        detail: `${def.description}${known.length > 0 ? ` Options known: ${known.join(', ')}.` : ' No options chosen yet — pick them at level-up.'}`
+          + ' Equip a shortbow or longbow to apply it to an attack.',
         resourceKey: def.resourceKey,
       });
       continue;

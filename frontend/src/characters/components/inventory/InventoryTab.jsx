@@ -10,9 +10,9 @@ import { getRaceGrantedWeapons, getRaceGrantedArmor } from '@/characters/compone
 import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
 import { isToolEntry } from '@/characters/components/inventory/toolsData';
 import {
-  isAmmunitionEntry, isAmmoItem, weaponNeedsAmmo, matchingAmmo,
-  resolveWeaponAmmo, setWeaponAmmo, decrementAmmo, setAmmoQuantity,
+  isAmmunitionEntry, isAmmoItem, weaponNeedsAmmo, setAmmoQuantity,
 } from '@/characters/components/inventory/ammunitionData';
+import WeaponAmmoControl from '@/characters/components/inventory/WeaponAmmoControl';
 import WeaponPropertyBadges from '@/characters/components/inventory/WeaponPropertyBadges';
 import { weaponBadges, weaponFacets } from '@/characters/components/inventory/weaponPropertyData';
 import ItemPickerDialog from '@/characters/components/inventory/ItemPickerDialog';
@@ -91,6 +91,7 @@ function ProficiencyBanner({ label, text, grants }) {
 export default function InventoryTab({
   inventory: inventoryProp = [], scores = {}, level = 1, charClass, subclass,
   race, subrace, campaignId, characterData = {}, edition = '5e', readOnly = false, onChange,
+  isGm = false,
 }) {
   const [activeId, setActiveId] = useState(CATEGORIES[0].id);
   // picker = { category (config obj), filter, defaultQty } | null
@@ -197,8 +198,15 @@ export default function InventoryTab({
   const handleEquip = (uid) => push(toggleEquipped(inventory, uid), true); // body armor only
   const handleAssignHand = (slot, uid, twoHanded = false) => push(assignHand(inventory, slot, uid || null, twoHanded), true);
   const handleAttune = (uid) => push(toggleAttuned(inventory, uid));
-  const handleSelectAmmo = (weaponUid, ammoUid) => push(setWeaponAmmo(inventory, weaponUid, ammoUid));
-  const handleUseAmmo = (ammoUid) => push(decrementAmmo(inventory, ammoUid, 1));
+
+  // Stocking weapons + ammunition is a GM action: the party's armoury is the GM's to hand out
+  // and take away. A player still USES what they have — equipping, holding, and spending a
+  // round with the Use Ammunition button — but can't mint or destroy either. Everything else
+  // (armor, gear, potions…) stays player-managed as before.
+  const canStockWeapons = !readOnly && isGm;
+  const isGmOnlyStock = (entry) => entry?.category === 'weapons' || isAmmunitionEntry(entry);
+  const canAddHere = !readOnly && (isGm || activeId !== 'weapons');
+  const canRemove = (entry) => !readOnly && (isGm || !isGmOnlyStock(entry));
 
   const entryProficient = (e) =>
     e.category === 'weapons' ? isWeaponProficient(e, { weaponProfText, raceWeapons })
@@ -206,44 +214,16 @@ export default function InventoryTab({
     : true;
 
   // Inline ammo control rendered under a ranged weapon with the Ammunition property.
-  const renderWeaponAmmo = (weapon) => {
-    const matches = matchingAmmo(inventory, weapon);
-    const sel = resolveWeaponAmmo(inventory, weapon);
-    return (
-      <div className="mt-1 flex items-center gap-2 flex-wrap" data-testid={`weapon-ammo-${weapon.uid}`}>
-        <Target className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        {!sel ? (
-          <span className="text-[11px] italic text-muted-foreground">No matching ammunition — add some below.</span>
-        ) : (
-          <>
-            {matches.length > 1 && !readOnly && (
-              <select
-                value={sel.uid}
-                onChange={(ev) => handleSelectAmmo(weapon.uid, ev.target.value)}
-                className="h-6 rounded border bg-background px-1 text-xs"
-                data-testid={`ammo-select-${weapon.uid}`}
-              >
-                {matches.map((a) => <option key={a.uid} value={a.uid}>{a.name}</option>)}
-              </select>
-            )}
-            <span className="text-xs text-muted-foreground" data-testid={`ammo-count-${weapon.uid}`}>
-              {sel.name}: <span className="font-medium text-foreground tabular-nums">{sel.quantity ?? 0}</span> remaining
-            </span>
-            {!readOnly && (
-              <Button
-                size="sm" variant="outline" className="h-6 px-2 text-xs"
-                onClick={() => handleUseAmmo(sel.uid)}
-                disabled={(sel.quantity ?? 0) <= 0}
-                data-testid={`use-ammo-${weapon.uid}`}
-              >
-                Use Ammunition
-              </Button>
-            )}
-          </>
-        )}
-      </div>
-    );
-  };
+  // The control itself is shared with the Action Economy tab (WeaponAmmoControl) so the two
+  // surfaces can't drift; this tab keeps the unprefixed test ids.
+  const renderWeaponAmmo = (weapon) => (
+    <WeaponAmmoControl
+      weapon={weapon}
+      inventory={inventory}
+      onChange={(next) => push(next)}
+      readOnly={readOnly}
+    />
+  );
 
   // One hand slot (main / off): a select to choose the held weapon/shield (or free), and a
   // status line — shield AC, the weapon's attack, or the free-hand unarmed-strike note.
@@ -489,7 +469,7 @@ export default function InventoryTab({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">{activeId === 'tools' ? 'Tools Carried' : activeCategory.label}</h3>
-          {!readOnly && (
+          {canAddHere && (
             <Button size="sm" variant="outline" onClick={openTabPicker} data-testid="inv-add-btn">
               <Plus className="h-4 w-4 mr-1" /> Add {activeCategory.singular}
             </Button>
@@ -661,7 +641,7 @@ export default function InventoryTab({
                       {e.attuned ? 'Unattune' : 'Attune'}
                     </Button>
                   )}
-                  {!readOnly && (
+                  {canRemove(e) && (
                     <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
                       onClick={() => handleRemove(e)} data-testid={`remove-item-${e.uid}`}>
                       <Trash2 className="h-3.5 w-3.5" />
@@ -685,7 +665,7 @@ export default function InventoryTab({
             <h3 className="text-sm font-semibold flex items-center gap-1.5">
               <Target className="h-4 w-4 text-muted-foreground" /> Ammunition
             </h3>
-            {!readOnly && (
+            {canStockWeapons && (
               <Button size="sm" variant="outline" onClick={openAmmoPicker} data-testid="add-ammo-btn">
                 <Plus className="h-4 w-4 mr-1" /> Add Ammunition
               </Button>
@@ -705,8 +685,10 @@ export default function InventoryTab({
                     <span className="font-medium text-sm">{a.name}</span>
                     <div className="text-xs text-muted-foreground truncate">{a.description || 'Ammunition'}</div>
                   </div>
+                  {/* The ± steppers set the stock, so they're GM-only: for a player a quiver
+                      goes DOWN only by firing (the Use Ammunition button on the weapon). */}
                   <div className="flex items-center gap-1 shrink-0">
-                    {!readOnly && (
+                    {canStockWeapons && (
                       <button className="h-6 w-6 rounded border hover:bg-muted disabled:opacity-40"
                         onClick={() => handleAmmoQty(a.uid, (a.quantity ?? 0) - 1)} disabled={(a.quantity ?? 0) <= 0}
                         aria-label="Decrease ammunition">
@@ -714,14 +696,14 @@ export default function InventoryTab({
                       </button>
                     )}
                     <span className="text-xs text-muted-foreground w-10 text-center tabular-nums" data-testid={`ammo-qty-${a.uid}`}>×{a.quantity ?? 0}</span>
-                    {!readOnly && (
+                    {canStockWeapons && (
                       <button className="h-6 w-6 rounded border hover:bg-muted"
                         onClick={() => handleAmmoQty(a.uid, (a.quantity ?? 0) + 1)} aria-label="Increase ammunition">
                         <Plus className="h-3 w-3 mx-auto" />
                       </button>
                     )}
                   </div>
-                  {!readOnly && (
+                  {canStockWeapons && (
                     <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
                       onClick={() => handleRemove(a)} data-testid={`remove-item-${a.uid}`}>
                       <Trash2 className="h-3.5 w-3.5" />

@@ -9,6 +9,7 @@ import { getRaceGrantedWeapons, getRaceGrantedArmor } from '@/characters/compone
 import { getAttacks, creatureSize, formatSigned, nonProficientEquippedArmor } from '@/characters/components/inventory/inventoryData';
 import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
 import { isHexWarrior, hexWeaponUid as storedHexWeaponUid } from '@/characters/components/inventory/weaponBondData';
+import WeaponAmmoControl from '@/characters/components/inventory/WeaponAmmoControl';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import {
   buildActionEconomy, characterSpellNames, TABS, TAB_LABELS, SOURCE_ORDER,
@@ -55,17 +56,30 @@ function ToHitBreakdown({ toHit, breakdown, entryKey }) {
   );
 }
 
-function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId }) {
+function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, inventory = [], onInventoryChange }) {
   // Great Weapon Master power attack: when a weapon entry carries a `powerAttack` variant,
   // a toggle swaps the displayed to-hit/damage between the normal and −5/+10 numbers.
   const [powerOn, setPowerOn] = useState(false);
   const view = powerOn && entry.powerAttack ? entry.powerAttack : entry;
+  // An attached feature block (Arcane Shot on a bow) owns the resource control itself, inside
+  // the block — so the Use button reads as belonging to that feature, not to the attack.
+  const attached = entry.arcaneShot ? resource : null;
+  const topResource = entry.arcaneShot ? null : resource;
+  // The live inventory entry behind an Ammunition weapon (the ammo control needs the weapon's
+  // stored `ammo_uid`, which only the inventory has).
+  const ammoWeapon = entry.needsAmmo && entry.weaponUid
+    ? inventory.find((e) => e.uid === entry.weaponUid)
+    : null;
   return (
     <div
-      className="flex items-start justify-between gap-3 rounded-md border bg-card px-3 py-2"
-      data-testid={resource ? `ae-resource-${resource.key}` : undefined}
+      className={cn(
+        'flex items-start justify-between gap-3 rounded-md border bg-card px-3',
+        // A card carrying an attached feature block needs room to breathe.
+        entry.arcaneShot ? 'py-3' : 'py-2'
+      )}
+      data-testid={topResource ? `ae-resource-${topResource.key}` : undefined}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm">{entry.name}</span>
           <Badge variant="outline" className="text-[10px] uppercase tracking-wide shrink-0">{entry.cost}</Badge>
@@ -185,10 +199,67 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId }) {
             {entry.greatWeaponMasterNote}
           </p>
         )}
+        {/* Ammunition: a weapon with the Ammunition property fires from a stack in the
+            inventory, so the same control the Items tab uses sits on the attack card —
+            spending a round from where you're actually making the attack. */}
+        {entry.needsAmmo && ammoWeapon && (
+          <WeaponAmmoControl
+            weapon={ammoWeapon}
+            inventory={inventory}
+            onChange={onInventoryChange}
+            readOnly={readOnly || !onInventoryChange}
+            idPrefix="ae-"
+            emptyHint="No matching ammunition — add some in the Items tab."
+            className="mt-1.5"
+          />
+        )}
+        {/* Arcane Shot rides on this bow's attack, so it lives in the attack's own card with
+            its options spelled out — no cross-referencing a separate entry mid-combat. */}
+        {entry.arcaneShot && (
+          <div
+            className="mt-2.5 rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2"
+            data-testid={`ae-arcane-shot-${entry.key}`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold">Arcane Shot</span>
+              <Badge variant="outline" className="text-[10px] uppercase tracking-wide">{entry.arcaneShot.cost}</Badge>
+              <span className="text-[11px] text-muted-foreground">
+                Save DC <span className="font-semibold text-foreground">{entry.arcaneShot.saveDc}</span>
+              </span>
+              {attached && (
+                <span className="ml-auto">
+                  <RestResourceControl
+                    row={attached}
+                    onChange={onChange}
+                    readOnly={readOnly}
+                    isGm={isGm}
+                    idPrefix={`ae-arcane-${entry.key}`}
+                  />
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">{entry.arcaneShot.note}</p>
+            {entry.arcaneShot.emptyNote ? (
+              <p className="text-[11px] text-amber-600 leading-relaxed">{entry.arcaneShot.emptyNote}</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {entry.arcaneShot.options.map((o) => (
+                  <li key={o.name} data-testid={`ae-arcane-shot-option-${o.name}`}>
+                    <span className="text-[11px] font-medium">{o.name}</span>
+                    <span className="text-[11px] text-muted-foreground leading-relaxed"> — {o.description}</span>
+                    {o.improvement && (
+                      <span className="text-[11px] text-emerald-600 leading-relaxed"> {o.improvement}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
       {/* Rest-rechargeable features get the same Use button as the Features tab. */}
-      {resource && (
-        <RestResourceControl row={resource} onChange={onChange} readOnly={readOnly} isGm={isGm} idPrefix="ae-rest" />
+      {topResource && (
+        <RestResourceControl row={topResource} onChange={onChange} readOnly={readOnly} isGm={isGm} idPrefix="ae-rest" />
       )}
     </div>
   );
@@ -267,6 +338,10 @@ export default function ActionEconomyTab({
   const restByKey = {};
   for (const r of restRows) restByKey[r.key] = r;
   const resourceFor = (entry) => (entry.resourceKey ? restByKey[entry.resourceKey] : null) || null;
+
+  // Spending a round of ammunition writes the whole inventory back through the same
+  // character_data save path the Items tab uses, so the two tabs stay in sync.
+  const handleInventoryChange = (next) => onChange?.({ inventory: next });
 
   const entries = economy[active] || [];
   const special = entries.filter((e) => e.source !== 'Universal');
@@ -350,7 +425,11 @@ export default function ActionEconomyTab({
               )}
               <div className="space-y-2">
                 {list.map((e) => (
-                  <ItemRow key={e.key} entry={e} resource={resourceFor(e)} onChange={onChange} readOnly={readOnly} isGm={isGm} campaignId={campaignId} />
+                  <ItemRow
+                    key={e.key} entry={e} resource={resourceFor(e)} onChange={onChange}
+                    readOnly={readOnly} isGm={isGm} campaignId={campaignId}
+                    inventory={inventory} onInventoryChange={onChange ? handleInventoryChange : null}
+                  />
                 ))}
               </div>
             </div>

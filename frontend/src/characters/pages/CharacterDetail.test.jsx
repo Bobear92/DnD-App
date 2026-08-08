@@ -271,6 +271,51 @@ describe('CharacterDetail', () => {
       // 'Greatsword' now appears both in the inventory row and as a Hands-panel option.
       await waitFor(() => expect(screen.getByTestId('inv-row-x1')).toHaveTextContent('Greatsword'));
     });
+
+    // Stocking weapons + ammunition is the GM's job. An owning player never gets those
+    // controls, and Player View takes them away from the GM exactly as it does GM Notes.
+    describe('weapon + ammunition stocking is GM-only', () => {
+      const ARCHER = {
+        ...BASE_CHARACTER,
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          inventory: [
+            { uid: 'x1', category: 'weapons', name: 'Longbow', damage: '1d8', weapon_category: 'Martial', quantity: 1, properties: '["Ammunition"]' },
+            { uid: 'am1', category: 'adventuring-gear', name: 'Arrows', item_category: 'Ammunition', quantity: 20 },
+          ],
+        },
+      };
+
+      it('the owning player sees no add/delete controls but can still spend a round', async () => {
+        characterService.getCharacterById.mockResolvedValue({ success: true, data: ARCHER });
+        renderDetail(); // default mocks: the player who owns this character
+        await waitFor(() => expect(screen.getByTestId('inv-row-x1')).toBeInTheDocument());
+        expect(screen.queryByTestId('inv-add-btn')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('add-ammo-btn')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('remove-item-x1')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('remove-item-am1')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Increase ammunition')).not.toBeInTheDocument();
+        expect(screen.getByTestId('use-ammo-x1')).toBeInTheDocument();
+      });
+
+      it('the GM sees them, and Player View takes them away', async () => {
+        useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm' } });
+        useAuth.mockReturnValue({ user: { id: 1, username: 'gm' } });
+        characterService.getCharacterById.mockResolvedValue({ success: true, data: ARCHER });
+        renderDetail();
+        await waitFor(() => expect(screen.getByTestId('inv-add-btn')).toBeInTheDocument());
+        expect(screen.getByTestId('add-ammo-btn')).toBeInTheDocument();
+        expect(screen.getByTestId('remove-item-x1')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Player View'));
+        await waitFor(() => expect(screen.queryByTestId('inv-add-btn')).not.toBeInTheDocument());
+        expect(screen.queryByTestId('add-ammo-btn')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('remove-item-x1')).not.toBeInTheDocument();
+        // Player View makes a non-owning GM a read-only observer, so there's no Use button
+        // either — but the count stays readable. (The owner keeps Use; see the test above.)
+        expect(screen.getByTestId('ammo-count-x1')).toHaveTextContent('20');
+      });
+    });
   });
 
   it('shows class features earned at or below current level and hides future features', async () => {

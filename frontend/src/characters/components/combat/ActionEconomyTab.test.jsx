@@ -476,4 +476,127 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
     });
     expect(screen.queryByTestId(/^ae-hex-weapon:rp1/)).not.toBeInTheDocument();
   });
+
+  // Ammunition is spent from the card you're attacking from, using the same control (and the
+  // same spend rule) as the Items tab.
+  describe('ammunition on the attack card', () => {
+    const bow = {
+      uid: 'lb1', category: 'weapons', equipped: true, name: 'Longbow',
+      weapon_category: 'Martial', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing',
+      properties: '["Ammunition", "Heavy", "Two-Handed"]', range: '150/600',
+    };
+    const arrows = {
+      uid: 'am1', category: 'adventuring-gear', name: 'Arrows',
+      item_category: 'Ammunition', quantity: 20,
+    };
+    const archer = (props = {}) => renderTab({
+      scores: { strength: 10, dexterity: 18 },
+      inventory: [bow, arrows],
+      onChange: vi.fn(),
+      ...props,
+    });
+
+    it('shows the ammo control on an Ammunition weapon card', () => {
+      archer();
+      expect(screen.getByTestId('ae-ammo-count-lb1')).toHaveTextContent('Arrows: 20 remaining');
+      expect(screen.getByTestId('ae-use-ammo-lb1')).toBeInTheDocument();
+    });
+
+    it('does not show it on a weapon without the Ammunition property', () => {
+      renderTab(); // default inventory is a Longsword
+      expect(screen.queryByTestId(/^ae-weapon-ammo-/)).not.toBeInTheDocument();
+    });
+
+    it('Use Ammunition writes the decremented stack back through onChange', () => {
+      const onChange = vi.fn();
+      archer({ onChange });
+      fireEvent.click(screen.getByTestId('ae-use-ammo-lb1'));
+      expect(onChange).toHaveBeenCalledWith({
+        inventory: [bow, expect.objectContaining({ uid: 'am1', quantity: 19 })],
+      });
+    });
+
+    it('flags an empty quiver on the card and disables the button', () => {
+      archer({ inventory: [bow, { ...arrows, quantity: 0 }] });
+      expect(screen.getByTestId('ae-ammo-out-lb1')).toHaveTextContent(/out of ammunition/i);
+      expect(screen.getByTestId('ae-use-ammo-lb1')).toBeDisabled();
+    });
+
+    it('points at the Items tab when no matching ammunition is carried', () => {
+      archer({ inventory: [bow] });
+      expect(screen.getByTestId('ae-weapon-ammo-lb1')).toHaveTextContent(/add some in the Items tab/i);
+    });
+
+    it('a read-only viewer sees the count but cannot spend', () => {
+      archer({ readOnly: true });
+      expect(screen.getByTestId('ae-ammo-count-lb1')).toBeInTheDocument();
+      expect(screen.queryByTestId('ae-use-ammo-lb1')).not.toBeInTheDocument();
+    });
+  });
+
+  // Arcane Shot is read off the same card as the attack it rides on, so an archer doesn't have
+  // to cross-reference a separate No Action entry mid-combat.
+  describe('Arcane Shot on the bow attack card', () => {
+    const longbowEntry = {
+      uid: 'lb1', category: 'weapons', equipped: true, name: 'Longbow',
+      weapon_category: 'Martial', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing',
+      properties: '["Ammunition", "Heavy", "Two-Handed"]', range: '150/600',
+    };
+    const crossbowEntry = {
+      ...longbowEntry, uid: 'xb1', name: 'Heavy Crossbow',
+      properties: '["Ammunition", "Heavy", "Two-Handed", "Loading"]',
+    };
+    const archer = (props = {}) => renderTab({
+      charClass: 'Fighter', subclass: 'Arcane Archer', level: 7,
+      scores: { strength: 10, dexterity: 18, intelligence: 16 },
+      inventory: [longbowEntry],
+      characterData: {
+        subclass: 'Arcane Archer',
+        arcane_shot_options: ['Bursting Arrow', 'Shadow Arrow'],
+      },
+      ...props,
+    });
+
+    it('renders the block inside the bow attack card, not as its own entry', () => {
+      archer();
+      expect(screen.getByTestId(/^ae-arcane-shot-weapon:lb1/)).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+      expect(screen.queryByText('Arcane Shot')).not.toBeInTheDocument();
+    });
+
+    it('shows the cost, the save DC and every known option with its description', () => {
+      archer();
+      const block = screen.getByTestId(/^ae-arcane-shot-weapon:lb1/);
+      expect(block).toHaveTextContent('Arcane Shot');
+      expect(block).toHaveTextContent('no action');
+      expect(block).toHaveTextContent('14'); // 8 + PB 3 + INT +3
+      expect(screen.getByTestId('ae-arcane-shot-option-Bursting Arrow')).toHaveTextContent(/detonates/i);
+      expect(screen.getByTestId('ae-arcane-shot-option-Shadow Arrow')).toHaveTextContent(/psychic/i);
+    });
+
+    it('spends a use from inside the block', () => {
+      const onChange = vi.fn();
+      archer({ onChange });
+      fireEvent.click(screen.getByRole('button', { name: /Use Arcane Shot/i }));
+      fireEvent.click(screen.getByTestId(/^ae-arcane-weapon:lb1.*-use-confirm-button$/));
+      expect(onChange).toHaveBeenCalledWith({ arcane_shot_used: 1 });
+    });
+
+    it('prompts to pick options when none are chosen', () => {
+      archer({ characterData: { subclass: 'Arcane Archer' } });
+      expect(screen.getByTestId(/^ae-arcane-shot-weapon:lb1/)).toHaveTextContent(/no options chosen yet/i);
+    });
+
+    it('does not attach to a crossbow — that archer keeps the standalone entry', () => {
+      archer({ inventory: [crossbowEntry] });
+      expect(screen.queryByTestId(/^ae-arcane-shot-/)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+      expect(screen.getByText('Arcane Shot')).toBeInTheDocument();
+    });
+
+    it('shows nothing for a Champion holding the same longbow', () => {
+      archer({ subclass: 'Champion', characterData: { subclass: 'Champion' } });
+      expect(screen.queryByTestId(/^ae-arcane-shot-/)).not.toBeInTheDocument();
+    });
+  });
 });

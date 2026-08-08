@@ -1776,6 +1776,7 @@ export default function CharacterDetail() {
                   edition={edition}
                   readOnly={!showEditable}
                   onChange={autoSaveClassPatch}
+                  isGm={isGm && !playerView}
                 />
               )}
             </TabsContent>
