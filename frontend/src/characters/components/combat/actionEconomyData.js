@@ -231,6 +231,15 @@ const isRangedWeapon = (e) =>
       || (e.properties || '').toLowerCase().includes('ammunition')
       || (e.properties || '').toLowerCase().includes('thrown'));
 
+/** A weapon that IS a ranged weapon — the Sharpshooter condition. Deliberately stricter than
+ *  `isRangedWeapon`: RAW Sharpshooter reads "a ranged weapon", and a thrown handaxe is a MELEE
+ *  weapon making a ranged attack, so it does not qualify (a dart does — it's a simple ranged
+ *  weapon that happens to be thrown). Hence the explicit melee exclusion. */
+const isPureRangedWeapon = (e) =>
+  e.category === 'weapons' && !isMelee(e)
+  && ((e.weapon_type || '').toLowerCase() === 'ranged'
+      || (e.properties || '').toLowerCase().includes('ammunition'));
+
 /** A polearm that enables the Polearm Master bonus attack: glaive, halberd, quarterstaff, or spear. */
 const isPolearm = (e) =>
   e.category === 'weapons' && /\b(glaive|halberd|quarterstaff|spear)\b/.test((e.name || '').toLowerCase());
@@ -296,15 +305,18 @@ function addFlatDamage(damage, amount) {
 }
 
 /**
- * Great Weapon Master power attack (5e/2014): take −5 on the attack roll for +10 damage.
- * Given a computed weapon attack row, returns the modified { toHit, toHitBreakdown, damage }.
- * The flat damage modifier is parsed out of the row's damage string and raised by 10.
+ * The −5 attack / +10 damage power attack (5e/2014). TWO feats grant the identical mechanic on
+ * disjoint weapon sets — Great Weapon Master on a Heavy melee weapon, Sharpshooter on a ranged
+ * weapon — so they share one variant builder and one UI toggle, parameterised by `source` (the
+ * feat name, which labels the to-hit breakdown and the button). Given a computed weapon attack
+ * row, returns the modified { toHit, toHitBreakdown, damage }; the flat damage modifier is
+ * parsed out of the row's damage string and raised by 10.
  */
-export function greatWeaponMasterVariant(attackRow = {}) {
+export function powerAttackVariant(attackRow = {}, source = 'Great Weapon Master') {
   const base = parseInt(attackRow.toHit, 10) || 0;
   return {
     toHit: formatSigned(base - 5),
-    toHitBreakdown: [...(attackRow.toHitBreakdown || []), { label: 'Great Weapon Master', value: -5 }],
+    toHitBreakdown: [...(attackRow.toHitBreakdown || []), { label: source, value: -5 }],
     damage: addFlatDamage(attackRow.damage, 10),
   };
 }
@@ -351,6 +363,9 @@ export function buildActionEconomy({
   // Great Weapon Master's −5/+10 power attack is the 2014 mechanic; the 2024 feat replaces it
   // with a flat +PB, so the toggle is 5e-only.
   const gwm = !is2024 && hasFeat(feats, 'Great Weapon Master');
+  // Sharpshooter's −5/+10 is likewise the 2014 mechanic — the 2024 feat replaces it with a flat
+  // +PB on ranged damage, so this toggle is 5e-only too.
+  const sharpshooter = !is2024 && hasFeat(feats, 'Sharpshooter');
   // GWM's crit/kill bonus-attack reminder (both editions) — co-located on melee weapon rows,
   // so it sits next to the power attack rather than off in the Bonus Actions list.
   const gwmBonusNote = greatWeaponMasterNote(feats);
@@ -369,16 +384,24 @@ export function buildActionEconomy({
   weaponRows.forEach((atk, i) => {
     const flag = atk.proficient === false ? ' · not proficient' : '';
     const disadv = atk.disadvantage ? ' · disadvantage' : '';
-    // Power-attack variant: only a proficient Heavy melee weapon qualifies for GWM.
+    // Power-attack variant (−5/+10). Both feats require PROFICIENCY with the weapon, and their
+    // weapon sets are disjoint — Heavy melee for GWM, ranged for Sharpshooter — so a given card
+    // can only ever offer one, and a single `powerAttack` slot suffices for a character with both.
     const weapon = atk.uid ? (inventory || []).find((e) => e.uid === atk.uid) : null;
     let powerAttack = null;
-    if (gwm && weapon && isMelee(weapon) && isHeavyWeapon(weapon) && atk.proficient !== false) {
-      const v = greatWeaponMasterVariant(atk);
-      powerAttack = {
-        toHit: v.toHit,
-        toHitBreakdown: v.toHitBreakdown,
-        detailRest: `to hit · ${v.damage}${flag}${disadv}`,
-      };
+    if (weapon && atk.proficient !== false) {
+      const powerSource = (gwm && isMelee(weapon) && isHeavyWeapon(weapon)) ? 'Great Weapon Master'
+        : (sharpshooter && isPureRangedWeapon(weapon)) ? 'Sharpshooter'
+        : null;
+      if (powerSource) {
+        const v = powerAttackVariant(atk, powerSource);
+        powerAttack = {
+          source: powerSource,
+          toHit: v.toHit,
+          toHitBreakdown: v.toHitBreakdown,
+          detailRest: `to hit · ${v.damage}${flag}${disadv}`,
+        };
+      }
     }
     push('action', {
       key: `weapon:${atk.uid || atk.name}:${i}`,
@@ -403,7 +426,7 @@ export function buildActionEconomy({
       // weapon attacks (not unarmed strikes, which aren't weapons, nor ranged weapons).
       savageAttacksNote: (weapon && isMelee(weapon) && hasSavageAttacks(characterData.race_traits))
         ? SAVAGE_ATTACKS_NOTE : null,
-      // Great Weapon Master power-attack variant (5e), toggled in the UI. Null when N/A.
+      // Great Weapon Master / Sharpshooter −5/+10 variant (5e), toggled in the UI. Null when N/A.
       powerAttack,
       // Great Weapon Master's other benefit (both editions): a crit or kill with a melee
       // weapon grants a bonus melee attack. Shown on melee weapon entries only.

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Swords, Zap, Repeat, ShieldAlert, Sparkles, ArrowUpRight } from 'lucide-react';
+import { Swords, Zap, Repeat, ShieldAlert, Sparkles, ArrowUpRight, ChevronDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
@@ -56,9 +56,82 @@ function ToHitBreakdown({ toHit, breakdown, entryKey }) {
   );
 }
 
+/**
+ * Arcane Shot, rendered inside the card of the bow attack it rides on. The header row —
+ * cost, save DC, and the Use control spending the shared pool — is always visible, because
+ * that is the at-a-glance combat state. The OPTIONS collapse behind a toggle (closed by
+ * default, same shape as the ClassSheet features list): an archer knows up to six, each a
+ * paragraph, and expanding all of them would bury the attack rows below this card.
+ */
+function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, isGm }) {
+  const [open, setOpen] = useState(false);
+  const options = arcaneShot.options || [];
+  return (
+    <div
+      className="mt-2.5 rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2"
+      data-testid={`ae-arcane-shot-${entryKey}`}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold">Arcane Shot</span>
+        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">{arcaneShot.cost}</Badge>
+        <span className="text-[11px] text-muted-foreground">
+          Save DC <span className="font-semibold text-foreground">{arcaneShot.saveDc}</span>
+        </span>
+        {resource && (
+          <span className="ml-auto">
+            <RestResourceControl
+              row={resource}
+              onChange={onChange}
+              readOnly={readOnly}
+              isGm={isGm}
+              idPrefix={`ae-arcane-${entryKey}`}
+            />
+          </span>
+        )}
+      </div>
+      {/* Nothing to hide when no option has been picked yet — show the prompt inline. */}
+      {arcaneShot.emptyNote ? (
+        <p className="text-[11px] text-amber-600 leading-relaxed">{arcaneShot.emptyNote}</p>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            data-testid={`ae-arcane-shot-toggle-${entryKey}`}
+            className="w-full flex items-center gap-2 rounded-md border border-primary/20 bg-background/60 px-2 py-1 text-left"
+          >
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Options</span>
+            <span className="text-[11px] text-muted-foreground">({options.length})</span>
+            <span className="flex-1" />
+            <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', open && 'rotate-180')} />
+          </button>
+          {open && (
+            <>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">{arcaneShot.note}</p>
+              <ul className="space-y-1.5">
+                {options.map((o) => (
+                  <li key={o.name} data-testid={`ae-arcane-shot-option-${o.name}`}>
+                    <span className="text-[11px] font-medium">{o.name}</span>
+                    <span className="text-[11px] text-muted-foreground leading-relaxed"> — {o.description}</span>
+                    {o.improvement && (
+                      <span className="text-[11px] text-emerald-600 leading-relaxed"> {o.improvement}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, inventory = [], onInventoryChange }) {
-  // Great Weapon Master power attack: when a weapon entry carries a `powerAttack` variant,
-  // a toggle swaps the displayed to-hit/damage between the normal and −5/+10 numbers.
+  // Power attack (Great Weapon Master on Heavy melee / Sharpshooter on ranged): when a weapon
+  // entry carries a `powerAttack` variant, a toggle swaps the displayed to-hit/damage between
+  // the normal and −5/+10 numbers. The variant names its own feat, so one control serves both.
   const [powerOn, setPowerOn] = useState(false);
   const view = powerOn && entry.powerAttack ? entry.powerAttack : entry;
   // An attached feature block (Arcane Shot on a bow) owns the resource control itself, inside
@@ -135,9 +208,11 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
                 : 'border-border text-muted-foreground hover:text-foreground'
             )}
             aria-pressed={powerOn}
-            data-testid={`ae-gwm-toggle-${entry.key}`}
+            data-testid={`ae-power-attack-toggle-${entry.key}`}
           >
-            {powerOn ? 'Great Weapon Master: on (−5 hit / +10 dmg)' : 'Use Great Weapon Master (−5 hit / +10 dmg)'}
+            {powerOn
+              ? `${entry.powerAttack.source}: on (−5 hit / +10 dmg)`
+              : `Use ${entry.powerAttack.source} (−5 hit / +10 dmg)`}
           </button>
         )}
         {entry.warning && (
@@ -216,45 +291,14 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
         {/* Arcane Shot rides on this bow's attack, so it lives in the attack's own card with
             its options spelled out — no cross-referencing a separate entry mid-combat. */}
         {entry.arcaneShot && (
-          <div
-            className="mt-2.5 rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2"
-            data-testid={`ae-arcane-shot-${entry.key}`}
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold">Arcane Shot</span>
-              <Badge variant="outline" className="text-[10px] uppercase tracking-wide">{entry.arcaneShot.cost}</Badge>
-              <span className="text-[11px] text-muted-foreground">
-                Save DC <span className="font-semibold text-foreground">{entry.arcaneShot.saveDc}</span>
-              </span>
-              {attached && (
-                <span className="ml-auto">
-                  <RestResourceControl
-                    row={attached}
-                    onChange={onChange}
-                    readOnly={readOnly}
-                    isGm={isGm}
-                    idPrefix={`ae-arcane-${entry.key}`}
-                  />
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">{entry.arcaneShot.note}</p>
-            {entry.arcaneShot.emptyNote ? (
-              <p className="text-[11px] text-amber-600 leading-relaxed">{entry.arcaneShot.emptyNote}</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {entry.arcaneShot.options.map((o) => (
-                  <li key={o.name} data-testid={`ae-arcane-shot-option-${o.name}`}>
-                    <span className="text-[11px] font-medium">{o.name}</span>
-                    <span className="text-[11px] text-muted-foreground leading-relaxed"> — {o.description}</span>
-                    {o.improvement && (
-                      <span className="text-[11px] text-emerald-600 leading-relaxed"> {o.improvement}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <ArcaneShotBlock
+            arcaneShot={entry.arcaneShot}
+            entryKey={entry.key}
+            resource={attached}
+            onChange={onChange}
+            readOnly={readOnly}
+            isGm={isGm}
+          />
         )}
       </div>
       {/* Rest-rechargeable features get the same Use button as the Features tab. */}

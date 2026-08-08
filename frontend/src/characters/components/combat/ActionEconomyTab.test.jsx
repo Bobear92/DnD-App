@@ -341,7 +341,8 @@ describe('ActionEconomyTab', () => {
     renderTab({ inventory: [greatswordEntry], scores: { strength: 16 }, characterData: { feats: [{ name: 'Great Weapon Master' }] } });
     expect(screen.getByTestId('ae-tohit-weapon:gs1:0')).toHaveTextContent('+6');
     expect(screen.getByText(/2d6 \+ 3 Slashing/)).toBeInTheDocument();
-    const toggle = screen.getByTestId('ae-gwm-toggle-weapon:gs1:0');
+    const toggle = screen.getByTestId('ae-power-attack-toggle-weapon:gs1:0');
+    expect(toggle).toHaveTextContent(/Use Great Weapon Master/);
     fireEvent.click(toggle);
     expect(screen.getByTestId('ae-tohit-weapon:gs1:0')).toHaveTextContent('+1');
     expect(screen.getByText(/2d6 \+ 13 Slashing/)).toBeInTheDocument();
@@ -352,7 +353,82 @@ describe('ActionEconomyTab', () => {
 
   it('shows no Great Weapon Master toggle without the feat', () => {
     renderTab({ inventory: [greatswordEntry], scores: { strength: 16 } });
-    expect(screen.queryByTestId('ae-gwm-toggle-weapon:gs1:0')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ae-power-attack-toggle-weapon:gs1:0')).not.toBeInTheDocument();
+  });
+
+  // Sharpshooter grants the identical −5/+10 mechanic on a disjoint weapon set, so it rides the
+  // same control rather than a parallel one.
+  describe('Sharpshooter power attack', () => {
+    const longbowEntry = {
+      uid: 'lb1', category: 'weapons', equipped: true, name: 'Longbow',
+      weapon_category: 'Martial', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing',
+      properties: '["Ammunition", "Heavy", "Two-Handed"]', range: '150/600',
+    };
+    const handaxeEntry = {
+      uid: 'ha1', category: 'weapons', equipped: true, name: 'Handaxe',
+      weapon_category: 'Simple', weapon_type: 'Melee', damage: '1d6', damage_type: 'Slashing',
+      properties: '["Light", "Thrown"]', range: '20/60',
+    };
+    const archer = (props = {}) => renderTab({
+      inventory: [longbowEntry],
+      scores: { strength: 10, dexterity: 16 },
+      characterData: { feats: [{ name: 'Sharpshooter' }] },
+      ...props,
+    });
+
+    it('swaps a ranged weapon to −5/+10', () => {
+      // Fighter L5 (PB +3), DEX 16 (+3), proficient Longbow: +6 to hit, 1d8 + 3 damage.
+      archer();
+      expect(screen.getByTestId('ae-tohit-weapon:lb1:0')).toHaveTextContent('+6');
+      const toggle = screen.getByTestId('ae-power-attack-toggle-weapon:lb1:0');
+      expect(toggle).toHaveTextContent(/Use Sharpshooter/);
+      fireEvent.click(toggle);
+      expect(screen.getByTestId('ae-tohit-weapon:lb1:0')).toHaveTextContent('+1');
+      expect(screen.getByText(/1d8 \+ 13 Piercing/)).toBeInTheDocument();
+      fireEvent.click(toggle);
+      expect(screen.getByTestId('ae-tohit-weapon:lb1:0')).toHaveTextContent('+6');
+    });
+
+    it('names Sharpshooter in the to-hit breakdown', () => {
+      archer();
+      fireEvent.click(screen.getByTestId('ae-power-attack-toggle-weapon:lb1:0'));
+      fireEvent.click(screen.getByTestId('ae-tohit-weapon:lb1:0'));
+      expect(screen.getByTestId('ae-tohit-breakdown-weapon:lb1:0')).toHaveTextContent('-5 Sharpshooter');
+    });
+
+    it('shows no toggle without the feat', () => {
+      archer({ characterData: {} });
+      expect(screen.queryByTestId('ae-power-attack-toggle-weapon:lb1:0')).not.toBeInTheDocument();
+    });
+
+    // RAW: "a ranged weapon". A thrown handaxe is a MELEE weapon making a ranged attack.
+    it('does not offer it on a thrown melee weapon', () => {
+      archer({ inventory: [handaxeEntry] });
+      expect(screen.queryByTestId('ae-power-attack-toggle-weapon:ha1:0')).not.toBeInTheDocument();
+    });
+
+    it('does not offer it on a ranged weapon the character is not proficient with', () => {
+      // A Wizard is not proficient with a martial Longbow.
+      archer({ charClass: 'Wizard' });
+      expect(screen.queryByTestId('ae-power-attack-toggle-weapon:lb1:0')).not.toBeInTheDocument();
+    });
+
+    // The 2024 feat replaces −5/+10 with a flat +PB, so the toggle must not appear there.
+    it('does not offer it in a 2024 campaign', () => {
+      archer({ edition: '5.5e' });
+      expect(screen.queryByTestId('ae-power-attack-toggle-weapon:lb1:0')).not.toBeInTheDocument();
+    });
+
+    // Disjoint weapon sets: a character with both feats gets the right one on each card.
+    it('gives each weapon the feat that actually applies to it', () => {
+      renderTab({
+        inventory: [greatswordEntry, longbowEntry],
+        scores: { strength: 16, dexterity: 16 },
+        characterData: { feats: [{ name: 'Great Weapon Master' }, { name: 'Sharpshooter' }] },
+      });
+      expect(screen.getByTestId('ae-power-attack-toggle-weapon:gs1:0')).toHaveTextContent(/Great Weapon Master/);
+      expect(screen.getByTestId('ae-power-attack-toggle-weapon:lb1:1')).toHaveTextContent(/Sharpshooter/);
+    });
   });
 
   it('shows the GWM crit/kill bonus-attack note on the melee weapon entry AND as a standalone Bonus entry', () => {
@@ -564,14 +640,37 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
       expect(screen.queryByText('Arcane Shot')).not.toBeInTheDocument();
     });
 
-    it('shows the cost, the save DC and every known option with its description', () => {
+    it('shows the cost and the save DC without expanding anything', () => {
       archer();
       const block = screen.getByTestId(/^ae-arcane-shot-weapon:lb1/);
       expect(block).toHaveTextContent('Arcane Shot');
       expect(block).toHaveTextContent('no action');
       expect(block).toHaveTextContent('14'); // 8 + PB 3 + INT +3
+    });
+
+    // An archer knows up to six options, each a paragraph — expanded by default they would
+    // bury every attack row below this card.
+    it('collapses the options behind a toggle showing how many are known', () => {
+      archer();
+      const toggle = screen.getByTestId(/^ae-arcane-shot-toggle-weapon:lb1/);
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(toggle).toHaveTextContent('(2)');
+      expect(screen.queryByTestId('ae-arcane-shot-option-Bursting Arrow')).not.toBeInTheDocument();
+    });
+
+    it('reveals every known option with its description when expanded', () => {
+      archer();
+      fireEvent.click(screen.getByTestId(/^ae-arcane-shot-toggle-weapon:lb1/));
+      expect(screen.getByTestId(/^ae-arcane-shot-toggle-weapon:lb1/)).toHaveAttribute('aria-expanded', 'true');
       expect(screen.getByTestId('ae-arcane-shot-option-Bursting Arrow')).toHaveTextContent(/detonates/i);
       expect(screen.getByTestId('ae-arcane-shot-option-Shadow Arrow')).toHaveTextContent(/psychic/i);
+    });
+
+    it('collapses again on a second click', () => {
+      archer();
+      fireEvent.click(screen.getByTestId(/^ae-arcane-shot-toggle-weapon:lb1/));
+      fireEvent.click(screen.getByTestId(/^ae-arcane-shot-toggle-weapon:lb1/));
+      expect(screen.queryByTestId('ae-arcane-shot-option-Bursting Arrow')).not.toBeInTheDocument();
     });
 
     it('spends a use from inside the block', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   classifyCastingTime, characterSpellNames, attacksPerAction, canTwoWeaponFight,
-  normalizeFeatureName, featuresKnownAtLevel, buildActionEconomy, greatWeaponMasterVariant,
+  normalizeFeatureName, featuresKnownAtLevel, buildActionEconomy, powerAttackVariant,
   subclassFeaturesKnownAtLevel,
 } from '@/characters/components/combat/actionEconomyData';
 
@@ -46,18 +46,25 @@ describe('attacksPerAction', () => {
   });
 });
 
-describe('greatWeaponMasterVariant', () => {
+describe('powerAttackVariant', () => {
   it('subtracts 5 from to-hit and adds 10 to the flat damage modifier', () => {
-    const v = greatWeaponMasterVariant({ toHit: '+6', toHitBreakdown: [{ label: 'STR', value: 3 }, { label: 'Proficiency', value: 2 }], damage: '2d6 + 3 slashing' });
+    const v = powerAttackVariant({ toHit: '+6', toHitBreakdown: [{ label: 'STR', value: 3 }, { label: 'Proficiency', value: 2 }], damage: '2d6 + 3 slashing' });
     expect(v.toHit).toBe('+1');
     expect(v.damage).toBe('2d6 + 13 slashing');
     expect(v.toHitBreakdown).toContainEqual({ label: 'Great Weapon Master', value: -5 });
   });
   it('adds +10 when the weapon has no existing flat modifier', () => {
-    expect(greatWeaponMasterVariant({ toHit: '+4', damage: '1d12 slashing' }).damage).toBe('1d12 + 10 slashing');
+    expect(powerAttackVariant({ toHit: '+4', damage: '1d12 slashing' }).damage).toBe('1d12 + 10 slashing');
   });
   it('folds a negative existing modifier into the +10', () => {
-    expect(greatWeaponMasterVariant({ toHit: '+0', damage: '2d6 - 1 bludgeoning' }).damage).toBe('2d6 + 9 bludgeoning');
+    expect(powerAttackVariant({ toHit: '+0', damage: '2d6 - 1 bludgeoning' }).damage).toBe('2d6 + 9 bludgeoning');
+  });
+  // The same mechanic serves Sharpshooter, which only differs by the label on the breakdown.
+  it('labels the breakdown with the feat that granted it', () => {
+    const v = powerAttackVariant({ toHit: '+8', toHitBreakdown: [{ label: 'DEX', value: 4 }], damage: '1d8 + 4 piercing' }, 'Sharpshooter');
+    expect(v.toHit).toBe('+3');
+    expect(v.damage).toBe('1d8 + 14 piercing');
+    expect(v.toHitBreakdown).toContainEqual({ label: 'Sharpshooter', value: -5 });
   });
 });
 
