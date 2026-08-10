@@ -2,7 +2,9 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import RacialResourceTracker from '@/characters/components/race/RacialResourceTracker';
-import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
+import {
+  getRacialRestResources, getRacialSpellResources,
+} from '@/characters/components/race/racialRestResources';
 
 describe('getRacialRestResources', () => {
   it('returns nothing for a race with no rest-gated traits', () => {
@@ -28,6 +30,54 @@ describe('getRacialRestResources', () => {
       'infernal_hellish_rebuke_used',
       'infernal_darkness_used',
     ]);
+  });
+});
+
+describe('getRacialSpellResources', () => {
+  it('returns nothing for traits that grant no spells', () => {
+    // Breath Weapon and Relentless Endurance are rest resources but not spells.
+    expect(getRacialSpellResources(['Breath Weapon', 'Relentless Endurance'], 20)).toEqual([]);
+  });
+
+  it('gives a Tiefling Hellish Rebuke at level 3, not before', () => {
+    expect(getRacialSpellResources(['Infernal Legacy'], 2)).toEqual([]);
+    expect(getRacialSpellResources(['Infernal Legacy'], 3)).toEqual([
+      {
+        name: 'Hellish Rebuke',
+        level: 2,
+        resourceKey: 'infernal_hellish_rebuke_used',
+        label: 'Hellish Rebuke (2nd-level)',
+        note: 'Infernal Legacy',
+        recharge: 'long',
+        max: 1,
+      },
+    ]);
+  });
+
+  it('adds Darkness at level 5', () => {
+    const spells = getRacialSpellResources(['Infernal Legacy'], 5);
+    expect(spells.map(s => s.name)).toEqual(['Hellish Rebuke', 'Darkness']);
+    expect(spells.map(s => s.level)).toEqual([2, 2]);
+  });
+
+  it('uses the catalog spell name, not the tracker label', () => {
+    // The label reads "Hellish Rebuke (2nd-level)" — that would never match the encyclopedia.
+    const [rebuke] = getRacialSpellResources(['Infernal Legacy'], 3);
+    expect(rebuke.name).toBe('Hellish Rebuke');
+    expect(rebuke.name).not.toBe(rebuke.label);
+  });
+
+  it('gives Drow Magic Faerie Fire at 3 and Darkness at 5', () => {
+    expect(getRacialSpellResources(['Drow Magic'], 3).map(s => [s.name, s.level]))
+      .toEqual([['Faerie Fire', 1]]);
+    expect(getRacialSpellResources(['Drow Magic'], 5).map(s => [s.name, s.level]))
+      .toEqual([['Faerie Fire', 1], ['Darkness', 2]]);
+  });
+
+  it('dedupes a spell granted at the same level by two traits', () => {
+    // Both Drow Magic and Infernal Legacy grant Darkness at 2nd level.
+    const spells = getRacialSpellResources(['Drow Magic', 'Infernal Legacy'], 5);
+    expect(spells.filter(s => s.name === 'Darkness')).toHaveLength(1);
   });
 });
 

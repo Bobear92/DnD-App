@@ -1118,6 +1118,72 @@ describe('CharacterDetail', () => {
       expect(screen.getByTestId('subclass-cantrips')).toHaveTextContent('Druidcraft');
     });
 
+    // Infernal Legacy grants a leveled spell (Hellish Rebuke at 3, Darkness at 5) on top of the
+    // Thaumaturgy cantrip. Racial spells used to be modelled as cantrips only, so the leveled ones
+    // existed purely as a use-counter on the Stats tab and never reached the Spells tab.
+    it('shows a leveled racial spell for a level-4 Tiefling, not just the cantrip', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Tiefling',
+          level: 4,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_traits: ['Darkvision', 'Hellish Resistance', 'Infernal Legacy'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      const racial = await screen.findByTestId('racial-spells');
+      expect(racial).toHaveTextContent('Thaumaturgy');
+      expect(racial).toHaveTextContent('Hellish Rebuke');
+      // Darkness is a level-5 grant — not yet.
+      expect(racial).not.toHaveTextContent('Darkness');
+      // The once-per-long-rest use is spendable from the Spells tab too.
+      expect(screen.getAllByTestId('racial-resource-infernal_hellish_rebuke_used').length)
+        .toBeGreaterThan(0);
+    });
+
+    it('adds the level-5 racial spell once the Tiefling reaches it', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Tiefling',
+          level: 5,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_traits: ['Infernal Legacy'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      const racial = await screen.findByTestId('racial-spells');
+      expect(racial).toHaveTextContent('Hellish Rebuke');
+      expect(racial).toHaveTextContent('Darkness');
+    });
+
+    it('gives a non-caster Tiefling the Spells tab from the leveled grant alone', async () => {
+      // A Tiefling always has Thaumaturgy, so isolate the leveled path with a race that only has
+      // the trait: the tab must appear on the strength of Hellish Rebuke by itself.
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Half-Elf',
+          level: 4,
+          character_data: { ...BASE_CHARACTER.character_data, race_traits: ['Drow Magic'] },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
+      expect(await screen.findByTestId('racial-spells')).toHaveTextContent('Faerie Fire');
+    });
+
     it('does NOT show the Spells tab for an Arcane Archer who has not picked the cantrip yet', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,

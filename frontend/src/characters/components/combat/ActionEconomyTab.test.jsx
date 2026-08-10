@@ -92,6 +92,47 @@ describe('ActionEconomyTab', () => {
     expect(onChange).toHaveBeenCalledWith({ action_surge_used: 1 });
   });
 
+  // Breath Weapon's counter lives in the RACIAL rest-resource table, not any class config —
+  // the tab used to build its resource index from the class config alone, so a racial
+  // resourceKey resolved to nothing and the card had no Use button.
+  describe('Dragonborn Breath Weapon', () => {
+    const dragonborn = (extra = {}) => ({
+      race_traits: ['Breath Weapon'],
+      draconic_ancestry: { name: 'Red', damage: 'Fire', breath: '15 ft cone' },
+      ...extra,
+    });
+
+    it('lists it under Actions with its computed damage, DC and area', () => {
+      renderTab({ level: 6, characterData: dragonborn(), scores: { strength: 16, constitution: 16 } });
+      expect(screen.getByText('Breath Weapon')).toBeInTheDocument();
+      expect(screen.getByText(/3d6 fire damage/)).toBeInTheDocument();
+      expect(screen.getByText(/DC 14 DEX save/)).toBeInTheDocument();
+      expect(screen.getByText(/15 ft cone/)).toBeInTheDocument();
+    });
+
+    it('shows a Use button that persists the racial counter', () => {
+      const onChange = vi.fn();
+      renderTab({ characterData: dragonborn(), scores: { strength: 16, constitution: 16 }, onChange });
+      fireEvent.click(screen.getByRole('button', { name: /Use Breath Weapon/i }));
+      fireEvent.click(screen.getByTestId('ae-rest-use-confirm-button'));
+      expect(onChange).toHaveBeenCalledWith({ breath_weapon_used: 1 });
+    });
+
+    it('disables the Use button once it has been spent', () => {
+      renderTab({
+        characterData: dragonborn({ breath_weapon_used: 1 }),
+        scores: { strength: 16, constitution: 16 },
+        onChange: vi.fn(),
+      });
+      expect(screen.getByRole('button', { name: /Use Breath Weapon/i })).toBeDisabled();
+    });
+
+    it('is absent for a character without the trait', () => {
+      renderTab();
+      expect(screen.queryByText('Breath Weapon')).not.toBeInTheDocument();
+    });
+  });
+
   it('disables the Use button when the resource is exhausted', () => {
     renderTab({ characterData: { second_wind_used: 1 }, onChange: vi.fn() });
     fireEvent.click(screen.getByTestId('ae-subtab-bonus'));

@@ -24,6 +24,9 @@ const levelLabel = (l) => (l === 0 ? 'Cantrips' : (ORD[l] ?? `Level ${l}`));
  *   classCantrips       string[]  class cantrip names (for level 0 + level detection)
  *   classLeveledNames   string[]  class leveled spell names (their level is read from the catalog)
  *   racialCantrips      string[]  race-granted cantrip names
+ *   racialLeveled       [{name, level}]  race-granted leveled spells (Infernal Legacy's Hellish
+ *                       Rebuke …); level is the level the trait casts it AT, known from the trait
+ *   racialTrackers      node      the racial once-per-rest use trackers (shown under Racial)
  *   featCantrips        string[]  feat-granted cantrip names
  *   featLeveled         [{name, level}]  feat-granted leveled spells (level known from the feat)
  *   featTrackers        node      the feat free-cast / ritual trackers (shown under the Feats source)
@@ -37,6 +40,8 @@ export default function SpellSourceLevelView({
   classCantrips = [],
   classLeveledNames = [],
   racialCantrips = [],
+  racialLeveled = [],
+  racialTrackers = null,
   featCantrips = [],
   featLeveled = [],
   featTrackers = null,
@@ -60,11 +65,13 @@ export default function SpellSourceLevelView({
   catalog.forEach((s) => { levelMap[s.name] = s.level; });
   const classLeveledLevels = classLeveledNames.map((n) => levelMap[n]).filter((l) => l > 0);
   const featLeveledLevels = featLeveled.map((f) => f.level).filter((l) => l > 0);
+  const racialLeveledLevels = racialLeveled.map((r) => r.level).filter((l) => l > 0);
   const anyCantrips = classCantrips.length + racialCantrips.length + featCantrips.length > 0;
   const presentLevels = [...new Set([
     ...(anyCantrips ? [0] : []),
     ...classLeveledLevels,
     ...featLeveledLevels,
+    ...racialLeveledLevels,
   ])].sort((a, b) => a - b);
   const useTabs = catalog.length > 0 && presentLevels.length > 1;
   const activeLvl = useTabs
@@ -73,10 +80,12 @@ export default function SpellSourceLevelView({
   const atLevel = (names) => (useTabs ? names.filter((n) => levelMap[n] === activeLvl) : names);
   const levelCount = (l) => (l === 0
     ? classCantrips.length + racialCantrips.length + featCantrips.length
-    : classLeveledNames.filter((n) => levelMap[n] === l).length + featLeveled.filter((f) => f.level === l).length);
+    : classLeveledNames.filter((n) => levelMap[n] === l).length
+      + featLeveled.filter((f) => f.level === l).length
+      + racialLeveled.filter((r) => r.level === l).length);
 
   const classAt = (l) => (l === 0 ? classCantrips.length > 0 : classLeveledNames.some((n) => levelMap[n] === l));
-  const racialAt = (l) => l === 0 && racialCantrips.length > 0;
+  const racialAt = (l) => (l === 0 ? racialCantrips.length > 0 : racialLeveled.some((r) => r.level === l));
   const featAt = (l) => (l === 0 ? featCantrips.length > 0 : featLeveled.some((f) => f.level === l));
   const sourcesAt = (l) => [
     classAt(l) && { key: 'class', label: 'Class' },
@@ -84,14 +93,27 @@ export default function SpellSourceLevelView({
     featAt(l) && { key: 'feats', label: 'Feats' },
   ].filter(Boolean);
 
-  const racialNode = racialCantrips.length > 0 ? (
-    <div className="rounded-lg border bg-card p-3 space-y-2" data-testid="spell-source-racial-content">
-      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Race-Granted Cantrips</div>
-      <SpellList spells={racialCantrips} readOnly label="" isCantrips levelTabs={false}
-        characterLevel={characterLevel} spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus} />
-      <p className="text-xs text-muted-foreground">Always known. No spell slot required.</p>
-    </div>
-  ) : null;
+  // l == null → flat view (every racial spell at once); else the racial spells at that level.
+  const racialNode = (l) => {
+    const names = l == null
+      ? [...racialCantrips, ...racialLeveled.map((r) => r.name)]
+      : (l === 0 ? racialCantrips : racialLeveled.filter((r) => r.level === l).map((r) => r.name));
+    if (names.length === 0 && !(racialTrackers && l !== 0)) return null;
+    return (
+      <div className="rounded-lg border bg-card p-3 space-y-2" data-testid="spell-source-racial-content">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Race-Granted Spells</div>
+        {names.length > 0 && (
+          <SpellList spells={names} readOnly label="" isCantrips={l === 0} hideLevelHeadings levelTabs={false}
+            characterLevel={l === 0 ? characterLevel : undefined}
+            spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus} />
+        )}
+        {l === 0 && racialCantrips.length > 0 && (
+          <p className="text-xs text-muted-foreground">Always known. No spell slot required.</p>
+        )}
+        {l !== 0 && racialTrackers}
+      </div>
+    );
+  };
   // l == null → flat view (all feat spells at once); else the feat spells at that level.
   const featsNode = (l) => {
     const names = l == null
@@ -114,7 +136,7 @@ export default function SpellSourceLevelView({
     return (
       <>
         {renderClass?.(null, { atLevel: (n) => n, levelMap })}
-        {racialNode}
+        {racialNode(null)}
         {(featCantrips.length + featLeveled.length > 0 || featTrackers) && featsNode(null)}
       </>
     );
@@ -157,7 +179,7 @@ export default function SpellSourceLevelView({
         </div>
       )}
       {activeKey === 'class' && renderClass?.(activeLvl, { atLevel, levelMap })}
-      {activeKey === 'racial' && racialNode}
+      {activeKey === 'racial' && racialNode(activeLvl)}
       {activeKey === 'feats' && featsNode(activeLvl)}
     </>
   );

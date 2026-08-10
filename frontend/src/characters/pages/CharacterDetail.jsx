@@ -43,7 +43,7 @@ import { draconicLabel } from '@/characters/components/subclass/draconicData';
 import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
 import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
-import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
+import { getRacialRestResources, getRacialSpellResources } from '@/characters/components/race/racialRestResources';
 import { hasRelentlessEndurance, RELENTLESS_ENDURANCE_NOTE } from '@/characters/components/race/raceCombatNotes';
 import { computeRaceGrantedCantrips } from '@/characters/components/race/raceCantrips';
 import { survivorNote, heroicWarriorNote } from '@/characters/components/subclass/subclassCombatNotes';
@@ -545,6 +545,12 @@ export default function CharacterDetail() {
   const ClassSheet = (edition === '5.5e' ? CLASS_SHEETS_2024 : CLASS_SHEETS_5E)[character.char_class];
 
   const raceGrantedCantrips = computeRaceGrantedCantrips(character);
+  // Leveled racial spells (Infernal Legacy's Hellish Rebuke, Drow Magic's Faerie Fire …) — each is
+  // a once-per-rest use, so it comes from the same table that drives the Racial Features tracker.
+  const raceGrantedLeveled = getRacialSpellResources(
+    character.character_data?.race_traits ?? [],
+    identity.draft?.level ?? character.level,
+  );
   const featGrantedSpells = getFeatGrantedSpells(character.character_data?.feats);
   const hasFeatSpells = featGrantedSpells.cantrips.length + featGrantedSpells.leveled.length + featGrantedSpells.ritualBooks.length > 0;
   // Class-source spellcasting: a spellcasting class, or a caster SUBCLASS (Eldritch Knight
@@ -559,7 +565,8 @@ export default function CharacterDetail() {
   // mechanism, shown as their own Spells-tab source the way race-granted cantrips are.
   const subclassCantrips = (classSection.draft ?? character.character_data)?.subclass_cantrips ?? [];
   const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || subclassCaster
-    || raceGrantedCantrips.length > 0 || subclassCantrips.length > 0 || hasFeatSpells;
+    || raceGrantedCantrips.length > 0 || raceGrantedLeveled.length > 0
+    || subclassCantrips.length > 0 || hasFeatSpells;
   const tabCount = hasSpells ? 6 : 5;
 
   const calendarEras = calendar?.eras ?? [];
@@ -1844,13 +1851,26 @@ export default function CharacterDetail() {
                       showSpellTabs={false}
                     />
                   ) : null;
+                  // The once-per-rest uses for leveled racial spells, shown under the Racial source
+                  // in whichever layout applies (folded strip or top-level toggle).
+                  const racialTrackersNode = raceGrantedLeveled.length > 0 && classSection.draft !== null ? (
+                    <RacialResourceTracker
+                      traits={character?.character_data?.race_traits ?? []}
+                      level={identity.draft?.level ?? character.level}
+                      data={classSection.draft}
+                      onChange={autoSaveClassPatch}
+                      readOnly={!showEditable}
+                      includeKeys={raceGrantedLeveled.map(s => s.resourceKey)}
+                    />
+                  ) : null;
                   const sources = [
                     isCaster && { key: 'class', label: 'Class' },
                     // Subclass-granted cantrips (Arcane Archer Lore) have no fold path into the
                     // shared level strip, so they always get their own source rather than
                     // silently disappearing on a caster that folds.
                     subclassCantrips.length > 0 && { key: 'subclass', label: 'Subclass' },
-                    !foldSources && raceGrantedCantrips.length > 0 && { key: 'racial', label: 'Racial' },
+                    !foldSources && (raceGrantedCantrips.length > 0 || raceGrantedLeveled.length > 0)
+                      && { key: 'racial', label: 'Racial' },
                     !foldSources && hasFeat && { key: 'feats', label: 'Feats' },
                   ].filter(Boolean);
                   const active = sources.some(s => s.key === spellSource) ? spellSource : sources[0]?.key;
@@ -1892,6 +1912,8 @@ export default function CharacterDetail() {
                             campaignId={campaignId}
                             isGm={isGm && !playerView}
                             raceGrantedCantrips={foldSources ? raceGrantedCantrips : []}
+                            raceGrantedLeveled={foldSources ? raceGrantedLeveled : []}
+                            racialTrackers={foldSources ? racialTrackersNode : null}
                             featSpells={foldSources ? { cantrips: fg.cantrips.map((c) => c.name), leveled: fg.leveled } : null}
                             featTrackers={foldSources ? featTrackersNode : null}
                           />
@@ -1912,13 +1934,26 @@ export default function CharacterDetail() {
                       )}
 
                       {active === 'racial' && (
-                        <div className="rounded-lg border bg-card p-4 space-y-2">
-                          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Race-Granted Cantrips</div>
+                        <div className="rounded-lg border bg-card p-4 space-y-3" data-testid="racial-spells">
+                          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            Race-Granted Spells
+                          </div>
                           <SpellLevelTabs
-                            spells={raceGrantedCantrips.map(name => ({ name, level: 0 }))}
+                            spells={[
+                              ...raceGrantedCantrips.map(name => ({ name, level: 0 })),
+                              ...raceGrantedLeveled.map(s => ({ name: s.name, level: s.level })),
+                            ]}
                             testIdPrefix="racial-spell-tab"
                           />
-                          <p className="text-xs text-muted-foreground">Always known. No spell slot required.</p>
+                          {raceGrantedCantrips.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Cantrips are always known and need no spell slot.
+                            </p>
+                          )}
+                          {/* The once-per-rest uses for the leveled spells. Same widget and same
+                              character_data keys as the Stats-tab Racial Features card, so spending
+                              a use here and there can't drift apart. */}
+                          {racialTrackersNode}
                         </div>
                       )}
 

@@ -431,6 +431,57 @@ describe('buildActionEconomy — Fighter', () => {
     expect(buildActionEconomy(args).action.map((e) => e.name)).toContain('Breath Weapon');
   });
 
+  describe('Breath Weapon', () => {
+    // The trait's damage, save DC, shape and damage type all vary by level + chosen ancestry.
+    // A static description showed a level-1 card to a level-16 Dragonborn.
+    const dragonbornArgs = (level, ancestry, con = 16) => {
+      const args = fighterArgs(level, '5e');
+      args.characterData = { race_traits: ['Breath Weapon'], draconic_ancestry: ancestry };
+      args.scores = { strength: 16, constitution: con };
+      return args;
+    };
+    const breathOf = (args) => buildActionEconomy(args).action.find((e) => e.name === 'Breath Weapon');
+
+    it('computes damage, save DC and area from the level + ancestry', () => {
+      const entry = breathOf(dragonbornArgs(6, { name: 'Red', damage: 'Fire', breath: '15 ft cone' }));
+      expect(entry.detail).toContain('3d6 fire damage'); // scaled at 6th
+      expect(entry.detail).toContain('DC 14 DEX save');  // 8 + PB 3 + CON 3
+      expect(entry.detail).toContain('15 ft cone');
+      expect(entry.detail).toContain('Recharges on a short or long rest.');
+    });
+
+    it('scales the damage with level rather than showing a fixed string', () => {
+      const red = { name: 'Red', damage: 'Fire', breath: '15 ft cone' };
+      expect(breathOf(dragonbornArgs(1, red)).detail).toContain('2d6');
+      expect(breathOf(dragonbornArgs(11, red)).detail).toContain('4d6');
+      expect(breathOf(dragonbornArgs(16, red)).detail).toContain('5d6');
+    });
+
+    it('uses a CON save for a cold-breathing ancestry', () => {
+      const entry = breathOf(dragonbornArgs(1, { name: 'White', damage: 'Cold', breath: '15 ft cone' }, 14));
+      expect(entry.detail).toContain('DC 12 CON save');
+      expect(entry.detail).toContain('2d6 cold damage');
+    });
+
+    it('carries the racial resource key so the card gets a Use button', () => {
+      const entry = breathOf(dragonbornArgs(5, { name: 'Blue', damage: 'Lightning', breath: '5×30 ft line' }));
+      expect(entry.resourceKey).toBe('breath_weapon_used');
+    });
+
+    it('falls back to a generic area when no ancestry was stored', () => {
+      const entry = breathOf(dragonbornArgs(5, null));
+      expect(entry.detail).toContain('in a line or cone');
+      expect(entry.detail).toContain('2d6 damage');
+    });
+
+    it('leaves other racial traits on their static description', () => {
+      const args = fighterArgs(5, '5e');
+      args.characterData = { race_traits: ['Savage Attacks'] };
+      // Savage Attacks isn't an action at all — no entry, and no crash from the compute path.
+      expect(buildActionEconomy(args).action.find((e) => e.name === 'Savage Attacks')).toBeFalsy();
+    });
+  });
+
   describe('feat effects', () => {
     const TAVERN_BRAWLER = {
       id: 14, name: 'Tavern Brawler', level: 4,

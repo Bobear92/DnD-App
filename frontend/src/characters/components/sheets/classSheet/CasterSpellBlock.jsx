@@ -43,6 +43,8 @@ export default function CasterSpellBlock({
   isGm = false,
   gmEdit = false,
   raceGrantedCantrips = [],
+  raceGrantedLeveled = [],
+  racialTrackers = null,
   featSpells = null,
   featTrackers = null,
   extras = null,
@@ -287,6 +289,8 @@ export default function CasterSpellBlock({
           classCantrips={cantrips}
           classLeveledNames={leveledKnown}
           racialCantrips={racialCantrips}
+          racialLeveled={raceGrantedLeveled}
+          racialTrackers={racialTrackers}
           featCantrips={featCantrips}
           featLeveled={featLeveled}
           featTrackers={featTrackers}
@@ -463,6 +467,8 @@ export default function CasterSpellBlock({
             classCantrips={data.cantrips ?? []}
             classLeveledNames={prepared}
             racialCantrips={playRacialCantrips}
+            racialLeveled={raceGrantedLeveled}
+            racialTrackers={racialTrackers}
             featCantrips={playFeatCantrips}
             featLeveled={playFeatLeveled}
             featTrackers={featTrackers}

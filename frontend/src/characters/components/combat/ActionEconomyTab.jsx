@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
 import { getRaceGrantedWeapons, getRaceGrantedArmor } from '@/characters/components/race/raceProficienciesData';
+import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
 import { getAttacks, creatureSize, formatSigned, nonProficientEquippedArmor } from '@/characters/components/inventory/inventoryData';
 import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
 import { isHexWarrior, hexWeaponUid as storedHexWeaponUid } from '@/characters/components/inventory/weaponBondData';
@@ -375,10 +376,18 @@ export default function ActionEconomyTab({
   );
 
   // Rest-rechargeable resources from the class config (Fighter: Second Wind, Action Surge,
-  // Indomitable). Indexed by key so an entry's `resourceKey` resolves to a live row with
-  // remaining/used counts — the Use button writes `<key>_used` back via onChange.
+  // Indomitable) PLUS the character's RACIAL ones (Dragonborn Breath Weapon), which live in
+  // their own table rather than any class config. Indexed by key so an entry's `resourceKey`
+  // resolves to a live row with remaining/used counts — the Use button writes `<key>_used`
+  // back via onChange, the same key the Stats-tab Racial Features tracker writes.
   const config = getClassConfig(charClass, edition);
-  const restRows = useRestResource({ resources: config?.restResources ?? [], level, data: characterData });
+  const racialResources = getRacialRestResources(characterData.race_traits ?? [], level)
+    .map((r) => ({ key: r.key, label: r.label, total: r.max, recharge: r.recharge, description: r.note }));
+  const restRows = useRestResource({
+    resources: [...(config?.restResources ?? []), ...racialResources],
+    level,
+    data: characterData,
+  });
   const restByKey = {};
   for (const r of restRows) restByKey[r.key] = r;
   const resourceFor = (entry) => (entry.resourceKey ? restByKey[entry.resourceKey] : null) || null;

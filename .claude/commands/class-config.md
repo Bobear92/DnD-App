@@ -13,7 +13,8 @@ ongoing work this skill covers.
 ## Where things live (`frontend/src/characters/components/sheets/classSheet/`)
 - `ClassSheet.jsx` — universal renderer. Reads `config` + the standard sheet props
   (`data, onChange, readOnly, level, creation, section, scores, abilityScores, backgroundSkills,
-  raceSkills, raceGrantedCantrips, campaignId, isGm, acExtra, maxHpNode`) **plus `gmEdit`**.
+  raceSkills, raceGrantedCantrips, raceGrantedLeveled, racialTrackers, campaignId, isGm, acExtra,
+  maxHpNode`) **plus `gmEdit`**.
   Handles section isolation, the HP/AC/Speed combat block, locked choices, rest resources, notes,
   subclass, Portent, the caster block, the features list, ASI reminder, and the creation skill picker.
 - `configs/{fighter,wizard}.js` — the config objects. `configs/index.jsx` — `getClassConfig(class, edition)`

@@ -10,6 +10,17 @@
  *   'short' — recovers on a short OR long rest
  *   'long'  — recovers only on a long rest
  *
+ * SPELL-GRANTING entries also carry:
+ *   `spell`      — the spell's catalog name, used to look it up in the encyclopedia.
+ *                  Distinct from `label`, which is the tracker's wording and may
+ *                  describe the cast ("Hellish Rebuke (2nd-level)").
+ *   `spellLevel` — the level the trait casts it AT (Infernal Legacy casts Hellish
+ *                  Rebuke as a 2nd-level spell, not its native 1st).
+ * This makes the table the single source of truth for both the use-counter and the
+ * spell itself, so a leveled racial spell shows up in the Spells tab instead of
+ * existing only as a number on the Stats tab. Race-granted CANTRIPS are not rest
+ * resources and live in `raceCantrips.js`.
+ *
  * The backend mirrors this table in `_compute_rest_patch`
  * (backend/players/characters/service.py) so the GM's rest buttons reset
  * these counters. Keep the two in sync when adding new resources.
@@ -41,6 +52,8 @@ export const RACIAL_REST_RESOURCES = [
     minLevel: 3,
     label: 'Faerie Fire',
     note: 'Drow Magic',
+    spell: 'Faerie Fire',
+    spellLevel: 1,
   },
   {
     trait: 'Drow Magic',
@@ -50,6 +63,8 @@ export const RACIAL_REST_RESOURCES = [
     minLevel: 5,
     label: 'Darkness',
     note: 'Drow Magic',
+    spell: 'Darkness',
+    spellLevel: 2,
   },
   {
     trait: 'Infernal Legacy',
@@ -59,6 +74,8 @@ export const RACIAL_REST_RESOURCES = [
     minLevel: 3,
     label: 'Hellish Rebuke (2nd-level)',
     note: 'Infernal Legacy',
+    spell: 'Hellish Rebuke',
+    spellLevel: 2,
   },
   {
     trait: 'Infernal Legacy',
@@ -68,6 +85,8 @@ export const RACIAL_REST_RESOURCES = [
     minLevel: 5,
     label: 'Darkness',
     note: 'Infernal Legacy',
+    spell: 'Darkness',
+    spellLevel: 2,
   },
 ];
 
@@ -80,4 +99,34 @@ export function getRacialRestResources(traits = [], level = 1) {
   return RACIAL_REST_RESOURCES.filter(
     (r) => traitSet.has(r.trait) && (level ?? 1) >= (r.minLevel ?? 1)
   );
+}
+
+/**
+ * The LEVELED spells a character's racial traits grant at this level, as
+ * `[{ name, level, resourceKey, label, note, recharge, max }]`.
+ *
+ * Sourced from the same table as the use-counters, so the Spells tab and the
+ * Racial Features tracker can never disagree about what the race grants.
+ * Deduped by spell name + cast level: a race granting the same spell twice
+ * (or a future trait overlapping another) shows one entry, not two.
+ */
+export function getRacialSpellResources(traits = [], level = 1) {
+  const seen = new Set();
+  return getRacialRestResources(traits, level)
+    .filter((r) => r.spell)
+    .filter((r) => {
+      const id = `${r.spell}:${r.spellLevel}`;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .map((r) => ({
+      name: r.spell,
+      level: r.spellLevel,
+      resourceKey: r.key,
+      label: r.label,
+      note: r.note,
+      recharge: r.recharge,
+      max: r.max,
+    }));
 }

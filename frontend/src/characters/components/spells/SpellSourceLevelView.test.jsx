@@ -93,6 +93,72 @@ describe('SpellSourceLevelView', () => {
     expect(within(tabs).queryByTestId('spell-source-racial')).not.toBeInTheDocument();
   });
 
+  // Leveled racial spells (Infernal Legacy's Hellish Rebuke) must fold into the strip the way feat
+  // spells do — the Racial source used to be pinned to level 0, so a Tiefling caster's Hellish
+  // Rebuke had nowhere to appear.
+  describe('leveled racial spells', () => {
+    const racialProps = {
+      racialLeveled: [{ name: 'Hellish Rebuke', level: 2 }],
+      racialTrackers: <div data-testid="racial-trackers">racial trackers</div>,
+    };
+
+    it('counts a leveled racial spell in its level tab', async () => {
+      mockCatalog = CATALOG;
+      view(racialProps);
+      await screen.findByTestId('spell-level-tabs');
+      // 2nd: Mirror Image (class) + Hellish Rebuke (racial) = 2.
+      expect(screen.getByTestId('spell-level-tab-2')).toHaveTextContent('2nd (2)');
+    });
+
+    it('offers a Racial source above level 0 and shows the spell + its tracker there', async () => {
+      mockCatalog = CATALOG;
+      view(racialProps);
+      await screen.findByTestId('spell-level-tabs');
+      fireEvent.click(screen.getByTestId('spell-level-tab-2'));
+      fireEvent.click(screen.getByTestId('spell-source-racial'));
+      const content = screen.getByTestId('spell-source-racial-content');
+      expect(within(content).getByText('Hellish Rebuke')).toBeInTheDocument();
+      expect(within(content).getByTestId('racial-trackers')).toBeInTheDocument();
+    });
+
+    it('keeps the tracker off the cantrip tab', async () => {
+      mockCatalog = CATALOG;
+      view(racialProps);
+      await screen.findByTestId('spell-source-racial');
+      fireEvent.click(screen.getByTestId('spell-source-racial'));
+      const content = screen.getByTestId('spell-source-racial-content');
+      expect(within(content).getByText('Prestidigitation')).toBeInTheDocument();
+      expect(within(content).queryByTestId('racial-trackers')).not.toBeInTheDocument();
+    });
+
+    it('opens a level tab that only a racial spell occupies', async () => {
+      mockCatalog = [{ name: 'Fire Bolt', level: 0 }];
+      render(
+        <SpellSourceLevelView
+          campaignId={1}
+          classCantrips={['Fire Bolt']}
+          classLeveledNames={[]}
+          racialLeveled={[{ name: 'Hellish Rebuke', level: 2 }]}
+          renderClass={renderClass}
+        />
+      );
+      await screen.findByTestId('spell-level-tabs');
+      expect(screen.getByTestId('spell-level-tab-2')).toHaveTextContent('2nd (1)');
+      fireEvent.click(screen.getByTestId('spell-level-tab-2'));
+      // Racial is the only source at 2nd → renders directly, no toggle.
+      expect(screen.queryByTestId('spell-source-tabs')).not.toBeInTheDocument();
+      expect(within(screen.getByTestId('spell-source-racial-content')).getByText('Hellish Rebuke'))
+        .toBeInTheDocument();
+    });
+
+    it('includes leveled racial spells in the flat fallback', () => {
+      view(racialProps); // no catalog → flat
+      const content = screen.getByTestId('spell-source-racial-content');
+      expect(within(content).getByText('Prestidigitation')).toBeInTheDocument();
+      expect(within(content).getByText('Hellish Rebuke')).toBeInTheDocument();
+    });
+  });
+
   it('does not tab when spells span only one level', async () => {
     mockCatalog = CATALOG;
     render(

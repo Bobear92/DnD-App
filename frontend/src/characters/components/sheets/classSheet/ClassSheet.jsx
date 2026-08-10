@@ -5,7 +5,8 @@
  *
  * Props (same contract as the legacy sheets, plus `gmEdit`):
  *   data, onChange, readOnly, level, creation, section, scores, abilityScores,
- *   backgroundSkills, raceSkills, raceGrantedCantrips, campaignId, isGm, acExtra, maxHpNode, afterHpNode,
+ *   backgroundSkills, raceSkills, raceGrantedCantrips, raceGrantedLeveled, racialTrackers,
+ *   campaignId, isGm, acExtra, maxHpNode, afterHpNode,
  *   gmEdit  — GM Edit toggle: when true, locked permanent choices become editable.
  *
  * `section`: 'all' | 'stats' | 'features' | 'spells' (CLAUDE.md section isolation).
@@ -147,6 +148,8 @@ export default function ClassSheet({
   backgroundSkills = [],
   raceSkills = [],
   raceGrantedCantrips = [],
+  raceGrantedLeveled = [],
+  racialTrackers = null,
   featSpells = null,
   featTrackers = null,
   section = 'all',
@@ -464,6 +467,8 @@ export default function ClassSheet({
           isGm={isGm}
           gmEdit={gmEdit}
           raceGrantedCantrips={raceGrantedCantrips}
+          raceGrantedLeveled={raceGrantedLeveled}
+          racialTrackers={racialTrackers}
           featSpells={featSpells}
           featTrackers={featTrackers}
         />

@@ -31,6 +31,7 @@ import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 import {
   isArcaneShotBow, getArcaneShotOptions, arcaneShotSaveDc, arcaneShotImproved,
 } from '@/characters/components/classData/arcaneShotData';
+import { getBreathWeapon } from '@/characters/components/race/breathWeaponData';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
 const ECONOMY_COST_LABEL = {
@@ -155,8 +156,28 @@ export function subclassFeaturesKnownAtLevel(charClass, edition, subclass, level
 // ─── Racial trait → action economy ───────────────────────────────────────────────
 // Keyed by racial trait name as stored in character_data.race_traits.
 
+// `resourceKey` links the trait to its RACIAL_REST_RESOURCES counter (the same `<key>_used`
+// the Stats-tab Racial Features tracker writes) so the card carries a Use button.
+// A `compute` entry builds its own `detail` from the character — Breath Weapon's damage,
+// save DC, shape and damage type all vary by level and chosen ancestry, so a static string
+// would show a level-1 card to a level-16 Dragonborn.
 export const RACIAL_ACTIONS = {
-  'Breath Weapon': { tab: 'action', cost: 'action', description: 'Exhale destructive energy in a line or cone (creatures make a DEX or CON save). Recharges on a short or long rest.' },
+  'Breath Weapon': {
+    tab: 'action',
+    cost: 'action',
+    resourceKey: 'breath_weapon_used',
+    description: 'Exhale destructive energy in a line or cone (creatures make a DEX or CON save). Recharges on a short or long rest.',
+    compute: ({ characterData, level, scores }) => {
+      const bw = getBreathWeapon({
+        raceTraits: characterData.race_traits,
+        draconicAncestry: characterData.draconic_ancestry,
+        level,
+        constitutionScore: scores.constitution,
+      });
+      if (!bw) return null;
+      return { detail: `${bw.summary} Recharges on a short or long rest.` };
+    },
+  },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────────
@@ -828,16 +849,19 @@ export function buildActionEconomy({
     }
   }
 
-  // Racial trait actions.
+  // Racial trait actions. A `compute` entry derives its own detail/meta from the character
+  // (level, ability scores, stored racial choices) instead of showing a fixed string.
   for (const trait of characterData.race_traits || []) {
     const def = RACIAL_ACTIONS[trait];
     if (!def) continue;
+    const computed = def.compute ? def.compute({ characterData, level, scores }) : null;
     push(def.tab, {
       key: `racial:${trait}`,
       name: trait,
       source: 'Racial',
       cost: def.cost,
-      detail: def.description,
+      detail: computed?.detail ?? def.description,
+      ...(def.resourceKey ? { resourceKey: def.resourceKey } : {}),
     });
   }
 
