@@ -1172,6 +1172,32 @@ describe('CharacterDetail', () => {
       expect(within(racial).queryByLabelText('Use Hellish Rebuke (2nd-level)')).not.toBeInTheDocument();
     });
 
+    // Infernal Legacy casts Hellish Rebuke (a 1st-level spell) AT 2nd level, so the racial list
+    // must show ONE strip using the trait's levels — not a nested "1st"/"2nd" strip derived from
+    // the catalog, which contradicted the "Lvl 2" tab containing it.
+    it('shows one level strip using the grant level, with no nested per-spell strip', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Tiefling',
+          level: 5,
+          character_data: { ...BASE_CHARACTER.character_data, race_traits: ['Infernal Legacy'] },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      const racial = await screen.findByTestId('racial-spells');
+      // The outer strip: Cantrips + Lvl 2 only — no "1st" tab, because nothing is granted at 1st.
+      expect(within(racial).getByTestId('racial-spell-tab-tab-0')).toBeInTheDocument();
+      expect(within(racial).getByTestId('racial-spell-tab-tab-2')).toBeInTheDocument();
+      expect(within(racial).queryByTestId('racial-spell-tab-tab-1')).not.toBeInTheDocument();
+      // And no second, catalog-derived strip nested inside it.
+      expect(within(racial).queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
+      fireEvent.click(within(racial).getByTestId('racial-spell-tab-tab-2'));
+      expect(within(racial).queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
+    });
+
     it('adds the level-5 racial spell once the Tiefling reaches it', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,

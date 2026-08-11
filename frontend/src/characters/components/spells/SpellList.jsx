@@ -86,6 +86,13 @@ async function fetchSpellCatalog(campaignId, edition) {
  *   characterLevel   number               the character's level; when set (cantrip lists only), each
  *                                          cantrip row shows its computed damage-at-this-level + save DC /
  *                                          attack bonus, so the player needn't open the description
+ *   singleGroup      boolean     render every spell as ONE list, in the order given, with no level
+ *                                heading and no level sub-tabs. For callers that already know which
+ *                                level they are showing these spells at and must not have it
+ *                                re-derived from the catalog — a racial trait casts a spell at ITS
+ *                                level, not the spell's native one (Infernal Legacy casts the
+ *                                1st-level Hellish Rebuke as 2nd) — so deriving here split one list
+ *                                into a nested "1st"/"2nd" strip contradicting its own parent tab.
  *   rowExtras        (name) => node|null   per-spell controls rendered in the row's right-hand cluster.
  *                                          Lets a spell that IS its own resource carry its use-counter on
  *                                          the spell row itself (a racial once-per-rest spell — Infernal
@@ -106,6 +113,7 @@ export default function SpellList({
   characterLevel,
   hideLevelHeadings = false,
   levelTabs = true,
+  singleGroup = false,
   rowExtras,
 }) {
   const ctx = useCampaign();
@@ -136,6 +144,10 @@ export default function SpellList({
   const grouped = {};
   if (isCantrips) {
     grouped[0] = [...spells].sort();
+  } else if (singleGroup) {
+    // One group, caller's order — no catalog lookup, so nothing can contradict the level
+    // the caller is displaying these under.
+    grouped[0] = [...spells];
   } else {
     spells.forEach(name => {
       const catalogEntry = spellMap[name];
@@ -153,7 +165,7 @@ export default function SpellList({
   // When the list spans more than one level, break it into per-level sub-tabs so it doesn't get
   // crowded (Cantrips / 1st / 2nd …). Only the active level's spells render. A single-level list
   // (including any cantrips-only list) shows no tab bar and renders as before.
-  const tabsActive = levelTabs && sortedLevels.length > 1;
+  const tabsActive = levelTabs && !singleGroup && sortedLevels.length > 1;
   const activeLevel = tabsActive
     ? (sortedLevels.includes(activeTab) ? activeTab : sortedLevels[0])
     : null;
@@ -219,7 +231,7 @@ export default function SpellList({
           : (lvl === -1 ? 'Other Spells' : (LEVEL_LABELS[lvl] ?? `Level ${lvl}`));
         return (
           <div key={lvl}>
-            {!hideLevelHeadings && !tabsActive && (
+            {!hideLevelHeadings && !tabsActive && !singleGroup && (
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pb-1 pt-1">
                 {heading}
               </div>

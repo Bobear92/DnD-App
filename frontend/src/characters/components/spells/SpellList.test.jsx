@@ -196,6 +196,31 @@ describe('SpellList', () => {
     expect(screen.queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
   });
 
+  // A racial trait casts a spell at ITS level, not the spell's own — Infernal Legacy casts the
+  // 1st-level Hellish Rebuke as 2nd. When the caller has already bucketed by that level, deriving
+  // levels here again split one list into a nested strip contradicting its parent tab.
+  it('singleGroup renders one list with no level tabs and no headings', async () => {
+    mockFetchCatalog();
+    render(<SpellList spells={['Fireball', 'Magic Missile']} label="" singleGroup />);
+    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
+    expect(screen.getByText('Magic Missile')).toBeInTheDocument();
+    expect(screen.queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
+    // No level headings at all, despite the two spells being 1st and 3rd level in the catalog.
+    expect(screen.queryByText('1st Level')).not.toBeInTheDocument();
+    expect(screen.queryByText('3rd Level')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cantrips')).not.toBeInTheDocument();
+  });
+
+  it('singleGroup keeps the order it was given', async () => {
+    mockFetchCatalog();
+    render(<SpellList spells={['Fireball', 'Magic Missile']} label="" singleGroup />);
+    await waitFor(() => expect(screen.getByText('Fireball')).toBeInTheDocument());
+    const names = screen.getAllByRole('button')
+      .map((b) => b.textContent.trim())
+      .filter((t) => ['Fireball', 'Magic Missile'].includes(t));
+    expect(names).toEqual(['Fireball', 'Magic Missile']);
+  });
+
   it('sorts spells alphabetically within each level section', async () => {
     mockFetchCatalog();
     render(<SpellList spells={['Magic Missile', 'Burning Hands']} label="Spells Known" />);

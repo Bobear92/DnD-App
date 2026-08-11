@@ -4,8 +4,12 @@ import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
 
 // SpellList is tested on its own; mock it to isolate the tab logic + surface what it receives.
 vi.mock('@/characters/components/spells/SpellList', () => ({
-  default: ({ spells = [], isCantrips, rowExtras }) => (
-    <div data-testid="spell-list" data-cantrips={String(!!isCantrips)}>
+  default: ({ spells = [], isCantrips, rowExtras, singleGroup }) => (
+    <div
+      data-testid="spell-list"
+      data-cantrips={String(!!isCantrips)}
+      data-single-group={String(!!singleGroup)}
+    >
       {spells.map((n) => (
         <span key={n} data-testid={`sl-${n}`}>{n}{rowExtras?.(n)}</span>
       ))}
@@ -51,6 +55,13 @@ describe('SpellLevelTabs', () => {
     expect(screen.queryByTestId('extra-mage-armor')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('spell-level-tab-1'));
     expect(screen.getByTestId('extra-mage-armor')).toBeInTheDocument();
+  });
+
+  // This strip owns the level axis. Letting SpellList derive levels again nested a second,
+  // contradictory strip inside the active tab (a 1st-level spell granted AT 2nd level).
+  it('tells SpellList not to re-derive levels (singleGroup)', () => {
+    render(<SpellLevelTabs spells={SPELLS} />);
+    expect(screen.getByTestId('spell-list')).toHaveAttribute('data-single-group', 'true');
   });
 
   it('renders an empty state when there are no spells', () => {

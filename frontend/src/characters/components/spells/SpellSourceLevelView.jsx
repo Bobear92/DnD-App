@@ -104,7 +104,11 @@ export default function SpellSourceLevelView({
     return (
       <div className="rounded-lg border bg-card p-3 space-y-2" data-testid="spell-source-racial-content">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Race-Granted Spells</div>
+        {/* singleGroup when showing ONE level: these were bucketed by the level the trait casts
+            them at, which is not always the spell's own level (Hellish Rebuke is a 1st-level
+            spell cast at 2nd). The flat fallback (l == null) legitimately spans levels. */}
         <SpellList spells={names} readOnly label="" isCantrips={l === 0} hideLevelHeadings levelTabs={false}
+          singleGroup={l != null}
           characterLevel={l === 0 ? characterLevel : undefined}
           spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus}
           rowExtras={racialUseControls ? ((n) => racialUseControls[n] ?? null) : undefined} />
@@ -124,6 +128,7 @@ export default function SpellSourceLevelView({
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Spells from Feats</div>
         {names.length > 0 && (
           <SpellList spells={names} readOnly label="" isCantrips={l === 0} hideLevelHeadings levelTabs={false}
+            singleGroup={l != null}
             characterLevel={l === 0 ? characterLevel : undefined} spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus} />
         )}
         {featTrackers}

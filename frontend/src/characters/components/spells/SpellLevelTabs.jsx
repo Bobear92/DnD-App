@@ -54,11 +54,15 @@ export default function SpellLevelTabs({
           </button>
         ))}
       </div>
+      {/* This strip owns the level axis: the spells were bucketed by the level the GRANT casts
+          them at, so SpellList must render them as one list rather than re-deriving levels from
+          the catalog (which nested a contradictory "1st"/"2nd" strip inside this tab). */}
       <SpellList
         spells={[...byLevel[activeLevel]].sort()}
         isCantrips={activeLevel === 0}
         readOnly
         hideLevelHeadings
+        singleGroup
         label=""
         rowExtras={rowExtras}
       />
