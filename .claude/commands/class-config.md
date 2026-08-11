@@ -16,7 +16,8 @@ ongoing work this skill covers.
   raceSkills, raceGrantedCantrips, raceGrantedLeveled, racialUseControls, campaignId, isGm, acExtra,
   maxHpNode`) **plus `gmEdit`**.
   Handles section isolation, the HP/AC/Speed combat block, locked choices, rest resources, notes,
-  subclass, Portent, the caster block, the features list, ASI reminder, and the creation skill picker.
+  subclass, Portent, the caster block, the encyclopedia class link (creation shows the L1 feature list
+  instead — a live sheet never repeats the class prose), ASI reminder, and the creation skill picker.
 - `configs/{fighter,wizard}.js` — the config objects. `configs/index.jsx` — `getClassConfig(class, edition)`
   + bound wrappers (`FighterSheet5e`, `WizardSheet2024`, …) re-exported by the two `components` index files
   as `FighterSheet`/`WizardSheet` so the page maps need no change.

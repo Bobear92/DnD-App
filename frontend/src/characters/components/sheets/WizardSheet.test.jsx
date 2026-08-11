@@ -5,8 +5,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { WizardSheet5e as WizardSheet } from '@/characters/components/sheets/classSheet/configs';
 
 vi.mock('react-router-dom', () => ({
-  // SubclassDetails reads campaignId from the URL for its encyclopedia link; no route here.
-  useParams: () => ({}),
+  // SubclassDetails and the features section's class link read campaignId from the URL for their
+  // encyclopedia links; stand in for a campaign route so those links render.
+  useParams: () => ({ campaignId: '1' }),
   Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
 }));
 
@@ -307,14 +308,14 @@ describe('WizardSheet section routing', () => {
 
     it('does not render class features', () => {
       sheet('stats');
-      expect(screen.queryByText('Class Features')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('class-encyclopedia-link')).not.toBeInTheDocument();
     });
   });
 
   describe('section="features"', () => {
-    it('renders class features heading', () => {
+    it('renders the encyclopedia class link', () => {
       sheet('features');
-      expect(screen.getByText('Class Features')).toBeInTheDocument();
+      expect(screen.getByTestId('class-encyclopedia-link')).toBeInTheDocument();
     });
 
     it('does not render spell slot grid', () => {
@@ -367,7 +368,7 @@ describe('WizardSheet section routing', () => {
 
     it('does not render class features heading', () => {
       sheet('spells');
-      expect(screen.queryByText('Class Features')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('class-encyclopedia-link')).not.toBeInTheDocument();
     });
 
     it('does not render HP fields', () => {
@@ -382,9 +383,9 @@ describe('WizardSheet section routing', () => {
       expect(screen.getByText('Current HP')).toBeInTheDocument();
     });
 
-    it('renders class features heading', () => {
+    it('renders the encyclopedia class link', () => {
       sheet('all');
-      expect(screen.getByText('Class Features')).toBeInTheDocument();
+      expect(screen.getByTestId('class-encyclopedia-link')).toBeInTheDocument();
     });
 
     it('renders spell slot grid in Prepared tab', () => {

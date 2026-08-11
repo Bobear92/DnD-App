@@ -17,7 +17,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Plus, X } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { BookOpen, ChevronRight, Plus, X } from 'lucide-react';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
@@ -68,73 +69,40 @@ function WeaponMasteryList({ value = [], onChange, readOnly, max }) {
   );
 }
 
-// One earned class feature: collapsed to its name (+ Lvl badge); click to expand the
-// description (same pattern as SubclassDetails feature toggles).
-function CollapsibleFeature({ feat, lvl }) {
-  const [open, setOpen] = useState(false);
+// During CREATION the level-1 features are the only place to read what the class does, so they
+// are listed here. On a live sheet there is no features list: the mechanised features already
+// have their own blocks above, and the full rules text lives in the encyclopedia (below).
+function CreationFeaturesList({ features }) {
   return (
-    <div className="rounded-md border bg-muted/20">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        data-testid={`class-feature-toggle-${feat.name}`}
-        className="w-full flex items-center gap-2 p-3 text-left"
-      >
-        <span className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">Lvl {lvl}</span>
-        <span className="font-semibold text-sm flex-1">{feat.name}</span>
-        <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
-      </button>
-      {open && (
-        <div className="px-3 pb-3 text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
-      )}
+    <div className="space-y-2">
+      <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
+      {(features[1] ?? []).map((feat) => (
+        <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
+          <div className="font-semibold text-sm">{feat.name}</div>
+          <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
+        </div>
+      ))}
     </div>
   );
 }
 
-function FeaturesList({ features, level, creation }) {
-  // The whole earned-features list collapses behind its header (collapsed by default —
-  // it's the longest block on the tab); individual features expand independently inside.
-  const [open, setOpen] = useState(false);
-  if (creation) {
-    return (
-      <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Level 1 Features</Label>
-        {(features[1] ?? []).map((feat) => (
-          <div key={feat.name} className="rounded-md border bg-muted/20 p-3 space-y-1.5">
-            <div className="font-semibold text-sm">{feat.name}</div>
-            <div className="text-xs text-muted-foreground leading-relaxed">{feat.description}</div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  const earned = Array.from({ length: level }, (_, i) => i + 1).flatMap((lvl) =>
-    (features[lvl] ?? []).map((feat) => ({ ...feat, lvl }))
-  );
+// Replaces the old earned-features dropdown: the class's whole rules text at every level lives on
+// the encyclopedia class page, so the sheet links there instead of duplicating it. Rendered from a
+// campaign route, so campaignId comes from the URL — outside a router (a sheet rendered bare in a
+// test) it's undefined and the link is simply omitted, same as SubclassDetails.
+function ClassEncyclopediaLink({ className }) {
+  const { campaignId } = useParams();
+  if (!campaignId) return null;
   return (
-    <div className="space-y-2">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        data-testid="class-features-toggle"
-        className="w-full flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-left"
-      >
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Class Features</span>
-        <span className="text-xs text-muted-foreground">({earned.length})</span>
-        <span className="flex-1" />
-        <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
-      </button>
-      {open && (
-        <>
-          <div className="text-xs text-muted-foreground">Tap a feature to read what it does.</div>
-          {earned.map((feat) => (
-            <CollapsibleFeature key={`${feat.lvl}-${feat.name}`} feat={feat} lvl={feat.lvl} />
-          ))}
-        </>
-      )}
-    </div>
+    <Link
+      to={`/campaigns/${campaignId}/encyclopedia/classes/${encodeURIComponent(className)}`}
+      data-testid="class-encyclopedia-link"
+      className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+    >
+      <BookOpen className="w-3.5 h-3.5" />
+      {className} in the Encyclopedia
+      <ChevronRight className="w-3.5 h-3.5" />
+    </Link>
   );
 }
 
@@ -332,7 +300,11 @@ export default function ClassSheet({
     />
   );
 
-  const featuresListBlock = <FeaturesList features={config.features} level={level} creation={creation} />;
+  // Creation needs the level-1 feature text inline; a live sheet sends you to the encyclopedia
+  // class page for the full rules instead of repeating them under the mechanised blocks.
+  const featuresListBlock = creation
+    ? <CreationFeaturesList features={config.features} />
+    : <ClassEncyclopediaLink className={config.className} />;
 
   const asiBlock = config.asiLevels?.some((l) => l <= level) ? (
     <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">

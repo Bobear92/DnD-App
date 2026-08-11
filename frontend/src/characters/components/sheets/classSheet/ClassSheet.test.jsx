@@ -3,11 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FighterSheet5e as FighterSheet, FighterSheet2024 } from '@/characters/components/sheets/classSheet/configs';
 
 // The Eldritch Knight known-caster block renders an encyclopedia Link.
+// SubclassDetails and the class-features link read campaignId from the URL; default to no route
+// (so those links are omitted) and let a test opt in by setting mockParams before rendering.
+let mockParams = {};
 vi.mock('react-router-dom', () => ({
-  // SubclassDetails reads campaignId from the URL for its encyclopedia link; no route here.
-  useParams: () => ({}),
+  useParams: () => mockParams,
   Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
 }));
+beforeEach(() => { mockParams = {}; });
 
 // The known-caster block fetches the spell catalog (via encyclopediaService) to build its unified
 // level strip. Default to an empty catalog so every existing test sees the flat (un-tabbed) list;
@@ -65,16 +68,22 @@ describe('ClassSheet — martial section isolation', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
-  it('shows class features in the features section (list collapsed until the header is clicked)', () => {
+  // The sheet no longer repeats the class's rules text — the encyclopedia class page has it at
+  // every level, so the features section links there instead of carrying a dropdown of prose.
+  it('links to the encyclopedia class page instead of listing the class features', () => {
+    mockParams = { campaignId: '4' };
     fighter();
-    expect(screen.getByText('Class Features')).toBeInTheDocument();
-    // The whole list is collapsed by default (header shows the earned count)
+    expect(screen.getByTestId('class-encyclopedia-link')).toHaveAttribute(
+      'href',
+      '/campaigns/4/encyclopedia/classes/Fighter'
+    );
+    expect(screen.queryByTestId('class-features-toggle')).not.toBeInTheDocument();
     expect(screen.queryByText('Extra Attack (2 attacks)')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('class-features-toggle'));
-    expect(screen.getByText('Extra Attack (2 attacks)')).toBeInTheDocument();
-    // Collapses again on re-click
-    fireEvent.click(screen.getByTestId('class-features-toggle'));
-    expect(screen.queryByText('Extra Attack (2 attacks)')).not.toBeInTheDocument();
+  });
+
+  it('omits the encyclopedia link when rendered outside a campaign route', () => {
+    fighter();
+    expect(screen.queryByTestId('class-encyclopedia-link')).not.toBeInTheDocument();
   });
 
   it('folds a feat speed bonus (Mobile +10) into Total Speed in the stats section', () => {
@@ -104,34 +113,14 @@ describe('ClassSheet — martial section isolation', () => {
   });
 });
 
-describe('ClassSheet — collapsible class features', () => {
-  it('hides a feature description until its name is clicked, and collapses on re-click', () => {
-    fighter();
-    fireEvent.click(screen.getByTestId('class-features-toggle')); // expand the section
-    const desc = 'You can attack twice, instead of once, whenever you take the Attack action on your turn.';
-    expect(screen.queryByText(desc)).not.toBeInTheDocument();
-    const toggle = screen.getByTestId('class-feature-toggle-Extra Attack (2 attacks)');
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    fireEvent.click(toggle);
-    expect(screen.getByText(desc)).toBeInTheDocument();
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    fireEvent.click(toggle);
-    expect(screen.queryByText(desc)).not.toBeInTheDocument();
-  });
-
-  it('features expand independently', () => {
-    fighter();
-    fireEvent.click(screen.getByTestId('class-features-toggle')); // expand the section
-    fireEvent.click(screen.getByTestId('class-feature-toggle-Second Wind'));
-    expect(screen.getByText(/bonus action to regain hit points/i)).toBeInTheDocument();
-    // Extra Attack stays collapsed
-    expect(screen.queryByText(/attack twice, instead of once/i)).not.toBeInTheDocument();
-  });
-
-  it('creation mode keeps level-1 descriptions expanded (no toggles)', () => {
+describe('ClassSheet — class feature text', () => {
+  // At creation the level-1 features are what you're choosing between, so they're read inline;
+  // the encyclopedia link belongs to the live sheet, where the full class is a click away.
+  it('creation mode lists the level-1 descriptions instead of the encyclopedia link', () => {
+    mockParams = { campaignId: '4' };
     render(<FighterSheet data={FIGHTER_DATA} level={1} section="all" creation />);
     expect(screen.getByText(/bonus action to regain hit points/i)).toBeInTheDocument();
-    expect(screen.queryByTestId('class-feature-toggle-Second Wind')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('class-encyclopedia-link')).not.toBeInTheDocument();
   });
 });
 

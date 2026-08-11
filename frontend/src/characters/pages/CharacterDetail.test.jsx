@@ -318,16 +318,18 @@ describe('CharacterDetail', () => {
     });
   });
 
-  it('shows class features earned at or below current level and hides future features', async () => {
+  // The full class rules text lives on the encyclopedia class page, not on the sheet — the sheet
+  // keeps the mechanised blocks (Extra Attacks, fighting style, trackers) and links out for the rest.
+  it('links to the encyclopedia class page instead of listing the class features', async () => {
     // BASE_CHARACTER is a level 5 Fighter
     renderDetail();
-    await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
-    // The Class Features list is collapsed behind its header — expand it first
-    fireEvent.click(screen.getByTestId('class-features-toggle'));
-    // "Extra Attack (2 attacks)" is the level 5 Fighter feature name — must be shown
-    expect(screen.getAllByText('Extra Attack (2 attacks)').length).toBeGreaterThan(0);
-    // Indomitable variants are level 9+ — none should appear at level 5
-    expect(screen.queryByText(/Indomitable/)).not.toBeInTheDocument();
+    const link = await screen.findByTestId('class-encyclopedia-link');
+    expect(link).toHaveAttribute('href', '/campaigns/1/encyclopedia/classes/Fighter');
+    expect(screen.queryByTestId('class-features-toggle')).not.toBeInTheDocument();
+    // The earned-features prose is gone with the dropdown…
+    expect(screen.queryByText('Extra Attack (2 attacks)')).not.toBeInTheDocument();
+    // …but the mechanised block that derives from it stays, still level-gated.
+    expect(screen.getByText('Extra Attacks')).toBeInTheDocument();
   });
 
   describe('GM view', () => {
