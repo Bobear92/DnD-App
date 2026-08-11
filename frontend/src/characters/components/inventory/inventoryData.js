@@ -14,6 +14,7 @@ import { getFeatAcMods } from '@/characters/components/feats/featEffects';
 import { styleToHitBonus, styleDamageBonus, styleAcBonus } from '@/characters/components/combat/fightingStyles';
 import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
+import { magicalAttackSource } from '@/characters/components/inventory/weaponMagic';
 
 /** Two or more equipped melee weapons (Dual Wielder's condition). */
 function twoMeleeWeaponsEquipped(inventory = []) {
@@ -382,6 +383,52 @@ export function wornNonProficientArmor({ inventory, charClass, characterData = {
   return nonProficientEquippedArmor(inventory ?? characterData.inventory ?? [], { armorProfText, raceArmor });
 }
 
+// ─── Armor Stealth disadvantage ──────────────────────────────────────────────────
+
+/**
+ * Heavier armor (and some medium) gives disadvantage on Dexterity (Stealth) checks —
+ * the `stealth_disadvantage` flag on the armor entry, seeded from the compendium and
+ * true in both editions.
+ *
+ * Medium Armor Master removes it for MEDIUM armor only (both editions say so); a
+ * Medium Armor Master in plate is still clanking. Matched by feat NAME rather than a
+ * structured effect on purpose: the feat's Stealth clause is currently an honest prose
+ * `note` in seed_feats.py, and feat effects are SNAPSHOTTED onto the character when
+ * taken — so authoring a new effect kind would silently miss every character who
+ * already has the feat. Same name-matching approach as Crossbow Expert in
+ * actionEconomyData. If the effects model grows a skill-condition kind, move this.
+ */
+function negatesStealthDisadvantage(armor, feats) {
+  const isMedium = (armor?.armor_type || '').toLowerCase() === 'medium';
+  return isMedium && hasFeat(feats, 'Medium Armor Master');
+}
+
+/**
+ * The equipped armor imposing disadvantage on Stealth, or null when there is none
+ * (no such armor worn, or a feat cancels it). Drives the Stealth "dis" tag on the
+ * Abilities & Skills panel.
+ */
+export function stealthDisadvantageArmor(inventory = [], { feats = [] } = {}) {
+  const armor = equippedBodyArmor(inventory);
+  if (!armor || !armor.stealth_disadvantage) return null;
+  return negatesStealthDisadvantage(armor, feats) ? null : armor;
+}
+
+/**
+ * Per-row note for an armor entry that imposes Stealth disadvantage, or null. Shown
+ * whether or not it's equipped (wording flips, like armorStrengthNote), and states
+ * when a feat is cancelling it — the reassurance is worth as much as the warning.
+ */
+export function armorStealthNote(armor = {}, { feats = [] } = {}) {
+  if (!armor.stealth_disadvantage) return null;
+  if (negatesStealthDisadvantage(armor, feats)) {
+    return 'Would impose disadvantage on Stealth — negated by Medium Armor Master.';
+  }
+  return armor.equipped
+    ? 'Disadvantage on Dexterity (Stealth) checks while worn.'
+    : 'Wearing it will impose disadvantage on Dexterity (Stealth) checks.';
+}
+
 // ─── Armor Strength requirements ─────────────────────────────────────────────────
 
 // RAW (2014 + 2024): armor listing a Strength score reduces the wearer's speed by
@@ -548,8 +595,14 @@ export function computeAttack(weapon, { scores = {}, level = 1, proficient = fal
   return { name: weapon.name, toHit, toHitBreakdown, damage, ability, proficient, disadvantage: !!warning, warning, loadingNote, styleNotes, hexNote };
 }
 
-/** Attack rows for every equipped weapon in the inventory. */
-export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [], armorProfText = '', raceArmor = [], hexWeaponUid = null } = {}) {
+/**
+ * Attack rows for every equipped weapon in the inventory.
+ *
+ * `charClass`/`subclass` are only needed for the magical-attack resolver — resolved HERE rather
+ * than in each surface so the Items tab and the Action Economy tab can't disagree about whether
+ * a weapon overcomes nonmagical resistance. `computeAttack` stays about the numbers.
+ */
+export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [], armorProfText = '', raceArmor = [], hexWeaponUid = null, charClass = null, subclass = null } = {}) {
   const equipped = (inventory || []).filter((e) => e.category === 'weapons' && e.equipped);
   // Dueling requires wielding a single weapon (a shield is fine, a second weapon is not).
   const soloWeapon = equipped.length === 1;
@@ -567,6 +620,8 @@ export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfT
       row.warning = [row.warning, `Wearing ${badArmor.name} without proficiency — attack rolls at disadvantage.`]
         .filter(Boolean).join(' ');
     }
+    // `{source, note}` when a feature makes this weapon's attacks magical, else null.
+    row.magical = magicalAttackSource(w, { charClass, subclass, level, edition });
     return row;
   });
 }

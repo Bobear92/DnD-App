@@ -11,6 +11,7 @@ import { getAttacks, creatureSize, formatSigned, nonProficientEquippedArmor } fr
 import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
 import { isHexWarrior, hexWeaponUid as storedHexWeaponUid } from '@/characters/components/inventory/weaponBondData';
 import WeaponAmmoControl from '@/characters/components/inventory/WeaponAmmoControl';
+import MagicAttackBadge from '@/characters/components/inventory/MagicAttackBadge';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import {
   buildActionEconomy, characterSpellNames, TABS, TAB_LABELS, SOURCE_ORDER,
@@ -72,9 +73,11 @@ function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, i
       className="mt-2.5 rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2"
       data-testid={`ae-arcane-shot-${entryKey}`}
     >
+      {/* No cost badge: the block sits inside the bow's ACTION card, and Arcane Shot rides on an
+          arrow that attack was already firing — a "No Action" tag next to it reads as a second,
+          separate thing to spend. The standalone fallback entry (no bow equipped) keeps its badge. */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold">Arcane Shot</span>
-        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">{arcaneShot.cost}</Badge>
         <span className="text-[11px] text-muted-foreground">
           Save DC <span className="font-semibold text-foreground">{arcaneShot.saveDc}</span>
         </span>
@@ -154,9 +157,13 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
       data-testid={topResource ? `ae-resource-${topResource.key}` : undefined}
     >
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-sm">{entry.name}</span>
           <Badge variant="outline" className="text-[10px] uppercase tracking-wide shrink-0">{entry.cost}</Badge>
+          {/* This weapon's attacks overcome resistance/immunity to nonmagical damage. The SOURCE
+              is named because it's what tells the player when the tag stops applying; clicking
+              the tag reveals the rule text. */}
+          <MagicAttackBadge magical={entry.magical} testId={`ae-magical-${entry.key}`} campaignId={campaignId} />
         </div>
         {/* Per-weapon attack rows (e.g. Two-Weapon Fighting main hand / off hand). */}
         {entry.subAttacks && entry.subAttacks.length > 0 && (
@@ -363,7 +370,7 @@ export default function ActionEconomyTab({
   const badArmor = nonProficientEquippedArmor(inventory, { armorProfText, raceArmor });
   // Hexblade's designated Hex Warrior weapon attacks with CHA when it's better.
   const hexUid = isHexWarrior({ charClass, subclass, edition }) ? storedHexWeaponUid(characterData) : null;
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor, hexWeaponUid: hexUid });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor, hexWeaponUid: hexUid, charClass, subclass });
 
   // A loading weapon caps the Attack action to one shot even with Extra Attack (unless a
   // feat lifts it — Crossbow Expert sets loadingNote to "…ignored…"). Surface a caveat on

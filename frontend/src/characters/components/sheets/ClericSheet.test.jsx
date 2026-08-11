@@ -12,6 +12,8 @@ import ClericSheet from '@/characters/components/sheets/ClericSheet';
  */
 
 vi.mock('react-router-dom', () => ({
+  // SubclassDetails reads campaignId from the URL for its encyclopedia link; no route here.
+  useParams: () => ({}),
   Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
 }));
 

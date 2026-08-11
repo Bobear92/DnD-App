@@ -14,8 +14,15 @@ const tabLabel = (lvl) => (lvl === 0 ? 'Cantrips' : `Lvl ${lvl}`);
  *   spells       [{ name, level }]  the spells to show (level 0 = cantrip)
  *   testIdPrefix string
  *   emptyText    string  shown when there are no spells
+ *   rowExtras    (name) => node|null  forwarded to SpellList: per-spell controls on the row
+ *                (a racial spell's once-per-rest use-counter lives here, on its own row)
  */
-export default function SpellLevelTabs({ spells = [], testIdPrefix = 'spell-level', emptyText = 'No spells.' }) {
+export default function SpellLevelTabs({
+  spells = [],
+  testIdPrefix = 'spell-level',
+  emptyText = 'No spells.',
+  rowExtras,
+}) {
   const byLevel = useMemo(() => {
     const m = {};
     for (const s of spells) (m[s.level ?? 0] ||= []).push(s.name);
@@ -53,6 +60,7 @@ export default function SpellLevelTabs({ spells = [], testIdPrefix = 'spell-leve
         readOnly
         hideLevelHeadings
         label=""
+        rowExtras={rowExtras}
       />
     </div>
   );

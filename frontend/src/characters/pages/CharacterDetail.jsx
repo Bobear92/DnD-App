@@ -25,9 +25,10 @@ import { getRaceGrantedSkillsFromTraits } from '@/characters/components/race/rac
 import { getBackgroundSkills } from '@/characters/components/race/backgroundSkillsData';
 import { getFeatGrantedSkills } from '@/characters/components/feats/featProficiencyData';
 import RacialResourceTracker from '@/characters/components/race/RacialResourceTracker';
+import RestUseControl from '@/characters/components/race/RestUseControl';
 import JumpCard from '@/characters/components/combat/JumpCard';
 import WalletCard from '@/characters/components/inventory/WalletCard';
-import { armorSpeedPenalty, wornNonProficientArmor } from '@/characters/components/inventory/inventoryData';
+import { armorSpeedPenalty, wornNonProficientArmor, stealthDisadvantageArmor } from '@/characters/components/inventory/inventoryData';
 import InventoryTab from '@/characters/components/inventory/InventoryTab';
 import ActionEconomyTab from '@/characters/components/combat/ActionEconomyTab';
 import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
@@ -541,6 +542,13 @@ export default function CharacterDetail() {
     charClass: character.char_class,
     characterData: classSection.draft ?? character.character_data ?? {},
   });
+  // Bulky armor (Chain Mail, Half Plate, …) gives disadvantage on Dexterity (Stealth)
+  // checks — independent of proficiency, and cancelled for medium armor by Medium Armor
+  // Master. Drives the Stealth "dis" tag on the Abilities & Skills panel.
+  const stealthArmor = stealthDisadvantageArmor(
+    (classSection.draft ?? character.character_data)?.inventory ?? [],
+    { feats: (classSection.draft ?? character.character_data)?.feats ?? [] },
+  );
   const edition = campaign?.edition || '5e';
   const ClassSheet = (edition === '5.5e' ? CLASS_SHEETS_2024 : CLASS_SHEETS_5E)[character.char_class];
 
@@ -1510,6 +1518,7 @@ export default function CharacterDetail() {
                     edition={edition}
                     readOnly={displayAsPlayer || !canEdit}
                     nonProfArmorName={nonProfArmor?.name}
+                    stealthArmorName={stealthArmor?.name}
                   />
                 </div>
               </SectionCard>
@@ -1851,18 +1860,25 @@ export default function CharacterDetail() {
                       showSpellTabs={false}
                     />
                   ) : null;
-                  // The once-per-rest uses for leveled racial spells, shown under the Racial source
-                  // in whichever layout applies (folded strip or top-level toggle).
-                  const racialTrackersNode = raceGrantedLeveled.length > 0 && classSection.draft !== null ? (
-                    <RacialResourceTracker
-                      traits={character?.character_data?.race_traits ?? []}
-                      level={identity.draft?.level ?? character.level}
-                      data={classSection.draft}
-                      onChange={autoSaveClassPatch}
-                      readOnly={!showEditable}
-                      includeKeys={raceGrantedLeveled.map(s => s.resourceKey)}
-                    />
-                  ) : null;
+                  // The once-per-rest use for each leveled racial spell, as a control that rides ON
+                  // that spell's row (both layouts: folded strip and top-level toggle). A separate
+                  // tracker card here would list the same spell twice under one source — and, being
+                  // outside the level strip, on every level tab. Same character_data keys as the
+                  // Stats-tab Racial Features card, so the two can't drift.
+                  const racialUseControls = classSection.draft !== null
+                    ? Object.fromEntries(raceGrantedLeveled.map(s => [
+                      s.name,
+                      <RestUseControl
+                        key={s.resourceKey}
+                        label={s.label}
+                        recharge={s.recharge}
+                        used={classSection.draft?.[s.resourceKey] ?? 0}
+                        max={s.max}
+                        onUsedChange={(next) => autoSaveClassPatch({ [s.resourceKey]: next })}
+                        readOnly={!showEditable}
+                      />,
+                    ]))
+                    : null;
                   const sources = [
                     isCaster && { key: 'class', label: 'Class' },
                     // Subclass-granted cantrips (Arcane Archer Lore) have no fold path into the
@@ -1913,7 +1929,7 @@ export default function CharacterDetail() {
                             isGm={isGm && !playerView}
                             raceGrantedCantrips={foldSources ? raceGrantedCantrips : []}
                             raceGrantedLeveled={foldSources ? raceGrantedLeveled : []}
-                            racialTrackers={foldSources ? racialTrackersNode : null}
+                            racialUseControls={foldSources ? racialUseControls : null}
                             featSpells={foldSources ? { cantrips: fg.cantrips.map((c) => c.name), leveled: fg.leveled } : null}
                             featTrackers={foldSources ? featTrackersNode : null}
                           />
@@ -1938,22 +1954,21 @@ export default function CharacterDetail() {
                           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                             Race-Granted Spells
                           </div>
+                          {/* Each leveled racial spell carries its own once-per-rest use control on
+                              its row (rowExtras), so it appears exactly once — under its level. */}
                           <SpellLevelTabs
                             spells={[
                               ...raceGrantedCantrips.map(name => ({ name, level: 0 })),
                               ...raceGrantedLeveled.map(s => ({ name: s.name, level: s.level })),
                             ]}
                             testIdPrefix="racial-spell-tab"
+                            rowExtras={racialUseControls ? (n => racialUseControls[n] ?? null) : undefined}
                           />
                           {raceGrantedCantrips.length > 0 && (
                             <p className="text-xs text-muted-foreground">
                               Cantrips are always known and need no spell slot.
                             </p>
                           )}
-                          {/* The once-per-rest uses for the leveled spells. Same widget and same
-                              character_data keys as the Stats-tab Racial Features card, so spending
-                              a use here and there can't drift apart. */}
-                          {racialTrackersNode}
                         </div>
                       )}
 
@@ -2150,7 +2165,7 @@ function SectionCard({ title, subtitle, children, isDirty, onSave, onReset, canE
   );
 }
 
-function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition, readOnly, nonProfArmorName }) {
+function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition, readOnly, nonProfArmorName, stealthArmorName }) {
   // Which skill's arithmetic is currently expanded (one at a time).
   const [openSkill, setOpenSkill] = useState(null);
   const storedProfs = classData?.skill_proficiencies ?? [];
@@ -2185,6 +2200,8 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
   if (raAdvSkills.length > 0) legendParts.push('Teal = advantage (Remarkable Athlete)');
   // Worn non-proficient armor: disadvantage on every STR/DEX ability check.
   if (nonProfArmorName) legendParts.push(`"dis" = disadvantage (wearing ${nonProfArmorName} without proficiency)`);
+  // Bulky armor: disadvantage on Stealth specifically (unless a feat cancels it).
+  if (stealthArmorName) legendParts.push(`"dis" on Stealth = wearing ${stealthArmorName}`);
 
   const rows = SKILL_MAP.map(({ skill, ability }) => {
     const isProf = skillProfs.includes(skill);
@@ -2193,7 +2210,12 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
     // 5e: ½-PB numeric on STR/DEX/CON skills. 2024: advantage on Athletics.
     const raNumeric = raBonus > 0 && !isProf && !isExpert && raBonusAbilities.includes(ability);
     const raAdvantage = !isExpert && raAdvSkills.includes(skill);
-    const armorDisadvantage = Boolean(nonProfArmorName) && (ability === 'strength' || ability === 'dexterity');
+    // Two independent armor reasons for disadvantage, both shown with the same "dis" tag:
+    // wearing armor you're not proficient with (every STR/DEX check), and armor that
+    // imposes Stealth disadvantage (Stealth only). A character can have both at once.
+    const nonProfDisadvantage = Boolean(nonProfArmorName) && (ability === 'strength' || ability === 'dexterity');
+    const stealthDisadvantage = Boolean(stealthArmorName) && skill === 'Stealth';
+    const armorDisadvantage = nonProfDisadvantage || stealthDisadvantage;
 
     return {
       skill,
@@ -2216,7 +2238,8 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
         halfProficiency: raNumeric ? raBonus : 0,
         notes: [
           raAdvantage && 'Advantage — Remarkable Athlete',
-          armorDisadvantage && `Disadvantage — wearing ${nonProfArmorName} without proficiency`,
+          nonProfDisadvantage && `Disadvantage — wearing ${nonProfArmorName} without proficiency`,
+          stealthDisadvantage && `Disadvantage — ${stealthArmorName} imposes disadvantage on Stealth`,
         ],
       }),
     };

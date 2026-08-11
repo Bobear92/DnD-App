@@ -681,12 +681,15 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
       expect(screen.queryByText('Arcane Shot')).not.toBeInTheDocument();
     });
 
-    it('shows the cost and the save DC without expanding anything', () => {
+    // The save DC is the at-a-glance combat state. The action cost is NOT shown: the block sits
+    // inside the bow's ACTION card and rides on that same attack, so a "No Action" tag next to
+    // it reads as a second, separate thing to spend.
+    it('shows the save DC without expanding anything, and no action-cost tag', () => {
       archer();
       const block = screen.getByTestId(/^ae-arcane-shot-weapon:lb1/);
       expect(block).toHaveTextContent('Arcane Shot');
-      expect(block).toHaveTextContent('no action');
       expect(block).toHaveTextContent('14'); // 8 + PB 3 + INT +3
+      expect(block).not.toHaveTextContent(/no action/i);
     });
 
     // An archer knows up to six options, each a paragraph — expanded by default they would
@@ -737,6 +740,69 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
     it('shows nothing for a Champion holding the same longbow', () => {
       archer({ subclass: 'Champion', characterData: { subclass: 'Champion' } });
       expect(screen.queryByTestId(/^ae-arcane-shot-/)).not.toBeInTheDocument();
+    });
+  });
+
+  // "Does this attack overcome resistance to nonmagical damage?" — answered on the attack card,
+  // naming the source so the player knows when it stops applying.
+  describe('magical attack tag', () => {
+    const longbow = {
+      uid: 'lb1', category: 'weapons', equipped: true, name: 'Longbow',
+      weapon_category: 'Martial', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing',
+      properties: '["Ammunition", "Heavy", "Two-Handed"]', range: '150/600',
+    };
+    const dagger = {
+      uid: 'dg1', category: 'weapons', equipped: true, name: 'Dagger',
+      weapon_category: 'Simple', weapon_type: 'Melee', damage: '1d4', damage_type: 'Piercing',
+      properties: '["Finesse", "Light", "Thrown"]',
+    };
+    const archer = (props = {}) => renderTab({
+      charClass: 'Fighter', subclass: 'Arcane Archer', level: 7,
+      scores: { strength: 10, dexterity: 18, intelligence: 16 },
+      inventory: [longbow, dagger],
+      characterData: { subclass: 'Arcane Archer' },
+      ...props,
+    });
+
+    it('tags the bow with its source and leaves the dagger untagged', () => {
+      archer();
+      expect(screen.getByTestId('ae-magical-weapon:lb1:0')).toHaveTextContent('Magic · Magic Arrow');
+      expect(screen.queryByTestId('ae-magical-weapon:dg1:1')).not.toBeInTheDocument();
+    });
+
+    // Click, not hover — a tooltip is unreachable on touch and unreadable at a glance.
+    it('reveals the rule text on click and hides it again', () => {
+      archer();
+      const tag = screen.getByTestId('ae-magical-weapon:lb1:0');
+      expect(tag).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByTestId('ae-magical-weapon:lb1:0-note')).not.toBeInTheDocument();
+      fireEvent.click(tag);
+      expect(tag).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByTestId('ae-magical-weapon:lb1:0-note'))
+        .toHaveTextContent(/overcoming resistance and immunity to nonmagical/i);
+      fireEvent.click(tag);
+      expect(screen.queryByTestId('ae-magical-weapon:lb1:0-note')).not.toBeInTheDocument();
+    });
+
+    // The mechanics link lives inside the tag, so it appears only where the tag does.
+    it('offers the mechanics page from the expanded note, and only then', () => {
+      archer();
+      expect(screen.queryByTestId('ae-magical-weapon:lb1:0-learn-more')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('ae-magical-weapon:lb1:0'));
+      expect(screen.getByTestId('ae-magical-weapon:lb1:0-learn-more')).toHaveAttribute(
+        'href',
+        '/campaigns/1/encyclopedia/mechanics/magical-attacks'
+      );
+    });
+
+    it('is absent before the feature level', () => {
+      archer({ level: 6 });
+      expect(screen.queryByTestId(/^ae-magical-/)).not.toBeInTheDocument();
+    });
+
+    it('is absent for a Champion holding the same longbow', () => {
+      archer({ subclass: 'Champion', characterData: { subclass: 'Champion' } });
+      expect(screen.queryByTestId(/^ae-magical-/)).not.toBeInTheDocument();
     });
   });
 });

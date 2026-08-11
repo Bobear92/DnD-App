@@ -5,7 +5,7 @@
  *
  * Props (same contract as the legacy sheets, plus `gmEdit`):
  *   data, onChange, readOnly, level, creation, section, scores, abilityScores,
- *   backgroundSkills, raceSkills, raceGrantedCantrips, raceGrantedLeveled, racialTrackers,
+ *   backgroundSkills, raceSkills, raceGrantedCantrips, raceGrantedLeveled, racialUseControls,
  *   campaignId, isGm, acExtra, maxHpNode, afterHpNode,
  *   gmEdit  — GM Edit toggle: when true, locked permanent choices become editable.
  *
@@ -149,7 +149,7 @@ export default function ClassSheet({
   raceSkills = [],
   raceGrantedCantrips = [],
   raceGrantedLeveled = [],
-  racialTrackers = null,
+  racialUseControls = null,
   featSpells = null,
   featTrackers = null,
   section = 'all',
@@ -468,7 +468,7 @@ export default function ClassSheet({
           gmEdit={gmEdit}
           raceGrantedCantrips={raceGrantedCantrips}
           raceGrantedLeveled={raceGrantedLeveled}
-          racialTrackers={racialTrackers}
+          racialUseControls={racialUseControls}
           featSpells={featSpells}
           featTrackers={featTrackers}
         />

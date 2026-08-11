@@ -26,7 +26,9 @@ const levelLabel = (l) => (l === 0 ? 'Cantrips' : (ORD[l] ?? `Level ${l}`));
  *   racialCantrips      string[]  race-granted cantrip names
  *   racialLeveled       [{name, level}]  race-granted leveled spells (Infernal Legacy's Hellish
  *                       Rebuke …); level is the level the trait casts it AT, known from the trait
- *   racialTrackers      node      the racial once-per-rest use trackers (shown under Racial)
+ *   racialUseControls   {[spellName]: node}  each leveled racial spell's once-per-rest use control,
+ *                       rendered ON that spell's row. Deliberately not a separate tracker card: the
+ *                       spell would then be listed twice under one source (and on every level tab).
  *   featCantrips        string[]  feat-granted cantrip names
  *   featLeveled         [{name, level}]  feat-granted leveled spells (level known from the feat)
  *   featTrackers        node      the feat free-cast / ritual trackers (shown under the Feats source)
@@ -41,7 +43,7 @@ export default function SpellSourceLevelView({
   classLeveledNames = [],
   racialCantrips = [],
   racialLeveled = [],
-  racialTrackers = null,
+  racialUseControls = null,
   featCantrips = [],
   featLeveled = [],
   featTrackers = null,
@@ -98,19 +100,17 @@ export default function SpellSourceLevelView({
     const names = l == null
       ? [...racialCantrips, ...racialLeveled.map((r) => r.name)]
       : (l === 0 ? racialCantrips : racialLeveled.filter((r) => r.level === l).map((r) => r.name));
-    if (names.length === 0 && !(racialTrackers && l !== 0)) return null;
+    if (names.length === 0) return null;
     return (
       <div className="rounded-lg border bg-card p-3 space-y-2" data-testid="spell-source-racial-content">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Race-Granted Spells</div>
-        {names.length > 0 && (
-          <SpellList spells={names} readOnly label="" isCantrips={l === 0} hideLevelHeadings levelTabs={false}
-            characterLevel={l === 0 ? characterLevel : undefined}
-            spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus} />
-        )}
+        <SpellList spells={names} readOnly label="" isCantrips={l === 0} hideLevelHeadings levelTabs={false}
+          characterLevel={l === 0 ? characterLevel : undefined}
+          spellSaveDc={spellSaveDc} spellAttackBonus={spellAttackBonus}
+          rowExtras={racialUseControls ? ((n) => racialUseControls[n] ?? null) : undefined} />
         {l === 0 && racialCantrips.length > 0 && (
           <p className="text-xs text-muted-foreground">Always known. No spell slot required.</p>
         )}
-        {l !== 0 && racialTrackers}
       </div>
     );
   };

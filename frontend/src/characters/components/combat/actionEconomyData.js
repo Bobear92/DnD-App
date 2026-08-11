@@ -436,6 +436,10 @@ export function buildActionEconomy({
       detailRest: `to hit · ${atk.damage}${flag}${disadv}`,
       warning: atk.warning || null,
       loadingNote: atk.loadingNote || null,
+      // `{source, note}` when a feature makes this weapon's attacks magical (overcoming
+      // resistance/immunity to nonmagical damage) — resolved once in getAttacks, so this tab
+      // and the Items tab always agree. Null for a mundane weapon.
+      magical: atk.magical || null,
       // Situational note: a ranged/thrown attack has disadvantage while an enemy is within
       // 5 ft. Crossbow Expert removes it. Rendered with a link to the Spacing page.
       spacingNote: (weapon && isRangedWeapon(weapon))
@@ -753,8 +757,10 @@ export function buildActionEconomy({
     }));
     for (const entry of arcaneShotBows) {
       entry.resourceKey = 'arcane_shot_used';
+      // No `cost` here: attached to the bow's Attack-action card, Arcane Shot costs nothing on
+      // top of the attack it rides on, so the tab renders it without an action-cost badge. The
+      // standalone fallback entry below (no bow equipped) still carries `def.cost`.
       entry.arcaneShot = {
-        cost: 'no action',
         saveDc: arcaneShotSaveDc(level, scores.intelligence),
         note: `Apply one option to an arrow fired from your ${entry.name} as part of the Attack action — one option per attack. Recharges on a short or long rest.`,
         options,

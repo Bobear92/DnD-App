@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import CharacterDetail from './CharacterDetail';
@@ -1138,12 +1138,38 @@ describe('CharacterDetail', () => {
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       const racial = await screen.findByTestId('racial-spells');
       expect(racial).toHaveTextContent('Thaumaturgy');
+      fireEvent.click(within(racial).getByTestId('racial-spell-tab-tab-2'));
       expect(racial).toHaveTextContent('Hellish Rebuke');
       // Darkness is a level-5 grant — not yet.
       expect(racial).not.toHaveTextContent('Darkness');
-      // The once-per-long-rest use is spendable from the Spells tab too.
-      expect(screen.getAllByTestId('racial-resource-infernal_hellish_rebuke_used').length)
-        .toBeGreaterThan(0);
+      // The once-per-long-rest use is spendable from the Spells tab too — as a control ON the
+      // spell's row, not a second listing in a tracker card.
+      expect(within(racial).getByLabelText('Use Hellish Rebuke (2nd-level)')).toBeInTheDocument();
+      expect(within(racial).queryByTestId('racial-resource-tracker')).not.toBeInTheDocument();
+    });
+
+    // The spell was rendered twice under Racial: once in its level tab, once as a tracker row that
+    // sat outside the level strip (so it showed on the Cantrips tab too).
+    it('shows the racial spell once — no use control on the Cantrips tab', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Tiefling',
+          level: 4,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_traits: ['Infernal Legacy'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      const racial = await screen.findByTestId('racial-spells');
+      // Cantrips tab is the default: only Thaumaturgy, no Hellish Rebuke and no use control.
+      expect(racial).toHaveTextContent('Thaumaturgy');
+      expect(racial).not.toHaveTextContent('Hellish Rebuke');
+      expect(within(racial).queryByLabelText('Use Hellish Rebuke (2nd-level)')).not.toBeInTheDocument();
     });
 
     it('adds the level-5 racial spell once the Tiefling reaches it', async () => {
@@ -1162,6 +1188,7 @@ describe('CharacterDetail', () => {
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       const racial = await screen.findByTestId('racial-spells');
+      fireEvent.click(within(racial).getByTestId('racial-spell-tab-tab-2'));
       expect(racial).toHaveTextContent('Hellish Rebuke');
       expect(racial).toHaveTextContent('Darkness');
     });
@@ -2425,6 +2452,69 @@ describe('CharacterDetail', () => {
       expect(screen.getByTestId('skill-armor-dis-Athletics')).toBeInTheDocument();
       expect(screen.getByTestId('skill-armor-dis-Acrobatics')).toBeInTheDocument();
       expect(screen.queryByTestId('skill-armor-dis-Arcana')).not.toBeInTheDocument();
+    });
+
+    // Stealth disadvantage is a separate armor rule from proficiency: a Fighter is proficient
+    // with Chain Mail and still can't sneak in it.
+    it('tags Stealth for a proficient wearer of armor that imposes it', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER, // Fighter — proficient with all armor
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            inventory: [{ uid: 'a1', category: 'armor', name: 'Chain Mail', armor_type: 'heavy', armor_class: 16, stealth_disadvantage: true, equipped: true }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('skill-armor-dis-Stealth')).toBeInTheDocument());
+      // Proficient, so no OTHER skill picks up a tag.
+      expect(screen.queryByTestId('skill-armor-dis-Athletics')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('saves-armor-warning')).not.toBeInTheDocument();
+    });
+
+    it('Medium Armor Master clears the Stealth tag for medium armor only', async () => {
+      const withArmor = (armorProps) => ({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{ name: 'Medium Armor Master' }],
+            inventory: [{ uid: 'a1', category: 'armor', armor_class: 15, stealth_disadvantage: true, equipped: true, ...armorProps }],
+          },
+        },
+      });
+      characterService.getCharacterById.mockResolvedValue(withArmor({ name: 'Half Plate', armor_type: 'medium' }));
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('skill-armor-dis-Stealth')).not.toBeInTheDocument();
+
+      cleanup();
+      characterService.getCharacterById.mockResolvedValue(withArmor({ name: 'Chain Mail', armor_type: 'heavy' }));
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByTestId('skill-armor-dis-Stealth')).toBeInTheDocument());
+    });
+
+    it('no Stealth tag for armor without the flag', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            inventory: [{ uid: 'a1', category: 'armor', name: 'Leather', armor_type: 'light', armor_class: 11, equipped: true }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('skill-armor-dis-Stealth')).not.toBeInTheDocument();
     });
 
     it('no saves note or skill tags for a proficient wearer (Fighter in Chain Mail)', async () => {

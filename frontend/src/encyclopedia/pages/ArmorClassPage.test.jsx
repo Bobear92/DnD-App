@@ -44,4 +44,24 @@ describe('ArmorClassPage', () => {
     expect(screen.getByText(/reduced by 10\s*feet/i)).toBeInTheDocument();
     expect(screen.getByText(/lower than the listed\s*requirement/i)).toBeInTheDocument();
   });
+  // Extended rather than given its own page: Stealth disadvantage is an armor property, and
+  // the armor row links here. The specific armors must match the seeded compendium.
+  it('explains Stealth disadvantage and which armors actually impose it', () => {
+    renderPage();
+    expect(screen.getByRole('heading', { name: 'Stealth disadvantage' })).toBeInTheDocument();
+    const list = screen.getByTestId('armor-class-stealth-list');
+    expect(list).toHaveTextContent(/only Padded armor/i);
+    expect(list).toHaveTextContent(/Scale Mail and Half Plate/i);
+    // The quiet medium armors — the thing players most often get wrong.
+    expect(list).toHaveTextContent(/Chain Shirt, Breastplate and Hide do not/i);
+    expect(list).toHaveTextContent(/Ring Mail, Chain Mail, Splint, Plate/i);
+    expect(list).toHaveTextContent(/Shields never impose it/i);
+  });
+
+  it('notes that Medium Armor Master clears it for medium armor only', () => {
+    renderPage();
+    // The feat is also listed in the AC section, so scope to the distinctive Stealth wording.
+    expect(screen.getAllByText(/Medium Armor Master/).length).toBeGreaterThan(1);
+    expect(screen.getByText(/heavy armor still gives it away/i)).toBeInTheDocument();
+  });
 });

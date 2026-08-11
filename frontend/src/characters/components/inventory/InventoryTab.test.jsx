@@ -149,6 +149,72 @@ describe('InventoryTab', () => {
     expect(screen.getByTestId('attack-warning-w1')).toHaveTextContent(/Chain Mail without proficiency/i);
   });
 
+  // The compendium has carried `stealth_disadvantage` all along; nothing on the sheet read it.
+  describe('armor Stealth disadvantage', () => {
+    const stealthMail = { ...chainMail, stealth_disadvantage: true };
+    const halfPlate = {
+      uid: 'hp1', category: 'armor', name: 'Half Plate', armor_type: 'Medium',
+      armor_class: 15, stealth_disadvantage: true, equipped: true, quantity: 1,
+    };
+
+    it('warns on the worn armor row', () => {
+      renderTab({ inventory: [stealthMail] });
+      fireEvent.click(screen.getByTestId('inv-category-armor'));
+      expect(screen.getByTestId('inv-stealth-warning-arm1'))
+        .toHaveTextContent(/Disadvantage on Dexterity \(Stealth\) checks while worn/i);
+    });
+
+    it('warns before equipping too', () => {
+      renderTab({ inventory: [{ ...stealthMail, equipped: false }] });
+      fireEvent.click(screen.getByTestId('inv-category-armor'));
+      expect(screen.getByTestId('inv-stealth-warning-arm1'))
+        .toHaveTextContent(/Wearing it will impose disadvantage/i);
+    });
+
+    it('says the feat cancels it rather than going silent (medium armor only)', () => {
+      const feats = { feats: [{ name: 'Medium Armor Master' }] };
+      renderTab({ inventory: [halfPlate], characterData: feats });
+      fireEvent.click(screen.getByTestId('inv-category-armor'));
+      expect(screen.getByTestId('inv-stealth-warning-hp1'))
+        .toHaveTextContent(/negated by Medium Armor Master/i);
+      cleanup();
+      // Heavy armor is untouched by the feat.
+      renderTab({ inventory: [stealthMail], characterData: feats });
+      fireEvent.click(screen.getByTestId('inv-category-armor'));
+      expect(screen.getByTestId('inv-stealth-warning-arm1'))
+        .toHaveTextContent(/Disadvantage on Dexterity \(Stealth\)/i);
+    });
+
+    it('shows nothing for armor without the flag', () => {
+      renderTab({ inventory: [leather] });
+      fireEvent.click(screen.getByTestId('inv-category-armor'));
+      expect(screen.queryByTestId('inv-stealth-warning-arm2')).not.toBeInTheDocument();
+    });
+
+    // The link rides inside the note, so it can only appear when the character owns armor that
+    // would impose the disadvantage — including when the feat cancels it.
+    it('links to the armor mechanics page from the note, and only from there', () => {
+      renderTab({ inventory: [stealthMail, leather] });
+      fireEvent.click(screen.getByTestId('inv-category-armor'));
+      expect(screen.getByTestId('inv-stealth-learn-more-arm1')).toHaveAttribute(
+        'href', '/campaigns/1/encyclopedia/mechanics/armor-class');
+      // Leather imposes nothing → no note and no link on its row.
+      expect(screen.queryByTestId('inv-stealth-learn-more-arm2')).not.toBeInTheDocument();
+    });
+
+    it('still offers the link when a feat negates the disadvantage', () => {
+      renderTab({ inventory: [halfPlate], characterData: { feats: [{ name: 'Medium Armor Master' }] } });
+      fireEvent.click(screen.getByTestId('inv-category-armor'));
+      expect(screen.getByTestId('inv-stealth-learn-more-hp1')).toBeInTheDocument();
+    });
+
+    it('shows no link at all when no owned armor imposes it', () => {
+      renderTab({ inventory: [leather] });
+      fireEvent.click(screen.getByTestId('inv-category-armor'));
+      expect(screen.queryByTestId(/^inv-stealth-learn-more-/)).not.toBeInTheDocument();
+    });
+  });
+
   it('shows no Strength warning when the requirement is met or absent', () => {
     renderTab({
       inventory: [{ ...chainMail, strength_requirement: 13 }, leather],
@@ -730,5 +796,60 @@ describe('InventoryTab — Hex Warrior weapon (Hexblade Warlock)', () => {
     // CHA +4 + prof +2 = +6 (finesse DEX would be +1+2 = +3)
     expect(screen.getByTestId('attack-rp1')).toHaveTextContent('+6 · 1d8 + 4 Piercing');
     expect(screen.getByTestId('attack-hex-rp1')).toHaveTextContent(/Hex Warrior/);
+  });
+
+  // Whether an attack overcomes resistance to nonmagical damage — same resolver as the Action
+  // Economy tab, so the two tabs can't disagree.
+  describe('magical attack tag', () => {
+    const longbow = {
+      uid: 'lb1', category: 'weapons', name: 'Longbow', weapon_category: 'Martial',
+      weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing', equipped: true, quantity: 1,
+    };
+    const archer = (props = {}) => renderTab({
+      charClass: 'Fighter', subclass: 'Arcane Archer', level: 7,
+      scores: { strength: 10, dexterity: 16 },
+      inventory: [longbow, longsword],
+      ...props,
+    });
+
+    it('tags the bow with its source and leaves the longsword untagged', () => {
+      archer();
+      expect(screen.getByTestId('attack-magical-lb1')).toHaveTextContent('Magic · Magic Arrow');
+      expect(screen.queryByTestId('attack-magical-w1')).not.toBeInTheDocument();
+    });
+
+    // Click, not hover — same control as the Action Economy tab (MagicAttackBadge).
+    it('reveals the rule text on click and hides it again', () => {
+      archer();
+      const tag = screen.getByTestId('attack-magical-lb1');
+      expect(screen.queryByTestId('attack-magical-lb1-note')).not.toBeInTheDocument();
+      fireEvent.click(tag);
+      expect(screen.getByTestId('attack-magical-lb1-note'))
+        .toHaveTextContent(/overcoming resistance and immunity to nonmagical/i);
+      fireEvent.click(tag);
+      expect(screen.queryByTestId('attack-magical-lb1-note')).not.toBeInTheDocument();
+    });
+
+    // The mechanics link lives inside the tag, so it can only ever appear where the tag does —
+    // the app never points a character at a rule it can't use.
+    it('offers the mechanics page from the expanded note, and only then', () => {
+      archer();
+      expect(screen.queryByTestId('attack-magical-lb1-learn-more')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('attack-magical-lb1'));
+      expect(screen.getByTestId('attack-magical-lb1-learn-more')).toHaveAttribute(
+        'href',
+        '/campaigns/1/encyclopedia/mechanics/magical-attacks'
+      );
+    });
+
+    it('is absent below the feature level', () => {
+      archer({ level: 6 });
+      expect(screen.queryByTestId(/^attack-magical-/)).not.toBeInTheDocument();
+    });
+
+    it('is absent for a Champion holding the same longbow', () => {
+      archer({ subclass: 'Champion' });
+      expect(screen.queryByTestId(/^attack-magical-/)).not.toBeInTheDocument();
+    });
   });
 });

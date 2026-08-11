@@ -4,6 +4,7 @@ import {
   toggleEquipped, toggleAttuned, attunedCount,
   equippedBodyArmor, equippedShield, computeArmorClass,
   isWeaponProficient, isArmorProficient, weaponAbility, computeAttack, getAttacks,
+  stealthDisadvantageArmor, armorStealthNote,
   abilityMod, profBonus, isHeavyWeapon, creatureSize, weaponAttackWarning,
   isLoadingWeapon, weaponLoadingNote,
   armorStrengthNote, armorSpeedPenalty,
@@ -230,6 +231,44 @@ describe('attack math', () => {
     expect(atks).toHaveLength(1);
     expect(atks[0].name).toBe('Longsword');
     expect(atks[0].proficient).toBe(true);
+  });
+
+  // Resolved in getAttacks (not in each surface) so the Items tab and the Action Economy tab
+  // can never disagree about whether a weapon overcomes nonmagical resistance.
+  describe('magical attacks', () => {
+    const archerBow = () => [
+      weapon({ uid: 'b1', equipped: true, name: 'Longbow', damage: '1d8', weapon_type: 'ranged', weapon_category: 'Martial' }),
+      weapon({ uid: 'd1', equipped: true, name: 'Dagger', damage: '1d4' }),
+    ];
+    const args = (over = {}) => ({
+      inventory: archerBow(),
+      scores: { dexterity: 16 },
+      level: 7,
+      weaponProfText: 'simple weapons, martial weapons',
+      charClass: 'Fighter',
+      subclass: 'Arcane Archer',
+      edition: '5e',
+      ...over,
+    });
+
+    it('tags only the weapons the feature covers, with its source', () => {
+      const rows = getAttacks(args());
+      expect(rows.find((r) => r.name === 'Longbow').magical).toEqual({
+        source: 'Magic Arrow',
+        note: expect.any(String),
+      });
+      expect(rows.find((r) => r.name === 'Dagger').magical).toBeNull();
+    });
+
+    it('is null below the feature level', () => {
+      const rows = getAttacks(args({ level: 6 }));
+      expect(rows.find((r) => r.name === 'Longbow').magical).toBeNull();
+    });
+
+    it('is null without the class/subclass context (nothing claims magic by default)', () => {
+      const rows = getAttacks({ ...args(), charClass: null, subclass: null });
+      expect(rows.every((r) => r.magical === null)).toBe(true);
+    });
   });
 });
 
@@ -633,5 +672,52 @@ describe('Hex Warrior weapon (CHA attacks)', () => {
     expect(ls.hexNote).toMatch(/Hex Warrior/);
     expect(rp.ability).toBe('dexterity'); // finesse, not hexed
     expect(rp.hexNote).toBeNull();
+  });
+});
+
+// Bulky armor gives disadvantage on Dexterity (Stealth). The compendium already carried
+// the `stealth_disadvantage` flag; nothing on the character sheet read it.
+describe('armor Stealth disadvantage', () => {
+  const chainMail = (over) => armor({ uid: 'cm', name: 'Chain Mail', armor_type: 'Heavy', stealth_disadvantage: true, ...over });
+  const halfPlate = (over) => armor({ uid: 'hp', name: 'Half Plate', armor_type: 'Medium', stealth_disadvantage: true, ...over });
+  const leatherArmor = (over) => armor({ uid: 'lt', name: 'Leather', armor_type: 'Light', stealth_disadvantage: false, ...over });
+  const mam = [{ name: 'Medium Armor Master' }];
+
+  it('reports the equipped armor imposing it', () => {
+    expect(stealthDisadvantageArmor([chainMail({ equipped: true })])?.name).toBe('Chain Mail');
+  });
+
+  it('ignores armor that is owned but not worn', () => {
+    expect(stealthDisadvantageArmor([chainMail({ equipped: false })])).toBeNull();
+  });
+
+  it('is null for armor without the flag, and for an empty inventory', () => {
+    expect(stealthDisadvantageArmor([leatherArmor({ equipped: true })])).toBeNull();
+    expect(stealthDisadvantageArmor([])).toBeNull();
+  });
+
+  // RAW both editions: the feat covers MEDIUM armor only — plate still clanks.
+  it('Medium Armor Master cancels it for medium armor but not heavy', () => {
+    expect(stealthDisadvantageArmor([halfPlate({ equipped: true })], { feats: mam })).toBeNull();
+    expect(stealthDisadvantageArmor([halfPlate({ equipped: true })])?.name).toBe('Half Plate');
+    expect(stealthDisadvantageArmor([chainMail({ equipped: true })], { feats: mam })?.name).toBe('Chain Mail');
+  });
+
+  describe('armorStealthNote', () => {
+    it('words it differently for worn vs owned', () => {
+      expect(armorStealthNote(chainMail({ equipped: true }))).toMatch(/while worn/i);
+      expect(armorStealthNote(chainMail({ equipped: false }))).toMatch(/Wearing it will impose/i);
+    });
+
+    it('is null for armor that never imposes it', () => {
+      expect(armorStealthNote(leatherArmor({ equipped: true }))).toBeNull();
+    });
+
+    // The reassurance matters as much as the warning — otherwise a Medium Armor Master
+    // just sees the note vanish and can't tell whether the app knows about the feat.
+    it('says so when the feat cancels it, rather than going silent', () => {
+      expect(armorStealthNote(halfPlate({ equipped: true }), { feats: mam }))
+        .toMatch(/negated by Medium Armor Master/i);
+    });
   });
 });

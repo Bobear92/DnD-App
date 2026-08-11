@@ -13,6 +13,7 @@ import {
   isAmmunitionEntry, isAmmoItem, weaponNeedsAmmo, setAmmoQuantity,
 } from '@/characters/components/inventory/ammunitionData';
 import WeaponAmmoControl from '@/characters/components/inventory/WeaponAmmoControl';
+import MagicAttackBadge from '@/characters/components/inventory/MagicAttackBadge';
 import WeaponPropertyBadges from '@/characters/components/inventory/WeaponPropertyBadges';
 import { weaponBadges, weaponFacets } from '@/characters/components/inventory/weaponPropertyData';
 import ItemPickerDialog from '@/characters/components/inventory/ItemPickerDialog';
@@ -20,7 +21,7 @@ import {
   buildEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons, migrateHands,
   toggleEquipped, toggleAttuned, attunedCount, computeArmorClass, getAttacks,
   isWeaponProficient, isArmorProficient, creatureSize, weaponAttackWarning, weaponLoadingNote,
-  armorStrengthNote, nonProficientEquippedArmor, armorNonProficiencyNote,
+  armorStrengthNote, armorStealthNote, nonProficientEquippedArmor, armorNonProficiencyNote,
   assignHand, handContents, isShieldEntry, isHandCapable, isTwoHandedWeapon, isVersatileWeapon,
   abilityMod, profBonus, formatSigned,
   EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
@@ -136,7 +137,7 @@ export default function InventoryTab({
   const hexWarrior = isHexWarrior({ charClass, subclass, edition });
   const hexUid = hexWarrior ? storedHexWeaponUid(characterData) : null;
   const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats, styles });
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor, hexWeaponUid: hexUid });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor, hexWeaponUid: hexUid, charClass, subclass });
   const attuned = attunedCount(inventory);
   // Worn armor/shield without proficiency — disadvantage on STR/DEX rolls + no spellcasting.
   const badArmor = nonProficientEquippedArmor(inventory, { armorProfText, raceArmor });
@@ -342,8 +343,12 @@ export default function InventoryTab({
               {attacks.map((a) => (
                 <div key={a.uid} className="flex flex-col" data-testid={`attack-${a.uid}`}>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium flex items-center gap-1.5">
+                    <span className="font-medium flex flex-wrap items-center gap-1.5">
                       {a.name}
+                      {/* Overcomes resistance/immunity to nonmagical damage. Same resolver as the
+                          Action Economy tab (getAttacks) and the same badge component, so neither
+                          the answer nor the presentation can drift. Click reveals the rule text. */}
+                      <MagicAttackBadge magical={a.magical} testId={`attack-magical-${a.uid}`} campaignId={campaignId} />
                       {!a.proficient && <span className="text-xs text-amber-600">(not proficient)</span>}
                       {a.disadvantage && <span className="text-xs text-amber-600">(disadvantage)</span>}
                     </span>
@@ -492,6 +497,11 @@ export default function InventoryTab({
               // Armor with a Strength requirement the character doesn't meet — warn on
               // the row before AND after equipping (unmet Str = −10 ft speed while worn).
               const strWarning = e.category === 'armor' ? armorStrengthNote(e, scores) : null;
+              // Armor that gives disadvantage on Stealth (and whether a feat cancels it).
+              const stealthNote = e.category === 'armor'
+                ? armorStealthNote(e, { feats: characterData?.feats })
+                : null;
+              const stealthNegated = stealthNote?.startsWith('Would impose');
               const loadingNote = e.category === 'weapons'
                 ? weaponLoadingNote(e, { feats: characterData?.feats, proficient, edition })
                 : null;
@@ -538,6 +548,24 @@ export default function InventoryTab({
                     )}
                     {strWarning && (
                       <div className="text-[11px] text-amber-600 leading-tight" data-testid={`inv-str-warning-${e.uid}`}>{strWarning}</div>
+                    )}
+                    {/* The mechanics link rides INSIDE the note, so it only ever appears when the
+                        character actually owns armor that would impose Stealth disadvantage —
+                        including when a feat is cancelling it, which is when you most want the rule. */}
+                    {stealthNote && (
+                      <div
+                        className={cn('text-[11px] leading-tight', stealthNegated ? 'text-emerald-600' : 'text-amber-600')}
+                        data-testid={`inv-stealth-warning-${e.uid}`}
+                      >
+                        {stealthNote}{' '}
+                        <Link
+                          to={`/campaigns/${campaignId}/encyclopedia/mechanics/armor-class`}
+                          className="text-primary hover:underline"
+                          data-testid={`inv-stealth-learn-more-${e.uid}`}
+                        >
+                          How armor works
+                        </Link>
+                      </div>
                     )}
                     {loadingNote && (
                       <div

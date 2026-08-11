@@ -23,6 +23,7 @@ import EncyclopediaPage from './encyclopedia/pages/EncyclopediaPage';
 import SpellEditPage from './encyclopedia/pages/SpellEditPage';
 import ItemEditPage from './encyclopedia/pages/ItemEditPage';
 import ManeuversPage from './encyclopedia/pages/ManeuversPage';
+import SubclassPage from './encyclopedia/pages/SubclassPage';
 import JumpPage from './encyclopedia/pages/JumpPage';
 import ArmorClassPage from './encyclopedia/pages/ArmorClassPage';
 import ActionEconomyPage from './encyclopedia/pages/ActionEconomyPage';
@@ -30,6 +31,7 @@ import HitDicePage from './encyclopedia/pages/HitDicePage';
 import LoadingPage from './encyclopedia/pages/LoadingPage';
 import ObjectInteractionPage from './encyclopedia/pages/ObjectInteractionPage';
 import SpacingPage from './encyclopedia/pages/SpacingPage';
+import MagicalAttacksPage from './encyclopedia/pages/MagicalAttacksPage';
 import MainLayout from './shared/components/layout/MainLayout';
 
 function App() {
@@ -57,6 +59,7 @@ function App() {
             <Route path="/campaigns/:campaignId/settings" element={<ProtectedRoute><CampaignSettingsPage /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia" element={<ProtectedRoute><MainLayout><EncyclopediaPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/maneuvers" element={<ProtectedRoute><MainLayout><ManeuversPage /></MainLayout></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/classes/:className/:subclassName" element={<ProtectedRoute><MainLayout><SubclassPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/jump" element={<ProtectedRoute><MainLayout><JumpPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/armor-class" element={<ProtectedRoute><MainLayout><ArmorClassPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/action-economy" element={<ProtectedRoute><MainLayout><ActionEconomyPage /></MainLayout></ProtectedRoute>} />
@@ -64,6 +67,7 @@ function App() {
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/loading" element={<ProtectedRoute><MainLayout><LoadingPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/object-interaction" element={<ProtectedRoute><MainLayout><ObjectInteractionPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/spacing" element={<ProtectedRoute><MainLayout><SpacingPage /></MainLayout></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/magical-attacks" element={<ProtectedRoute><MainLayout><MagicalAttacksPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/spells/:spellId" element={<ProtectedRoute><MainLayout><SpellEditPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/items/:category/:itemId" element={<ProtectedRoute><MainLayout><ItemEditPage /></MainLayout></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/campaigns" replace />} />

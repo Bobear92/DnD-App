@@ -126,6 +126,39 @@ export default function ArmorClassPage() {
             </p>
           </Section>
 
+          <Section title="Stealth disadvantage">
+            <p>
+              Bulky armor rattles. Armor whose entry says so gives you{' '}
+              <span className="font-medium text-foreground">disadvantage on Dexterity (Stealth) checks</span> while
+              you wear it. This has nothing to do with proficiency — a Fighter proficient with all armor still
+              can't sneak in plate — and nothing to do with your AC, which is unchanged.
+            </p>
+            <p>It is a property of the specific armor, not of its category. In the compendium:</p>
+            <ul className="list-disc pl-5 space-y-1" data-testid="armor-class-stealth-list">
+              <li><span className="font-medium text-foreground">Light</span> — only Padded armor.</li>
+              <li>
+                <span className="font-medium text-foreground">Medium</span> — Scale Mail and Half Plate.{' '}
+                <span className="italic">Chain Shirt, Breastplate and Hide do not</span> — they're the quiet
+                medium armors, which is a large part of why they get picked.
+              </li>
+              <li><span className="font-medium text-foreground">Heavy</span> — all of it: Ring Mail, Chain Mail, Splint, Plate.</li>
+              <li><span className="font-medium text-foreground">Shields</span> never impose it.</li>
+            </ul>
+            <p>
+              <span className="font-medium text-foreground">Medium Armor Master</span> removes the disadvantage
+              from <span className="font-medium text-foreground">medium</span> armor — so a Scale Mail or Half
+              Plate wearer with the feat sneaks normally, while heavy armor still gives it away. On your sheet the
+              armor's row says which of the two is happening, and the{' '}
+              <span className="font-medium text-foreground">Stealth</span> skill carries a "dis" tag whenever it
+              actually applies.
+            </p>
+            <p>
+              Both the 2014 and 2024 rules work this way. Note that disadvantage applies to the{' '}
+              <span className="italic">Stealth check</span> only — moving quietly is harder, but nothing else about
+              Dexterity changes.
+            </p>
+          </Section>
+
           <Section title="Armor proficiency">
             <p>
               Your class (plus some races and feats) tells you which armor categories you're{' '}

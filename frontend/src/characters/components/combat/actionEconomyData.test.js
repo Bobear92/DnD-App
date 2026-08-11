@@ -947,7 +947,9 @@ describe('buildActionEconomy — Arcane Archer (Fighter subclass)', () => {
     expect(ec.no_action.find((e) => e.name === 'Arcane Shot')).toBeFalsy();
     const bow = ec.action.find((e) => e.name === 'Longbow');
     expect(bow.arcaneShot).toBeTruthy();
-    expect(bow.arcaneShot.cost).toBe('no action');
+    // No action-cost badge on the attached block — it rides on the bow's Attack action, so a
+    // "No Action" tag would read as a second thing to spend. The standalone fallback keeps one.
+    expect(bow.arcaneShot.cost).toBeUndefined();
     // The uses are the one shared pool, so the bow card carries the same resource key.
     expect(bow.resourceKey).toBe('arcane_shot_used');
   });

@@ -5,6 +5,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { WizardSheet5e as WizardSheet } from '@/characters/components/sheets/classSheet/configs';
 
 vi.mock('react-router-dom', () => ({
+  // SubclassDetails reads campaignId from the URL for its encyclopedia link; no route here.
+  useParams: () => ({}),
   Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
 }));
 

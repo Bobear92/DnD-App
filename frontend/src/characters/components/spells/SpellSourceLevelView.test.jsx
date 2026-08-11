@@ -99,7 +99,7 @@ describe('SpellSourceLevelView', () => {
   describe('leveled racial spells', () => {
     const racialProps = {
       racialLeveled: [{ name: 'Hellish Rebuke', level: 2 }],
-      racialTrackers: <div data-testid="racial-trackers">racial trackers</div>,
+      racialUseControls: { 'Hellish Rebuke': <div data-testid="racial-use-hr">1/1</div> },
     };
 
     it('counts a leveled racial spell in its level tab', async () => {
@@ -110,25 +110,29 @@ describe('SpellSourceLevelView', () => {
       expect(screen.getByTestId('spell-level-tab-2')).toHaveTextContent('2nd (2)');
     });
 
-    it('offers a Racial source above level 0 and shows the spell + its tracker there', async () => {
+    // The use-counter rides ON the spell's row rather than in a tracker card below the list:
+    // a card would list the spell a second time under the same source.
+    it('offers a Racial source above level 0 and shows the spell with its use control on its row', async () => {
       mockCatalog = CATALOG;
       view(racialProps);
       await screen.findByTestId('spell-level-tabs');
       fireEvent.click(screen.getByTestId('spell-level-tab-2'));
       fireEvent.click(screen.getByTestId('spell-source-racial'));
       const content = screen.getByTestId('spell-source-racial-content');
-      expect(within(content).getByText('Hellish Rebuke')).toBeInTheDocument();
-      expect(within(content).getByTestId('racial-trackers')).toBeInTheDocument();
+      // Named exactly once — the row itself, not row + tracker.
+      expect(within(content).getAllByText('Hellish Rebuke')).toHaveLength(1);
+      expect(within(content).getByTestId('racial-use-hr')).toBeInTheDocument();
     });
 
-    it('keeps the tracker off the cantrip tab', async () => {
+    it('keeps the use control off the cantrip tab', async () => {
       mockCatalog = CATALOG;
       view(racialProps);
       await screen.findByTestId('spell-source-racial');
       fireEvent.click(screen.getByTestId('spell-source-racial'));
       const content = screen.getByTestId('spell-source-racial-content');
       expect(within(content).getByText('Prestidigitation')).toBeInTheDocument();
-      expect(within(content).queryByTestId('racial-trackers')).not.toBeInTheDocument();
+      expect(within(content).queryByText('Hellish Rebuke')).not.toBeInTheDocument();
+      expect(within(content).queryByTestId('racial-use-hr')).not.toBeInTheDocument();
     });
 
     it('opens a level tab that only a racial spell occupies', async () => {

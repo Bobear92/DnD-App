@@ -4,6 +4,8 @@ import { FighterSheet5e as FighterSheet, FighterSheet2024 } from '@/characters/c
 
 // The Eldritch Knight known-caster block renders an encyclopedia Link.
 vi.mock('react-router-dom', () => ({
+  // SubclassDetails reads campaignId from the URL for its encyclopedia link; no route here.
+  useParams: () => ({}),
   Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
 }));
 

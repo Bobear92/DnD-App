@@ -4,9 +4,11 @@ import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
 
 // SpellList is tested on its own; mock it to isolate the tab logic + surface what it receives.
 vi.mock('@/characters/components/spells/SpellList', () => ({
-  default: ({ spells = [], isCantrips }) => (
+  default: ({ spells = [], isCantrips, rowExtras }) => (
     <div data-testid="spell-list" data-cantrips={String(!!isCantrips)}>
-      {spells.map((n) => <span key={n} data-testid={`sl-${n}`}>{n}</span>)}
+      {spells.map((n) => (
+        <span key={n} data-testid={`sl-${n}`}>{n}{rowExtras?.(n)}</span>
+      ))}
     </div>
   ),
 }));
@@ -39,6 +41,16 @@ describe('SpellLevelTabs', () => {
     expect(screen.getByTestId('spell-list')).toHaveAttribute('data-cantrips', 'false');
     expect(screen.getByTestId('sl-Mage Armor')).toBeInTheDocument();
     expect(screen.queryByTestId('sl-Fire Bolt')).not.toBeInTheDocument();
+  });
+
+  // A racial spell that IS its own once-per-rest resource carries its use control on its row,
+  // so it isn't listed a second time in a tracker card.
+  it('forwards rowExtras to SpellList for the shown level only', () => {
+    const rowExtras = (n) => (n === 'Mage Armor' ? <b data-testid="extra-mage-armor">1/1</b> : null);
+    render(<SpellLevelTabs spells={SPELLS} rowExtras={rowExtras} />);
+    expect(screen.queryByTestId('extra-mage-armor')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('spell-level-tab-1'));
+    expect(screen.getByTestId('extra-mage-armor')).toBeInTheDocument();
   });
 
   it('renders an empty state when there are no spells', () => {

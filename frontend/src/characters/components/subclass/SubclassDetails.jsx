@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { BookOpen, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 import { Label } from '@/components/ui/label';
@@ -7,6 +8,10 @@ import { Label } from '@/components/ui/label';
 export default function SubclassDetails({ className, edition, subclassName, level }) {
   const [expanded, setExpanded] = useState({});
   const toggle = (name) => setExpanded(prev => ({ ...prev, [name]: !prev[name] }));
+  // The sheet lists only the features already EARNED; the encyclopedia page is the whole subclass
+  // at every level. Rendered from a campaign route, so campaignId comes from the URL — outside a
+  // router (a sheet rendered bare in a test) it's undefined and the link is simply omitted.
+  const { campaignId } = useParams();
 
   const editionKey = edition === '5.5e' ? '5.5e' : '5e';
   const subData = SUBCLASS_DATA[className]?.[editionKey]?.[subclassName];
@@ -21,6 +26,17 @@ export default function SubclassDetails({ className, edition, subclassName, leve
     <div className="space-y-3">
       <div className="text-sm font-semibold">{subclassName}</div>
       <div className="text-xs text-muted-foreground italic leading-relaxed">{subData.flavorText}</div>
+      {campaignId && (
+        <Link
+          to={`/campaigns/${campaignId}/encyclopedia/classes/${encodeURIComponent(className)}/${encodeURIComponent(subclassName)}`}
+          data-testid="subclass-encyclopedia-link"
+          className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          {subclassName} in the Encyclopedia
+          <ChevronRight className="w-3.5 h-3.5" />
+        </Link>
+      )}
       {earnedFeatures.length > 0 && (
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground uppercase tracking-wide">Subclass Features</Label>

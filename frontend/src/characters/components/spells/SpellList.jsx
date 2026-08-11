@@ -86,6 +86,11 @@ async function fetchSpellCatalog(campaignId, edition) {
  *   characterLevel   number               the character's level; when set (cantrip lists only), each
  *                                          cantrip row shows its computed damage-at-this-level + save DC /
  *                                          attack bonus, so the player needn't open the description
+ *   rowExtras        (name) => node|null   per-spell controls rendered in the row's right-hand cluster.
+ *                                          Lets a spell that IS its own resource carry its use-counter on
+ *                                          the spell row itself (a racial once-per-rest spell — Infernal
+ *                                          Legacy's Hellish Rebuke) instead of being listed a second time
+ *                                          in a separate tracker card.
  */
 export default function SpellList({
   spells = [],
@@ -101,6 +106,7 @@ export default function SpellList({
   characterLevel,
   hideLevelHeadings = false,
   levelTabs = true,
+  rowExtras,
 }) {
   const ctx = useCampaign();
   const campaignId = ctx?.campaign?.id;
@@ -241,6 +247,7 @@ export default function SpellList({
                       )}
                     </div>
                     <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                      {rowExtras?.(name)}
                       {castable && (
                         <button
                           type="button"
