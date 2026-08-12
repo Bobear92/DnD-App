@@ -185,15 +185,32 @@ const characterService = {
 
   // ── Rest ───────────────────────────────────────────────────────────────────
 
-  applyRest: async (campaignId, restType, characterIds) => {
+  // `optIns` is only meaningful for restType 'initiative': {characterId: [featureName]} for
+  // features the player must CHOOSE to use (they cost a limited charge, so the backend ignores
+  // them unless named here).
+  applyRest: async (campaignId, restType, characterIds, optIns = null) => {
     try {
       const response = await api.post(`/campaign/${campaignId}/rest`, {
         rest_type: restType,
         character_ids: characterIds,
+        ...(optIns ? { opt_ins: optIns } : {}),
       });
       return { success: true, data: response.data };
     } catch (error) {
       return { success: false, error: error.response?.data?.detail || 'Failed to apply rest' };
+    }
+  },
+
+  /** Which of these characters have an initiative feature they must opt into, and is it still
+   *  available. Read-only; the encounter page asks rather than mirroring the backend table. */
+  getInitiativeOptions: async (campaignId, characterIds = []) => {
+    try {
+      const response = await api.get(`/campaign/${campaignId}/initiative-options`, {
+        params: { character_ids: characterIds.join(',') },
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to load initiative options' };
     }
   },
 };

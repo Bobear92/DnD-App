@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from shared.database import engine, Base
 from auth.routes import router as auth_router
-from gm import campaigns_router, npcs_router, loot_tables_router, locations_router, calendar_router, timeline_router, session_notes_router
+from gm import campaigns_router, npcs_router, loot_tables_router, locations_router, calendar_router, timeline_router, session_notes_router, encounters_router
 from players.characters.routes import router as characters_router
 from players.races import router as races_router
 from players.backgrounds import router as backgrounds_router
@@ -45,6 +45,7 @@ app.include_router(locations_router)
 app.include_router(calendar_router)
 app.include_router(timeline_router)
 app.include_router(session_notes_router)
+app.include_router(encounters_router)
 app.include_router(bestiary_router)
 app.include_router(spells_router)
 app.include_router(armor_router)

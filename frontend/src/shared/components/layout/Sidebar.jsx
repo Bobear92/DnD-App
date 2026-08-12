@@ -2,7 +2,7 @@ import { NavLink, useParams } from 'react-router-dom';
 import { useCampaign } from '../../../campaigns/CampaignContext';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard, Users, Drama, Map, Clock, BookOpen, Menu, ChevronLeft, GitBranch, Settings, Library,
+  LayoutDashboard, Users, Drama, Map, Clock, BookOpen, Menu, ChevronLeft, GitBranch, Settings, Library, Swords,
 } from 'lucide-react';
 
 const Sidebar = ({ collapsed, toggleSidebar }) => {
@@ -14,6 +14,8 @@ const Sidebar = ({ collapsed, toggleSidebar }) => {
   const gmNavItems = [
     { path: `/campaigns/${campaignId}/dashboard`, icon: LayoutDashboard, label: 'Dashboard' },
     { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'Characters' },
+    // GM-only by design — the encounters API 403s players on reads as well as writes.
+    { path: `/campaigns/${campaignId}/encounters`, icon: Swords, label: 'Encounters' },
     { path: `/campaigns/${campaignId}/npcs`, icon: Drama, label: 'NPCs' },
     { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
     { path: `/campaigns/${campaignId}/timeline`, icon: GitBranch, label: 'Timeline' },

@@ -133,8 +133,25 @@ class ToggleVisibilityRequest(BaseModel):
 # ── Rest ──────────────────────────────────────────────────────────────────────
 
 class RestRequest(BaseModel):
-    rest_type: str  # "short" or "long"
+    rest_type: str  # "short" | "long" | "initiative" (see service._REST_TYPES)
     character_ids: List[int]
+    # Initiative only: {character_id: [feature names]} the player chose to use. Features with
+    # mode 'opt_in' (Monk 2024 Uncanny Metabolism) do nothing unless named here, because they
+    # cost a limited charge and the choice is the player's. Keys arrive as JSON strings.
+    opt_ins: Optional[Dict[str, List[str]]] = None
+
+
+class InitiativeOption(BaseModel):
+    feature: str
+    label: str
+    description: str = ""
+    available: bool = True   # false once its own charge is spent
+
+
+class InitiativeOptionsItem(BaseModel):
+    character_id: int
+    name: str
+    options: List[InitiativeOption] = []
 
 
 class RestResultItem(BaseModel):

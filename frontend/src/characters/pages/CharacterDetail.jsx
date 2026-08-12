@@ -34,12 +34,13 @@ import ActionEconomyTab from '@/characters/components/combat/ActionEconomyTab';
 import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
 import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '@/characters/components/feats/featEffects';
 import { computePassiveScores } from '@/characters/components/skills/passiveSkills';
-import { skillBreakdown, saveBreakdown, abilityPart, buildBreakdown } from '@/characters/components/skills/skillMath';
+import { skillBreakdown, saveBreakdown } from '@/characters/components/skills/skillMath';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { getCasterDescriptor } from '@/characters/components/classData/casterDescriptors';
 import { MaxHpValue } from '@/characters/components/combat/CombatBonusInline';
 import { hpRollBase, effectiveMaxHp as computeEffectiveMaxHp, remarkableAthlete } from '@/characters/components/combat/combatBonuses';
+import { initiativeBreakdown, initiativeFeatNote } from '@/characters/components/combat/initiativeData';
 import { draconicLabel } from '@/characters/components/subclass/draconicData';
 import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
 import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
@@ -1375,20 +1376,14 @@ export default function CharacterDetail() {
                     <div className="rounded-md border py-2 px-2">
                       <div className="text-[10px] text-muted-foreground uppercase">Initiative</div>
                       {(() => {
-                        const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
-                        const sources = getFeatStatModSources(feats, 'initiative', { pb });
-                        const ra = remarkableAthlete({
+                        const { breakdown, featSources: sources, advantage } = initiativeBreakdown({
+                          dexterity: identity.draft.dexterity,
+                          feats: classSection.draft?.feats ?? character.character_data?.feats ?? [],
+                          pb,
                           charClass: character.char_class,
                           subclass: classSection.draft?.subclass ?? character.character_data?.subclass,
                           level: character.level,
                           edition,
-                        });
-                        const breakdown = buildBreakdown({
-                          parts: [
-                            abilityPart('dexterity', identity.draft.dexterity),
-                            ...sources.map((s) => ({ key: `feat-${s.source}`, label: s.source, value: s.amount })),
-                          ],
-                          notes: [ra?.advantageInitiative && 'Advantage — Remarkable Athlete'],
                         });
                         return (
                           <>
@@ -1405,10 +1400,10 @@ export default function CharacterDetail() {
                             )}
                             {sources.length > 0 && (
                               <div className="text-[9px] text-emerald-600 leading-tight" data-testid="initiative-feat-note">
-                                {sources.map((s) => `+${s.amount} ${s.source}`).join(', ')}
+                                {initiativeFeatNote(sources)}
                               </div>
                             )}
-                            {ra?.advantageInitiative && (
+                            {advantage && (
                               <div className="text-[9px] text-teal-600 leading-tight" data-testid="initiative-advantage-note">
                                 Advantage (Remarkable Athlete)
                               </div>

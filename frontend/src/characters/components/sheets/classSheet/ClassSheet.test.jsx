@@ -133,6 +133,21 @@ describe('ClassSheet — rest resource descriptions', () => {
       .toHaveTextContent('Take one additional action on your turn.');
   });
 
+  // Samurai's Fighting Spirit had no tracker at all until the initiative work needed a pool for
+  // Tireless Spirit to refill. Subclass-gated, so only a Samurai sees it.
+  it('shows the Samurai Fighting Spirit pool, and only for a Samurai', () => {
+    render(<FighterSheet data={{ ...FIGHTER_DATA, subclass: 'Samurai' }} level={10} section="features" />);
+    const row = screen.getByTestId('rest-resource-fighting_spirit_used');
+    expect(within(row).getByText('Fighting Spirit (Long Rest)')).toBeInTheDocument();
+    expect(screen.getByTestId('rest-resource-desc-fighting_spirit_used'))
+      .toHaveTextContent('advantage on your weapon attack rolls');
+  });
+
+  it('hides Fighting Spirit from a Champion', () => {
+    render(<FighterSheet data={{ ...FIGHTER_DATA, subclass: 'Champion' }} level={10} section="features" />);
+    expect(screen.queryByTestId('rest-resource-fighting_spirit_used')).not.toBeInTheDocument();
+  });
+
   it('shows the Indomitable description once earned (L9)', () => {
     render(<FighterSheet data={FIGHTER_DATA} level={9} section="features" />);
     expect(screen.getByTestId('rest-resource-desc-indomitable_used'))

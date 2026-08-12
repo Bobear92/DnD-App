@@ -50,6 +50,14 @@ const REST_RESOURCES = [
     key: 'indomitable_used', label: 'Indomitable (Long Rest)', total: indomitableTotal, recharge: 'long', minLevel: 9,
     description: 'Reroll a failed saving throw — you must use the new roll.',
   },
+  // Subclass-gated: only a Samurai sees this. Three uses per long rest; the temporary hit points
+  // scale, which is progression information rather than a "when you got it" tag, so it is spelled
+  // out in words in the description.
+  {
+    key: 'fighting_spirit_used', label: 'Fighting Spirit (Long Rest)', total: () => 3,
+    recharge: 'long', minLevel: 3, subclass: 'Samurai',
+    description: 'Bonus action: advantage on your weapon attack rolls until the end of the turn, plus temporary hit points — five of them, rising to ten at tenth level and fifteen at fifteenth.',
+  },
 ];
 
 const ASI_LEVELS = [4, 6, 8, 12, 14, 16, 19];

@@ -7,7 +7,7 @@ from players.characters.schemas import (
     CharacterListItem, ToggleVisibilityRequest,
     CharacterTimelineEventCreate, CharacterTimelineEventResponse,
     CharacterNpcCreate, CharacterNpcResponse,
-    RestRequest, RestResponse,
+    RestRequest, RestResponse, InitiativeOptionsItem,
 )
 from players.characters.service import (
     create_character, get_characters_for_user, get_character_by_id,
@@ -16,7 +16,7 @@ from players.characters.service import (
     upload_character_music, delete_character_music,
     get_character_timeline_events, create_character_timeline_event, remove_character_timeline_event,
     get_character_npcs, create_character_npc, remove_character_npc,
-    apply_rest,
+    apply_rest, get_initiative_options,
 )
 from shared.database import get_db
 from shared.dependencies import get_current_user
@@ -43,8 +43,24 @@ def apply_rest_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Apply a short or long rest to selected characters (GM only)."""
+    """Apply a short rest, long rest, or initiative recharge to selected characters (GM only)."""
     return apply_rest(db, campaign_id, rest_data, current_user.id, current_user.is_admin)
+
+
+@router.get("/campaign/{campaign_id}/initiative-options", response_model=List[InitiativeOptionsItem])
+def initiative_options_endpoint(
+    campaign_id: int,
+    character_ids: str = "",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Initiative features the listed characters must CHOOSE to use (GM only).
+
+    `character_ids` is a comma-separated list. Characters with no such feature are omitted, so an
+    empty list means "nobody in this encounter has a choice to make".
+    """
+    ids = [int(part) for part in character_ids.split(',') if part.strip().isdigit()]
+    return get_initiative_options(db, campaign_id, ids, current_user.id, current_user.is_admin)
 
 
 @router.get("/campaign/{campaign_id}", response_model=List[CharacterListItem])

@@ -8,7 +8,7 @@ from players.characters.schemas import (
     CharacterCreate, CharacterUpdate, CharacterGmUpdate,
     CharacterTimelineEventCreate, CharacterTimelineEventResponse,
     CharacterNpcCreate, CharacterNpcResponse,
-    RestRequest, RestResponse, RestResultItem,
+    RestRequest, RestResponse, RestResultItem, InitiativeOption, InitiativeOptionsItem,
 )
 from players.characters.storage import save_character_image, delete_character_image_file
 from shared.music_storage import save_music_file, delete_music_file
@@ -462,7 +462,289 @@ def remove_character_npc(db: Session, character_id: int, link_id: int, user_id: 
 
 # ── Rest ──────────────────────────────────────────────────────────────────────
 
+# 'initiative' is not a rest in the fiction — it reuses this endpoint because it is the same
+# operation (GM applies a resource patch to selected characters) and shares its authorization.
+_REST_TYPES = {'short', 'long', 'initiative'}
+
 _SPELLCASTING_CLASSES = {'Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Wizard', 'Artificer'}
+
+# ── Initiative-triggered recharges ────────────────────────────────────────────
+#
+# A handful of features refill a resource "when you roll initiative". They are applied by the GM's
+# encounter flow (rest_type 'initiative'), never by a short/long rest.
+#
+# This table is the SINGLE source of truth — deliberately not mirrored on the frontend. The UI shows
+# what this returned (RestResponse.changes) rather than predicting it, so the two can't disagree
+# about which features fired. There are three shapes, hence `mode`; a boolean flag would have been
+# wrong from the first row (Monk's Perfect Self regains FOUR, not one):
+#
+#   'regain_when_empty' — RAW "and have no uses remaining": no-op unless the pool is fully spent,
+#                         then give back `amount`.
+#   'floor'             — top the pool up so at least `amount` remains; never takes any away.
+#   'opt_in'            — the player chooses (and it costs its own charge). NOT YET IMPLEMENTED —
+#                         Monk 2024 Uncanny Metabolism needs a per-character opt-in on the page.
+#
+# `total` and `amount` accept an int, the sentinels 'level' / 'pb', or a callable taking the pool
+# context — because a pool's size is not always a constant. A Battle Master at 15th has SIX dice
+# plus one per Martial Adept feat, and a Bard's Inspiration pool is their Charisma modifier; a flat
+# number would refill someone who still had a die left. The formula lives on the row, so adding a
+# feature stays a one-row change.
+# `unit` is (singular, plural) for the change message, default ('use', 'uses').
+_INITIATIVE_RESOURCES = [
+    {
+        'feature': 'Ever-Ready Shot',
+        'label': 'Arcane Shot',
+        'char_class': 'Fighter',
+        'subclass': 'Arcane Archer',
+        'edition': '5e',          # None means "either edition"
+        'min_level': 15,
+        'key': 'arcane_shot_used',
+        'total': 2,               # flat two uses at every level (see arcaneShotData.js)
+        'mode': 'regain_when_empty',
+        'amount': 1,
+    },
+    {
+        # Both editions word it the same way and both unlock at 15th.
+        'feature': 'Relentless',
+        'label': 'Superiority Dice',
+        'char_class': 'Fighter',
+        'subclass': 'Battle Master',
+        'edition': None,
+        'min_level': 15,
+        'key': 'superiority_dice_used',
+        # 6 dice from 15th (4 at 3rd, 5 at 7th), plus one per Martial Adept feat — mirrors the
+        # frontend's superiorityDiceCount(level) + martialAdeptDieCount(feats).
+        'total': lambda ctx: 6 + _martial_adept_dice(ctx['cd']),
+        'mode': 'regain_when_empty',
+        'amount': 1,
+        'unit': ('die', 'dice'),
+    },
+    {
+        'feature': 'Superior Inspiration',
+        'label': 'Bardic Inspiration',
+        'char_class': 'Bard',
+        'subclass': None,
+        'edition': '5e',          # the 2024 Bard's version isn't in our feature tables yet
+        'min_level': 20,
+        'key': 'bardic_inspiration_used',
+        'total': lambda ctx: max(1, _ability_mod(getattr(ctx['char'], 'charisma', 10))),
+        'mode': 'regain_when_empty',
+        'amount': 1,
+    },
+    {
+        # The OPT-IN shape: the Monk CHOOSES to use this, it is not gated on being empty, and it
+        # costs its own 1/long-rest charge. `amount` follows the feature text our app displays
+        # ("regain Focus Points equal to your Proficiency Bonus"), which is a simplification of
+        # the published 2024 wording — see docs/tickets/roll-initiative-v1.md.
+        'feature': 'Uncanny Metabolism',
+        'label': 'Focus Points',
+        'description': 'Regain Focus Points equal to your proficiency bonus. Once per long rest.',
+        'char_class': 'Monk',
+        'subclass': None,
+        'edition': '5.5e',
+        'min_level': 2,
+        'key': 'ki_used',
+        'total': 'level',
+        'mode': 'opt_in',
+        'amount': 'pb',
+        'charge_key': 'uncanny_metabolism_used',
+        'unit': ('point', 'points'),
+    },
+    {
+        # Samurai's Fighting Spirit is three uses per long rest (see configs/fighter.js).
+        'feature': 'Tireless Spirit',
+        'label': 'Fighting Spirit',
+        'char_class': 'Fighter',
+        'subclass': 'Samurai',
+        'edition': '5e',          # our subclass data has no 2024 Samurai
+        'min_level': 10,
+        'key': 'fighting_spirit_used',
+        'total': 3,
+        'mode': 'regain_when_empty',
+        'amount': 1,
+    },
+    {
+        # The FLOOR shape: "have fewer Focus Points than your Proficiency Bonus → your total
+        # becomes equal to your Proficiency Bonus". Not conditional on being empty, and it must
+        # never take points away from a Monk who has more than PB.
+        'feature': 'Perfect Focus',
+        'label': 'Focus Points',
+        'char_class': 'Monk',
+        'subclass': None,
+        'edition': '5.5e',
+        'min_level': 15,
+        'key': 'ki_used',
+        'total': 'level',         # focus points = monk level
+        'mode': 'floor',
+        'amount': 'pb',
+        'unit': ('point', 'points'),
+    },
+    {
+        # "…and have no ki points remaining, you regain 4 ki points" — the reason `amount` is a
+        # number rather than a boolean flag.
+        'feature': 'Perfect Self',
+        'label': 'Ki',
+        'char_class': 'Monk',
+        'subclass': None,
+        'edition': '5e',
+        'min_level': 20,
+        'key': 'ki_used',
+        'total': 'level',         # ki points = monk level
+        'mode': 'regain_when_empty',
+        'amount': 4,
+        'unit': ('point', 'points'),
+    },
+]
+
+
+def _ability_mod(score) -> int:
+    return ((score or 10) - 10) // 2
+
+
+def _martial_adept_dice(cd: dict) -> int:
+    """Extra superiority dice from feats — one per feat carrying a `maneuver_grant` effect.
+    Mirrors the frontend `martialAdeptDieCount`."""
+    count = 0
+    for feat in (cd.get('feats') or []):
+        if not isinstance(feat, dict):
+            continue
+        for effect in (feat.get('effects') or []):
+            if isinstance(effect, dict) and effect.get('kind') == 'maneuver_grant':
+                count += 1
+                break
+    return count
+
+
+def _resolve_pool_value(value, ctx: dict) -> int:
+    """Resolve an _INITIATIVE_RESOURCES `total`/`amount`: a callable, 'level', 'pb', or an int."""
+    if callable(value):
+        return int(value(ctx))
+    if value == 'level':
+        return ctx['level']
+    if value == 'pb':
+        return ctx['pb']
+    return int(value)
+
+
+def _proficiency_bonus(level: int) -> int:
+    return 2 + (max(1, level) - 1) // 4
+
+
+def _initiative_specs_for(char: Character, cd: dict, edition: str):
+    """The _INITIATIVE_RESOURCES rows that apply to this character (class/subclass/edition/level)."""
+    level = char.level or 1
+    for spec in _INITIATIVE_RESOURCES:
+        if spec['char_class'] != char.char_class:
+            continue
+        if spec.get('subclass') and cd.get('subclass') != spec['subclass']:
+            continue
+        if spec.get('edition') and spec['edition'] != edition:
+            continue
+        if level < spec['min_level']:
+            continue
+        yield spec
+
+
+def get_initiative_options(
+    db: Session, campaign_id: int, character_ids: list[int], user_id: int, is_admin: bool
+) -> list:
+    """Per character, the initiative features they must CHOOSE to use (and whether the choice is
+    still available). Read-only: it exists so the encounter page can offer the opt-in without
+    mirroring _INITIATIVE_RESOURCES, which would let the two copies disagree."""
+    membership = _get_membership(db, campaign_id, user_id)
+    if not membership or (membership.role != 'gm' and not is_admin):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the GM can read initiative options")
+
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    characters = db.query(Character).filter(
+        Character.id.in_(character_ids),
+        Character.campaign_id == campaign_id,
+    ).all()
+
+    results = []
+    for char in characters:
+        cd = char.character_data or {}
+        options = []
+        for spec in _initiative_specs_for(char, cd, campaign.edition):
+            if spec['mode'] != 'opt_in':
+                continue
+            spent = bool(cd.get(spec.get('charge_key')))
+            options.append(InitiativeOption(
+                feature=spec['feature'],
+                label=spec['label'],
+                description=spec.get('description', ''),
+                available=not spent,
+            ))
+        if options:
+            results.append(InitiativeOptionsItem(
+                character_id=char.id, name=char.name, options=options,
+            ))
+    return results
+
+
+def _compute_initiative_patch(
+    char: Character, edition: str, opted_in: set | None = None
+) -> tuple[dict, list]:
+    """Return (character_data_patch, human_readable_changes) for rolling initiative.
+
+    `opted_in` holds the feature names this character chose to use — an `opt_in` row does nothing
+    without it, because the player decides whether to spend the charge."""
+    cd = char.character_data or {}
+    level = char.level or 1
+    pb = _proficiency_bonus(level)
+    opted_in = opted_in or set()
+    patch: dict = {}
+    changes: list = []
+
+    for spec in _initiative_specs_for(char, cd, edition):
+        if spec['mode'] == 'opt_in' and spec['feature'] not in opted_in:
+            continue
+
+        ctx = {'char': char, 'cd': cd, 'level': level, 'pb': pb}
+        total = _resolve_pool_value(spec['total'], ctx)
+        amount = _resolve_pool_value(spec['amount'], ctx)
+        used = cd.get(spec['key']) or 0
+
+        if spec['mode'] == 'regain_when_empty':
+            if used < total:
+                continue  # RAW: only when you have none left
+            new_used = max(0, used - amount)
+        elif spec['mode'] == 'floor':
+            # Leave at least `amount` in the pool; never reduce someone who has more.
+            new_used = min(used, max(0, total - amount))
+        elif spec['mode'] == 'opt_in':
+            # Costs its own charge, so refuse when that charge is already spent — and don't burn
+            # it on a full pool, where the feature would do nothing anyway.
+            charge_key = spec.get('charge_key')
+            if charge_key and cd.get(charge_key):
+                continue
+            if used == 0:
+                continue
+            new_used = max(0, used - amount)
+            if charge_key:
+                patch[charge_key] = 1
+        else:
+            continue
+
+        if new_used == used:
+            continue
+
+        patch[spec['key']] = new_used
+        regained = used - new_used
+        singular, plural = spec.get('unit', ('use', 'uses'))
+        changes.append(
+            f"{spec['label']}: {regained} {singular if regained == 1 else plural} "
+            f"regained ({spec['feature']})"
+        )
+
+    if not changes:
+        changes.append('Nothing regained on initiative')
+
+    return patch, changes
+
 
 # Racial / subracial rest resources — mirrors frontend racialRestResources.js.
 # Each tuple: (trait_name, character_data_key, recharge, min_level).
@@ -571,6 +853,9 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             if cd.get('subclass') == 'Arcane Archer':
                 patch['arcane_shot_used'] = 0
                 changes.append('Arcane Shot recovered')
+            if cd.get('subclass') == 'Samurai':
+                patch['fighting_spirit_used'] = 0
+                changes.append('Fighting Spirit recovered')
             if cd.get('subclass') == 'Eldritch Knight':
                 # Subclass caster: Fighter isn't in _SPELLCASTING_CLASSES, so reset the
                 # EK's spell slots here (same shape as the class-caster reset above).
@@ -584,6 +869,11 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
         elif cls == 'Monk':
             patch['ki_used'] = 0
             changes.append('Focus points recovered' if edition == '5.5e' else 'Ki points recovered')
+            if edition == '5.5e':
+                # Uncanny Metabolism's own 1/long-rest charge (see _INITIATIVE_RESOURCES).
+                if cd.get('uncanny_metabolism_used'):
+                    changes.append('Uncanny Metabolism recovered')
+                patch['uncanny_metabolism_used'] = 0
         elif cls == 'Paladin':
             patch['lay_on_hands_used'] = 0
             patch['divine_sense_used'] = 0
@@ -692,6 +982,13 @@ def apply_rest(
     if not membership or (membership.role != 'gm' and not is_admin):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the GM can apply rests")
 
+    # Previously an unrecognised rest_type silently patched nothing and reported success.
+    if rest_data.rest_type not in _REST_TYPES:
+        raise HTTPException(
+            status_code=422,  # starlette renamed its 422 constant; the literal is version-proof
+            detail=f"rest_type must be one of {sorted(_REST_TYPES)}",
+        )
+
     campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
@@ -703,7 +1000,11 @@ def apply_rest(
 
     applied_to = []
     for char in characters:
-        patch, changes = _compute_rest_patch(char, rest_data.rest_type, campaign.edition)
+        if rest_data.rest_type == 'initiative':
+            opted_in = set((rest_data.opt_ins or {}).get(str(char.id), []))
+            patch, changes = _compute_initiative_patch(char, campaign.edition, opted_in)
+        else:
+            patch, changes = _compute_rest_patch(char, rest_data.rest_type, campaign.edition)
         if patch:
             char_data = dict(char.character_data or {})
             char_data.update(patch)

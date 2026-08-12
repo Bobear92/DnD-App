@@ -19,6 +19,7 @@ import SessionList from './sessions/pages/SessionList';
 import SessionDetail from './sessions/pages/SessionDetail';
 import CampaignMembers from './campaigns/pages/CampaignMembers';
 import CampaignSettingsPage from './campaigns/pages/CampaignSettingsPage';
+import EncountersPage from './encounters/pages/EncountersPage';
 import EncyclopediaPage from './encyclopedia/pages/EncyclopediaPage';
 import SpellEditPage from './encyclopedia/pages/SpellEditPage';
 import ItemEditPage from './encyclopedia/pages/ItemEditPage';
@@ -58,6 +59,8 @@ function App() {
             <Route path="/campaigns/:campaignId/sessions/:sessionId" element={<ProtectedRoute><SessionDetail /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/members" element={<ProtectedRoute><CampaignMembers /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/settings" element={<ProtectedRoute><CampaignSettingsPage /></ProtectedRoute>} />
+            {/* EncountersPage renders its own MainLayout (it needs the full-height flex body). */}
+            <Route path="/campaigns/:campaignId/encounters" element={<ProtectedRoute><EncountersPage /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia" element={<ProtectedRoute><MainLayout><EncyclopediaPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/maneuvers" element={<ProtectedRoute><MainLayout><ManeuversPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/classes/:className" element={<ProtectedRoute><MainLayout><ClassPage /></MainLayout></ProtectedRoute>} />
