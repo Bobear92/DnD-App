@@ -692,6 +692,51 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
       expect(block).not.toHaveTextContent(/no action/i);
     });
 
+    // "14" alone doesn't say whether a new Intelligence score has landed yet, so the DC opens
+    // into its arithmetic like every other derived number on the sheet.
+    it('expands the save DC into its calculation when clicked', () => {
+      archer();
+      const dc = screen.getByTestId(/^ae-arcane-shot-dc-weapon:lb1/);
+      expect(dc).toHaveTextContent('14');
+      expect(dc).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByTestId(/^ae-arcane-shot-dc-breakdown-weapon:lb1/)).not.toBeInTheDocument();
+
+      fireEvent.click(dc);
+      const panel = screen.getByTestId(/^ae-arcane-shot-dc-breakdown-weapon:lb1/);
+      expect(panel).toHaveTextContent('Base');
+      expect(panel).toHaveTextContent('Proficiency bonus');
+      expect(panel).toHaveTextContent('+3');
+      expect(panel).toHaveTextContent('INT modifier');
+      expect(panel).toHaveTextContent('Total');
+      // A DC is a target number, not a bonus — it must not render as "+14".
+      expect(panel).not.toHaveTextContent('+14');
+    });
+
+    it('collapses the save DC calculation again on a second click', () => {
+      archer();
+      fireEvent.click(screen.getByTestId(/^ae-arcane-shot-dc-weapon:lb1/));
+      fireEvent.click(screen.getByTestId(/^ae-arcane-shot-dc-weapon:lb1/));
+      expect(screen.queryByTestId(/^ae-arcane-shot-dc-breakdown-weapon:lb1/)).not.toBeInTheDocument();
+    });
+
+    // Superior Arcane Shot is written into the option's own text: a trailing "the damage
+    // increases to 4d6" beside a description still saying 2d6 was being read as extra damage.
+    it('shows the upgraded option text at level 18, with no appended improvement clause', () => {
+      archer({ level: 18 });
+      fireEvent.click(screen.getByTestId(/^ae-arcane-shot-toggle-weapon:lb1/));
+      const bursting = screen.getByTestId('ae-arcane-shot-option-Bursting Arrow');
+      expect(bursting).toHaveTextContent(/each take 4d6 force damage/);
+      expect(bursting).not.toHaveTextContent(/2d6/);
+      expect(bursting).not.toHaveTextContent(/increases to/);
+    });
+
+    it('shows the base option text below level 18', () => {
+      archer({ level: 17 });
+      fireEvent.click(screen.getByTestId(/^ae-arcane-shot-toggle-weapon:lb1/));
+      expect(screen.getByTestId('ae-arcane-shot-option-Bursting Arrow'))
+        .toHaveTextContent(/each take 2d6 force damage/);
+    });
+
     // An archer knows up to six options, each a paragraph — expanded by default they would
     // bury every attack row below this card.
     it('collapses the options behind a toggle showing how many are known', () => {

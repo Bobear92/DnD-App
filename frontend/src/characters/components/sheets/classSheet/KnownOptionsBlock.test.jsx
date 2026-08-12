@@ -95,17 +95,27 @@ describe('KnownOptionsBlock', () => {
     expect(screen.getByText('Bursting Arrow')).toBeInTheDocument(); // still displayed
   });
 
-  it('hides the improved effects below the improvement level', () => {
+  it('shows the base option text below the improvement level', () => {
     renderBlock({ level: 17 });
     expect(screen.queryByTestId('known-options-arcane_shot-improved-Shadow Arrow')).not.toBeInTheDocument();
+    // Nothing anywhere in the block — known options or the picker below them — shows upgraded dice.
+    const block = screen.getByTestId('known-options-arcane_shot');
+    expect(block).toHaveTextContent(/extra 2d6 psychic damage/);
+    expect(block).not.toHaveTextContent(/4d6/);
   });
 
-  it('shows each option\'s improved effect at the improvement level', () => {
+  // The upgrade replaces the description rather than appending a clause to it — the player
+  // reads one paragraph with the right dice, not a base effect plus "…increases to 4d6".
+  it('shows the upgraded option text at the improvement level', () => {
     renderBlock({ level: 18 });
-    expect(screen.getByTestId('known-options-arcane_shot-improved-Shadow Arrow'))
-      .toHaveTextContent('psychic damage increases to 4d6');
+    const shadow = screen.getByTestId('known-options-arcane_shot-improved-Shadow Arrow');
+    expect(shadow).toHaveTextContent(/extra 4d6 psychic damage/);
+    expect(shadow).not.toHaveTextContent(/2d6/);
+    expect(shadow).not.toHaveTextContent(/increases to/);
     expect(screen.getByTestId('known-options-arcane_shot-improved-Bursting Arrow'))
-      .toHaveTextContent('force damage increases to 4d6');
+      .toHaveTextContent(/each take 4d6 force damage/);
+    // The badge is what marks the text as the improved version.
+    expect(screen.getAllByText('Improved').length).toBeGreaterThan(0);
   });
 
   it('shows an em dash when nothing is known and nothing is owed', () => {

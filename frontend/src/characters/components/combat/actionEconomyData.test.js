@@ -971,12 +971,28 @@ describe('buildActionEconomy — Arcane Archer (Fighter subclass)', () => {
     expect(bow.arcaneShot.saveDc).toBe(14);
   });
 
-  it('shows the improved effects only from level 18', () => {
+  // The card shows the DC as a clickable number, so the arithmetic has to travel with it —
+  // and its total can never disagree with the plain `saveDc` next to it.
+  it('carries the save DC arithmetic alongside the number', () => {
+    const bow = buildActionEconomy(aaArgs(7, { scores: { dexterity: 18, intelligence: 16 } }))
+      .action.find((e) => e.name === 'Longbow');
+    expect(bow.arcaneShot.saveDcBreakdown.total).toBe(bow.arcaneShot.saveDc);
+    expect(bow.arcaneShot.saveDcBreakdown.parts.map((p) => p.label))
+      .toEqual(['Base', 'Proficiency bonus', 'INT modifier']);
+  });
+
+  // Superior Arcane Shot rewrites the option's own text rather than appending a rider, so the
+  // card can't show "2d6 force damage" and "increases to 4d6" side by side.
+  it('swaps in the upgraded option text only from level 18', () => {
     const at = (lvl) => buildActionEconomy(aaArgs(lvl, {
       characterData: { arcane_shot_options: ['Bursting Arrow'] },
-    })).action.find((e) => e.name === 'Longbow').arcaneShot.options[0].improvement;
-    expect(at(17)).toBeNull();
-    expect(at(18)).toMatch(/4d6/);
+    })).action.find((e) => e.name === 'Longbow').arcaneShot.options[0];
+    expect(at(17).description).toMatch(/each take 2d6 force damage/);
+    expect(at(17).improved).toBe(false);
+    expect(at(18).description).toMatch(/each take 4d6 force damage/);
+    expect(at(18).description).not.toMatch(/2d6/);
+    expect(at(18).description).not.toMatch(/increases to/);
+    expect(at(18).improved).toBe(true);
   });
 
   it('points at level-up when no options have been chosen', () => {

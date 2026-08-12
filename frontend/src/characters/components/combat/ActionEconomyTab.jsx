@@ -19,6 +19,7 @@ import {
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { useRestResource } from '@/characters/components/sheets/classSheet/hooks/useRestResource';
 import { RestResourceControl } from '@/characters/components/sheets/classSheet/RestResourceTracker';
+import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
 
 const TAB_ICONS = { no_action: Sparkles, action: Swords, bonus: Zap, 'action+bonus': Repeat, reaction: ShieldAlert };
 
@@ -64,9 +65,15 @@ function ToHitBreakdown({ toHit, breakdown, entryKey }) {
  * that is the at-a-glance combat state. The OPTIONS collapse behind a toggle (closed by
  * default, same shape as the ClassSheet features list): an archer knows up to six, each a
  * paragraph, and expanding all of them would bury the attack rows below this card.
+ *
+ * The save DC is clickable, expanding into its arithmetic through the same BreakdownValue the
+ * skills and saving throws use — "18" alone doesn't say whether a new Intelligence score or
+ * proficiency bonus has landed yet. Each option's 18th-level upgrade is already written into
+ * its description upstream, so nothing here appends a second "…increases to 4d6" clause.
  */
 function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, isGm }) {
   const [open, setOpen] = useState(false);
+  const [dcOpen, setDcOpen] = useState(false);
   const options = arcaneShot.options || [];
   return (
     <div
@@ -79,7 +86,20 @@ function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, i
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold">Arcane Shot</span>
         <span className="text-[11px] text-muted-foreground">
-          Save DC <span className="font-semibold text-foreground">{arcaneShot.saveDc}</span>
+          Save DC{' '}
+          {arcaneShot.saveDcBreakdown ? (
+            <BreakdownValue
+              testId={`ae-arcane-shot-dc-${entryKey}`}
+              label="the Arcane Shot save DC"
+              breakdown={arcaneShot.saveDcBreakdown}
+              signed={false}
+              expanded={dcOpen}
+              onToggle={() => setDcOpen((o) => !o)}
+              className="font-semibold text-foreground"
+            />
+          ) : (
+            <span className="font-semibold text-foreground">{arcaneShot.saveDc}</span>
+          )}
         </span>
         {resource && (
           <span className="ml-auto">
@@ -93,6 +113,13 @@ function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, i
           </span>
         )}
       </div>
+      {dcOpen && arcaneShot.saveDcBreakdown && (
+        <BreakdownPanel
+          testId={`ae-arcane-shot-dc-breakdown-${entryKey}`}
+          breakdown={arcaneShot.saveDcBreakdown}
+          signed={false}
+        />
+      )}
       {/* Nothing to hide when no option has been picked yet — show the prompt inline. */}
       {arcaneShot.emptyNote ? (
         <p className="text-[11px] text-amber-600 leading-relaxed">{arcaneShot.emptyNote}</p>
@@ -118,9 +145,6 @@ function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, i
                   <li key={o.name} data-testid={`ae-arcane-shot-option-${o.name}`}>
                     <span className="text-[11px] font-medium">{o.name}</span>
                     <span className="text-[11px] text-muted-foreground leading-relaxed"> — {o.description}</span>
-                    {o.improvement && (
-                      <span className="text-[11px] text-emerald-600 leading-relaxed"> {o.improvement}</span>
-                    )}
                   </li>
                 ))}
               </ul>

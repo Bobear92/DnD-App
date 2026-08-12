@@ -12,14 +12,17 @@
  *     label,                  // shown in the step header
  *     storeField,             // character_data field the chosen NAMES are written to
  *     knownAtLevel(level)→n,  // cumulative count known at a level (drives the per-level delta)
- *     pool: [{ name, description }],
+ *     pool: [{ name, description, improvedDescription? }],
  *     subclass?,              // when set, the choice belongs to that SUBCLASS, not the whole
  *                             //   class — offered only to a character who has it (Arcane
  *                             //   Archer's Arcane Shot). Everything else about the shape is
  *                             //   identical, so a subclass pool costs no new step/component.
- *     improvementAt?,         // level at which each pool option's `improvement` text applies
- *                             //   (Arcane Shot's 18th-level upgrade). Rendered by
- *                             //   KnownOptionsBlock, so the level lives in a gate not a label.
+ *     improvementAt?,         // level from which each pool option's `improvedDescription`
+ *                             //   REPLACES its description (Arcane Shot's 18th-level upgrade).
+ *                             //   Resolved by poolOptionDescription, so the level lives in a
+ *                             //   gate not a label — and every surface swaps the same text
+ *                             //   rather than appending an "…increases to 4d6" clause that
+ *                             //   reads as a second, additional effect.
  *     derived?(level, scores) // one computed line for the sheet — { label, value, note }
  *                             //   (Arcane Shot's save DC = 8 + PB + INT).
  *   }
@@ -245,6 +248,17 @@ export function availablePoolOptions(choice, characterData = {}, level = null) {
   return (choice.pool || []).filter(
     (o) => !have.has(lc(o.name)) && (level == null || (o.minLevel ?? 0) <= Number(level)),
   );
+}
+
+/**
+ * The text to show for one pool option at a level: its improved description once the choice's
+ * `improvementAt` level is reached, otherwise the base one. One rule in one place, so a picker
+ * and the known-options list next to it can never show the same option two different ways.
+ */
+export function poolOptionDescription(choice, option, level = 1) {
+  if (!option) return '';
+  const improved = choice?.improvementAt != null && Number(level) >= choice.improvementAt;
+  return (improved && option.improvedDescription) || option.description || '';
 }
 
 /**

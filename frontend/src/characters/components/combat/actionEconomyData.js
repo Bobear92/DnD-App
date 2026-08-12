@@ -29,7 +29,8 @@ import { weaponNeedsAmmo } from '@/characters/components/inventory/ammunitionDat
 import { remarkableAthleteMoveNote, eldritchStrikeNote } from '@/characters/components/subclass/subclassCombatNotes';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 import {
-  isArcaneShotBow, getArcaneShotOptions, arcaneShotSaveDc, arcaneShotImproved,
+  isArcaneShotBow, getArcaneShotOptions, arcaneShotSaveDc, arcaneShotSaveDcBreakdown,
+  arcaneShotImproved,
 } from '@/characters/components/classData/arcaneShotData';
 import { getBreathWeapon } from '@/characters/components/race/breathWeaponData';
 
@@ -749,11 +750,15 @@ export function buildActionEconomy({
   const arcaneShotBowKeys = arcaneShotBows.map((e) => e.key);
   if (arcaneShotBows.length > 0) {
     const known = characterData.arcane_shot_options || [];
+    // Superior Arcane Shot (L18) is resolved INTO each option's description — one paragraph
+    // with the bigger dice — rather than shipped as a separate clause the card appends. A
+    // trailing "the damage increases to 4d6" next to a description that still says 2d6 reads
+    // as an extra effect on top, which is exactly how it was being misread mid-combat.
     const improved = arcaneShotImproved(level);
     const options = getArcaneShotOptions(known).map((o) => ({
       name: o.name,
-      description: o.description,
-      improvement: improved ? o.improvement : null,
+      description: (improved && o.improvedDescription) || o.description,
+      improved,
     }));
     for (const entry of arcaneShotBows) {
       entry.resourceKey = 'arcane_shot_used';
@@ -762,6 +767,8 @@ export function buildActionEconomy({
       // standalone fallback entry below (no bow equipped) still carries `def.cost`.
       entry.arcaneShot = {
         saveDc: arcaneShotSaveDc(level, scores.intelligence),
+        // The same DC as arithmetic, so the card's number can expand into how it was reached.
+        saveDcBreakdown: arcaneShotSaveDcBreakdown(level, scores.intelligence),
         note: `Apply one option to an arrow fired from your ${entry.name} as part of the Attack action — one option per attack. Recharges on a short or long rest.`,
         options,
         emptyNote: options.length === 0 ? 'No options chosen yet — pick them at level-up.' : null,

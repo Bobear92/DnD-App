@@ -28,7 +28,7 @@ import {
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { getHpBonusesPerLevel, hpRollBase, effectiveMaxHp } from '@/characters/components/combat/combatBonuses';
 import { getManeuvers, maneuversKnownAtLevel } from '@/characters/components/classData/maneuversData';
-import { getLevelChoices, availablePoolOptions, applyLevelChoice } from '@/characters/components/classData/levelChoicesData';
+import { getLevelChoices, availablePoolOptions, applyLevelChoice, poolOptionDescription } from '@/characters/components/classData/levelChoicesData';
 import { getSubclassGrants, availableGrantOptions, applyGrant } from '@/characters/components/classData/subclassGrants';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import FeatPicker from '@/characters/components/feats/FeatPicker';
@@ -1586,6 +1586,9 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                     {opts.map((o) => {
                       const sel = chosen.includes(o.name);
                       const atLimit = !sel && chosen.length >= required;
+                      // At a level past the pool's improvement level, pick from the UPGRADED
+                      // text — the same text the sheet will show once it's chosen.
+                      const description = poolOptionDescription(c, o, newLevel);
                       return (
                         <button
                           key={o.name}
@@ -1600,8 +1603,8 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                           )}
                         >
                           <span className="font-medium text-sm">{o.name}</span>
-                          {o.description && (
-                            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{o.description}</p>
+                          {description && (
+                            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</p>
                           )}
                         </button>
                       );

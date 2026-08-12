@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
-import { availablePoolOptions } from '@/characters/components/classData/levelChoicesData';
+import { availablePoolOptions, poolOptionDescription } from '@/characters/components/classData/levelChoicesData';
 import Field from '@/characters/components/sheets/Field';
 
 /**
@@ -20,7 +20,9 @@ import Field from '@/characters/components/sheets/Field';
  * existed, GM import) can fill the owed slots inline; only GM Edit can remove one.
  *
  * Per-choice optional fields it honors (see levelChoicesData):
- *   improvementAt  — level at which each option's `improvement` text applies
+ *   improvementAt  — level from which each option's `improvedDescription` replaces its
+ *                    description (the upgraded dice are written INTO the option text, so the
+ *                    player reads one paragraph rather than a base effect plus a rider)
  *   derived(level, scores) → { label, value, note }  — one computed line (Arcane Shot save DC)
  */
 export default function KnownOptionsBlock({
@@ -78,10 +80,16 @@ export default function KnownOptionsBlock({
 
               {known.map((name) => {
                 const opt = byName.get(name);
+                const showImproved = improved && !!opt?.improvedDescription;
                 return (
                   <div key={name} className="rounded-md border bg-muted/20 p-3 space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm">{name}</span>
+                      {/* The badge is the only marker that this text is the upgraded version —
+                          the upgrade itself is written into the description below. */}
+                      {showImproved && (
+                        <Badge variant="outline" className="text-[10px]">Improved</Badge>
+                      )}
                       {gmEdit && !readOnly && (
                         <button
                           type="button"
@@ -95,14 +103,12 @@ export default function KnownOptionsBlock({
                         </button>
                       )}
                     </div>
-                    {opt?.description && (
-                      <p className="text-xs text-muted-foreground leading-relaxed">{opt.description}</p>
-                    )}
-                    {improved && opt?.improvement && (
-                      <p className="text-xs text-emerald-600 leading-relaxed"
-                        data-testid={`known-options-${choice.key}-improved-${name}`}>
-                        <Badge variant="outline" className="mr-1 text-[10px]">Improved</Badge>
-                        {opt.improvement}
+                    {opt && (
+                      <p
+                        className="text-xs text-muted-foreground leading-relaxed"
+                        data-testid={showImproved ? `known-options-${choice.key}-improved-${name}` : undefined}
+                      >
+                        {poolOptionDescription(choice, opt, level)}
                       </p>
                     )}
                   </div>
@@ -112,7 +118,7 @@ export default function KnownOptionsBlock({
               {editable && known.length < choice.count && (
                 <OptionCardPicker
                   options={availablePoolOptions(choice, data, level)
-                    .map((o) => ({ value: o.name, description: o.description }))}
+                    .map((o) => ({ value: o.name, description: poolOptionDescription(choice, o, level) }))}
                   value=""
                   onChange={(v) => v && onChange?.({ [choice.storeField]: [...known, v] })}
                 />
