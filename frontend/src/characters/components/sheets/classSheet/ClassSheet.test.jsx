@@ -153,6 +153,51 @@ describe('ClassSheet — rest resource descriptions', () => {
     expect(screen.getByTestId('rest-resource-desc-indomitable_used'))
       .toHaveTextContent('Reroll a failed saving throw — you must use the new roll.');
   });
+
+  // The Cavalier's two pools are the first sized by an ability modifier rather than by level,
+  // so these assert the score actually reaches the tracker.
+  describe('Cavalier ability-modifier pools', () => {
+    const cavalier = (level, scores) => render(
+      <FighterSheet
+        data={{ ...FIGHTER_DATA, subclass: 'Cavalier' }}
+        level={level}
+        section="features"
+        scores={scores}
+      />
+    );
+
+    it('sizes Unwavering Mark by Strength, not by level', () => {
+      cavalier(3, { strength: 18, constitution: 14 });
+      expect(within(screen.getByTestId('rest-resource-unwavering_mark_used')).getByText('4 / 4 remaining'))
+        .toBeInTheDocument();
+    });
+
+    it('sizes Warding Maneuver by Constitution once earned at L7', () => {
+      cavalier(7, { strength: 18, constitution: 16 });
+      expect(within(screen.getByTestId('rest-resource-warding_maneuver_used')).getByText('3 / 3 remaining'))
+        .toBeInTheDocument();
+    });
+
+    it('floors both at one use so a low modifier still gets the feature', () => {
+      cavalier(7, { strength: 8, constitution: 9 });
+      expect(within(screen.getByTestId('rest-resource-unwavering_mark_used')).getByText('1 / 1 remaining'))
+        .toBeInTheDocument();
+      expect(within(screen.getByTestId('rest-resource-warding_maneuver_used')).getByText('1 / 1 remaining'))
+        .toBeInTheDocument();
+    });
+
+    it('withholds Warding Maneuver until L7', () => {
+      cavalier(6, { strength: 18, constitution: 16 });
+      expect(screen.getByTestId('rest-resource-unwavering_mark_used')).toBeInTheDocument();
+      expect(screen.queryByTestId('rest-resource-warding_maneuver_used')).not.toBeInTheDocument();
+    });
+
+    it('shows neither to a Champion', () => {
+      render(<FighterSheet data={FIGHTER_DATA} level={7} section="features" scores={{ strength: 18, constitution: 16 }} />);
+      expect(screen.queryByTestId('rest-resource-unwavering_mark_used')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('rest-resource-warding_maneuver_used')).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe('ClassSheet — Features tab sub-tabs', () => {

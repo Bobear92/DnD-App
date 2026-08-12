@@ -757,7 +757,10 @@ describe('CharacterDetail', () => {
       expect(screen.queryByTestId('racial-resource-tracker')).not.toBeInTheDocument();
     });
 
-    it('keeps non-HP racial resources (Dragonborn Breath Weapon) in the Identity Racial Features card', async () => {
+    // The Identity Racial Features card is GONE: every racial rest resource is shown by the
+    // surface that owns its mechanic, each with its own Use control. A generic card here could
+    // only ever repeat one of them — which is exactly what it was doing.
+    it('does not show a Racial Features card on Identity for a Dragonborn — Breath Weapon lives in the Action Economy tab', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,
         data: {
@@ -771,8 +774,29 @@ describe('CharacterDetail', () => {
       });
       renderDetail();
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
-      expect(screen.getAllByText('Racial Features').length).toBeGreaterThan(0);
-      expect(within(screen.getByTestId('racial-resource-tracker')).getByText('Breath Weapon')).toBeInTheDocument();
+      expect(screen.queryByText('Racial Features')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('racial-resource-tracker')).not.toBeInTheDocument();
+    });
+
+    // Regression: the card only ever excluded the HP-adjacent key, so a L3+ Tiefling saw
+    // Hellish Rebuke BOTH on its Spells-tab row and again in this card.
+    it('does not repeat a racial spell resource on Identity for a L4 Tiefling', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Tiefling',
+          level: 4,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_traits: ['Darkvision', 'Hellish Resistance', 'Infernal Legacy'],
+          },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByText('Racial Features')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('racial-resource-tracker')).not.toBeInTheDocument();
     });
 
     it('does not show the Racial Features card when no rest-gated traits exist', async () => {
@@ -2590,6 +2614,54 @@ describe('CharacterDetail', () => {
       const block = await screen.findByTestId('languages-from-feats');
       expect(within(block).getByText('Draconic')).toBeInTheDocument();
       expect(within(block).getByText('Giant')).toBeInTheDocument();
+    });
+
+    // A subclass grant can hand out a language instead of a skill (Cavalier / Samurai "Bonus
+    // Proficiency"). Before this group, subclass_languages was stored and deduped against but
+    // never displayed, so the choice vanished from the sheet.
+    it('shows a subclass-granted language under "From Subclass" (Cavalier Bonus Proficiency)', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            subclass: 'Cavalier',
+            subclass_languages: ['Draconic'],
+          },
+        },
+      });
+      renderDetail();
+      const block = await screen.findByTestId('languages-from-subclass');
+      expect(within(block).getByText('Draconic')).toBeInTheDocument();
+    });
+
+    it('does not show a "From Subclass" group when the subclass granted no language', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, character_data: { ...BASE_CHARACTER.character_data, feat_languages: ['Giant'] } },
+      });
+      renderDetail();
+      await screen.findByTestId('languages-from-feats');
+      expect(screen.queryByTestId('languages-from-subclass')).not.toBeInTheDocument();
+    });
+
+    it('does not repeat a subclass language already known from the race', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_languages: ['Common', 'Elvish'],
+            subclass_languages: ['Elvish', 'Giant'],
+          },
+        },
+      });
+      renderDetail();
+      const block = await screen.findByTestId('languages-from-subclass');
+      expect(within(block).getByText('Giant')).toBeInTheDocument();
+      expect(within(block).queryByText('Elvish')).not.toBeInTheDocument();
     });
 
     it('grants a saving-throw proficiency from Resilient (chosen ability)', async () => {

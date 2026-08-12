@@ -24,6 +24,12 @@ const FIGHTER_SKILLS = [
   'Insight', 'Intimidation', 'Perception', 'Survival',
 ];
 
+// Cavalier pools are sized by an ability modifier, not by level — hence the `ctx` argument
+// useRestResource passes in. RAW floors both at one use, so a Cavalier with a dump-stat
+// modifier still gets the feature rather than an empty tracker.
+const abilityModUses = (ability) => (_level, { scores = {} } = {}) =>
+  Math.max(1, Math.floor(((scores[ability] ?? 10) - 10) / 2));
+
 const actionSurgeTotal = (level) => (level >= 17 ? 2 : level >= 2 ? 1 : 0);
 const indomitableTotal = (level) => (level >= 17 ? 3 : level >= 13 ? 2 : level >= 9 ? 1 : 0);
 const extraAttacks = (level) => (level >= 20 ? 4 : level >= 11 ? 3 : level >= 5 ? 2 : 1);
@@ -45,6 +51,18 @@ const REST_RESOURCES = [
   {
     key: 'action_surge_used', label: 'Action Surge (Short Rest)', total: actionSurgeTotal, recharge: 'short', minLevel: 2,
     description: 'Take one additional action on your turn.',
+  },
+  // Subclass-gated: only a Cavalier sees these two. Both hold ability-modifier uses (minimum
+  // one) rather than a flat count, which is why their totals read the ability scores.
+  {
+    key: 'unwavering_mark_used', label: 'Unwavering Mark (Long Rest)', total: abilityModUses('strength'),
+    recharge: 'long', minLevel: 3, subclass: 'Cavalier',
+    description: "Bonus action: a special melee attack against a creature you marked that damaged someone else — with advantage, dealing extra damage equal to half your Fighter level. Marking itself is free and unlimited; these uses are the follow-up attack.",
+  },
+  {
+    key: 'warding_maneuver_used', label: 'Warding Maneuver (Long Rest)', total: abilityModUses('constitution'),
+    recharge: 'long', minLevel: 7, subclass: 'Cavalier',
+    description: "Reaction: add 1d8 to the AC of yourself or a creature within 5 ft against one attack. If it still hits, the target resists that attack's damage. Requires a melee weapon or shield in hand.",
   },
   {
     key: 'indomitable_used', label: 'Indomitable (Long Rest)', total: indomitableTotal, recharge: 'long', minLevel: 9,

@@ -1375,6 +1375,62 @@ describe('LevelUpWizard', () => {
     });
   });
 
+  // The Cavalier's Bonus Proficiency is one picker with TWO destinations — picking a skill must
+  // write skill_proficiencies, picking a language must write subclass_languages. Getting this
+  // wrong would file a language as a bogus skill proficiency.
+  describe('subclass grants — Cavalier Bonus Proficiency (skill or language)', () => {
+    const FIGHTER_L2 = {
+      id: 40, name: 'Alys', char_class: 'Fighter', level: 2, constitution: 14,
+      character_data: { hp_max: 20 },
+    };
+
+    const toGrantStep = () => {
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → subclass
+      fireEvent.click(screen.getByText('Cavalier'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // subclass → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → subclass-grants
+    };
+
+    it('files a chosen skill under skill_proficiencies', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={FIGHTER_L2} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      toGrantStep();
+      expect(screen.getByTestId('subclass-grant-cavalier_bonus_proficiency')).toBeInTheDocument();
+      fireEvent.click(screen.getByText('Persuasion'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(3, expect.objectContaining({
+        subclass: 'Cavalier',
+        skill_proficiencies: expect.arrayContaining(['Persuasion']),
+      })));
+      expect(onComplete.mock.calls[0][1].subclass_languages).toBeUndefined();
+    });
+
+    it('files a chosen language under subclass_languages, not as a skill', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={FIGHTER_L2} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      toGrantStep();
+      fireEvent.click(screen.getByText('Draconic'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(3, expect.objectContaining({
+        subclass_languages: ['Draconic'],
+      })));
+      expect(onComplete.mock.calls[0][1].skill_proficiencies ?? []).not.toContain('Draconic');
+    });
+
+    it('is never offered to another Fighter subclass', () => {
+      render(<LevelUpWizard character={FIGHTER_L2} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      fireEvent.click(screen.getByText('Champion'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      expect(screen.queryByTestId('subclass-grant-cavalier_bonus_proficiency')).not.toBeInTheDocument();
+    });
+  });
+
   describe('level choices — Warlock Eldritch Invocations', () => {
     // Warlock L1→2 learns its first 2 invocations (5e: none before L2). Known caster + L1 subclass.
     const WARLOCK_L1 = {

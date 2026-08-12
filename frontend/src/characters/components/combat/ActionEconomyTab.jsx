@@ -418,6 +418,7 @@ export default function ActionEconomyTab({
     resources: [...(config?.restResources ?? []), ...racialResources],
     level,
     data: characterData,
+    scores, // ability-derived pool sizes (Cavalier's Strength/Constitution-modifier uses)
   });
   const restByKey = {};
   for (const r of restRows) restByKey[r.key] = r;

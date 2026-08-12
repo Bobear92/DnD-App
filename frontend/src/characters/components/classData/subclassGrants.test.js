@@ -5,10 +5,13 @@ import {
   getEarnedSubclassGrants,
   availableGrantOptions,
   applyGrant,
+  grantStoreFieldFor,
+  grantStoreFields,
 } from '@/characters/components/classData/subclassGrants';
 
 const studentOfWar = SUBCLASS_GRANTS.Fighter['5e']['Battle Master'][0];
 const additionalStyle5e = SUBCLASS_GRANTS.Fighter['5e'].Champion[0];
+const cavalierBonusProf = SUBCLASS_GRANTS.Fighter['5e'].Cavalier[0];
 
 describe('subclassGrants — data integrity', () => {
   it('Battle Master grants Student of War (tool, banner) at L3 both editions', () => {
@@ -163,5 +166,52 @@ describe('applyGrant', () => {
     expect(
       applyGrant(additionalStyle5e, ['Dueling', 'Archery'], { additional_fighting_styles: ['Archery'] })
     ).toEqual({ additional_fighting_styles: ['Archery', 'Dueling'] });
+  });
+});
+
+// ── Cavalier "Bonus Proficiency": one picker, two destinations ───────────────────
+// The grant offers "a skill OR a language", so each option carries its own storeField.
+// Without the split routing, a chosen language would land in skill_proficiencies and show
+// up as a bogus skill proficiency on the Abilities & Skills panel.
+describe('subclassGrants — split-destination grant (Cavalier Bonus Proficiency)', () => {
+  it('is a L3 5e-only grant offering the five RAW skills plus languages', () => {
+    expect(cavalierBonusProf.level).toBe(3);
+    expect(SUBCLASS_GRANTS.Fighter['5.5e'].Cavalier).toBeUndefined(); // no 2024 Cavalier
+    for (const skill of ['Animal Handling', 'History', 'Insight', 'Performance', 'Persuasion']) {
+      expect(cavalierBonusProf.options.find((o) => o.value === skill)).toBeDefined();
+    }
+    expect(cavalierBonusProf.options.find((o) => o.value === 'Draconic')).toBeDefined();
+  });
+
+  it('routes a skill to skill_proficiencies and a language to subclass_languages', () => {
+    expect(grantStoreFieldFor(cavalierBonusProf, 'Insight')).toBe('skill_proficiencies');
+    expect(grantStoreFieldFor(cavalierBonusProf, 'Draconic')).toBe('subclass_languages');
+    expect(grantStoreFields(cavalierBonusProf).sort())
+      .toEqual(['skill_proficiencies', 'subclass_languages']);
+  });
+
+  it('applyGrant writes a picked language to subclass_languages, not skill_proficiencies', () => {
+    expect(applyGrant(cavalierBonusProf, ['Draconic'], {}))
+      .toEqual({ subclass_languages: ['Draconic'] });
+  });
+
+  it('applyGrant writes a picked skill to skill_proficiencies, preserving existing ones', () => {
+    expect(applyGrant(cavalierBonusProf, ['Insight'], { skill_proficiencies: ['Athletics'] }))
+      .toEqual({ skill_proficiencies: ['Athletics', 'Insight'] });
+  });
+
+  it('excludes both skills already proficient in and languages already spoken', () => {
+    const opts = availableGrantOptions(cavalierBonusProf, {
+      skill_proficiencies: ['Insight'],
+      race_languages: ['Common', 'Draconic'],
+    });
+    expect(opts.find((o) => o.value === 'Insight')).toBeUndefined();
+    expect(opts.find((o) => o.value === 'Draconic')).toBeUndefined();
+    expect(opts.find((o) => o.value === 'History')).toBeDefined();
+    expect(opts.find((o) => o.value === 'Elvish')).toBeDefined();
+  });
+
+  it('a single-destination grant still returns exactly one field', () => {
+    expect(grantStoreFields(studentOfWar)).toEqual(['subclass_tool_proficiencies']);
   });
 });

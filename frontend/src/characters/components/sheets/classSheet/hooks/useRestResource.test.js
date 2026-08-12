@@ -74,4 +74,45 @@ describe('useRestResource', () => {
     });
     expect(rows[0].description).toBe('Does the thing.');
   });
+
+  // Not every pool is sized by level: the Cavalier's two pools hold ability-modifier uses,
+  // so `total` receives a context alongside the level.
+  describe('ability-derived totals', () => {
+    const conUses = {
+      key: 'warding_maneuver_used', label: 'Warding Maneuver', recharge: 'long',
+      total: (_level, { scores = {} } = {}) => Math.max(1, Math.floor(((scores.constitution ?? 10) - 10) / 2)),
+    };
+
+    it('sizes the pool from the ability score, not the level', () => {
+      const rows = useRestResource({ resources: [conUses], level: 7, data: {}, scores: { constitution: 16 } });
+      expect(rows[0].total).toBe(3);
+    });
+
+    it('floors at one use for a negative or zero modifier, so the row never disappears', () => {
+      const rows = useRestResource({ resources: [conUses], level: 7, data: {}, scores: { constitution: 8 } });
+      expect(rows[0].total).toBe(1);
+      expect(rows[0].remaining).toBe(1);
+    });
+
+    it('defaults to a score of 10 when no scores are supplied', () => {
+      const rows = useRestResource({ resources: [conUses], level: 7, data: {} });
+      expect(rows[0].total).toBe(1);
+    });
+
+    it('still subtracts spent uses from an ability-derived total', () => {
+      const rows = useRestResource({
+        resources: [conUses], level: 7, scores: { constitution: 18 },
+        data: { warding_maneuver_used: 2 },
+      });
+      expect(rows[0]).toMatchObject({ total: 4, used: 2, remaining: 2 });
+    });
+
+    it('leaves a level-based total working unchanged', () => {
+      const rows = useRestResource({
+        resources: [{ key: 'y', label: 'Y', total: (level) => (level >= 5 ? 2 : 1), recharge: 'long' }],
+        level: 5, data: {}, scores: { constitution: 20 },
+      });
+      expect(rows[0].total).toBe(2);
+    });
+  });
 });

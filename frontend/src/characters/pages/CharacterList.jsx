@@ -80,6 +80,11 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
     if (characterData?.subclass === 'Battle Master') items.push('Superiority Dice');
     if (characterData?.subclass === 'Arcane Archer') items.push('Arcane Shot');
     if (characterData?.subclass === 'Eldritch Knight') items.push('All spell slots');
+    if (characterData?.subclass === 'Samurai') items.push('Fighting Spirit');
+    if (characterData?.subclass === 'Cavalier') {
+      items.push('Unwavering Mark');
+      if (level >= 7) items.push('Warding Maneuver');
+    }
   }
   else if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');
   else if (cls === 'Paladin') items.push('Lay on Hands, Divine Sense & Channel Divinity, spell preparation unlocked');

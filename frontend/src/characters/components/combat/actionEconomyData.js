@@ -130,6 +130,27 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
       'Arcane Shot': { tab: 'no_action', cost: 'no action', resourceKey: 'arcane_shot_used', description: 'When you fire an arrow from a shortbow or longbow as part of the Attack action, apply one of your known Arcane Shot options to it — one option per attack. Recharges on a short or long rest.' },
       'Curving Shot': { tab: 'bonus', cost: 'bonus action', description: 'When you miss with a magic arrow, use a bonus action to reroll the attack against a different target within 60 feet of the original one.' },
     },
+    Cavalier: {
+      // Marking is free and unlimited; the tracked pool is the follow-up attack, so the
+      // resourceKey hangs off the bonus action rather than a "no action" mark entry.
+      'Unwavering Mark': { tab: 'bonus', cost: 'bonus action', resourceKey: 'unwavering_mark_used', description: "When a creature you marked deals damage to anyone other than you, make a special melee weapon attack against it with advantage, dealing extra damage equal to half your Fighter level. Marking a creature you hit with a melee weapon attack costs nothing; only this follow-up is limited. Recharges on a long rest." },
+      'Warding Maneuver': { tab: 'reaction', cost: 'reaction', resourceKey: 'warding_maneuver_used', description: "When you or a creature within 5 feet is hit by an attack, add 1d8 to the target's AC against it — potentially a miss. If it still hits, the target has resistance to that attack's damage. You must be wielding a melee weapon or a shield. Recharges on a long rest." },
+      // Ferocious Charger costs nothing extra — it rides on an attack you were making anyway,
+      // so it lands in no_action with its own computed save DC (the Arcane Shot DC pattern).
+      'Ferocious Charger': {
+        tab: 'no_action', cost: 'no action',
+        description: 'If you move at least 10 feet in a straight line right before you hit a creature, it must make a Strength saving throw or be knocked prone. Once per turn.',
+        compute: ({ level, scores }) => {
+          const pb = profBonus(level);
+          const strMod = abilityMod(scores?.strength ?? 10);
+          return {
+            detail: 'If you move at least 10 feet in a straight line right before you hit a creature,'
+              + ` it must make a Strength saving throw (DC ${8 + pb + strMod} = 8 + PB ${formatSigned(pb)}`
+              + ` + STR ${formatSigned(strMod)}) or be knocked prone. Once per turn.`,
+          };
+        },
+      },
+    },
   },
 };
 
@@ -835,12 +856,16 @@ export function buildActionEconomy({
       });
       continue;
     }
+    // A `compute` entry derives its own detail/meta from the character, the same way a
+    // RACIAL_ACTIONS entry does — Ferocious Charger's save DC scales with level and Strength,
+    // so a fixed string would show the wrong number to everyone but one character.
+    const computed = def.compute ? def.compute({ characterData, level, scores }) : null;
     push(def.tab, {
       key: `subclass:${fname}`,
       name: fname,
       source: 'Subclass',
       cost: def.cost,
-      detail: def.description,
+      detail: computed?.detail ?? def.description,
       resourceKey: def.resourceKey,
     });
   }
@@ -939,6 +964,31 @@ export function buildActionEconomy({
   (is2024 ? UNIVERSAL_REACTIONS_2024 : UNIVERSAL_REACTIONS_5E).forEach((r) => {
     push('reaction', { key: `universal:${r.name}`, name: r.name, source: 'Universal', cost: 'reaction', detail: r.description });
   });
+
+  // Cavalier's Hold the Line (L10) and Vigilant Defender (L18) change what the UNIVERSAL
+  // Opportunity Attack reaction does rather than adding an action of their own, so they ride on
+  // that entry — same shape as Arcane Charge on Action Surge. This must run AFTER the universal
+  // menu is pushed above, since that's what creates the entry they attach to.
+  if (charClass === 'Fighter' && subclass === 'Cavalier' && level >= 10) {
+    const oa = buckets.reaction.find((e) => e.key === 'universal:Opportunity Attack');
+    if (oa) {
+      const riders = [...(oa.riders || [])];
+      riders.push({
+        source: 'Hold the Line',
+        text: 'Creatures also provoke your opportunity attacks when they move 5 ft or more while'
+          + ' within your reach, and a creature you hit with one has its speed reduced to 0 for the'
+          + ' rest of the turn.',
+      });
+      if (level >= 18) {
+        riders.push({
+          source: 'Vigilant Defender',
+          text: "You get a special reaction once on every creature's turn except your own, usable"
+            + ' only to make an opportunity attack — it does not consume your normal reaction.',
+        });
+      }
+      oa.riders = riders;
+    }
+  }
 
   return { ...buckets, attacksPerAction: attacksPerAction(charClass, level) };
 }

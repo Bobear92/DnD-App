@@ -127,8 +127,8 @@ export function RestResourceControl({ row, onChange, readOnly = false, isGm = fa
   );
 }
 
-export default function RestResourceTracker({ resources = [], level = 1, data = {}, onChange, readOnly = false, isGm = false }) {
-  const rows = useRestResource({ resources, level, data });
+export default function RestResourceTracker({ resources = [], level = 1, data = {}, scores = {}, onChange, readOnly = false, isGm = false }) {
+  const rows = useRestResource({ resources, level, data, scores });
   if (rows.length === 0) return null;
 
   return (

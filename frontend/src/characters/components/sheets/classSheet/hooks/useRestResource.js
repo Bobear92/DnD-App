@@ -7,24 +7,29 @@
  * editable value.
  *
  * Config entry shape:
- *   { key, label, total: (level)=>number, recharge: 'short'|'long', minLevel?: number,
+ *   { key, label, total: (level, ctx)=>number, recharge: 'short'|'long', minLevel?: number,
  *     subclass?: string, description?: string }
  *   — description is a short "what it does" line shown under the label; `subclass` limits the
  *     resource to characters of that subclass (Arcane Archer's Arcane Shot uses), so a
  *     subclass pool costs a data entry rather than a bespoke panel.
+ *   — `total` also receives a context `{ scores, data }` because a pool is not always sized by
+ *     level: the Cavalier's Unwavering Mark and Warding Maneuver hold Strength- and
+ *     Constitution-modifier uses. The backend's _INITIATIVE_RESOURCES already passes a pool
+ *     context to its callables for the same reason; this matches that shape.
  *
  * @param {object} opts
  * @param {Array}  opts.resources  config restResources
  * @param {number} opts.level
  * @param {object} opts.data       character_data (reads `<key>_used` and `subclass`)
+ * @param {object} opts.scores     ability scores, for ability-derived pool sizes
  * @returns {Array<{ key, label, recharge, total, used, remaining }>}  visible rows only
  */
-export function useRestResource({ resources = [], level = 1, data = {} }) {
+export function useRestResource({ resources = [], level = 1, data = {}, scores = {} }) {
   return resources
     .filter((r) => level >= (r.minLevel ?? 1))
     .filter((r) => !r.subclass || r.subclass === data.subclass)
     .map((r) => {
-      const total = typeof r.total === 'function' ? r.total(level) : r.total;
+      const total = typeof r.total === 'function' ? r.total(level, { scores, data }) : r.total;
       const used = data[r.key] ?? 0;
       return {
         key: r.key,

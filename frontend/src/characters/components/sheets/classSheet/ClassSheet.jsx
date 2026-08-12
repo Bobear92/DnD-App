@@ -202,7 +202,7 @@ export default function ClassSheet({
   ) : null;
 
   const restResourcesBlock = (!creation && config.restResources?.length > 0) ? (
-    <RestResourceTracker resources={config.restResources} level={level} data={data} onChange={onChange} readOnly={readOnly} isGm={isGm} />
+    <RestResourceTracker resources={config.restResources} level={level} data={data} scores={scores} onChange={onChange} readOnly={readOnly} isGm={isGm} />
   ) : null;
 
   const notesBlock = config.notes?.map((n) => (

@@ -1471,6 +1471,80 @@ class TestInitiativeRest:
         )
         assert self._data(client, char_id, h_gm)["fighting_spirit_used"] == 3
 
+    # ── Cavalier: Unwavering Mark + Warding Maneuver ─────────────────────────
+    # Both hold ability-modifier uses, but the reset only zeroes the spent count — the pool
+    # SIZE stays a frontend concern, so these assert the counters and nothing about totals.
+
+    def _cavalier(self, client, headers, campaign_id, *, level=7, data=None):
+        resp = client.post("/api/characters", json={
+            "name": "Ser Alys", "race": "Human", "char_class": "Fighter", "level": level,
+            "campaign_id": campaign_id,
+            "character_data": {"subclass": "Cavalier", **(data or {})},
+        }, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def test_cavalier_pools_reset_on_a_long_rest(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._cavalier(client, h_gm, campaign_id, data={
+            "unwavering_mark_used": 3, "warding_maneuver_used": 2,
+        })
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["unwavering_mark_used"] == 0
+        assert cd["warding_maneuver_used"] == 0
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Unwavering Mark recovered" in changes
+        assert "Warding Maneuver recovered" in changes
+
+    def test_cavalier_pools_survive_a_short_rest(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._cavalier(client, h_gm, campaign_id, data={
+            "unwavering_mark_used": 3, "warding_maneuver_used": 2,
+        })
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["unwavering_mark_used"] == 3
+        assert cd["warding_maneuver_used"] == 2
+
+    def test_warding_maneuver_not_promised_below_level_7(self, client):
+        # Unwavering Mark is a level-3 feature; Warding Maneuver is level 7. A level-5
+        # Cavalier must not be told a rest gave back something they haven't earned.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._cavalier(client, h_gm, campaign_id, level=5, data={"unwavering_mark_used": 2})
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Unwavering Mark recovered" in changes
+        assert "Warding Maneuver recovered" not in changes
+        assert self._data(client, char_id, h_gm)["unwavering_mark_used"] == 0
+
+    def test_cavalier_pools_untouched_for_another_subclass(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        resp = client.post("/api/characters", json={
+            "name": "Champ", "race": "Human", "char_class": "Fighter", "level": 7,
+            "campaign_id": campaign_id,
+            "character_data": {"subclass": "Champion", "unwavering_mark_used": 3},
+        }, headers=h_gm)
+        char_id = resp.json()["id"]
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        assert self._data(client, char_id, h_gm)["unwavering_mark_used"] == 3
+
     def test_tireless_spirit_regains_a_use_when_empty(self, client):
         h_gm, _, campaign_id = self._setup(client)
         char_id = self._samurai(client, h_gm, campaign_id, used=3)

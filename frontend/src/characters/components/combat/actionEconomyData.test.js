@@ -1210,3 +1210,73 @@ describe('buildActionEconomy — Eldritch Knight (Fighter subclass)', () => {
     expect(champ.eldritchStrikeNote).toBeNull();
   });
 });
+
+describe('buildActionEconomy — Cavalier (Fighter subclass)', () => {
+  const cavArgs = (level, extra = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Cavalier',
+    level,
+    edition: '5e',
+    characterData: {},
+    inventory: [],
+    attacks: [{ uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true }],
+    scores: { strength: 16 },
+    spellIndex: {},
+    ...extra,
+  });
+
+  it('Unwavering Mark is a bonus action wired to its long-rest pool from L3', () => {
+    const entry = buildActionEconomy(cavArgs(3)).bonus.find((e) => e.name === 'Unwavering Mark');
+    expect(entry.resourceKey).toBe('unwavering_mark_used');
+    // The tracked pool is the follow-up attack; marking itself is free, and saying so is the
+    // whole point of the entry (a player reading only the pool would ration the wrong thing).
+    expect(entry.detail).toMatch(/Marking a creature .* costs nothing/i);
+    expect(entry.detail).toMatch(/half your Fighter level/i);
+  });
+
+  it('Warding Maneuver is a reaction from L7, not before', () => {
+    expect(buildActionEconomy(cavArgs(6)).reaction.find((e) => e.name === 'Warding Maneuver')).toBeFalsy();
+    const entry = buildActionEconomy(cavArgs(7)).reaction.find((e) => e.name === 'Warding Maneuver');
+    expect(entry.resourceKey).toBe('warding_maneuver_used');
+    expect(entry.detail).toMatch(/resistance/i);          // RAW consequence, not "1d8 force damage"
+    expect(entry.detail).not.toMatch(/force damage/i);
+    expect(entry.detail).toMatch(/melee weapon or a shield/i); // the wielding prerequisite
+  });
+
+  it('Ferocious Charger computes its save DC from level and Strength', () => {
+    // L15 → PB +5; STR 16 → +3; DC 8 + 5 + 3 = 16.
+    const l15 = buildActionEconomy(cavArgs(15)).no_action.find((e) => e.name === 'Ferocious Charger');
+    expect(l15.detail).toMatch(/DC 16 = 8 \+ PB \+5 \+ STR \+3/);
+    // A different Strength gives a different DC — the point of computing it at all.
+    const strong = buildActionEconomy(cavArgs(15, { scores: { strength: 20 } }))
+      .no_action.find((e) => e.name === 'Ferocious Charger');
+    expect(strong.detail).toMatch(/DC 18/);
+    expect(buildActionEconomy(cavArgs(14)).no_action.find((e) => e.name === 'Ferocious Charger')).toBeFalsy();
+  });
+
+  it('Hold the Line rides on the universal Opportunity Attack from L10', () => {
+    const oaAt = (lvl) => buildActionEconomy(cavArgs(lvl)).reaction
+      .find((e) => e.key === 'universal:Opportunity Attack');
+    expect(oaAt(9).riders ?? []).toHaveLength(0);
+    const riders = oaAt(10).riders;
+    expect(riders).toHaveLength(1);
+    expect(riders[0].source).toBe('Hold the Line');
+    expect(riders[0].text).toMatch(/speed reduced to 0/i);
+    // Stays out of the base rule text — it isn't something every opportunity attack does.
+    expect(oaAt(10).detail).not.toMatch(/Hold the Line/);
+  });
+
+  it('Vigilant Defender joins it as a second rider at L18', () => {
+    const riders = buildActionEconomy(cavArgs(18)).reaction
+      .find((e) => e.key === 'universal:Opportunity Attack').riders;
+    expect(riders.map((r) => r.source)).toEqual(['Hold the Line', 'Vigilant Defender']);
+    expect(riders[1].text).toMatch(/does not consume your normal reaction/i);
+  });
+
+  it('gives none of it to another Fighter subclass', () => {
+    const champ = buildActionEconomy({ ...cavArgs(18), subclass: 'Champion' });
+    expect(champ.bonus.find((e) => e.name === 'Unwavering Mark')).toBeFalsy();
+    expect(champ.reaction.find((e) => e.name === 'Warding Maneuver')).toBeFalsy();
+    expect(champ.reaction.find((e) => e.key === 'universal:Opportunity Attack').riders ?? []).toHaveLength(0);
+  });
+});

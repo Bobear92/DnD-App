@@ -23,7 +23,7 @@ ongoing work this skill covers.
   as `FighterSheet`/`WizardSheet` so the page maps need no change.
 - `hooks/useLockedChoice.js` — `locked = readOnly || (!creation && !gmEdit && hasValue)` (permanent choices).
 - `hooks/useSlotCaster.js` — `availableSlots`/`setSlotUsed`/`handleCastSpell`; slots reset only by GM rest.
-- `hooks/useRestResource.js` — resolves config `restResources` → rows for the level.
+- `hooks/useRestResource.js` — resolves config `restResources` → rows for the level. `total` is called as `total(level, {scores, data})`, so a pool can be sized by an ability modifier rather than by level (Cavalier's Strength/Constitution uses); callers must pass `scores`.
 - `RestResourceTracker.jsx`, `CombatBlock.jsx`, `CasterSpellBlock.jsx`, `SkillProficiencyPicker.jsx`,
   `SpellPickerCreation.jsx` — shared blocks driven by config.
 

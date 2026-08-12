@@ -45,7 +45,7 @@ import { draconicLabel } from '@/characters/components/subclass/draconicData';
 import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
 import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
-import { getRacialRestResources, getRacialSpellResources } from '@/characters/components/race/racialRestResources';
+import { getRacialSpellResources } from '@/characters/components/race/racialRestResources';
 import { hasRelentlessEndurance, RELENTLESS_ENDURANCE_NOTE } from '@/characters/components/race/raceCombatNotes';
 import { computeRaceGrantedCantrips } from '@/characters/components/race/raceCantrips';
 import { survivorNote, heroicWarriorNote } from '@/characters/components/subclass/subclassCombatNotes';
@@ -77,7 +77,7 @@ import {
 import { cn } from '@/lib/utils';
 
 // Racial rest-resource keys that are HP mechanics — tracked in the HP & Movement
-// sub-tab (between Max HP and Hit Dice) instead of the Racial Features card.
+// sub-tab, between Max HP and Hit Dice.
 const HP_ADJACENT_RACIAL_KEYS = ['relentless_endurance_used'];
 
 const ABILITY_LABELS = [
@@ -581,11 +581,10 @@ export default function CharacterDetail() {
   const calendarEras = calendar?.eras ?? [];
   const calendarMonths = calendar?.months ?? [];
 
-  // HP-adjacent racial resources (Half-Orc Relentless Endurance) live with HP, not in the
-  // Identity sub-tab's Racial Features card: data-driven sheets render the tracker between
-  // Max HP and Hit Dice via the CombatBlock `afterHpNode` slot; hand-written sheets show it
-  // right below their combat block until they migrate (same interim pattern as the feat
-  // speed note).
+  // HP-adjacent racial resources (Half-Orc Relentless Endurance) live with HP: data-driven
+  // sheets render the tracker between Max HP and Hit Dice via the CombatBlock `afterHpNode`
+  // slot; hand-written sheets show it right below their combat block until they migrate
+  // (same interim pattern as the feat speed note).
   const hpAdjacentRacialNode = classSection.draft !== null ? (
     <RacialResourceTracker
       traits={character?.character_data?.race_traits ?? []}
@@ -1287,8 +1286,15 @@ export default function CharacterDetail() {
                     const bgLangs = [...new Set(cd.background_languages ?? [])].filter(l => !raceSet.has(l));
                     const bgSet = new Set(bgLangs);
                     const featLangs = [...new Set(cd.feat_languages ?? [])].filter(l => !raceSet.has(l) && !bgSet.has(l));
+                    const featSet = new Set(featLangs);
+                    // A subclass grant can hand out a language instead of a skill (Cavalier /
+                    // Samurai "Bonus Proficiency"), so it gets its own source group here.
+                    const subclassLangs = [...new Set(cd.subclass_languages ?? [])]
+                      .filter(l => !raceSet.has(l) && !bgSet.has(l) && !featSet.has(l));
                     const hasTraits = (cd.race_traits?.length ?? 0) > 0;
-                    if (!hasTraits && raceLangs.length === 0 && bgLangs.length === 0 && featLangs.length === 0) return null;
+                    const anyLangs = raceLangs.length > 0 || bgLangs.length > 0
+                      || featLangs.length > 0 || subclassLangs.length > 0;
+                    if (!hasTraits && !anyLangs) return null;
                     return (
                       <div className="space-y-2">
                         {hasTraits && (
@@ -1297,7 +1303,7 @@ export default function CharacterDetail() {
                             <TraitBadgeList traits={cd.race_traits} />
                           </div>
                         )}
-                        {(raceLangs.length > 0 || bgLangs.length > 0 || featLangs.length > 0) && (
+                        {anyLangs && (
                           <div>
                             <div className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Languages</div>
                             <div className="space-y-1.5">
@@ -1326,6 +1332,16 @@ export default function CharacterDetail() {
                                   <div className="text-[10px] font-medium text-muted-foreground/70 mb-1 uppercase tracking-wide">From Feats</div>
                                   <div className="flex flex-wrap gap-1.5">
                                     {featLangs.map(l => (
+                                      <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {subclassLangs.length > 0 && (
+                                <div data-testid="languages-from-subclass">
+                                  <div className="text-[10px] font-medium text-muted-foreground/70 mb-1 uppercase tracking-wide">From Subclass</div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {subclassLangs.map(l => (
                                       <Badge key={l} variant="outline" className="text-xs">{l}</Badge>
                                     ))}
                                   </div>
@@ -1664,30 +1680,12 @@ export default function CharacterDetail() {
                 />
               )}
 
-              {/* Racial Features — rest-rechargeable racial traits (incl. Dragonborn Breath
-                  Weapon), except HP-adjacent ones (Relentless Endurance), which live in the
-                  HP & Movement sub-tab. */}
-              {statsSubTab === 'identity' && classSection.draft !== null && getRacialRestResources(
-                character?.character_data?.race_traits ?? [],
-                identity.draft?.level ?? character.level
-              ).some(r => !HP_ADJACENT_RACIAL_KEYS.includes(r.key)) && (
-                <SectionCard
-                  title="Racial Features"
-                  isDirty={classSection.isDirty}
-                  onSave={saveClassData}
-                  onReset={classSection.reset}
-                  canEdit={showEditable}
-                >
-                  <RacialResourceTracker
-                    traits={character?.character_data?.race_traits ?? []}
-                    level={identity.draft?.level ?? character.level}
-                    data={classSection.draft}
-                    onChange={autoSaveClassPatch}
-                    readOnly={!showEditable}
-                    excludeKeys={HP_ADJACENT_RACIAL_KEYS}
-                  />
-                </SectionCard>
-              )}
+              {/* No Racial Features card here. Every rest-rechargeable racial resource is
+                  shown by the surface that owns its mechanic, each carrying its own Use
+                  control writing the same `<key>_used`: Breath Weapon → the Action Economy
+                  tab, Relentless Endurance → the HP & Movement sub-tab (hpAdjacentRacialNode),
+                  the Drow Magic / Infernal Legacy spells → their Spells-tab rows. A generic
+                  card here could only ever repeat one of those. */}
             </TabsContent>
 
             {/* ── Tab 2: Features ── */}

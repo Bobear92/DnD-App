@@ -19,8 +19,14 @@
  *     key,                         // unique step/test key
  *     label,                       // shown in the wizard + sheet
  *     count,                       // how many to pick (current grants all use 1)
- *     storeField,                  // character_data array the picks merge into
- *     options: [{value, description?}],  // the pool (description → OptionCardPicker; else button grid)
+ *     storeField,                  // character_data array the picks merge into (the DEFAULT —
+ *                                  //   an option may name its own, see below)
+ *     options: [{value, description?, storeField?}],
+ *                                   // the pool (description → OptionCardPicker; else button grid).
+ *                                   // An option may OVERRIDE storeField: Cavalier/Samurai "Bonus
+ *                                   // Proficiency" is one picker offering "a skill OR a language",
+ *                                   // i.e. two destinations behind a single choice. Options that
+ *                                   // don't name one fall back to the grant's storeField.
  *     heldFrom: (characterData, ctx) => string[],  // names already held → excluded (no doubling up)
  *     surface: 'sheet' | 'banner' | 'skills' | 'spells',
  *                                   // where the CHOSEN value is shown afterward (default 'sheet').
@@ -43,6 +49,8 @@ import { gatherProficiencies } from '@/characters/components/inventory/inventory
 import { ARTISAN_TOOLS } from '@/characters/components/inventory/toolsData';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 import { FIGHTER_FIGHTING_STYLES_5E, FIGHTER_FIGHTING_STYLES_2024 } from '@/characters/components/classData/classChoicesData';
+import { FEAT_LANGUAGE_OPTIONS } from '@/characters/components/feats/featProficiencyData';
+import { SKILLS_BY_NAME } from '@/encyclopedia/data/skillsData';
 
 const lc = (s) => (s || '').toLowerCase();
 const dedup = (arr) => [...new Set((arr || []).filter(Boolean))];
@@ -71,6 +79,21 @@ const heldCantrips = (cd) => [
 const heldFightingStyles = (cd) => [cd.fighting_style, ...(cd.additional_fighting_styles || [])];
 
 const asOptions = (names) => names.map((value) => ({ value })); // string[] → {value} (no description)
+
+// A "skill OR a language" grant (Cavalier + Samurai "Bonus Proficiency"). One picker, two
+// destinations: the skills land in skill_proficiencies (shown in Abilities & Skills), the
+// languages in subclass_languages (shown as the languages panel's "From Subclass" group).
+// The per-option storeField is what makes that possible without a second grant.
+const skillOrLanguage = (skillNames) => [
+  ...skillNames.map((value) => ({ value, description: SKILLS_BY_NAME[value]?.flavor })),
+  ...FEAT_LANGUAGE_OPTIONS.map((value) => ({
+    value, storeField: 'subclass_languages',
+    description: `Learn to speak, read, and write ${value}.`,
+  })),
+];
+// Held across BOTH destinations, so a language you already speak and a skill you're already
+// proficient in are equally excluded from the one picker.
+const heldSkillsOrLanguages = (cd) => [...heldSkills(cd), ...heldLanguages(cd)];
 
 // A Battle Master Student of War grant is identical in both editions.
 const studentOfWar = {
@@ -115,6 +138,18 @@ export const SUBCLASS_GRANTS = {
           options: FIGHTER_FIGHTING_STYLES_5E, heldFrom: heldFightingStyles,
         },
       ],
+      Cavalier: [
+        {
+          level: 3, key: 'cavalier_bonus_proficiency', label: 'Bonus Proficiency — Skill or Language',
+          count: 1, storeField: 'skill_proficiencies',
+          options: skillOrLanguage(['Animal Handling', 'History', 'Insight', 'Performance', 'Persuasion']),
+          heldFrom: heldSkillsOrLanguages,
+          // Whichever branch is picked is displayed by the panel that already owns it — the
+          // Abilities & Skills panel or the languages "From Subclass" group — so this grant is
+          // never repeated in the ClassSheet block (only surface:'sheet' renders there).
+          surface: 'skills',
+        },
+      ],
     },
     '5.5e': {
       'Battle Master': [studentOfWar],
@@ -153,8 +188,29 @@ export function availableGrantOptions(grant, characterData = {}, ctx = {}) {
   return (grant.options || []).filter((o) => !held.has(lc(o.value)));
 }
 
-/** character_data patch merging the `chosen` value-names into the grant's storeField. */
+/** The field a given picked value writes to — its option's override, else the grant's default. */
+export function grantStoreFieldFor(grant, value) {
+  const opt = (grant?.options || []).find((o) => lc(o.value) === lc(value));
+  return opt?.storeField || grant?.storeField;
+}
+
+/** Every character_data field this grant can write to (one for most, two for skill-or-language). */
+export function grantStoreFields(grant) {
+  return dedup([grant?.storeField, ...(grant?.options || []).map((o) => o.storeField)]);
+}
+
+/**
+ * character_data patch merging the `chosen` value-names into their store fields. Picks are
+ * grouped per destination, so a single grant offering "a skill OR a language" writes each
+ * choice where its own panel will find it rather than dumping both in one array.
+ */
 export function applyGrant(grant, chosen, characterData = {}) {
   if (!grant?.storeField) return {};
-  return { [grant.storeField]: dedup([...(characterData[grant.storeField] || []), ...(chosen || [])]) };
+  const patch = {};
+  for (const value of chosen || []) {
+    const field = grantStoreFieldFor(grant, value);
+    if (!field) continue;
+    patch[field] = dedup([...(patch[field] || characterData[field] || []), value]);
+  }
+  return patch;
 }

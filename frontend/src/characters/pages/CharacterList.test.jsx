@@ -283,6 +283,47 @@ describe('CharacterList — rest buttons (GM view)', () => {
     expect(screen.getByText('Arcane Shot')).toBeInTheDocument();
   });
 
+  // Both Cavalier pools recharge on a long rest, but Warding Maneuver isn't gained until L7 —
+  // the summary must not promise back a feature the character doesn't have yet.
+  it('long rest summary lists Unwavering Mark for a L5 Cavalier but not Warding Maneuver', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], character_data: { subclass: 'Cavalier' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText('Unwavering Mark')).toBeInTheDocument();
+    expect(screen.queryByText('Warding Maneuver')).not.toBeInTheDocument();
+  });
+
+  it('long rest summary adds Warding Maneuver for a L7 Cavalier', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], level: 7, character_data: { subclass: 'Cavalier' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText('Warding Maneuver')).toBeInTheDocument();
+  });
+
+  // The backend has reset fighting_spirit_used since the Samurai pool was created, but this
+  // summary never mentioned it — so a GM saw the rest restore something it hadn't promised.
+  it('long rest summary lists Fighting Spirit for a Samurai', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], character_data: { subclass: 'Samurai' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText('Fighting Spirit')).toBeInTheDocument();
+  });
+
   it('confirmation dialog shows selected character names', async () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));
