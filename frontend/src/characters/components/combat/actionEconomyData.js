@@ -33,6 +33,7 @@ import {
   arcaneShotImproved,
 } from '@/characters/components/classData/arcaneShotData';
 import { getBreathWeapon } from '@/characters/components/race/breathWeaponData';
+import { buildBreakdown } from '@/characters/components/skills/skillMath';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
 const ECONOMY_COST_LABEL = {
@@ -131,24 +132,50 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
       'Curving Shot': { tab: 'bonus', cost: 'bonus action', description: 'When you miss with a magic arrow, use a bonus action to reroll the attack against a different target within 60 feet of the original one.' },
     },
     Cavalier: {
-      // Marking is free and unlimited; the tracked pool is the follow-up attack, so the
-      // resourceKey hangs off the bonus action rather than a "no action" mark entry.
-      'Unwavering Mark': { tab: 'bonus', cost: 'bonus action', resourceKey: 'unwavering_mark_used', description: "When a creature you marked deals damage to anyone other than you, make a special melee weapon attack against it with advantage, dealing extra damage equal to half your Fighter level. Marking a creature you hit with a melee weapon attack costs nothing; only this follow-up is limited. Recharges on a long rest." },
+      // Unwavering Mark is TWO things at two different costs, so it is surfaced as two things.
+      // Marking is free, unlimited, and happens on a melee weapon hit — so it rides on the
+      // melee attack cards as a rider (attached below), the Arcane Shot "read it off the card
+      // you're already looking at" shape. Only the FOLLOW-UP attack is limited, and it is a
+      // bonus action, so it gets its own card here — named for the trigger a player is
+      // actually looking for mid-combat ("my marked target just hit someone else") rather
+      // than for the feature. The card's attack rows are computed below.
+      'Unwavering Mark': {
+        tab: 'bonus', cost: 'bonus action', resourceKey: 'unwavering_mark_used',
+        displayName: 'Marked Target',
+        description: 'When a creature you marked deals damage to anyone other than you, make a special melee weapon attack against it with advantage. Recharges on a long rest.',
+      },
       'Warding Maneuver': { tab: 'reaction', cost: 'reaction', resourceKey: 'warding_maneuver_used', description: "When you or a creature within 5 feet is hit by an attack, add 1d8 to the target's AC against it — potentially a miss. If it still hits, the target has resistance to that attack's damage. You must be wielding a melee weapon or a shield. Recharges on a long rest." },
+      // A SECOND reaction economy, not a better opportunity attack: usable once on every other
+      // creature's turn, and it doesn't spend your normal reaction. `extraReaction` puts it in
+      // its own section of the Reactions tab so it can't be read as the one reaction everyone
+      // gets — which is what happened while it was only a rider on the Opportunity Attack.
+      'Vigilant Defender': {
+        tab: 'reaction', cost: 'special reaction', extraReaction: true,
+        description: "Once on every creature's turn except your own, you can make an opportunity"
+          + ' attack. This special reaction can be used for nothing else, and it does not consume'
+          + ' your normal reaction — so you can still take one of the reactions above on the same turn.',
+      },
       // Ferocious Charger costs nothing extra — it rides on an attack you were making anyway,
       // so it lands in no_action with its own computed save DC (the Arcane Shot DC pattern).
       'Ferocious Charger': {
         tab: 'no_action', cost: 'no action',
         description: 'If you move at least 10 feet in a straight line right before you hit a creature, it must make a Strength saving throw or be knocked prone. Once per turn.',
-        compute: ({ level, scores }) => {
-          const pb = profBonus(level);
-          const strMod = abilityMod(scores?.strength ?? 10);
-          return {
-            detail: 'If you move at least 10 feet in a straight line right before you hit a creature,'
-              + ` it must make a Strength saving throw (DC ${8 + pb + strMod} = 8 + PB ${formatSigned(pb)}`
-              + ` + STR ${formatSigned(strMod)}) or be knocked prone. Once per turn.`,
-          };
-        },
+        // The DC is a computed NUMBER with its own breakdown, not arithmetic spelled out inside
+        // the sentence — same treatment as the Arcane Shot save DC. Inlining "DC 15 = 8 + PB +5
+        // + STR +2" made the rules text unreadable for the sake of math nobody needs until they
+        // question the number; now the sentence stays clean and the DC expands on click.
+        compute: ({ level, scores }) => ({
+          saveDc: {
+            label: 'Strength save DC',
+            breakdown: buildBreakdown({
+              parts: [
+                { key: 'base', label: 'Base', value: 8, signed: false },
+                { key: 'proficiency', label: 'Proficiency bonus', value: profBonus(level) },
+                { key: 'ability', label: 'STR modifier', value: abilityMod(scores?.strength ?? 10) },
+              ],
+            }),
+          },
+        }),
       },
     },
   },
@@ -161,6 +188,55 @@ export const SUBCLASS_FEATURE_ACTIONS_2024 = {
     },
   },
 };
+
+/**
+ * Riders that hang off WEAPON ATTACK cards — always-on things that change what happens when
+ * you attack, but cost nothing of their own and so are not entries in any bucket.
+ *
+ * Attaching them to the attack card (rather than listing them separately) is the same "read it
+ * off the card you're already looking at" principle as Arcane Shot; the tab renders each one
+ * collapsed to its name, since a rider is a paragraph you need only once its trigger fires.
+ *
+ * Kept as a TABLE because this is the shape that repeats: the third hand-written attach block
+ * would have been the point where these started drifting apart. (Riders that hang off ONE
+ * NAMED entry — Arcane Charge on Action Surge, Hold the Line on the Opportunity Attack — are a
+ * different shape and stay in their own blocks; they attach by key, not by weapon scope.)
+ *
+ * `scope` picks which attack cards get it: 'melee' (an unarmed strike counts), 'ranged', 'all'.
+ * `applies(ctx)` is the gate — class/subclass/level, a feat, whatever the feature keys on.
+ * `text` is authored here rather than read from a table because FEAT rules text lives only in
+ * the backend compendium; this module is pure and does no fetching.
+ */
+export const ATTACK_RIDERS = [
+  {
+    source: 'Unwavering Mark',
+    scope: 'melee',
+    applies: ({ charClass, subclass, level }) =>
+      charClass === 'Fighter' && subclass === 'Cavalier' && (level ?? 1) >= 3,
+    text: 'On a hit you can mark the creature until the end of your next turn. While it is'
+      + " within 5 ft of you, it has disadvantage on any attack roll that doesn't target"
+      + ' you. Marking costs nothing and there is no limit on how many creatures you mark.',
+  },
+  {
+    source: 'Mounted Combatant',
+    scope: 'melee',
+    applies: ({ feats }) => hasFeat(feats, 'Mounted Combatant'),
+    // The whole feat, not just the attack clause — a player opening it mid-combat wants the
+    // one they're about to use, and the other two clauses have no home in the app yet (there
+    // is no mount model, so nothing here can be computed; see the mounts/vehicles worklist).
+    text: 'While mounted you have advantage on melee attack rolls against any unmounted creature'
+      + ' that is smaller than your mount. You can also force an attack that targets your mount'
+      + ' to target you instead, and when your mount makes a Dexterity saving throw for half'
+      + ' damage it instead takes no damage on a success and half on a failure.',
+  },
+];
+
+/** Does this weapon attack entry fall inside a rider's scope? */
+function matchesRiderScope(entry, scope) {
+  if (scope === 'melee') return !!entry.melee;
+  if (scope === 'ranged') return !entry.melee;
+  return true;
+}
 
 /** Subclass feature names earned at or below `level`, from the SUBCLASS_DATA tables. */
 export function subclassFeaturesKnownAtLevel(charClass, edition, subclass, level = 1) {
@@ -333,13 +409,36 @@ function unarmedAttack(scores = {}, level = 1, dice = null) {
       { label: 'Proficiency', value: profBonus(level) },
     ],
     damage,
+    // A base unarmed strike's "1" is a flat term, not a die — say so, since the whole point
+    // of the breakdown is that a reader can check the arithmetic against the rules. The RAW
+    // floor of 1 is shown as its own term when it actually bites (a negative STR modifier),
+    // so the listed terms always add up to the number displayed.
+    damageBreakdown: dice
+      ? [{ label: 'feat damage die', value: dice }, { label: 'STR', value: str }]
+      : [
+        { label: 'unarmed base', value: 1 },
+        { label: 'STR', value: str },
+        ...(1 + str < 1 ? [{ label: 'minimum 1', value: 1 - (1 + str) }] : []),
+      ],
     proficient: true,
   };
 }
 
-/** Add a flat amount to a damage string's modifier: "1d12 + 4 slashing" +10 → "1d12 + 14 slashing". */
+/**
+ * Add a flat amount to a damage string's modifier: "1d12 + 4 slashing" +10 → "1d12 + 14 slashing".
+ *
+ * A base unarmed strike has no die at all — it is a flat "4 bludgeoning" — so the leading token
+ * can't be assumed to be dice. When it's a bare number the amount is added INTO it ("7
+ * bludgeoning"), which is the whole point of folding: one number you roll and read once.
+ */
 function addFlatDamage(damage, amount) {
-  const m = /^(\S+)(?:\s*([+-])\s*(\d+))?(.*)$/.exec((damage || '').trim());
+  const trimmed = (damage || '').trim();
+  const flatOnly = /^(\d+)(\s.*)?$/.exec(trimmed);
+  if (flatOnly) {
+    const [, num, rest] = flatOnly;
+    return `${Number(num) + amount}${rest || ''}`;
+  }
+  const m = /^(\S+)(?:\s*([+-])\s*(\d+))?(.*)$/.exec(trimmed);
   if (!m) return damage;
   const [, die, sign, num, rest] = m;
   const flat = (sign === '-' ? -Number(num) : Number(num) || 0) + amount;
@@ -361,6 +460,7 @@ export function powerAttackVariant(attackRow = {}, source = 'Great Weapon Master
     toHit: formatSigned(base - 5),
     toHitBreakdown: [...(attackRow.toHitBreakdown || []), { label: source, value: -5 }],
     damage: addFlatDamage(attackRow.damage, 10),
+    damageBreakdown: [...(attackRow.damageBreakdown || []), { label: source, value: 10 }],
   };
 }
 
@@ -442,6 +542,9 @@ export function buildActionEconomy({
           source: powerSource,
           toHit: v.toHit,
           toHitBreakdown: v.toHitBreakdown,
+          damage: v.damage,
+          damageBreakdown: v.damageBreakdown,
+          damageFlags: `${flag}${disadv}`,
           detailRest: `to hit · ${v.damage}${flag}${disadv}`,
         };
       }
@@ -456,6 +559,9 @@ export function buildActionEconomy({
       toHit: atk.toHit,
       toHitBreakdown: atk.toHitBreakdown || null,
       detailRest: `to hit · ${atk.damage}${flag}${disadv}`,
+      // The trailing "· not proficient / · disadvantage" flags, kept apart from the damage
+      // string so the UI can make the damage itself a clickable chip.
+      damageFlags: `${flag}${disadv}`,
       warning: atk.warning || null,
       loadingNote: atk.loadingNote || null,
       // `{source, note}` when a feature makes this weapon's attacks magical (overcoming
@@ -494,6 +600,14 @@ export function buildActionEconomy({
       // inventory itself) on this attack's card.
       weaponUid: atk.uid || null,
       needsAmmo: !!(weapon && weaponNeedsAmmo(weapon)),
+      // Is this row a MELEE weapon attack? An unarmed strike counts (it has no inventory
+      // entry, hence the null-weapon branch) — features keyed on "when you hit with a melee
+      // weapon attack" apply to it. Consumed by the Cavalier's Unwavering Mark rider.
+      melee: weapon ? isMelee(weapon) : true,
+      // The raw damage string, kept structured so a feature can fold its own bonus into it
+      // without re-parsing `detail`, plus the term-by-term breakdown behind it.
+      damage: atk.damage || null,
+      damageBreakdown: atk.damageBreakdown || null,
     });
   });
 
@@ -515,6 +629,7 @@ export function buildActionEconomy({
         name: main.name,
         toHit: mainRow?.toHit ?? null,
         damage: mainRow?.damage ?? baseDamage(main),
+        damageBreakdown: mainRow?.damageBreakdown ?? null,
         warning: mainRow?.warning ?? null,
       },
       {
@@ -523,6 +638,17 @@ export function buildActionEconomy({
         toHit: offRow?.toHit ?? null,
         // Strip the ability modifier from the off-hand damage unless the TWF style restores it.
         damage: twfStyle ? (offRow?.damage ?? baseDamage(off)) : baseDamage(off),
+        // The off-hand's MISSING ability modifier is the thing players query most, so the
+        // breakdown names it rather than silently omitting the term: without the fighting
+        // style the ability part is dropped and replaced by a zero-valued explanation.
+        damageBreakdown: twfStyle
+          ? (offRow?.damageBreakdown ?? null)
+          : (offRow?.damageBreakdown
+            ? [
+              ...offRow.damageBreakdown.filter((p) => typeof p.value !== 'number'),
+              { label: 'no ability modifier off-hand (no Two-Weapon Fighting style)', value: 0 },
+            ]
+            : null),
         warning: offRow?.warning ?? null,
       },
     ];
@@ -856,18 +982,74 @@ export function buildActionEconomy({
       });
       continue;
     }
+    // Unwavering Mark (Cavalier L3+) splits across two surfaces. MARKING is free, unlimited
+    // and happens on a melee weapon hit, so it rides on the melee attack cards (below). The
+    // FOLLOW-UP attack is the limited half, so it keeps this bonus-action card — renamed to
+    // the trigger the player is scanning for ("Marked Target") and given real attack rows,
+    // because "extra damage equal to half your Fighter level" is arithmetic the sheet already
+    // has everything to do.
+    if (fname === 'Unwavering Mark') {
+      const meleeRows = buckets.action.filter((e) => e.source === 'Weapon' && e.melee);
+      // No melee attack to make means no follow-up to offer — a Cavalier holding only a bow
+      // can't trigger this at all, so the card is omitted rather than shown empty with an
+      // instruction. (An unarmed strike counts as a melee attack, so a bare-handed Cavalier
+      // still gets the card.)
+      if (meleeRows.length === 0) continue;
+      const bonusDamage = Math.floor(level / 2);
+      push(def.tab, {
+        key: `subclass:${fname}`,
+        name: def.displayName || fname,
+        source: 'Subclass',
+        cost: def.cost,
+        detail: `${def.description} Half your Fighter level (${formatSigned(bonusDamage)}) is already`
+          + ' included in the damage below.',
+        // One row per melee attack you could answer with. The half-level bonus is FOLDED into
+        // the damage string rather than shown as a separate term: this is a single attack you
+        // roll once, and a trailing "+3" reads as a second damage source to add.
+        subAttacks: meleeRows.map((row) => ({
+          label: 'Attack',
+          name: row.name,
+          toHit: row.toHit,
+          damage: addFlatDamage(row.damage, bonusDamage),
+          // The folded half-level shows as its own term, so "why is this bigger than my
+          // normal attack?" is answerable by clicking the number rather than by arithmetic.
+          damageBreakdown: [
+            ...(row.damageBreakdown || []),
+            { label: 'half Fighter level (Unwavering Mark)', value: bonusDamage },
+          ],
+          note: 'with advantage',
+        })),
+        resourceKey: def.resourceKey,
+      });
+      continue;
+    }
     // A `compute` entry derives its own detail/meta from the character, the same way a
     // RACIAL_ACTIONS entry does — Ferocious Charger's save DC scales with level and Strength,
     // so a fixed string would show the wrong number to everyone but one character.
     const computed = def.compute ? def.compute({ characterData, level, scores }) : null;
     push(def.tab, {
       key: `subclass:${fname}`,
-      name: fname,
+      name: def.displayName || fname,
       source: 'Subclass',
       cost: def.cost,
       detail: computed?.detail ?? def.description,
+      // A computed save DC the feature imposes — `{label, breakdown}`, rendered as a clickable
+      // number rather than arithmetic inside `detail`.
+      saveDc: computed?.saveDc ?? null,
+      // True for a reaction that does NOT spend your one normal reaction (Vigilant Defender).
+      // The tab gives these their own section so they read as an additional economy.
+      extraReaction: !!def.extraReaction,
       resourceKey: def.resourceKey,
     });
+  }
+
+  // Riders that hang off WEAPON ATTACK cards (see ATTACK_RIDERS). Runs after the weapon push,
+  // which is what creates the entries they attach to.
+  for (const rider of ATTACK_RIDERS) {
+    if (!rider.applies({ charClass, subclass, level, edition, feats, characterData })) continue;
+    for (const row of buckets.action.filter((e) => e.source === 'Weapon' && matchesRiderScope(e, rider.scope))) {
+      row.riders = [...(row.riders || []), { source: rider.source, text: rider.text }];
+    }
   }
 
   // Arcane Charge (Eldritch Knight L15) — it costs nothing extra, so it hangs off the Action
@@ -965,28 +1147,27 @@ export function buildActionEconomy({
     push('reaction', { key: `universal:${r.name}`, name: r.name, source: 'Universal', cost: 'reaction', detail: r.description });
   });
 
-  // Cavalier's Hold the Line (L10) and Vigilant Defender (L18) change what the UNIVERSAL
-  // Opportunity Attack reaction does rather than adding an action of their own, so they ride on
-  // that entry — same shape as Arcane Charge on Action Surge. This must run AFTER the universal
-  // menu is pushed above, since that's what creates the entry they attach to.
+  // Cavalier's Hold the Line (L10) changes what the UNIVERSAL Opportunity Attack reaction does
+  // rather than adding an action of its own, so it rides on that entry — same shape as Arcane
+  // Charge on Action Surge. This must run AFTER the universal menu is pushed above, since
+  // that's what creates the entry it attaches to.
+  //
+  // Vigilant Defender (L18) is deliberately NOT a rider: it grants a whole SEPARATE reaction,
+  // once on every other creature's turn, that doesn't spend your normal one. As a rider it was
+  // invisible — the Reactions tab showed a lone "Opportunity Attack" and nothing said you had a
+  // second reaction economy. It gets its own entry, flagged `extraReaction` (see below).
   if (charClass === 'Fighter' && subclass === 'Cavalier' && level >= 10) {
     const oa = buckets.reaction.find((e) => e.key === 'universal:Opportunity Attack');
     if (oa) {
-      const riders = [...(oa.riders || [])];
-      riders.push({
-        source: 'Hold the Line',
-        text: 'Creatures also provoke your opportunity attacks when they move 5 ft or more while'
-          + ' within your reach, and a creature you hit with one has its speed reduced to 0 for the'
-          + ' rest of the turn.',
-      });
-      if (level >= 18) {
-        riders.push({
-          source: 'Vigilant Defender',
-          text: "You get a special reaction once on every creature's turn except your own, usable"
-            + ' only to make an opportunity attack — it does not consume your normal reaction.',
-        });
-      }
-      oa.riders = riders;
+      oa.riders = [
+        ...(oa.riders || []),
+        {
+          source: 'Hold the Line',
+          text: 'Creatures also provoke your opportunity attacks when they move 5 ft or more while'
+            + ' within your reach, and a creature you hit with one has its speed reduced to 0 for the'
+            + ' rest of the turn.',
+        },
+      ];
     }
   }
 

@@ -192,9 +192,10 @@ describe('ActionEconomyTab', () => {
   it('flags disadvantage on a Heavy weapon for a Small (5e) character', () => {
     renderTab({ inventory: [greatswordEntry], race: 'Halfling' });
     expect(screen.getByText('Greatsword')).toBeInTheDocument();
-    // The weapon's own detail line carries the disadvantage flag (scoped to avoid the
-    // universal Dodge action, whose description also mentions "disadvantage").
-    expect(screen.getByText(/2d6.*·\s*disadvantage/i)).toBeInTheDocument();
+    // The weapon's own detail line carries the disadvantage flag (scoped via the damage chip
+    // to avoid the universal Dodge action, whose description also mentions "disadvantage").
+    expect(screen.getByTestId(/^ae-damage-weapon:/).closest('p'))
+      .toHaveTextContent(/2d6.*·\s*disadvantage/i);
     // …and the full amber warning message is shown under the entry.
     expect(screen.getByText(/Small creatures attack with it at disadvantage/i)).toBeInTheDocument();
   });
@@ -203,7 +204,8 @@ describe('ActionEconomyTab', () => {
     const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
     renderTab({ charClass: 'Wizard', inventory: [longswordEntry, chainMailEntry] });
     expect(screen.getByText('Longsword')).toBeInTheDocument();
-    expect(screen.getByText(/1d8.*·\s*disadvantage/i)).toBeInTheDocument();
+    expect(screen.getByTestId(/^ae-damage-weapon:/).closest('p'))
+      .toHaveTextContent(/1d8.*·\s*disadvantage/i);
     expect(screen.getByText(/Chain Mail without proficiency/i)).toBeInTheDocument();
   });
 
@@ -211,7 +213,8 @@ describe('ActionEconomyTab', () => {
     const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
     renderTab({ charClass: 'Wizard', inventory: [chainMailEntry] });
     expect(screen.getByText('Unarmed Strike')).toBeInTheDocument();
-    expect(screen.getByText(/bludgeoning.*·\s*disadvantage/i)).toBeInTheDocument();
+    expect(screen.getByTestId(/^ae-damage-weapon:/).closest('p'))
+      .toHaveTextContent(/bludgeoning.*·\s*disadvantage/i);
   });
 
   it("shows a can't-cast note under the Spell section while wearing non-proficient armor", async () => {
@@ -529,16 +532,172 @@ describe('ActionEconomyTab', () => {
     fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
     const rider = screen.getByTestId('ae-rider-arcane-charge');
     expect(rider).toHaveTextContent('Arcane Charge');
-    expect(rider).toHaveTextContent(/teleport up to 30 ft/i);
+    // Collapsed to the name — the rules text arrives on click.
+    expect(screen.queryByTestId('ae-rider-arcane-charge-text')).not.toBeInTheDocument();
+    fireEvent.click(rider);
+    expect(screen.getByTestId('ae-rider-arcane-charge-text')).toHaveTextContent(/teleport up to 30 ft/i);
     // It is a separate element from the Action Surge description, not run into it.
     expect(screen.getByText(/take one additional action for free/i)).not.toBe(rider);
     expect(screen.getByText(/take one additional action for free/i)).not.toHaveTextContent(/Arcane Charge/);
+  });
+
+  it('collapses a rider again on a second click', () => {
+    renderTab({ subclass: 'Eldritch Knight', level: 15 });
+    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    const rider = screen.getByTestId('ae-rider-arcane-charge');
+    expect(rider).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(rider);
+    expect(rider).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(rider);
+    expect(rider).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('ae-rider-arcane-charge-text')).not.toBeInTheDocument();
   });
 
   it('shows no rider line for a Champion at L15', () => {
     renderTab({ subclass: 'Champion', level: 15 });
     fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
     expect(screen.queryByTestId('ae-rider-arcane-charge')).not.toBeInTheDocument();
+  });
+});
+
+// Unwavering Mark reaches the player as two surfaces: the free mark on the melee attack card
+// it triggers from, and the limited follow-up attack as its own bonus-action card.
+describe('ActionEconomyTab — Cavalier Unwavering Mark', () => {
+  it('hangs the mark off the melee attack card, name only until clicked', () => {
+    renderTab({ subclass: 'Cavalier', level: 7 });
+    const rider = screen.getByTestId('ae-rider-unwavering-mark');
+    expect(rider).toHaveTextContent('Unwavering Mark');
+    expect(screen.queryByTestId('ae-rider-unwavering-mark-text')).not.toBeInTheDocument();
+    fireEvent.click(rider);
+    expect(screen.getByTestId('ae-rider-unwavering-mark-text'))
+      .toHaveTextContent(/disadvantage on any attack roll that doesn't target you/i);
+  });
+
+  it('shows the follow-up attack as a Marked Target bonus action with folded damage', () => {
+    renderTab({ subclass: 'Cavalier', level: 7 });
+    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    expect(screen.getByText('Marked Target')).toBeInTheDocument();
+    // Half Fighter level is already in the number, and advantage is stated on the row.
+    const row = screen.getByTestId('ae-twf-attack');
+    expect(row).toHaveTextContent(/1d8 \+ 6 slashing/i);
+    expect(row).toHaveTextContent(/with advantage/i);
+  });
+
+  it('shows neither surface for a Champion', () => {
+    renderTab({ subclass: 'Champion', level: 7 });
+    expect(screen.queryByTestId('ae-rider-unwavering-mark')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    expect(screen.queryByText('Marked Target')).not.toBeInTheDocument();
+  });
+});
+
+describe('ActionEconomyTab — extra reactions', () => {
+  it('gives Vigilant Defender its own section in the Reactions tab', () => {
+    renderTab({ subclass: 'Cavalier', level: 18 });
+    fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+    const section = screen.getByTestId('ae-extra-reactions');
+    expect(section).toHaveTextContent('Vigilant Defender');
+    expect(section).toHaveTextContent(/on other creatures' turns/i);
+    // It says plainly that it does not compete with your one normal reaction.
+    expect(section).toHaveTextContent(/don't use your one normal reaction/i);
+  });
+
+  it('keeps it out of the ordinary reaction groups', () => {
+    renderTab({ subclass: 'Cavalier', level: 18 });
+    fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+    // The Subclass group holds Warding Maneuver, not the extra reaction.
+    const extra = screen.getByTestId('ae-extra-reactions');
+    const universal = screen.getByTestId('ae-universal');
+    expect(universal).not.toHaveTextContent('Vigilant Defender');
+    expect(extra).not.toHaveTextContent('Warding Maneuver');
+  });
+
+  it('shows no such section below L18 or for another subclass', () => {
+    renderTab({ subclass: 'Cavalier', level: 17 });
+    fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+    expect(screen.queryByTestId('ae-extra-reactions')).not.toBeInTheDocument();
+    cleanup();
+    renderTab({ subclass: 'Champion', level: 18 });
+    fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+    expect(screen.queryByTestId('ae-extra-reactions')).not.toBeInTheDocument();
+  });
+});
+
+describe('ActionEconomyTab — a feature-imposed save DC', () => {
+  const KEY = 'subclass:Ferocious Charger';
+
+  it('shows the DC as a number, with the arithmetic behind a click', () => {
+    renderTab({ subclass: 'Cavalier', level: 15, scores: { strength: 16, dexterity: 12, constitution: 14 } });
+    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    // L15 → PB +5, STR 16 → +3, so 8 + 5 + 3 = 16.
+    const dc = screen.getByTestId(`ae-save-dc-${KEY}`);
+    expect(dc).toHaveTextContent('16');
+    expect(screen.queryByTestId(`ae-save-dc-breakdown-${KEY}`)).not.toBeInTheDocument();
+    fireEvent.click(dc);
+    const panel = screen.getByTestId(`ae-save-dc-breakdown-${KEY}`);
+    expect(panel).toHaveTextContent('Base');
+    expect(panel).toHaveTextContent('Proficiency bonus');
+    expect(panel).toHaveTextContent('STR modifier');
+  });
+
+  it('keeps the arithmetic out of the rules sentence', () => {
+    renderTab({ subclass: 'Cavalier', level: 15 });
+    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    expect(screen.getByText(/move at least 10 feet in a straight line/i))
+      .not.toHaveTextContent(/8 \+ PB/);
+  });
+});
+
+describe('ActionEconomyTab — Mounted Combatant rider', () => {
+  const mounted = { characterData: { feats: [{ id: 26, name: 'Mounted Combatant', level: 4 }] } };
+
+  it('hangs the feat off a melee attack card, name only until clicked', () => {
+    renderTab({ inventory: [longswordEntry], ...mounted });
+    const rider = screen.getByTestId('ae-rider-mounted-combatant');
+    expect(rider).toHaveTextContent('Mounted Combatant');
+    expect(screen.queryByTestId('ae-rider-mounted-combatant-text')).not.toBeInTheDocument();
+    fireEvent.click(rider);
+    expect(screen.getByTestId('ae-rider-mounted-combatant-text'))
+      .toHaveTextContent(/advantage on melee attack rolls/i);
+  });
+
+  it('is absent without the feat', () => {
+    renderTab({ inventory: [longswordEntry] });
+    expect(screen.queryByTestId('ae-rider-mounted-combatant')).not.toBeInTheDocument();
+  });
+});
+
+// Damage gets the same click-to-see-the-math treatment the to-hit already had, so a wrong
+// number can be traced to the term that produced it instead of being taken on trust.
+describe('ActionEconomyTab — damage breakdown', () => {
+  it('expands a weapon attack damage into its terms on click', () => {
+    renderTab({ inventory: [longswordEntry] });
+    const chip = screen.getByTestId(/^ae-damage-weapon:/);
+    expect(chip).toHaveTextContent('1d8');
+    // Closed until asked for — the card leads with the number, not the arithmetic.
+    expect(screen.queryByTestId(/^ae-damage-breakdown-weapon:/)).not.toBeInTheDocument();
+    fireEvent.click(chip);
+    const bd = screen.getByTestId(/^ae-damage-breakdown-weapon:/);
+    expect(bd).toHaveTextContent('1d8 weapon die');
+    expect(bd).toHaveTextContent(/STR/);
+  });
+
+  it('collapses again on a second click', () => {
+    renderTab({ inventory: [longswordEntry] });
+    const chip = screen.getByTestId(/^ae-damage-weapon:/);
+    expect(chip).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(chip);
+    expect(chip).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(chip);
+    expect(screen.queryByTestId(/^ae-damage-breakdown-weapon:/)).not.toBeInTheDocument();
+  });
+
+  it("names the mark's half-level term on the Marked Target row", () => {
+    renderTab({ subclass: 'Cavalier', level: 7, inventory: [longswordEntry] });
+    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    fireEvent.click(screen.getByTestId('ae-sub-damage-attack'));
+    expect(screen.getByTestId('ae-sub-damage-attack-breakdown'))
+      .toHaveTextContent(/half Fighter level \(Unwavering Mark\)/i);
   });
 });
 
@@ -578,10 +737,11 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
     // default Actions tab — the weapon entry carries the hex note
     const note = screen.getByTestId(/^ae-hex-weapon:rp1/);
     expect(note).toHaveTextContent(/Hex Warrior/);
-    // CHA +4 + prof +2 (Hex Warrior grants martial weapon proficiency) = +6; the to-hit
-    // renders as the clickable breakdown chip, the rest as detail text.
+    // CHA +4 + prof +2 (Hex Warrior grants martial weapon proficiency) = +6; to-hit and
+    // damage each render as their own clickable breakdown chip.
     expect(screen.getByTestId(/^ae-tohit-weapon:rp1/)).toHaveTextContent('+6');
-    expect(screen.getByText(/to hit · 1d8 \+ 4 Piercing/)).toBeInTheDocument();
+    expect(screen.getByTestId(/^ae-damage-weapon:rp1/)).toHaveTextContent('1d8 + 4 Piercing');
+    expect(screen.getByTestId(/^ae-tohit-weapon:rp1/).closest('p')).toHaveTextContent(/to hit ·/);
   });
 
   it('shows no hex note for a non-Hexblade Warlock with the same stored uid', () => {

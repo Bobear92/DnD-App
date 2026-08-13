@@ -532,6 +532,54 @@ describe('CharacterDetail', () => {
         );
       });
     });
+
+    // XP tops out at the level-20 threshold — there is no level 21 to earn, so an over-award
+    // lands on the cap instead of accumulating a meaningless total. (The backend clamps too;
+    // this keeps the GM from watching a number they typed change on save.)
+    it('clamps an over-award to the 355,000 cap instead of overflowing', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'experience' } });
+      useAuth.mockReturnValue({ user: { id: 1 } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, level: 19, experience_points: 305000, level_up_pending: false },
+      });
+      characterService.updateCharacter.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, level: 19, experience_points: 355000, level_up_pending: true },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByPlaceholderText('Add XP…')).toBeInTheDocument());
+      fireEvent.change(screen.getByPlaceholderText('Add XP…'), { target: { value: '500000' } });
+      fireEvent.click(screen.getByText('Add XP'));
+      await waitFor(() => {
+        // 305,000 + 500,000 = 805,000 → clamped to 355,000, and level 20 is still unlocked.
+        expect(characterService.updateCharacter).toHaveBeenCalledWith('1',
+          expect.objectContaining({ experience_points: 355000, level_up_pending: true })
+        );
+      });
+    });
+
+    it('leaves an award that stays under the cap alone', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'experience' } });
+      useAuth.mockReturnValue({ user: { id: 1 } });
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, level: 19, experience_points: 305000, level_up_pending: false },
+      });
+      characterService.updateCharacter.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, level: 19, experience_points: 320000 },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByPlaceholderText('Add XP…')).toBeInTheDocument());
+      fireEvent.change(screen.getByPlaceholderText('Add XP…'), { target: { value: '15000' } });
+      fireEvent.click(screen.getByText('Add XP'));
+      await waitFor(() => {
+        expect(characterService.updateCharacter).toHaveBeenCalledWith('1',
+          expect.objectContaining({ experience_points: 320000 })
+        );
+      });
+    });
   });
 
   describe('subrace and racial data display', () => {
@@ -2680,6 +2728,72 @@ describe('CharacterDetail', () => {
       await openStatsSubTab('abilities');
       // WIS 12 (+1) + proficiency bonus +3 (level 5) = +4
       await waitFor(() => expect(within(screen.getByTestId('save-wisdom')).getByText('+4')).toBeInTheDocument());
+    });
+  });
+
+  // Features that change how the character's own saves work sit between the Saving
+  // Throws grid and Skills — name only, click for the full rules text.
+  describe('features affecting saves', () => {
+    const BORN = 'save-feature-fighter-cavalier-born-to-the-saddle';
+
+    function mockCavalier(overrides = {}) {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          ...overrides,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Cavalier' },
+        },
+      });
+    }
+
+    it('lists Born to the Saddle for a Cavalier, name only', async () => {
+      mockCavalier();
+      renderDetail();
+      await openStatsSubTab('abilities');
+      const row = await screen.findByTestId(BORN);
+      expect(row).toHaveTextContent('Born to the Saddle');
+      expect(screen.queryByTestId(`${BORN}-desc`)).not.toBeInTheDocument();
+    });
+
+    it('expands the full description when the name is clicked', async () => {
+      mockCavalier();
+      renderDetail();
+      await openStatsSubTab('abilities');
+      fireEvent.click(await screen.findByTestId(BORN));
+      expect(screen.getByTestId(`${BORN}-desc`)).toHaveTextContent(/advantage on saving throws/i);
+    });
+
+    it('renders between the Saving Throws grid and Skills', async () => {
+      mockCavalier();
+      renderDetail();
+      await openStatsSubTab('abilities');
+      const panel = await screen.findByTestId('save-features');
+      const saves = screen.getByTestId('save-strength');
+      // Saving Throws grid comes first in the DOM, the panel after it.
+      expect(saves.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('shows no panel for a Fighter subclass with no save features', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Champion' },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await screen.findByTestId('save-strength');
+      expect(screen.queryByTestId('save-features')).not.toBeInTheDocument();
+    });
+
+    it('shows no panel for a Cavalier below the level the feature is gained', async () => {
+      mockCavalier({ level: 2 });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await screen.findByTestId('save-strength');
+      expect(screen.queryByTestId('save-features')).not.toBeInTheDocument();
     });
   });
 });

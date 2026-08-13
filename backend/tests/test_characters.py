@@ -391,6 +391,84 @@ class TestGmDelete:
         assert resp.status_code == 403
 
 
+# ── Experience Point Cap ──────────────────────────────────────────────────────
+
+class TestExperiencePointCap:
+    """XP tops out at the level-20 threshold (355,000). Past it there is no level left to
+    earn, so an over-award is clamped instead of accumulating a meaningless total."""
+
+    MAX_XP = 355_000
+
+    def test_update_clamps_xp_above_the_cap(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        char_id = make_character(client, h_gm, campaign_id)
+
+        resp = client.put(f"/api/characters/{char_id}",
+                          json={"experience_points": 999_999}, headers=h_gm)
+        assert resp.status_code == 200
+        assert resp.json()["experience_points"] == self.MAX_XP
+
+    def test_xp_exactly_at_the_cap_is_untouched(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        char_id = make_character(client, h_gm, campaign_id)
+
+        resp = client.put(f"/api/characters/{char_id}",
+                          json={"experience_points": self.MAX_XP}, headers=h_gm)
+        assert resp.json()["experience_points"] == self.MAX_XP
+
+    def test_xp_below_the_cap_is_untouched(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        char_id = make_character(client, h_gm, campaign_id)
+
+        resp = client.put(f"/api/characters/{char_id}",
+                          json={"experience_points": 305_000}, headers=h_gm)
+        assert resp.json()["experience_points"] == 305_000
+
+    def test_a_level_19_character_pushed_over_lands_on_the_cap(self, client):
+        # The reported case: a GM awarding a big chunk of XP at level 19.
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        char_id = make_character(client, h_gm, campaign_id)
+        client.put(f"/api/characters/{char_id}",
+                   json={"level": 19, "experience_points": 305_000}, headers=h_gm)
+
+        resp = client.put(f"/api/characters/{char_id}",
+                          json={"experience_points": 305_000 + 500_000}, headers=h_gm)
+        assert resp.json()["experience_points"] == self.MAX_XP
+
+    def test_negative_xp_is_floored_at_zero(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        char_id = make_character(client, h_gm, campaign_id)
+
+        resp = client.put(f"/api/characters/{char_id}",
+                          json={"experience_points": -50}, headers=h_gm)
+        assert resp.json()["experience_points"] == 0
+
+    def test_the_cap_survives_a_reread(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        char_id = make_character(client, h_gm, campaign_id)
+        client.put(f"/api/characters/{char_id}",
+                   json={"experience_points": 10_000_000}, headers=h_gm)
+
+        # Clamped on the way IN, so the stored value is the cap — not merely displayed as it.
+        resp = client.get(f"/api/characters/{char_id}", headers=h_gm)
+        assert resp.json()["experience_points"] == self.MAX_XP
+
+    def test_an_update_that_omits_xp_leaves_it_alone(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        char_id = make_character(client, h_gm, campaign_id)
+        client.put(f"/api/characters/{char_id}", json={"experience_points": 900}, headers=h_gm)
+
+        resp = client.put(f"/api/characters/{char_id}", json={"name": "Renamed"}, headers=h_gm)
+        assert resp.json()["experience_points"] == 900
+
+
 # ── Campaign Edition ──────────────────────────────────────────────────────────
 
 class TestCampaignEdition:

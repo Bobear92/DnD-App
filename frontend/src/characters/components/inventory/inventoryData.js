@@ -480,13 +480,19 @@ export function weaponAbility(weapon, scores = {}, { hexWeapon = false } = {}) {
   const str = abilityMod(scores.strength);
   const dex = abilityMod(scores.dexterity);
   let base;
-  if (ranged) base = { ability: 'dexterity', mod: dex };
+  // `reason` records WHY this ability won, so the to-hit/damage breakdowns can say so. Without
+  // it a Finesse weapon whose owner has equal STR and DEX reads as a bare "+2 STR" — correct,
+  // but indistinguishable from the app ignoring Finesse and hardcoding Strength.
+  if (ranged) base = { ability: 'dexterity', mod: dex, reason: 'ranged weapon' };
   else if (props.includes('finesse')) {
-    base = dex > str ? { ability: 'dexterity', mod: dex } : { ability: 'strength', mod: str };
-  } else base = { ability: 'strength', mod: str };
+    // Finesse takes the BETTER of the two; a tie falls to Strength, which changes no number.
+    base = dex > str
+      ? { ability: 'dexterity', mod: dex, reason: 'Finesse — DEX beats STR' }
+      : { ability: 'strength', mod: str, reason: dex === str ? 'Finesse — STR ties DEX' : 'Finesse — STR beats DEX' };
+  } else base = { ability: 'strength', mod: str, reason: null };
   if (hexWeapon) {
     const cha = abilityMod(scores.charisma);
-    if (cha > base.mod) return { ability: 'charisma', mod: cha, hex: true };
+    if (cha > base.mod) return { ability: 'charisma', mod: cha, hex: true, reason: 'Hex Warrior' };
   }
   return base;
 }
@@ -566,19 +572,23 @@ const ABILITY_ABBR = {
 
 /**
  * Attack row for one weapon:
- *   { name, toHit, toHitBreakdown, damage, ability, proficient, disadvantage, warning, loadingNote, styleNotes }
+ *   { name, toHit, toHitBreakdown, damage, damageBreakdown, ability, proficient, disadvantage,
+ *     warning, loadingNote, styleNotes }
  * Fighting styles fold into the numbers: Archery (+2 ranged to-hit), Dueling (+2 one-handed
  * melee damage when it's the only weapon — `soloWeapon`), Thrown Weapon Fighting (+2 thrown
- * damage). `styleNotes` lists the styles that applied; `toHitBreakdown` is the per-source
- * [{label, value}] making up the to-hit total (ability mod, proficiency, fighting styles)
- * so the UI can show "how the +N is calculated".
+ * damage). `styleNotes` lists the styles that applied; `toHitBreakdown` and `damageBreakdown`
+ * are the per-source [{label, value}] making up each total, so the UI can show "how this
+ * number was reached" — the damage one leads with the die (a string value) and follows with
+ * the numeric modifiers.
  */
 export function computeAttack(weapon, { scores = {}, level = 1, proficient = false, size = 'Medium', edition = '5e', feats = [], styles = [], soloWeapon = false, versatileTwoHanded = false, hexWeapon = false } = {}) {
-  const { ability, mod, hex } = weaponAbility(weapon, scores, { hexWeapon });
+  const { ability, mod, hex, reason: abilityReason } = weaponAbility(weapon, scores, { hexWeapon });
+  // One label for both breakdowns, naming the rule that chose this ability where one applied.
+  const abilityLabel = `${ABILITY_ABBR[ability] || ability}${abilityReason ? ` (${abilityReason})` : ''}`;
   const { bonus: toHitStyle, sources: toHitSources, parts: toHitParts } = styleToHitBonus(weapon, styles);
-  const { bonus: dmgStyle, sources: dmgSources } = styleDamageBonus(weapon, styles, { soloWeapon });
+  const { bonus: dmgStyle, sources: dmgSources, parts: dmgParts } = styleDamageBonus(weapon, styles, { soloWeapon });
   const toHit = formatSigned(mod + (proficient ? profBonus(level) : 0) + toHitStyle);
-  const toHitBreakdown = [{ label: ABILITY_ABBR[ability] || ability, value: mod }];
+  const toHitBreakdown = [{ label: abilityLabel, value: mod }];
   if (proficient) toHitBreakdown.push({ label: 'Proficiency', value: profBonus(level) });
   for (const p of toHitParts) toHitBreakdown.push({ label: `${p.source} fighting style`, value: p.amount });
   const flat = mod + dmgStyle;
@@ -587,12 +597,21 @@ export function computeAttack(weapon, { scores = {}, level = 1, proficient = fal
   // A Versatile weapon uses its larger die when held two-handed (the other hand is free).
   const versDie = versatileTwoHanded ? weaponVersatileDie(weapon) : null;
   const damage = `${versDie || weapon.damage || '—'}${dmgBonus}${dmgType}`;
+  // Where the damage came from, term by term — the same "click the number to see the math"
+  // contract the to-hit already has. A damage string is dice PLUS modifiers, so a part's
+  // `value` is a string for the die and a number for each modifier; consumers downstream
+  // (power attack, Unwavering Mark) append their own term rather than re-parsing the string.
+  const damageBreakdown = [
+    { label: versDie ? 'two-handed grip' : 'weapon die', value: versDie || weapon.damage || '—' },
+    { label: abilityLabel, value: mod },
+    ...dmgParts.map((p) => ({ label: `${p.source} fighting style`, value: p.amount })),
+  ];
   const warning = weaponAttackWarning(weapon, { size, scores, edition });
   const loadingNote = weaponLoadingNote(weapon, { feats, proficient, edition });
   const styleNotes = [...new Set([...toHitSources, ...dmgSources])];
   // Hex Warrior actually drove the numbers (CHA beat STR/DEX) — surface the source.
   const hexNote = hex ? 'Uses Charisma for attack & damage (Hex Warrior).' : null;
-  return { name: weapon.name, toHit, toHitBreakdown, damage, ability, proficient, disadvantage: !!warning, warning, loadingNote, styleNotes, hexNote };
+  return { name: weapon.name, toHit, toHitBreakdown, damage, damageBreakdown, ability, proficient, disadvantage: !!warning, warning, loadingNote, styleNotes, hexNote };
 }
 
 /**

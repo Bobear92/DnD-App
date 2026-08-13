@@ -18,6 +18,12 @@ from gm.campaigns.campaign_tools.timeline.service import _compute_era_dates, _re
 from gm.campaigns.campaign_tools.npcs.models import NPC, NPCStatus
 
 
+# The top of the 5e XP table — the level-20 threshold. XP past it buys nothing (there is no
+# level 21), so a total is clamped here rather than allowed to run away. Mirrored on the
+# frontend as MAX_XP in characters/pages/CharacterDetail.jsx.
+MAX_EXPERIENCE_POINTS = 355_000
+
+
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
 def _get_membership(db: Session, campaign_id: int, user_id: int) -> CampaignMember | None:
@@ -79,6 +85,7 @@ def create_character(character_data: CharacterCreate, user_id: int, db: Session)
         backstory=character_data.backstory,
         personal_notes=character_data.personal_notes,
         theme_music_url=character_data.theme_music_url,
+        experience_points=min(MAX_EXPERIENCE_POINTS, max(0, character_data.experience_points or 0)),
         user_id=user_id,
         campaign_id=character_data.campaign_id,
         is_visible_to_players=False,
@@ -147,6 +154,13 @@ def update_character(character_id: int, character_data: CharacterUpdate | Charac
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only update your own characters")
 
     update_fields = character_data.model_dump(exclude_unset=True)
+
+    # XP tops out at the level-20 threshold. Past it XP means nothing — there is no level 21
+    # to earn — so an over-award is clamped rather than left to run away. Clamped HERE, not
+    # only in the UI, so it holds for any caller (the frontend clamps too, so the GM never
+    # sees a number the save would silently change).
+    if update_fields.get("experience_points") is not None:
+        update_fields["experience_points"] = min(MAX_EXPERIENCE_POINTS, max(0, update_fields["experience_points"]))
 
     # Only GM may set gm_notes or is_visible_to_players
     if not is_gm:

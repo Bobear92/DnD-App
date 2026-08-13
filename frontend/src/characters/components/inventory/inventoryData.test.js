@@ -295,7 +295,8 @@ describe('fighting styles fold into attack/AC math', () => {
     const atk = computeAttack(bow, { scores: { dexterity: 16 }, level: 13, proficient: true, styles: ['Archery'] });
     expect(atk.toHit).toBe('+10');
     expect(atk.toHitBreakdown).toEqual([
-      { label: 'DEX', value: 3 },
+      // The ability term names the rule that chose it — a ranged weapon always uses DEX.
+      { label: 'DEX (ranged weapon)', value: 3 },
       { label: 'Proficiency', value: 5 },
       { label: 'Archery fighting style', value: 2 },
     ]);
@@ -307,6 +308,74 @@ describe('fighting styles fold into attack/AC math', () => {
     const sword = { name: 'Longsword', damage: '1d8', weapon_type: 'melee' };
     const atk = computeAttack(sword, { scores: { strength: 16 }, level: 5, proficient: false });
     expect(atk.toHitBreakdown).toEqual([{ label: 'STR', value: 3 }]);
+  });
+
+  // Damage gets the same click-to-see-the-math treatment as the to-hit, so a player can
+  // check where every point came from instead of trusting one opaque string.
+  it('computeAttack returns a damage breakdown of die / ability / fighting style', () => {
+    const sword = { name: 'Longsword', damage: '1d8', damage_type: 'Slashing', weapon_type: 'melee' };
+    // STR 16 (+3) + Dueling +2 → 1d8 + 5
+    const atk = computeAttack(sword, { scores: { strength: 16 }, level: 5, proficient: true, styles: ['Dueling'], soloWeapon: true });
+    expect(atk.damage).toBe('1d8 + 5 Slashing');
+    expect(atk.damageBreakdown).toEqual([
+      { label: 'weapon die', value: '1d8' },
+      { label: 'STR', value: 3 },
+      { label: 'Dueling fighting style', value: 2 },
+    ]);
+    // The numeric terms sum to the flat modifier actually shown in the damage string.
+    const flat = atk.damageBreakdown.filter((p) => typeof p.value === 'number')
+      .reduce((s, p) => s + p.value, 0);
+    expect(atk.damage).toContain(`+ ${flat}`);
+  });
+
+  it('the damage breakdown names the two-handed grip when a Versatile weapon uses its bigger die', () => {
+    const sword = { name: 'Longsword', damage: '1d8', versatile_damage: '1d10', damage_type: 'Slashing', weapon_type: 'melee', properties: 'Versatile (1d10)' };
+    const oneHanded = computeAttack(sword, { scores: { strength: 16 }, level: 5, proficient: true });
+    expect(oneHanded.damageBreakdown[0]).toEqual({ label: 'weapon die', value: '1d8' });
+    const twoHanded = computeAttack(sword, { scores: { strength: 16 }, level: 5, proficient: true, versatileTwoHanded: true });
+    expect(twoHanded.damageBreakdown[0]).toEqual({ label: 'two-handed grip', value: '1d10' });
+  });
+
+  // A Finesse weapon uses the BETTER of STR/DEX. When they tie, the chosen ability is
+  // Strength — correct, but a bare "+2 STR" on a scimitar is indistinguishable from the app
+  // ignoring Finesse entirely, which is exactly what it looked like in QA. The breakdown
+  // names the rule so the reader can tell the difference.
+  describe('the ability term names the rule that chose it', () => {
+    const scimitar = { name: 'Scimitar', damage: '1d6', damage_type: 'Slashing', weapon_type: 'Melee', properties: '["Finesse", "Light"]' };
+
+    it('says Finesse tied when STR and DEX are equal', () => {
+      // STR 14 (+2) / DEX 15 (+2) — the QA character exactly.
+      const atk = computeAttack(scimitar, { scores: { strength: 14, dexterity: 15 }, level: 3, proficient: true });
+      expect(atk.damageBreakdown).toContainEqual({ label: 'STR (Finesse — STR ties DEX)', value: 2 });
+      expect(atk.damage).toBe('1d6 + 2 Slashing');
+    });
+
+    it('uses DEX and says so when DEX is higher', () => {
+      const atk = computeAttack(scimitar, { scores: { strength: 12, dexterity: 18 }, level: 3, proficient: true });
+      expect(atk.damageBreakdown).toContainEqual({ label: 'DEX (Finesse — DEX beats STR)', value: 4 });
+      expect(atk.toHitBreakdown[0]).toEqual({ label: 'DEX (Finesse — DEX beats STR)', value: 4 });
+      expect(atk.damage).toBe('1d6 + 4 Slashing');
+    });
+
+    it('uses STR and says so when STR is higher', () => {
+      const atk = computeAttack(scimitar, { scores: { strength: 18, dexterity: 12 }, level: 3, proficient: true });
+      expect(atk.damageBreakdown).toContainEqual({ label: 'STR (Finesse — STR beats DEX)', value: 4 });
+    });
+
+    it('leaves a plain STR label on a weapon with no rule to explain', () => {
+      const club = { name: 'Club', damage: '1d4', damage_type: 'Bludgeoning', weapon_type: 'Melee', properties: '["Light"]' };
+      const atk = computeAttack(club, { scores: { strength: 14, dexterity: 18 }, level: 3, proficient: true });
+      expect(atk.damageBreakdown).toContainEqual({ label: 'STR', value: 2 });
+    });
+  });
+
+  it('the damage breakdown carries no fighting-style term when none applies', () => {
+    const sword = { name: 'Longsword', damage: '1d8', damage_type: 'Slashing', weapon_type: 'melee' };
+    const atk = computeAttack(sword, { scores: { strength: 16 }, level: 5, proficient: true });
+    expect(atk.damageBreakdown).toEqual([
+      { label: 'weapon die', value: '1d8' },
+      { label: 'STR', value: 3 },
+    ]);
   });
 
   it('Dueling adds +2 damage to a solo one-handed melee weapon, but not when a second weapon is equipped', () => {
@@ -649,7 +718,9 @@ describe('Hex Warrior weapon (CHA attacks)', () => {
     const atk = computeAttack(longsword, { scores, level: 5, proficient: true, hexWeapon: true });
     expect(atk.toHit).toBe('+7'); // +4 CHA +3 prof
     expect(atk.damage).toBe('1d8 + 4 slashing');
-    expect(atk.toHitBreakdown[0]).toEqual({ label: 'CHA', value: 4 });
+    expect(atk.toHitBreakdown[0]).toEqual({ label: 'CHA (Hex Warrior)', value: 4 });
+    // The damage breakdown names it too, so neither number looks like it came from nowhere.
+    expect(atk.damageBreakdown).toContainEqual({ label: 'CHA (Hex Warrior)', value: 4 });
     expect(atk.hexNote).toMatch(/Hex Warrior/);
   });
 

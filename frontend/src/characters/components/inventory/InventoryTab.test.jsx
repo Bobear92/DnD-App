@@ -261,7 +261,8 @@ describe('InventoryTab', () => {
 
   it('shows the 2024 Champion Remarkable Athlete post-crit move note on weapon rows', () => {
     renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Champion', level: 3, edition: '5.5e' });
-    expect(screen.getByTestId('remarkable-move-w1')).toHaveTextContent('half your Speed');
+    fireEvent.click(screen.getByTestId('remarkable-move-w1'));
+    expect(screen.getByTestId('remarkable-move-w1-text')).toHaveTextContent('half your Speed');
   });
 
   it('shows no Remarkable Athlete move note in 5e / for a non-Champion', () => {
@@ -272,9 +273,31 @@ describe('InventoryTab', () => {
     expect(screen.queryByTestId('remarkable-move-w1')).not.toBeInTheDocument();
   });
 
+  // Warding Maneuver's prerequisite IS the equipment, so the item row is where it belongs.
+  it('shows the Warding Maneuver note on a melee weapon and a shield for a L7 Cavalier', () => {
+    const shield = { uid: 'sh1', category: 'armor', name: 'Shield', armor_type: 'Shield', armor_class: 2, equipped: true, quantity: 1 };
+    renderTab({ inventory: [longsword, shield], charClass: 'Fighter', subclass: 'Cavalier', level: 7 });
+    fireEvent.click(screen.getByTestId('warding-maneuver-w1'));
+    expect(screen.getByTestId('warding-maneuver-w1-text')).toHaveTextContent(/roll a d8/i);
+    // The shield lives under the Armor sub-tab.
+    fireEvent.click(screen.getByTestId('inv-category-armor'));
+    fireEvent.click(screen.getByTestId('warding-maneuver-sh1'));
+    expect(screen.getByTestId('warding-maneuver-sh1-text')).toHaveTextContent(/resistance/i);
+  });
+
+  it('shows no Warding Maneuver note below L7, or on a ranged weapon', () => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Cavalier', level: 6 });
+    expect(screen.queryByTestId('warding-maneuver-w1')).not.toBeInTheDocument();
+    cleanup();
+    const bow = { uid: 'lb1', category: 'weapons', name: 'Longbow', weapon_category: 'Martial', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing', quantity: 1 };
+    renderTab({ inventory: [bow], charClass: 'Fighter', subclass: 'Cavalier', level: 7 });
+    expect(screen.queryByTestId('warding-maneuver-lb1')).not.toBeInTheDocument();
+  });
+
   it('shows the Eldritch Strike note on weapon rows for an Eldritch Knight at L10', () => {
     renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Eldritch Knight', level: 10 });
-    expect(screen.getByTestId('eldritch-strike-w1')).toHaveTextContent(/disadvantage on the next saving throw/i);
+    fireEvent.click(screen.getByTestId('eldritch-strike-w1'));
+    expect(screen.getByTestId('eldritch-strike-w1-text')).toHaveTextContent(/disadvantage on the next saving throw/i);
   });
 
   it('shows no Eldritch Strike note below L10 / for a non-EK subclass', () => {
@@ -360,7 +383,11 @@ describe('InventoryTab', () => {
 
   it('shows a Savage Attacks note on a melee weapon for a Half-Orc', () => {
     renderTab({ inventory: [longsword], charClass: 'Fighter', characterData: { race_traits: ['Savage Attacks', 'Relentless Endurance'] } });
+    // Collapsed to the name; the rules text arrives on click.
     expect(screen.getByTestId('savage-attacks-w1')).toHaveTextContent(/Savage Attacks/i);
+    expect(screen.queryByTestId('savage-attacks-w1-text')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('savage-attacks-w1'));
+    expect(screen.getByTestId('savage-attacks-w1-text')).toHaveTextContent(/one extra time/i);
   });
 
   it('no Savage Attacks note on a ranged weapon even for a Half-Orc', () => {
@@ -375,7 +402,8 @@ describe('InventoryTab', () => {
 
   it('shows a Great Weapon Master bonus-attack note on a melee weapon row', () => {
     renderTab({ inventory: [longsword], charClass: 'Fighter', characterData: { feats: [{ name: 'Great Weapon Master' }] } });
-    expect(screen.getByTestId('gwm-bonus-w1')).toHaveTextContent(/critical hit.*bonus action/i);
+    fireEvent.click(screen.getByTestId('gwm-bonus-w1'));
+    expect(screen.getByTestId('gwm-bonus-w1-text')).toHaveTextContent(/critical hit.*bonus action/i);
   });
 
   it('no Great Weapon Master bonus-attack note on a ranged weapon', () => {

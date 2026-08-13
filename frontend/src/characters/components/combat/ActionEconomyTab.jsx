@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Swords, Zap, Repeat, ShieldAlert, Sparkles, ArrowUpRight, ChevronDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import FeatureNote from '@/characters/components/shared/FeatureNote';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
 import { getRaceGrantedWeapons, getRaceGrantedArmor } from '@/characters/components/race/raceProficienciesData';
@@ -32,13 +33,19 @@ const EMPTY_NOTES = {
 };
 
 /**
- * The weapon to-hit total as a clickable chip — tapping it toggles a breakdown of how
- * the +N is calculated (ability mod, proficiency, fighting styles). Falls back to plain
- * text when there's no breakdown to show.
+ * An attack number as a clickable chip — tapping it toggles the term-by-term breakdown
+ * behind it. Serves BOTH numbers on an attack: the to-hit (ability mod, proficiency,
+ * fighting styles) and the damage (weapon die, ability mod, fighting styles, and any
+ * feature folding a bonus in, e.g. Great Weapon Master's +10 or Unwavering Mark's half
+ * Fighter level). One component rather than two near-identical ones, because the only
+ * difference is that a damage breakdown leads with a die: a part whose `value` is a
+ * string renders as-is ("1d8 weapon die"), a numeric one renders signed ("+3 STR").
+ *
+ * Falls back to plain text when there's no breakdown to show.
  */
-function ToHitBreakdown({ toHit, breakdown, entryKey }) {
+function AttackNumber({ value, breakdown, testId, breakdownTestId }) {
   const [open, setOpen] = useState(false);
-  if (!breakdown || breakdown.length === 0) return <span>{toHit}</span>;
+  if (!breakdown || breakdown.length === 0) return <span>{value}</span>;
   return (
     <>
       <button
@@ -46,16 +53,37 @@ function ToHitBreakdown({ toHit, breakdown, entryKey }) {
         onClick={() => setOpen((o) => !o)}
         className="font-medium text-foreground underline decoration-dotted underline-offset-2 hover:text-primary"
         aria-expanded={open}
-        data-testid={`ae-tohit-${entryKey}`}
+        title="How this number is calculated"
+        data-testid={testId}
       >
-        {toHit}
+        {value}
       </button>
       {open && (
-        <span className="ml-1 text-muted-foreground" data-testid={`ae-tohit-breakdown-${entryKey}`}>
-          ({breakdown.map((p) => `${formatSigned(p.value)} ${p.label}`).join(', ')})
+        <span className="ml-1 text-muted-foreground" data-testid={breakdownTestId || `${testId}-breakdown`}>
+          ({breakdown
+            .map((p) => `${typeof p.value === 'number' ? formatSigned(p.value) : p.value} ${p.label}`)
+            .join(', ')})
         </span>
       )}
     </>
+  );
+}
+
+/**
+ * A rider: a separate feature that hangs off another entry because it costs nothing of its own
+ * (Arcane Charge on Action Surge, Unwavering Mark on a melee attack). Delegates to the shared
+ * `FeatureNote` — the same collapsed-name/expand-on-click widget the Items-tab feature notes
+ * use — and only adds the indent rule that keeps a rider from reading as part of the base text.
+ */
+function RiderLine({ rider }) {
+  const slug = rider.source.toLowerCase().replace(/\s+/g, '-');
+  return (
+    <FeatureNote
+      name={rider.source}
+      text={rider.text}
+      testId={`ae-rider-${slug}`}
+      className="mt-1.5 border-l-2 border-border pl-2"
+    />
   );
 }
 
@@ -161,6 +189,8 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
   // entry carries a `powerAttack` variant, a toggle swaps the displayed to-hit/damage between
   // the normal and −5/+10 numbers. The variant names its own feat, so one control serves both.
   const [powerOn, setPowerOn] = useState(false);
+  // A feature-imposed save DC expands into its arithmetic on click (Ferocious Charger).
+  const [dcOpen, setDcOpen] = useState(false);
   const view = powerOn && entry.powerAttack ? entry.powerAttack : entry;
   // An attached feature block (Arcane Shot on a bow) owns the resource control itself, inside
   // the block — so the Use button reads as belonging to that feature, not to the attack.
@@ -201,9 +231,22 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
                 <span className="w-16 shrink-0 text-muted-foreground">{sa.label}</span>
                 <span className="font-medium">{sa.name}</span>
                 <span className="text-muted-foreground">
-                  {sa.toHit || sa.damage
-                    ? `${sa.toHit ? `${sa.toHit} to hit · ` : ''}${sa.damage || ''}${sa.warning ? ' · disadvantage' : ''}`
-                    : (sa.detail || '')}
+                  {sa.toHit || sa.damage ? (
+                    <>
+                      {sa.toHit ? `${sa.toHit} to hit · ` : ''}
+                      {/* Damage on a sub-row is clickable too — these are exactly the rows
+                          carrying a folded-in bonus (Unwavering Mark's half level, the
+                          off-hand's dropped ability modifier), so they're where "where did
+                          that number come from?" actually gets asked. */}
+                      <AttackNumber
+                        value={sa.damage || ''}
+                        breakdown={sa.damageBreakdown}
+                        testId={`ae-sub-damage-${sa.label.toLowerCase().replace(/\s+/g, '-')}`}
+                      />
+                      {sa.note ? ` · ${sa.note}` : ''}
+                      {sa.warning ? ' · disadvantage' : ''}
+                    </>
+                  ) : (sa.detail || '')}
                 </span>
               </div>
             ))}
@@ -211,23 +254,54 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
         )}
         {entry.toHitBreakdown ? (
           <p className="text-xs text-muted-foreground mt-0.5">
-            <ToHitBreakdown toHit={view.toHit} breakdown={view.toHitBreakdown} entryKey={entry.key} />
-            {view.detailRest ? ` ${view.detailRest}` : ''}
+            <AttackNumber
+              value={view.toHit}
+              breakdown={view.toHitBreakdown}
+              testId={`ae-tohit-${entry.key}`}
+              breakdownTestId={`ae-tohit-breakdown-${entry.key}`}
+            />
+            {' to hit · '}
+            <AttackNumber
+              value={view.damage}
+              breakdown={view.damageBreakdown}
+              testId={`ae-damage-${entry.key}`}
+              breakdownTestId={`ae-damage-breakdown-${entry.key}`}
+            />
+            {view.damageFlags || ''}
           </p>
         ) : (
           entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>
         )}
-        {/* Riders: separate features that hang off this entry (e.g. Arcane Charge on Action
-            Surge). Given their own indented line so they don't read as part of the base rule. */}
-        {entry.riders?.map((rider) => (
-          <p
-            key={rider.source}
-            className="text-xs text-muted-foreground mt-1.5 border-l-2 border-border pl-2"
-            data-testid={`ae-rider-${rider.source.toLowerCase().replace(/\s+/g, '-')}`}
-          >
-            <span className="font-medium text-foreground">{rider.source}</span>
-            {rider.text ? ` — ${rider.text}` : ''}
+        {/* A save DC this feature imposes, as a clickable number rather than arithmetic baked
+            into the sentence above it — the same treatment the Arcane Shot DC gets. */}
+        {entry.saveDc && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {entry.saveDc.label}{' '}
+            <BreakdownValue
+              testId={`ae-save-dc-${entry.key}`}
+              label={`the ${entry.saveDc.label}`}
+              breakdown={entry.saveDc.breakdown}
+              signed={false}
+              className="font-semibold text-foreground"
+              expanded={dcOpen}
+              onToggle={() => setDcOpen((o) => !o)}
+            />
+            {dcOpen && (
+              <BreakdownPanel
+                testId={`ae-save-dc-breakdown-${entry.key}`}
+                breakdown={entry.saveDc.breakdown}
+                signed={false}
+              />
+            )}
           </p>
+        )}
+        {/* Riders: separate features that hang off this entry (e.g. Arcane Charge on Action
+            Surge, Unwavering Mark on a melee attack). Given their own indented line so they
+            don't read as part of the base rule, and collapsed to the NAME until clicked — a
+            rider is a paragraph of consequences you only need once the trigger fires, and
+            several of them expanded at once buries the attack numbers the card exists for. */}
+        {entry.riders?.map((rider) => (
+          <RiderLine key={rider.source} rider={rider} />
         ))}
         {entry.powerAttack && (
           <button
@@ -429,8 +503,14 @@ export default function ActionEconomyTab({
   const handleInventoryChange = (next) => onChange?.({ inventory: next });
 
   const entries = economy[active] || [];
-  const special = entries.filter((e) => e.source !== 'Universal');
-  const universal = entries.filter((e) => e.source === 'Universal');
+  // Reactions that do NOT spend your one normal reaction (Cavalier's Vigilant Defender) are
+  // pulled out of their source group into a section of their own. Listed beside the others they
+  // read as one more thing competing for the single reaction you get, which is the opposite of
+  // what they are — the whole point is that they're additional.
+  const extraReactions = entries.filter((e) => e.extraReaction);
+  const normal = entries.filter((e) => !e.extraReaction);
+  const special = normal.filter((e) => e.source !== 'Universal');
+  const universal = normal.filter((e) => e.source === 'Universal');
 
   // Group the character-specific entries by source for headed sections.
   const grouped = SOURCE_ORDER
@@ -525,6 +605,27 @@ export default function ActionEconomyTab({
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">General — available to everyone</h3>
               <div className="space-y-2 opacity-80">
                 {universal.map((e) => <ItemRow key={e.key} entry={e} />)}
+              </div>
+            </div>
+          )}
+
+          {/* Reactions that don't spend your one normal reaction. Given a bordered section of
+              their own, last, so the list above reads as "pick ONE of these" and this reads as
+              "and also this, on someone else's turn". */}
+          {extraReactions.length > 0 && (
+            <div
+              className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3"
+              data-testid="ae-extra-reactions"
+            >
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-primary">
+                Extra reactions — on other creatures&apos; turns
+              </h3>
+              <p className="text-[11px] text-muted-foreground leading-tight">
+                These don&apos;t use your one normal reaction, so you can still take one of the
+                reactions above in the same round.
+              </p>
+              <div className="space-y-2">
+                {extraReactions.map((e) => <ItemRow key={e.key} entry={e} />)}
               </div>
             </div>
           )}

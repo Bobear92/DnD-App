@@ -32,10 +32,10 @@ import {
 } from '@/characters/components/inventory/weaponBondData';
 import WeaponDesignationPanel from '@/characters/components/inventory/WeaponDesignationPanel';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
-import { critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
+import { critRange, critRangeLabel } from '@/characters/components/combat/combatBonuses';
 import { getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
-import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
-import { remarkableAthleteMoveNote, eldritchStrikeNote } from '@/characters/components/subclass/subclassCombatNotes';
+import { getEquipmentFeatures } from '@/characters/components/inventory/equipmentFeatures';
+import FeatureNote from '@/characters/components/shared/FeatureNote';
 
 // Tools are stored as adventuring-gear entries but get their own sub-tab (inserted
 // right after Gear). It isn't a real encyclopedia category — the Add picker reuses
@@ -120,15 +120,9 @@ export default function InventoryTab({
   // weapon attack, so it's shown on each weapon row. Null for everyone else.
   const crit = critRange({ charClass, subclass, level });
   const critLabel = critRangeLabel(crit);
-  // 2024 Champion Remarkable Athlete's post-crit free move — crit-triggered like the crit
-  // range, so it rides alongside it on each weapon row. Null for 5e / non-Champions.
-  const remarkableMoveNote = remarkableAthleteMoveNote({ charClass, subclass, level, edition });
-  // Great Weapon Master's crit/kill bonus-attack reminder (both editions), shown on melee
-  // weapon rows next to the crit range. Null when the character lacks the feat.
-  const gwmBonusNote = greatWeaponMasterNote(characterData?.feats);
-  // Eldritch Knight's Eldritch Strike (L10) — an on-hit weapon-attack rider, shown on every
-  // weapon row. Null for everyone else.
-  const eldritchNote = eldritchStrikeNote({ charClass, subclass, level });
+  // (Feature notes gated on holding a given item — Savage Attacks, the Great Weapon Master
+  // bonus attack, Eldritch Strike, Remarkable Athlete's move, Warding Maneuver — are resolved
+  // per row by getEquipmentFeatures, not one local per feature.)
   // Weapon designations: Eldritch Knight's Weapon Bond (up to 2 bonded weapons) and the
   // Hexblade's Hex Warrior weapon (one, lacks Two-Handed, attacks with CHA). Both are
   // chosen here from the owned weapons and stored as inventory-entry uids.
@@ -512,15 +506,6 @@ export default function InventoryTab({
               // Expert removes the penalty for ranged weapons.
               const isRangedWeapon = e.category === 'weapons'
                 && (weaponNeedsAmmo(e) || weaponFacets(e).includes('Thrown'));
-              // Half-Orc Savage Attacks: extra damage die on a melee weapon crit — flag
-              // every melee weapon (weapon_type 'melee', incl. thrown melee like handaxes).
-              const showSavage = e.category === 'weapons'
-                && (e.weapon_type || '').toLowerCase() === 'melee'
-                && hasSavageAttacks(characterData?.race_traits);
-              // Great Weapon Master's crit/kill bonus attack — a melee-weapon benefit.
-              const showGwmBonus = e.category === 'weapons'
-                && (e.weapon_type || '').toLowerCase() === 'melee'
-                && !!gwmBonusNote;
               return (
                 <div key={e.uid} className="flex items-center gap-3 px-3 py-2" data-testid={`inv-row-${e.uid}`}>
                   <div className={cn('w-1.5 h-9 rounded-full shrink-0', activeCategory.accent)} />
@@ -599,30 +584,23 @@ export default function InventoryTab({
                         </div>
                       );
                     })()}
-                    {showSavage && (
-                      <div className="text-[11px] text-emerald-600 leading-tight" data-testid={`savage-attacks-${e.uid}`}>
-                        {SAVAGE_ATTACKS_NOTE}
-                      </div>
-                    )}
-                    {showGwmBonus && (
-                      <div className="text-[11px] text-emerald-600 leading-tight" data-testid={`gwm-bonus-${e.uid}`}>
-                        {gwmBonusNote}
-                      </div>
-                    )}
+                    {/* Features gated on holding THIS item — "what does carrying this unlock?"
+                        Data-driven (EQUIPMENT_FEATURES) rather than a block per feature, so the
+                        next one is a table entry. Test ids stay per-feature. */}
+                    {getEquipmentFeatures(e, { charClass, subclass, level, edition, characterData })
+                      .map((f) => (
+                        <FeatureNote
+                          key={f.source}
+                          name={f.source}
+                          text={f.text}
+                          tone={f.tone}
+                          testId={`${f.testId}-${e.uid}`}
+                        />
+                      ))}
                     <div className="text-xs text-muted-foreground truncate">{activeCategory.subtitle(e)}</div>
                     {e.category === 'weapons' && crit && (
                       <div className="text-[11px] text-primary leading-tight font-medium" data-testid={`crit-range-${e.uid}`}>
                         Crit {critLabel} ({crit.source})
-                      </div>
-                    )}
-                    {e.category === 'weapons' && eldritchNote && (
-                      <div className="text-[11px] text-violet-500 leading-tight" data-testid={`eldritch-strike-${e.uid}`}>
-                        {eldritchNote}
-                      </div>
-                    )}
-                    {e.category === 'weapons' && remarkableMoveNote && (
-                      <div className="text-[11px] text-emerald-600 leading-tight" data-testid={`remarkable-move-${e.uid}`}>
-                        {remarkableMoveNote}
                       </div>
                     )}
                     {e.category === 'weapons' && (

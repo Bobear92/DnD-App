@@ -66,6 +66,18 @@ describe('powerAttackVariant', () => {
     expect(v.damage).toBe('1d8 + 14 piercing');
     expect(v.toHitBreakdown).toContainEqual({ label: 'Sharpshooter', value: -5 });
   });
+  it('names the feat in the DAMAGE breakdown too, so the +10 is auditable', () => {
+    const v = powerAttackVariant({
+      toHit: '+6',
+      damage: '2d6 + 3 slashing',
+      damageBreakdown: [{ label: 'weapon die', value: '2d6' }, { label: 'STR', value: 3 }],
+    });
+    expect(v.damageBreakdown).toContainEqual({ label: 'Great Weapon Master', value: 10 });
+    // Numeric terms still reconcile with the damage string: 3 + 10 = 13.
+    const flat = v.damageBreakdown.filter((p) => typeof p.value === 'number')
+      .reduce((s, p) => s + p.value, 0);
+    expect(v.damage).toContain(`+ ${flat}`);
+  });
 });
 
 describe('canTwoWeaponFight', () => {
@@ -1211,6 +1223,64 @@ describe('buildActionEconomy — Eldritch Knight (Fighter subclass)', () => {
   });
 });
 
+// Riders attach to weapon attack cards from a table now, so a feature and a feat reach the
+// same surface by the same route rather than through two hand-written blocks.
+describe('buildActionEconomy — ATTACK_RIDERS', () => {
+  const args = (extra = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Champion',
+    level: 5,
+    edition: '5e',
+    characterData: {},
+    inventory: [
+      { uid: 'w1', category: 'weapons', name: 'Longsword', weapon_type: 'Melee', equipped: true },
+      { uid: 'w2', category: 'weapons', name: 'Longbow', weapon_type: 'Ranged', equipped: true },
+    ],
+    attacks: [
+      { uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true },
+      { uid: 'w2', name: 'Longbow', toHit: '+5', damage: '1d8 + 1 piercing', proficient: true },
+    ],
+    scores: { strength: 16, dexterity: 12 },
+    spellIndex: {},
+    ...extra,
+  });
+  const ridersOn = (name, extra) => {
+    const e = buildActionEconomy(args(extra)).action.find((x) => x.source === 'Weapon' && x.name === name);
+    return (e?.riders ?? []).map((r) => r.source);
+  };
+  const mounted = { characterData: { feats: [{ id: 26, name: 'Mounted Combatant', level: 4 }] } };
+
+  it('puts Mounted Combatant on melee attacks only', () => {
+    expect(ridersOn('Longsword', mounted)).toContain('Mounted Combatant');
+    expect(ridersOn('Longbow', mounted)).not.toContain('Mounted Combatant');
+  });
+
+  it('omits it entirely without the feat', () => {
+    expect(ridersOn('Longsword')).toHaveLength(0);
+  });
+
+  it('carries the full feat text, all three clauses', () => {
+    const rider = buildActionEconomy(args(mounted)).action
+      .find((e) => e.name === 'Longsword').riders.find((r) => r.source === 'Mounted Combatant');
+    expect(rider.text).toMatch(/advantage on melee attack rolls/i);   // the attack clause
+    expect(rider.text).toMatch(/target you instead/i);                // redirect
+    expect(rider.text).toMatch(/Dexterity saving throw/i);            // the mount's evasion
+    // The rider stays out of the attack's own rule text.
+    expect(buildActionEconomy(args(mounted)).action.find((e) => e.name === 'Longsword').detail)
+      .not.toMatch(/Mounted Combatant/);
+  });
+
+  it('stacks with a subclass rider on the same card', () => {
+    const both = { subclass: 'Cavalier', ...mounted };
+    expect(ridersOn('Longsword', both)).toEqual(['Unwavering Mark', 'Mounted Combatant']);
+  });
+
+  it('reaches an unarmed strike, which is a melee attack', () => {
+    const bare = { ...mounted, inventory: [], attacks: [] };
+    expect(ridersOn('Unarmed Strike', bare)).toContain('Mounted Combatant');
+  });
+});
+
 describe('buildActionEconomy — Cavalier (Fighter subclass)', () => {
   const cavArgs = (level, extra = {}) => ({
     charClass: 'Fighter',
@@ -1219,19 +1289,91 @@ describe('buildActionEconomy — Cavalier (Fighter subclass)', () => {
     edition: '5e',
     characterData: {},
     inventory: [],
-    attacks: [{ uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true }],
+    attacks: [{
+      uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true,
+      damageBreakdown: [{ label: 'weapon die', value: '1d8' }, { label: 'STR', value: 3 }],
+    }],
     scores: { strength: 16 },
     spellIndex: {},
     ...extra,
   });
 
-  it('Unwavering Mark is a bonus action wired to its long-rest pool from L3', () => {
-    const entry = buildActionEconomy(cavArgs(3)).bonus.find((e) => e.name === 'Unwavering Mark');
+  // Unwavering Mark is two mechanics at two costs. Marking is free and rides on the melee
+  // attack that triggers it; only the follow-up attack is a bonus action with a pool.
+  const markedTarget = (lvl, extra) =>
+    buildActionEconomy(cavArgs(lvl, extra)).bonus.find((e) => e.name === 'Marked Target');
+  const meleeRider = (lvl, extra) =>
+    (buildActionEconomy(cavArgs(lvl, extra)).action.find((e) => e.source === 'Weapon')?.riders ?? [])
+      .find((r) => r.source === 'Unwavering Mark');
+
+  it('the follow-up attack is a bonus action wired to its long-rest pool from L3', () => {
+    const entry = markedTarget(3);
     expect(entry.resourceKey).toBe('unwavering_mark_used');
-    // The tracked pool is the follow-up attack; marking itself is free, and saying so is the
-    // whole point of the entry (a player reading only the pool would ration the wrong thing).
-    expect(entry.detail).toMatch(/Marking a creature .* costs nothing/i);
-    expect(entry.detail).toMatch(/half your Fighter level/i);
+    expect(entry.cost).toBe('bonus action');
+    // Named for the trigger the player scans for mid-combat, not for the feature.
+    expect(buildActionEconomy(cavArgs(3)).bonus.find((e) => e.name === 'Unwavering Mark')).toBeFalsy();
+    expect(entry.detail).toMatch(/deals damage to anyone other than you/i);
+    expect(entry.detail).toMatch(/advantage/i);
+  });
+
+  it('the folded half-level shows as its own term in the damage breakdown', () => {
+    // Folding keeps the number rollable; the breakdown keeps it auditable.
+    const parts = markedTarget(7).subAttacks[0].damageBreakdown;
+    expect(parts).toContainEqual({ label: 'half Fighter level (Unwavering Mark)', value: 3 });
+    // Terms still reconcile with the displayed damage: 1d8 + STR 3 + mark 3 = 1d8 + 6.
+    const flat = parts.filter((p) => typeof p.value === 'number').reduce((s, p) => s + p.value, 0);
+    expect(flat).toBe(6);
+    expect(markedTarget(7).subAttacks[0].damage).toContain(`+ ${flat}`);
+  });
+
+  it('the follow-up card shows the real attack with half Fighter level folded into the damage', () => {
+    // L7 → half level 3. Longsword 1d8 + 3 → 1d8 + 6, rolled once, so it is ONE number.
+    const entry = markedTarget(7);
+    expect(entry.subAttacks).toHaveLength(1);
+    expect(entry.subAttacks[0]).toMatchObject({
+      name: 'Longsword', toHit: '+5', damage: '1d8 + 6 slashing', note: 'with advantage',
+    });
+    expect(entry.detail).toMatch(/already/i); // says the bonus is included, not to be added again
+    // L3 → half level 1.
+    expect(markedTarget(3).subAttacks[0].damage).toBe('1d8 + 4 slashing');
+  });
+
+  it('an unarmed strike is a melee weapon attack for the mark, and gets the bonus too', () => {
+    const entry = markedTarget(7, { attacks: [] }); // nothing equipped → unarmed strike row
+    expect(entry.subAttacks.map((s) => s.name)).toEqual(['Unarmed Strike']);
+    // STR 16 → 1 + 3 = 4 bludgeoning, +3 half level = 7.
+    expect(entry.subAttacks[0].damage).toBe('7 bludgeoning');
+    expect(meleeRider(7, { attacks: [] })).toBeTruthy();
+  });
+
+  it('marking rides on the melee attack card, free and unlimited, not on the pool', () => {
+    const rider = meleeRider(3);
+    expect(rider.text).toMatch(/disadvantage on any attack roll that doesn't target you/i);
+    expect(rider.text).toMatch(/costs nothing/i);
+    expect(rider.text).toMatch(/no limit/i);
+    // It stays out of the attack's own rule text — it isn't what every attack does.
+    const atk = buildActionEconomy(cavArgs(3)).action.find((e) => e.source === 'Weapon');
+    expect(atk.detail).not.toMatch(/Unwavering Mark/);
+  });
+
+  it('drops both surfaces entirely when only a ranged weapon is equipped', () => {
+    // A bow can't trigger the mark, so there is no follow-up to offer — the card is omitted
+    // rather than shown empty. (Bare-handed is different: an unarmed strike IS a melee attack,
+    // covered by the unarmed test above, so that Cavalier keeps the card.)
+    const bow = { attacks: [{ uid: 'w2', name: 'Longbow', toHit: '+7', damage: '1d8 + 3 piercing', proficient: true }],
+      inventory: [{ uid: 'w2', category: 'weapons', name: 'Longbow', weapon_type: 'Ranged', equipped: true }] };
+    expect(meleeRider(7, bow)).toBeFalsy();
+    expect(markedTarget(7, bow)).toBeFalsy();
+  });
+
+  it('neither surface exists below L3, nor for another subclass', () => {
+    expect(markedTarget(2)).toBeFalsy();
+    expect(meleeRider(2)).toBeFalsy();
+    const champ = { charClass: 'Fighter', subclass: 'Champion', level: 7, edition: '5e',
+      characterData: {}, inventory: [], scores: { strength: 16 }, spellIndex: {},
+      attacks: [{ uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true }] };
+    expect(buildActionEconomy(champ).bonus.find((e) => e.name === 'Marked Target')).toBeFalsy();
+    expect(buildActionEconomy(champ).action.find((e) => e.source === 'Weapon').riders ?? []).toHaveLength(0);
   });
 
   it('Warding Maneuver is a reaction from L7, not before', () => {
@@ -1246,12 +1388,25 @@ describe('buildActionEconomy — Cavalier (Fighter subclass)', () => {
   it('Ferocious Charger computes its save DC from level and Strength', () => {
     // L15 → PB +5; STR 16 → +3; DC 8 + 5 + 3 = 16.
     const l15 = buildActionEconomy(cavArgs(15)).no_action.find((e) => e.name === 'Ferocious Charger');
-    expect(l15.detail).toMatch(/DC 16 = 8 \+ PB \+5 \+ STR \+3/);
+    expect(l15.saveDc.label).toBe('Strength save DC');
+    expect(l15.saveDc.breakdown.total).toBe(16);
     // A different Strength gives a different DC — the point of computing it at all.
     const strong = buildActionEconomy(cavArgs(15, { scores: { strength: 20 } }))
       .no_action.find((e) => e.name === 'Ferocious Charger');
-    expect(strong.detail).toMatch(/DC 18/);
+    expect(strong.saveDc.breakdown.total).toBe(18);
     expect(buildActionEconomy(cavArgs(14)).no_action.find((e) => e.name === 'Ferocious Charger')).toBeFalsy();
+  });
+
+  it('names each term of the Ferocious Charger DC, and keeps them out of the rules text', () => {
+    const entry = buildActionEconomy(cavArgs(15)).no_action.find((e) => e.name === 'Ferocious Charger');
+    expect(entry.saveDc.breakdown.parts.map((p) => p.label))
+      .toEqual(['Base', 'Proficiency bonus', 'STR modifier']);
+    // The terms sum to the number they explain.
+    expect(entry.saveDc.breakdown.parts.reduce((s, p) => s + p.value, 0))
+      .toBe(entry.saveDc.breakdown.total);
+    // The sentence stays readable — no arithmetic inlined into it.
+    expect(entry.detail).toMatch(/Strength saving throw or be knocked prone/i);
+    expect(entry.detail).not.toMatch(/DC|8 \+ PB/);
   });
 
   it('Hold the Line rides on the universal Opportunity Attack from L10', () => {
@@ -1266,11 +1421,37 @@ describe('buildActionEconomy — Cavalier (Fighter subclass)', () => {
     expect(oaAt(10).detail).not.toMatch(/Hold the Line/);
   });
 
-  it('Vigilant Defender joins it as a second rider at L18', () => {
+  // Vigilant Defender grants a WHOLE SEPARATE reaction, so it is an entry of its own rather
+  // than a rider — as a rider the Reactions tab showed a lone Opportunity Attack and nothing
+  // told the player they had a second reaction economy.
+  it('Vigilant Defender is its own reaction entry at L18, flagged as an extra reaction', () => {
+    const reactions = buildActionEconomy(cavArgs(18)).reaction;
+    const vd = reactions.find((e) => e.name === 'Vigilant Defender');
+    expect(vd.extraReaction).toBe(true);
+    expect(vd.cost).toBe('special reaction');
+    expect(vd.detail).toMatch(/does not consume your normal reaction/i);
+    expect(vd.detail).toMatch(/every creature's turn except your own/i);
+    // …and it is no longer duplicated as a rider on the Opportunity Attack.
+    const oaRiders = reactions.find((e) => e.key === 'universal:Opportunity Attack').riders;
+    expect(oaRiders.map((r) => r.source)).toEqual(['Hold the Line']);
+  });
+
+  it('Vigilant Defender does not exist below L18, and Hold the Line still rides on the OA', () => {
+    const at17 = buildActionEconomy(cavArgs(17)).reaction;
+    expect(at17.find((e) => e.name === 'Vigilant Defender')).toBeFalsy();
+    expect(at17.find((e) => e.key === 'universal:Opportunity Attack').riders
+      .map((r) => r.source)).toEqual(['Hold the Line']);
+  });
+
+  it('no other reaction is flagged as an extra reaction', () => {
+    const flagged = buildActionEconomy(cavArgs(18)).reaction.filter((e) => e.extraReaction);
+    expect(flagged.map((e) => e.name)).toEqual(['Vigilant Defender']);
+  });
+
+  it('keeps Hold the Line as a rider — it modifies the opportunity attack rather than adding one', () => {
     const riders = buildActionEconomy(cavArgs(18)).reaction
       .find((e) => e.key === 'universal:Opportunity Attack').riders;
-    expect(riders.map((r) => r.source)).toEqual(['Hold the Line', 'Vigilant Defender']);
-    expect(riders[1].text).toMatch(/does not consume your normal reaction/i);
+    expect(riders.map((r) => r.source)).toEqual(['Hold the Line']);
   });
 
   it('gives none of it to another Fighter subclass', () => {

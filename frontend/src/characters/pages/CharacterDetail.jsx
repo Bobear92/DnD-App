@@ -36,6 +36,7 @@ import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from
 import { computePassiveScores } from '@/characters/components/skills/passiveSkills';
 import { skillBreakdown, saveBreakdown } from '@/characters/components/skills/skillMath';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
+import SaveFeaturesPanel from '@/characters/components/skills/SaveFeaturesPanel';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { getCasterDescriptor } from '@/characters/components/classData/casterDescriptors';
 import { MaxHpValue } from '@/characters/components/combat/CombatBonusInline';
@@ -129,6 +130,12 @@ const XP_THRESHOLDS = [0, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000,
   64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 
 function xpForLevel(level) { return XP_THRESHOLDS[Math.min(level, 20)] ?? 355000; }
+
+// The top of the 5e XP table (level 20). XP stops meaning anything past it — there is no
+// level 21 to earn — so a GM's award is clamped here rather than letting the total run away.
+// The backend clamps too (players/characters/service.py); this one keeps the UI honest
+// immediately instead of showing a number the save will silently change.
+export const MAX_XP = XP_THRESHOLDS[20];
 
 function mod(score) { return Math.floor((score - 10) / 2); }
 function modStr(score) { const m = mod(score); return m >= 0 ? `+${m}` : `${m}`; }
@@ -376,7 +383,8 @@ export default function CharacterDetail() {
   const handleAddXp = async () => {
     const toAdd = parseInt(xpInput.replace(/,/g, ''));
     if (isNaN(toAdd) || toAdd <= 0) return;
-    const newXp = (character.experience_points ?? 0) + toAdd;
+    // Clamp at the level-20 threshold: an over-award tops out rather than overflowing.
+    const newXp = Math.min(MAX_XP, (character.experience_points ?? 0) + toAdd);
     const nextLevel = (character.level ?? 1) + 1;
     const pendingLevelUp = nextLevel <= 20 && newXp >= xpForLevel(nextLevel);
     setAddingXp(true);
@@ -1518,6 +1526,15 @@ export default function CharacterDetail() {
                       </p>
                     )}
                   </div>
+
+                  {/* Features that change how the character's own saves work — advantage,
+                      rerolls, situational bonuses. The grid above can only show a number. */}
+                  <SaveFeaturesPanel
+                    charClass={character.char_class}
+                    subclass={classSection.draft?.subclass ?? character?.character_data?.subclass}
+                    level={character.level}
+                    edition={edition}
+                  />
 
                   {/* Skills */}
                   <SkillsDisplay
