@@ -1281,6 +1281,92 @@ describe('buildActionEconomy — ATTACK_RIDERS', () => {
   });
 });
 
+// Riders that hang off ONE NAMED entry come from a table too, so a subclass feature and a feat
+// modify the same universal action by the same route. Arcane Charge and Hold the Line keep
+// their own tests above — those pass unchanged through the migration, which is the point.
+describe('buildActionEconomy — ENTRY_RIDERS (Sentinel)', () => {
+  // Sentinel as the app stores it: the reaction attack is an `action` effect, the two
+  // opportunity-attack clauses are a display-only note (which is why they never reached this
+  // tab before) — the rider text for those lives in ENTRY_RIDERS.
+  const SENTINEL = {
+    id: 30,
+    name: 'Sentinel',
+    level: 4,
+    effects: [
+      {
+        kind: 'action',
+        name: 'Sentinel Strike',
+        economy: 'reaction',
+        trigger: 'When a creature within 5 ft attacks a target other than you',
+        description: 'Make a melee weapon attack against the attacking creature.',
+      },
+      { kind: 'note', text: "Your opportunity-attack hits reduce the target's speed to 0; creatures provoke even when they Disengage." },
+    ],
+  };
+
+  const args = (extra = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Champion',
+    level: 5,
+    edition: '5e',
+    characterData: {},
+    inventory: [],
+    attacks: [{ uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true }],
+    scores: { strength: 16, dexterity: 12 },
+    spellIndex: {},
+    ...extra,
+  });
+  const withSentinel = (extra = {}) => args({ characterData: { feats: [SENTINEL] }, ...extra });
+  const oaFrom = (a) => buildActionEconomy(a).reaction.find((e) => e.key === 'universal:Opportunity Attack');
+
+  it('rides on the universal Opportunity Attack when the character has the feat', () => {
+    const riders = oaFrom(withSentinel()).riders;
+    expect(riders.map((r) => r.source)).toEqual(['Sentinel']);
+  });
+
+  it('carries both opportunity-attack clauses — the ones that had no home before', () => {
+    const rider = oaFrom(withSentinel()).riders[0];
+    expect(rider.text).toMatch(/speed reduced to 0/i);   // the speed clause
+    expect(rider.text).toMatch(/Disengage/i);            // the provoke-anyway clause
+  });
+
+  it('stays out of the base rule text — it is not what every opportunity attack does', () => {
+    const oa = oaFrom(withSentinel());
+    expect(oa.detail).not.toMatch(/Sentinel|Disengage/);
+    expect(oa.detail).toMatch(/leaves your reach/i);
+  });
+
+  it('omits the rider entirely without the feat', () => {
+    expect(oaFrom(args()).riders ?? []).toHaveLength(0);
+  });
+
+  it('keeps Sentinel Strike a separate reaction entry — a different trigger, not an OA', () => {
+    const reactions = buildActionEconomy(withSentinel()).reaction;
+    const strike = reactions.find((e) => e.name === 'Sentinel Strike');
+    expect(strike.source).toBe('Feat');
+    expect(strike.cost).toBe('reaction');
+    expect(strike.detail).toMatch(/attacks a target other than you/i);
+    // It spends your normal reaction, so it is NOT an extra reaction (contrast Vigilant Defender).
+    expect(strike.extraReaction).toBeFalsy();
+    // …and it is not duplicated into the rider.
+    expect(oaFrom(withSentinel()).riders[0].text).not.toMatch(/Sentinel Strike/);
+  });
+
+  it('applies in 2024 too — the rewrite keeps all three clauses', () => {
+    const riders = oaFrom(withSentinel({ edition: '5.5e' })).riders;
+    expect(riders.map((r) => r.source)).toEqual(['Sentinel']);
+  });
+
+  it('stacks with a subclass rider on the same entry', () => {
+    const both = withSentinel({ subclass: 'Cavalier', level: 10 });
+    expect(oaFrom(both).riders.map((r) => r.source)).toEqual(['Hold the Line', 'Sentinel']);
+  });
+
+  it('does not print the level it was gained', () => {
+    expect(oaFrom(withSentinel()).riders[0].text).not.toMatch(/\bL\d+\b/);
+  });
+});
+
 describe('buildActionEconomy — Cavalier (Fighter subclass)', () => {
   const cavArgs = (level, extra = {}) => ({
     charClass: 'Fighter',

@@ -246,8 +246,8 @@ export const SUBCLASS_FEATURE_ACTIONS_2024 = {
  *
  * Kept as a TABLE because this is the shape that repeats: the third hand-written attach block
  * would have been the point where these started drifting apart. (Riders that hang off ONE
- * NAMED entry — Arcane Charge on Action Surge, Hold the Line on the Opportunity Attack — are a
- * different shape and stay in their own blocks; they attach by key, not by weapon scope.)
+ * NAMED entry are a different shape and live in ENTRY_RIDERS below; they attach by key, not
+ * by weapon scope.)
  *
  * `scope` picks which attack cards get it: 'melee' (an unarmed strike counts), 'ranged', 'all'.
  * `applies(ctx)` is the gate — class/subclass/level, a feat, whatever the feature keys on.
@@ -284,6 +284,55 @@ function matchesRiderScope(entry, scope) {
   if (scope === 'ranged') return !entry.melee;
   return true;
 }
+
+/**
+ * Riders that hang off ONE NAMED entry, matched by key rather than by weapon scope — the
+ * companion table to ATTACK_RIDERS, and consolidated at the same trigger: Arcane Charge and
+ * Hold the Line were hand-written attach blocks, and Sentinel would have been a third copy of
+ * the same find-the-entry-and-push shape.
+ *
+ * The line between a rider and an entry: a rider MODIFIES an action you already had; a feature
+ * that ADDS one gets its own entry (Vigilant Defender, Sentinel Strike).
+ *
+ * `entryKey` is the target's key (`universal:Opportunity Attack`, `feature:Action Surge`). The
+ * attach loop searches every bucket, so a rider needn't know which one its target lives in.
+ * `applies(ctx)` is the gate — class/subclass/level, a feat, whatever the feature keys on.
+ * `text` is authored here for the same reason ATTACK_RIDERS' is: FEAT rules text lives only in
+ * the backend compendium, and this module is pure and does no fetching.
+ */
+export const ENTRY_RIDERS = [
+  {
+    source: 'Arcane Charge',
+    entryKey: 'feature:Action Surge',
+    applies: ({ charClass, subclass, level }) =>
+      charClass === 'Fighter' && subclass === 'Eldritch Knight' && (level ?? 1) >= 15,
+    text: 'When you use Action Surge, you can teleport up to 30 ft to an unoccupied space you can see, before or after the extra action.',
+  },
+  {
+    source: 'Hold the Line',
+    entryKey: 'universal:Opportunity Attack',
+    applies: ({ charClass, subclass, level }) =>
+      charClass === 'Fighter' && subclass === 'Cavalier' && (level ?? 1) >= 10,
+    text: 'Creatures also provoke your opportunity attacks when they move 5 ft or more while'
+      + ' within your reach, and a creature you hit with one has its speed reduced to 0 for the'
+      + ' rest of the turn.',
+  },
+  // Sentinel is three clauses with two homes. Two of them CHANGE what an opportunity attack
+  // does, so they ride here — before this they reached the sheet only as a display-only feat
+  // note, and the Reactions tab showed the unmodified stock rule text. The third clause (a
+  // reaction attack when a creature within 5 ft attacks someone else) is a different trigger
+  // that is not an opportunity attack at all, so it stays its own entry: the feat's
+  // "Sentinel Strike" action effect. Authored once for both editions — the 2024 rewrite
+  // keeps all three clauses.
+  {
+    source: 'Sentinel',
+    entryKey: 'universal:Opportunity Attack',
+    applies: ({ feats }) => hasFeat(feats, 'Sentinel'),
+    text: 'A creature you hit with an opportunity attack has its speed reduced to 0 for the rest'
+      + ' of the turn, and creatures provoke your opportunity attacks even when they take the'
+      + ' Disengage action before leaving your reach.',
+  },
+];
 
 /** Subclass feature names earned at or below `level`, from the SUBCLASS_DATA tables. */
 export function subclassFeaturesKnownAtLevel(charClass, edition, subclass, level = 1) {
@@ -1099,23 +1148,6 @@ export function buildActionEconomy({
     }
   }
 
-  // Arcane Charge (Eldritch Knight L15) — it costs nothing extra, so it hangs off the Action
-  // Surge entry rather than being its own action. It goes in `riders` (its own labelled line)
-  // instead of being appended to `detail`: run into the base text it reads as something Action
-  // Surge always does, which it is not.
-  if (charClass === 'Fighter' && subclass === 'Eldritch Knight' && level >= 15) {
-    const surge = buckets.no_action.find((e) => e.key === 'feature:Action Surge');
-    if (surge) {
-      surge.riders = [
-        ...(surge.riders || []),
-        {
-          source: 'Arcane Charge',
-          text: 'When you use Action Surge, you can teleport up to 30 ft to an unoccupied space you can see, before or after the extra action.',
-        },
-      ];
-    }
-  }
-
   // Racial trait actions. A `compute` entry derives its own detail/meta from the character
   // (level, ability scores, stored racial choices) instead of showing a fixed string.
   for (const trait of characterData.race_traits || []) {
@@ -1194,28 +1226,22 @@ export function buildActionEconomy({
     push('reaction', { key: `universal:${r.name}`, name: r.name, source: 'Universal', cost: 'reaction', detail: r.description });
   });
 
-  // Cavalier's Hold the Line (L10) changes what the UNIVERSAL Opportunity Attack reaction does
-  // rather than adding an action of its own, so it rides on that entry — same shape as Arcane
-  // Charge on Action Surge. This must run AFTER the universal menu is pushed above, since
-  // that's what creates the entry it attaches to.
+  // Riders that hang off ONE NAMED entry (see ENTRY_RIDERS). Runs LAST, after every push
+  // above — several attach to the universal menu, which is the last thing pushed, and running
+  // here means a rider can target a universal entry as easily as a class feature.
   //
-  // Vigilant Defender (L18) is deliberately NOT a rider: it grants a whole SEPARATE reaction,
-  // once on every other creature's turn, that doesn't spend your normal one. As a rider it was
-  // invisible — the Reactions tab showed a lone "Opportunity Attack" and nothing said you had a
-  // second reaction economy. It gets its own entry, flagged `extraReaction` (see below).
-  if (charClass === 'Fighter' && subclass === 'Cavalier' && level >= 10) {
-    const oa = buckets.reaction.find((e) => e.key === 'universal:Opportunity Attack');
-    if (oa) {
-      oa.riders = [
-        ...(oa.riders || []),
-        {
-          source: 'Hold the Line',
-          text: 'Creatures also provoke your opportunity attacks when they move 5 ft or more while'
-            + ' within your reach, and a creature you hit with one has its speed reduced to 0 for the'
-            + ' rest of the turn.',
-        },
-      ];
-    }
+  // Contrast Vigilant Defender (Cavalier L18), deliberately NOT a rider: it grants a whole
+  // SEPARATE reaction, once on every other creature's turn, that doesn't spend your normal one.
+  // As a rider it was invisible — the Reactions tab showed a lone "Opportunity Attack" and
+  // nothing said you had a second reaction economy. It gets its own entry, flagged
+  // `extraReaction`. Same reason Sentinel Strike is an entry while Sentinel's other two
+  // clauses are a rider.
+  const allEntries = Object.values(buckets).flat();
+  for (const rider of ENTRY_RIDERS) {
+    if (!rider.applies({ charClass, subclass, level, edition, feats, characterData })) continue;
+    const target = allEntries.find((e) => e.key === rider.entryKey);
+    if (!target) continue;
+    target.riders = [...(target.riders || []), { source: rider.source, text: rider.text }];
   }
 
   return { ...buckets, attacksPerAction: attacksPerAction(charClass, level) };
