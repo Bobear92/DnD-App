@@ -118,10 +118,18 @@ export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', ca
   const addFeat = (feat) => {
     if (!feat) return;
     // Snapshot the feat's structured `effects` onto the instance (inventory-snapshot pattern) so
-    // the sheet's resolvers (unarmed die, proficiency banners, action economy) work without a
-    // re-fetch — matching how the LevelUpWizard / Variant Human acquisition paths store feats.
+    // the sheet's resolvers (unarmed die, proficiency banners, action economy, the Defenses
+    // panel) work without a re-fetch — matching how the LevelUpWizard / Variant Human
+    // acquisition paths store feats.
+    //
+    // The effects are read off the CATALOGUE, not off `feat`: FeatPicker's documented payload is
+    // `{id, name}` only, so trusting `feat.effects` silently stored every feat added here with no
+    // mechanics at all (the resolved list above papered over it for display, but anything reading
+    // character_data.feats directly got a bare {id, name}).
+    const full = catalogue.find((c) => (feat.id != null && c.id === feat.id) || c.name === feat.name);
     const entry = { id: feat.id, name: feat.name };
-    if (Array.isArray(feat.effects)) entry.effects = feat.effects;
+    const effects = Array.isArray(feat.effects) ? feat.effects : full?.effects;
+    if (Array.isArray(effects)) entry.effects = effects;
     onChange?.({ feats: [...feats, entry] });
     setAdding(false);
   };

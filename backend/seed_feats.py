@@ -27,7 +27,7 @@ def _prereq(text):
 # need a not-yet-built consumer (resource pools, proficiency-CHOICE grants, speed) are kept
 # as `note` so no chip is shown that does nothing (upgrade them when the consumer ships).
 # Consumers live now: stat_mod (initiative, passive_perception), ability_score,
-# ability_choice, action, attack_mod, note.
+# ability_choice, action, attack_mod, damage_reduction (the Defenses panel), note.
 def _abil(ability, amount=1):
     return {"kind": "ability_score", "ability": ability, "amount": amount,
             "label": f"+{amount} {ability.capitalize()}"}
@@ -38,6 +38,24 @@ def _abil_choice(abilities, amount=1):
 
 def _note(text):
     return {"kind": "note", "text": text}
+
+def _damage_reduction(amount, damage_types, condition, nonmagical_only=False, label=None):
+    """Flat damage SUBTRACTION — not resistance (which halves).
+
+    `amount` is an int or the 'pb' sentinel (resolved against the proficiency bonus by the
+    consumer, same convention as stat_mod/resource). `condition` is a machine-readable gate
+    the consumer decides how to check — 'heavy_armor' is the only one so far — and is what
+    keeps the Defenses panel from claiming an unconditional reduction.
+    """
+    amt = "your proficiency bonus" if amount == "pb" else str(amount)
+    return {
+        "kind": "damage_reduction",
+        "amount": amount,
+        "damage_types": list(damage_types),
+        "condition": condition,
+        "nonmagical_only": nonmagical_only,
+        "label": label or f"−{amt} {'/'.join(t[:1].upper() for t in damage_types)}",
+    }
 
 def _action(name, economy, trigger, description):
     return {"kind": "action", "name": name, "economy": economy, "trigger": trigger, "description": description}
@@ -138,7 +156,9 @@ FEAT_EFFECTS_5E = {
     ],
     "Heavy Armor Master": [
         _abil("strength"),
-        _note("While wearing heavy armor, reduce nonmagical bludgeoning/piercing/slashing damage taken by 3."),
+        # 2014 reduces only NONMAGICAL B/P/S; the 2024 rewrite drops that clause (see below).
+        _damage_reduction(3, ["bludgeoning", "piercing", "slashing"], "heavy_armor",
+                          nonmagical_only=True),
     ],
     "Inspiring Leader": [
         _note("Spend 10 minutes to give up to six creatures temporary hit points equal to your level + CHA modifier."),
@@ -327,7 +347,9 @@ FEAT_EFFECTS_2024 = {
         _note("Add your proficiency bonus to a Heavy weapon's damage when you take the Attack action."),
     ],
     "Heavily Armored": [_abil_choice(["strength", "constitution"]), {"kind": "proficiency", "prof_type": "armor", "items": ["Heavy"]}],
-    "Heavy Armor Master": [_abil_choice(["strength", "constitution"]), _note("While wearing Heavy armor, reduce bludgeoning/piercing/slashing damage taken by your proficiency bonus.")],
+    # 2024 scales with PB and applies to ALL B/P/S — the 2014 "nonmagical" clause is gone.
+    "Heavy Armor Master": [_abil_choice(["strength", "constitution"]),
+                           _damage_reduction("pb", ["bludgeoning", "piercing", "slashing"], "heavy_armor")],
     "Inspiring Leader": [_abil_choice(["wisdom", "charisma"]), _note("As a Magic action, grant up to six creatures temporary hit points equal to your level + the chosen ability modifier.")],
     "Keen Mind": [
         _abil("intelligence"),

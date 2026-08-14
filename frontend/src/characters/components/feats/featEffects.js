@@ -14,7 +14,7 @@
 //   { kind: 'maneuver_grant', count, die }                     player picks N Battle Master maneuvers + a die (Martial Adept)
 //   { kind: 'note',           text }                           display-only rider (explicitly not a mechanic)
 
-export const FEAT_EFFECT_KINDS = ['stat_mod', 'ability_score', 'ability_choice', 'attack_mod', 'action', 'spell_grant', 'maneuver_grant', 'note'];
+export const FEAT_EFFECT_KINDS = ['stat_mod', 'ability_score', 'ability_choice', 'attack_mod', 'action', 'spell_grant', 'maneuver_grant', 'damage_reduction', 'note'];
 
 /** All effect objects across a character's feats (each feat instance may carry a snapshot). */
 export function allFeatEffects(feats = []) {
@@ -39,6 +39,28 @@ export function getFeatStatModSources(feats = [], stat, { pb } = {}) {
   return allFeatEffects(feats)
     .filter((e) => e.kind === 'stat_mod' && e.stat === stat)
     .map((e) => ({ source: e._featName, amount: resolveAmount(e.amount, pb), label: e.label }));
+}
+
+/**
+ * Flat damage REDUCTION from feats (Heavy Armor Master's −3 / −PB) — a subtraction, not
+ * resistance, so it is deliberately a separate kind from anything that halves.
+ *
+ * The `condition` is returned unevaluated ('heavy_armor'): this module is pure and has no
+ * equipment context. The Defenses panel decides whether the gate is currently met, which is
+ * what stops it claiming an unconditional reduction — the same split `getFeatAcMods` uses.
+ */
+export function getFeatDamageReductions(feats = [], { pb } = {}) {
+  return allFeatEffects(feats)
+    .filter((e) => e.kind === 'damage_reduction')
+    .map((e) => ({
+      source: e._featName,
+      amount: resolveAmount(e.amount, pb),
+      damageTypes: e.damage_types ?? [],
+      condition: e.condition ?? null,
+      nonmagicalOnly: !!e.nonmagical_only,
+    }))
+    // A PB-scaled reduction resolves to 0 when no pb is supplied; showing "−0" would be a lie.
+    .filter((e) => e.amount > 0);
 }
 
 /**

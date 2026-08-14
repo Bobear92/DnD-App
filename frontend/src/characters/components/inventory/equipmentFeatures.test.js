@@ -38,6 +38,79 @@ describe('getEquipmentFeatures — Warding Maneuver', () => {
   });
 });
 
+const HAM_5E = {
+  name: 'Heavy Armor Master',
+  effects: [{
+    kind: 'damage_reduction',
+    amount: 3,
+    damage_types: ['bludgeoning', 'piercing', 'slashing'],
+    condition: 'heavy_armor',
+    nonmagical_only: true,
+  }],
+};
+const HAM_2024 = {
+  name: 'Heavy Armor Master',
+  effects: [{
+    kind: 'damage_reduction',
+    amount: 'pb',
+    damage_types: ['bludgeoning', 'piercing', 'slashing'],
+    condition: 'heavy_armor',
+    nonmagical_only: false,
+  }],
+};
+const chain = { uid: 'a3', category: 'armor', name: 'Chain Mail', armor_type: 'Heavy' };
+const leather = { uid: 'a4', category: 'armor', name: 'Leather', armor_type: 'Light' };
+const scale = { uid: 'a5', category: 'armor', name: 'Scale Mail', armor_type: 'Medium' };
+
+describe('ITEM_SCOPES.heavyArmor', () => {
+  it('matches heavy body armor only — not medium, light, shields or weapons', () => {
+    expect(ITEM_SCOPES.heavyArmor(plate)).toBe(true);
+    expect(ITEM_SCOPES.heavyArmor(chain)).toBe(true);
+    expect(ITEM_SCOPES.heavyArmor(scale)).toBe(false);
+    expect(ITEM_SCOPES.heavyArmor(leather)).toBe(false);
+    expect(ITEM_SCOPES.heavyArmor(shield)).toBe(false);
+    expect(ITEM_SCOPES.heavyArmor(melee)).toBe(false);
+  });
+});
+
+describe('getEquipmentFeatures — Heavy Armor Master', () => {
+  const withHam = (feats, level = 12, edition = '5e') =>
+    ({ charClass: 'Fighter', level, edition, characterData: { feats } });
+
+  it('shows on heavy armor only — the feat does nothing in medium or light', () => {
+    expect(sources(plate, withHam([HAM_5E]))).toContain('Heavy Armor Master');
+    expect(sources(scale, withHam([HAM_5E]))).not.toContain('Heavy Armor Master');
+    expect(sources(leather, withHam([HAM_5E]))).not.toContain('Heavy Armor Master');
+    expect(sources(shield, withHam([HAM_5E]))).not.toContain('Heavy Armor Master');
+  });
+
+  it('does not show without the feat', () => {
+    expect(sources(plate, withHam([]))).not.toContain('Heavy Armor Master');
+  });
+
+  it('states the 5e flat 3 and its nonmagical restriction', () => {
+    const note = getEquipmentFeatures(plate, withHam([HAM_5E]))
+      .find((f) => f.source === 'Heavy Armor Master');
+    expect(note.text).toMatch(/reduced by 3/);
+    expect(note.text).toMatch(/nonmagical attacks/i);
+    expect(note.text).toMatch(/bludgeoning, piercing and slashing/);
+  });
+
+  it('scales the 2024 version with proficiency bonus and drops the nonmagical clause', () => {
+    // PB at level 12 is 4.
+    const note = getEquipmentFeatures(plate, withHam([HAM_2024], 12, '5.5e'))
+      .find((f) => f.source === 'Heavy Armor Master');
+    expect(note.text).toMatch(/reduced by 4/);
+    expect(note.text).not.toMatch(/nonmagical/i);
+  });
+
+  it('reads the number off the effect, so it tracks level for the PB-scaled version', () => {
+    const at5 = getEquipmentFeatures(plate, withHam([HAM_2024], 5, '5.5e'))
+      .find((f) => f.source === 'Heavy Armor Master');
+    expect(at5.text).toMatch(/reduced by 3/); // PB 3 at level 5
+  });
+});
+
 // The table absorbed four notes that used to be hand-written into the row; these guard that
 // each still resolves through it, on the same item kinds and with the same test ids.
 describe('getEquipmentFeatures — the notes folded into the table', () => {

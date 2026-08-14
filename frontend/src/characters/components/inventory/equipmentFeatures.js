@@ -25,6 +25,8 @@
  */
 
 import { hasFeat, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
+import { profBonus } from '@/characters/components/inventory/inventoryData';
+import { getFeatDamageReductions } from '@/characters/components/feats/featEffects';
 import { SAVAGE_ATTACKS_NOTE, hasSavageAttacks } from '@/characters/components/race/raceCombatNotes';
 import {
   eldritchStrikeNote, remarkableAthleteMoveNote,
@@ -43,6 +45,7 @@ export const ITEM_SCOPES = {
   finesseWeapon: (e) => e.category === 'weapons' && /finesse/i.test(e.properties || ''),
   shield: (e) => e.category === 'armor' && lc(e.armor_type) === 'shield',
   bodyArmor: (e) => e.category === 'armor' && lc(e.armor_type) !== 'shield',
+  heavyArmor: (e) => e.category === 'armor' && lc(e.armor_type) === 'heavy',
 };
 
 /**
@@ -73,6 +76,29 @@ export const EQUIPMENT_FEATURES = [
       'Warding Maneuver: while wielding this, when you or a creature you can see within 5 ft is'
       + " hit by an attack, you can use your reaction to roll a d8 and add it to the target's AC"
       + ' against that attack. If it still hits, the target has resistance to its damage.',
+  },
+  {
+    // The ONE place the reduction is answered as "should I wear this?" rather than "what am
+    // I resistant to?" — the Defenses panel carries the standing answer. Both read the same
+    // structured `damage_reduction` feat effect, so the number can't drift between them.
+    //
+    // Scoped to heavyArmor rather than bodyArmor because the feat is worthless in anything
+    // else: showing it on leather would state a benefit the wearer does not have.
+    source: 'Heavy Armor Master',
+    testId: 'heavy-armor-master',
+    scopes: ['heavyArmor'],
+    applies: ({ feats, level }) =>
+      getFeatDamageReductions(feats, { pb: profBonus(level ?? 1) }).length > 0,
+    text: ({ feats, level }) => {
+      const [r] = getFeatDamageReductions(feats, { pb: profBonus(level ?? 1) });
+      if (!r) return '';
+      // Spelled out rather than abbreviated — this is a sentence, not the panel's type column.
+      const types = r.damageTypes.length > 1
+        ? `${r.damageTypes.slice(0, -1).join(', ')} and ${r.damageTypes.at(-1)}`
+        : r.damageTypes[0];
+      const magic = r.nonmagicalOnly ? ' from nonmagical attacks' : '';
+      return `Heavy Armor Master: while wearing this, ${types} damage${magic} you take is reduced by ${r.amount}.`;
+    },
   },
   {
     source: 'Savage Attacks',

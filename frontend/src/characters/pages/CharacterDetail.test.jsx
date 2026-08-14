@@ -937,6 +937,80 @@ describe('CharacterDetail', () => {
     });
   });
 
+  describe('Defenses panel (HP & Movement sub-tab)', () => {
+    it('shows no Defenses card at all for a character with no resistances', async () => {
+      // BASE_CHARACTER is a Human Fighter — the card must not appear empty.
+      renderDetail();
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('defenses')).not.toBeInTheDocument();
+      expect(screen.queryByText('Defenses')).not.toBeInTheDocument();
+    });
+
+    it('lists a standing racial resistance under Always on', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Tiefling',
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            race_traits: ['Hellish Resistance'],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('hp');
+      expect(await screen.findByTestId('defenses')).toBeInTheDocument();
+      expect(screen.getByTestId('defenses-always-on')).toBeInTheDocument();
+      expect(screen.getByTestId('defense-race-hellish-resistance-types'))
+        .toHaveTextContent('Fire');
+    });
+
+    it('puts a feat damage reduction under Situational with its condition', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{
+              name: 'Heavy Armor Master',
+              effects: [{
+                kind: 'damage_reduction',
+                amount: 3,
+                damage_types: ['bludgeoning', 'piercing', 'slashing'],
+                condition: 'heavy_armor',
+                nonmagical_only: true,
+              }],
+            }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('hp');
+      expect(await screen.findByTestId('defenses-situational')).toBeInTheDocument();
+      expect(screen.getByTestId('defense-feat-heavy-armor-master-value'))
+        .toHaveTextContent('−3');
+      expect(screen.getByTestId('defense-feat-heavy-armor-master-condition'))
+        .toHaveTextContent('while wearing heavy armor');
+      // The regression the panel exists to prevent: never presented as unconditional.
+      expect(screen.queryByTestId('defenses-always-on')).not.toBeInTheDocument();
+    });
+
+    it('renders for a hand-written sheet too, not just a data-driven one', async () => {
+      // Barbarian has no class config, so this would be missed by an afterHpNode-style slot.
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: { ...BASE_CHARACTER, char_class: 'Barbarian', level: 5 },
+      });
+      renderDetail();
+      await openStatsSubTab('hp');
+      expect(await screen.findByTestId('defense-barbarian-rage-condition'))
+        .toHaveTextContent('while raging');
+    });
+  });
+
   describe('Inspiration card', () => {
     it('renders an Inspiration card defaulting to 0', async () => {
       renderDetail();

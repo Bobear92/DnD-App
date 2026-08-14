@@ -22,6 +22,7 @@ export const MECHANICS = [
   { slug: 'object-interaction', title: 'Drawing & Stowing Weapons', blurb: 'Your one free object interaction per turn, why swapping weapons costs a moment, and how Dual Wielder helps.', available: true },
   { slug: 'spacing', title: 'Spacing', blurb: 'The 5-foot rule: melee reach, opportunity attacks, and disadvantage on ranged & spell attacks in melee.', available: true },
   { slug: 'magical-attacks', title: 'Magical Attacks & Resistance', blurb: 'Resistance to nonmagical damage, and the three ways an attack becomes magical.', available: true },
+  { slug: 'damage-mitigation', title: 'Taking Damage', blurb: 'Resistance, vulnerability, immunity, flat damage reduction, and how temporary hit points soak a hit.', available: true },
   // Roadmap — planned pages (render as muted "Coming soon" cards until built).
   { slug: 'conditions', title: 'Conditions', blurb: 'Blinded, prone, grappled, and the rest — what each status does to you.', available: false },
   { slug: 'concentration', title: 'Concentration', blurb: 'Keeping a spell going, the saving throw when you take damage, and what breaks it.', available: false },

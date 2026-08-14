@@ -224,3 +224,33 @@ class TestFeatEffects:
         resp = client.put(f"/feats/{feat['id']}", json={"effects": new_effects}, headers=admin_h)
         assert resp.status_code == 200
         assert resp.json()["effects"] == new_effects
+
+    def test_damage_reduction_effect_round_trips_with_all_its_fields(self, client):
+        # Heavy Armor Master's shape. The frontend Defenses panel reads every one of these:
+        # dropping `condition` would make the reduction read as unconditional, and dropping
+        # `nonmagical_only` would overstate the 2014 version.
+        admin_h, _ = make_admin(client)
+        effects = [{
+            "kind": "damage_reduction",
+            "amount": 3,
+            "damage_types": ["bludgeoning", "piercing", "slashing"],
+            "condition": "heavy_armor",
+            "nonmagical_only": True,
+            "label": "−3 B/P/S",
+        }]
+        feat = self._create(client, admin_h, effects)
+        assert client.get(f"/feats/{feat['id']}", headers=admin_h).json()["effects"] == effects
+        assert client.get("/feats", headers=admin_h).json()[0]["effects"] == effects
+
+    def test_damage_reduction_accepts_the_pb_sentinel_amount(self, client):
+        # The 2024 feat scales with proficiency bonus, so `amount` is not always an int.
+        admin_h, _ = make_admin(client)
+        effects = [{
+            "kind": "damage_reduction",
+            "amount": "pb",
+            "damage_types": ["bludgeoning", "piercing", "slashing"],
+            "condition": "heavy_armor",
+            "nonmagical_only": False,
+        }]
+        feat = self._create(client, admin_h, effects)
+        assert client.get(f"/feats/{feat['id']}", headers=admin_h).json()["effects"] == effects

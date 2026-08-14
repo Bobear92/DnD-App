@@ -4,11 +4,22 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
 
 // FeatPicker uses a Radix dialog — mock to a flat button list so we can pick directly.
+//
+// The mock emits `{id, name}` ONLY, because that is FeatPicker's real documented payload. An
+// earlier version of this mock passed the whole catalogue object, which is more generous than
+// the real component — and that hid a live bug for as long as it existed: FeatsSubTab read
+// `feat.effects` off the picker payload, so every feat added here was stored with no mechanics
+// at all. Keep this faithful to the real contract.
 vi.mock('@/characters/components/feats/FeatPicker', () => ({
   default: ({ feats = [], onChange }) => (
     <div data-testid="feat-picker">
       {feats.map((f) => (
-        <button key={f.id} type="button" data-testid={`add-pick-${f.id}`} onClick={() => onChange(f)}>
+        <button
+          key={f.id}
+          type="button"
+          data-testid={`add-pick-${f.id}`}
+          onClick={() => onChange({ id: f.id, name: f.name })}
+        >
           {f.name}
         </button>
       ))}
@@ -115,6 +126,21 @@ describe('FeatsSubTab', () => {
         { id: 10, name: 'Alert', effects: CATALOGUE[0].effects },
       ],
     });
+  });
+
+  it('snapshots effects from the CATALOGUE even though the picker only passes {id,name}', async () => {
+    // Regression: FeatsSubTab used to read `feat.effects` straight off the picker payload,
+    // which never carries it — so a feat added from the sheet was stored as a bare {id,name}
+    // and every consumer reading character_data.feats directly (the Defenses panel, the
+    // unarmed die, proficiency banners) saw a feat with no mechanics. The Feats list itself
+    // looked fine because it re-resolves owned feats against the catalogue for display, which
+    // is precisely what made the bug invisible.
+    const onChange = vi.fn();
+    render(<FeatsSubTab feats={[]} campaignId={1} edition="5e" canManage onChange={onChange} />);
+    fireEvent.click(await screen.findByTestId('feats-add-btn'));
+    fireEvent.click(await screen.findByTestId('add-pick-10')); // Alert — has effects
+    const [[patch]] = onChange.mock.calls;
+    expect(patch.feats[0].effects).toEqual(CATALOGUE[0].effects);
   });
 
   it('snapshots a feat without effects as just {id,name}', async () => {

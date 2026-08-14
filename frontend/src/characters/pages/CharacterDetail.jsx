@@ -37,6 +37,8 @@ import { computePassiveScores } from '@/characters/components/skills/passiveSkil
 import { skillBreakdown, saveBreakdown } from '@/characters/components/skills/skillMath';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
 import SaveFeaturesPanel from '@/characters/components/skills/SaveFeaturesPanel';
+import DefensesPanel from '@/characters/components/defenses/DefensesPanel';
+import { hasDefenses } from '@/characters/components/defenses/defenses';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { getCasterDescriptor } from '@/characters/components/classData/casterDescriptors';
 import { MaxHpValue } from '@/characters/components/combat/CombatBonusInline';
@@ -1684,6 +1686,33 @@ export default function CharacterDetail() {
                   </div>
                 </SectionCard>
               )}
+
+              {/* Damage resistances / immunities / flat reductions. Rendered centrally rather
+                  than through a sheet slot, so it works for data-driven AND hand-written
+                  sheets alike — unlike the afterHpNode tracker above. Renders nothing when
+                  the character has no defenses. */}
+              {statsSubTab === 'hp' && (() => {
+                const defenseCtx = {
+                  charClass: character.char_class,
+                  subclass: classSection.draft?.subclass ?? character?.character_data?.subclass,
+                  level: identity.draft?.level ?? character.level,
+                  edition,
+                  characterData: {
+                    ...(character?.character_data ?? {}),
+                    ...(classSection.draft ?? {}),
+                  },
+                  pb,
+                  campaignId,
+                };
+                // Gate the CARD, not just its contents — an empty titled card is worse than
+                // no card, and the panel alone can only render null inside one.
+                if (!hasDefenses(defenseCtx)) return null;
+                return (
+                  <SectionCard title="Defenses" canEdit={false}>
+                    <DefensesPanel {...defenseCtx} />
+                  </SectionCard>
+                );
+              })()}
 
               {/* Jumping — computed long/high jump distances (display-only); links to the mechanics page */}
               {statsSubTab === 'hp' && (
