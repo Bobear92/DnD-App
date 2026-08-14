@@ -15,8 +15,10 @@ The level-up *choice* kinds are now consolidated into `subclassGrants.js` (profi
 picks + skill/cantrip grants); a subclass **option pool** is a `subclassGrants` sibling in `levelChoicesData.js`
 (a choice with a `subclass` field), displayed by the shared, pool-agnostic `KnownOptionsBlock` — reach for
 that before writing JSX. Only a genuinely *interactive* panel still needs its own component, and
-`BattleMasterPanel` remains the only one. **Proven so far: Battle Master + Champion + Eldritch Knight +
-Arcane Archer + Cavalier (Fighter).** So: triage each feature into a
+`BattleMasterPanel` remains the only one — note that `CompanionPanel` is NOT a counter-example: it is
+data-driven off `companionData.js` and registered nowhere, so it serves every subclass at once.
+**Proven so far: Battle Master + Champion + Eldritch Knight + Arcane Archer + Cavalier + Echo Knight
+(Fighter).** So: triage each feature into a
 mechanism that already exists. When a feature fits *nothing*, **STOP and flag it** — propose a new shared
 mechanism and get a decision. Do **not** fork another bespoke per-subclass panel just to ship a feature
 (that's the breadth-before-vertical / skill-as-band-aid tripwire in CLAUDE.md — the 24×-rework trap). When
@@ -41,6 +43,7 @@ one edition — note that in the diff.
 | **Passive ability/skill/init bonus** | `combatBonuses.js` (e.g. `remarkableAthlete` already exists) | Add a descriptor + wire the consumer (skills panel / derived row). |
 | **Subclass spellcasting** (Eldritch Knight, Arcane Trickster) | `classData/subclassCasterData.js` → `SUBCLASS_CASTERS[class][edition][sub]` + `getSubclassCaster` | **Built (EK proven, both editions).** A `kind:'known'` caster: third-caster slot table + cantrips/spells-known progressions. ClassSheet resolves `config.caster ?? getSubclassCaster(...)` → CasterSpellBlock's known-caster block; LevelUpWizard adds the New Spells step (targets from the subclass progression, even when the subclass is chosen that same run); CharacterDetail `hasSpells`; backend `_compute_rest_patch` long-rest slot reset + `getRestSummary`. Arcane Trickster = data entry here + the same wiring on the hand-written Rogue sheets (flag that part). |
 | **Spell grant** (learn a specific cantrip/spell) | a `subclassGrants` grant with `surface:'spells'` → `character_data.subclass_cantrips` | **Built (Arcane Archer Lore proven).** The Spells tab renders a **Subclass** source for it and `hasSpells` counts it, so a granted cantrip alone gives a non-caster the Spells tab. A *leveled* spell grant has no consumer yet — flag that. |
+| **A summoned entity with its own numbers** (an echo, a familiar, a Steel Defender, a drake) | `companions/companionData.js` → a `COMPANIONS` entry + the shared `CompanionPanel` | **Built (Echo Knight's echo proven).** Class-agnostic table: `count(level)`/`stats(level)`/`traits(level)`; a stat is a string or a `buildBreakdown` (clickable number). Rendered in the ClassSheet's subclass area with NO config entry, so any config-driven class gets it. Stateless by design — no current HP, no position, no "is it out". A companion with real hit points needs the Bestiary tie-in; flag that rather than growing this table. Export the derived number (like `echoArmorClass`) if an Action Economy card shows it too. |
 | **Pure rules text** (crit range, resistance, advantage on X, "can't be disarmed") | prose-only → leave as the feature description | Honest "flavor, not forgotten". Most "Improved Critical"-type features. |
 
 ## Phase 1 — Audit (always do this first, present before any code)

@@ -24,9 +24,9 @@ const FIGHTER_SKILLS = [
   'Insight', 'Intimidation', 'Perception', 'Survival',
 ];
 
-// Cavalier pools are sized by an ability modifier, not by level — hence the `ctx` argument
-// useRestResource passes in. RAW floors both at one use, so a Cavalier with a dump-stat
-// modifier still gets the feature rather than an empty tracker.
+// Some pools are sized by an ability modifier rather than by level (both Cavalier pools, two of
+// the three Echo Knight ones) — hence the `ctx` argument useRestResource passes in. RAW floors
+// them at one use, so a dump-stat modifier still gets the feature rather than an empty tracker.
 const abilityModUses = (ability) => (_level, { scores = {} } = {}) =>
   Math.max(1, Math.floor(((scores[ability] ?? 10) - 10) / 2));
 
@@ -63,6 +63,24 @@ const REST_RESOURCES = [
     key: 'warding_maneuver_used', label: 'Warding Maneuver (Long Rest)', total: abilityModUses('constitution'),
     recharge: 'long', minLevel: 7, subclass: 'Cavalier',
     description: "Reaction: add 1d8 to the AC of yourself or a creature within 5 ft against one attack. If it still hits, the target resists that attack's damage. Requires a melee weapon or shield in hand.",
+  },
+  // Subclass-gated: only an Echo Knight sees these three. Two hold ability-modifier uses (the
+  // Cavalier shape); Shadow Martyr is a flat single use, and it is the only Echo Knight pool
+  // that comes back on a SHORT rest.
+  {
+    key: 'unleash_incarnation_used', label: 'Unleash Incarnation (Long Rest)', total: abilityModUses('constitution'),
+    recharge: 'long', minLevel: 3, subclass: 'Echo Knight',
+    description: "When you take the Attack action, make one additional melee attack from your echo's position.",
+  },
+  {
+    key: 'shadow_martyr_used', label: 'Shadow Martyr (Short Rest)', total: () => 1,
+    recharge: 'short', minLevel: 10, subclass: 'Echo Knight',
+    description: 'Reaction: teleport your echo next to a creature about to be attacked and make the attack target the echo instead.',
+  },
+  {
+    key: 'reclaim_potential_used', label: 'Reclaim Potential (Long Rest)', total: abilityModUses('constitution'),
+    recharge: 'long', minLevel: 15, subclass: 'Echo Knight',
+    description: 'When an echo of yours is destroyed by damage, gain 2d6 + your Constitution modifier temporary hit points — provided you have none already.',
   },
   {
     key: 'indomitable_used', label: 'Indomitable (Long Rest)', total: indomitableTotal, recharge: 'long', minLevel: 9,

@@ -234,6 +234,31 @@ describe('ClassSheet — Features tab sub-tabs', () => {
   });
 });
 
+// The companion statblock is data-driven rather than registered per subclass (no config entry),
+// so this checks the wiring rather than the numbers — companionData.test.js owns those.
+describe('ClassSheet — summoned companion statblock', () => {
+  const echoKnight = (level) =>
+    render(<FighterSheet data={{ ...FIGHTER_DATA, subclass: 'Echo Knight' }} level={level} section="features" />);
+
+  it("shows the echo's statblock under an Echo Knight's subclass tab", () => {
+    echoKnight(5);
+    fireEvent.click(screen.getByTestId('features-subtab-subclass'));
+    expect(screen.getByTestId('companion-echo')).toBeInTheDocument();
+    expect(screen.getByTestId('companion-echo-stat-ac')).toHaveTextContent('17');
+  });
+
+  it('keeps it out of the General features tab', () => {
+    echoKnight(5);
+    expect(screen.queryByTestId('companion-echo')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing for a subclass with no companion', () => {
+    fighter(); // Champion
+    fireEvent.click(screen.getByTestId('features-subtab-subclass'));
+    expect(screen.queryByTestId('companion-panel')).not.toBeInTheDocument();
+  });
+});
+
 describe('ClassSheet — locked choices + GM Edit (Epic 1)', () => {
   it('locks Fighting Style to plain text outside creation when gmEdit is off', () => {
     fighter({ gmEdit: false });

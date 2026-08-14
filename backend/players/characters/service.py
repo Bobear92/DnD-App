@@ -578,6 +578,22 @@ _INITIATIVE_RESOURCES = [
         'amount': 1,
     },
     {
+        # Legion of One's second half: "when you roll initiative and have no uses of Unleash
+        # Incarnation remaining, you regain one use of that feature". The pool is the CON
+        # modifier floored at one (mirrors the frontend's abilityModUses('constitution')) —
+        # a flat number would call a CON 12 Echo Knight with one use left "empty".
+        'feature': 'Legion of One',
+        'label': 'Unleash Incarnation',
+        'char_class': 'Fighter',
+        'subclass': 'Echo Knight',
+        'edition': '5e',          # Echo Knight has no 2024 version
+        'min_level': 18,
+        'key': 'unleash_incarnation_used',
+        'total': lambda ctx: max(1, _ability_mod(getattr(ctx['char'], 'constitution', 10))),
+        'mode': 'regain_when_empty',
+        'amount': 1,
+    },
+    {
         # The FLOOR shape: "have fewer Focus Points than your Proficiency Bonus → your total
         # becomes equal to your Proficiency Bonus". Not conditional on being empty, and it must
         # never take points away from a Monk who has more than PB.
@@ -808,6 +824,11 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             if cd.get('subclass') == 'Arcane Archer':
                 patch['arcane_shot_used'] = 0
                 changes.append('Arcane Shot recovered')
+            # Shadow Martyr is the only Echo Knight pool that comes back on a short rest;
+            # the other two are long-rest only (see the long branch below).
+            if cd.get('subclass') == 'Echo Knight' and level >= 10:
+                patch['shadow_martyr_used'] = 0
+                changes.append('Shadow Martyr recovered')
         if cls == 'Bard' and (edition == '5.5e' or level >= 5):
             patch['bardic_inspiration_used'] = 0
             changes.append('Bardic Inspiration recovered')
@@ -878,6 +899,19 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
                 if level >= 7:
                     patch['warding_maneuver_used'] = 0
                     changes.append('Warding Maneuver recovered')
+            if cd.get('subclass') == 'Echo Knight':
+                # Unleash Incarnation and Reclaim Potential both hold CON-modifier uses; as
+                # with the Cavalier, the pool SIZE stays a frontend concern (config
+                # restResources) and this only zeroes the spent count. Shadow Martyr already
+                # came back on the short-rest branch, but a long rest recovers it too.
+                patch['unleash_incarnation_used'] = 0
+                changes.append('Unleash Incarnation recovered')
+                if level >= 10:
+                    patch['shadow_martyr_used'] = 0
+                    changes.append('Shadow Martyr recovered')
+                if level >= 15:
+                    patch['reclaim_potential_used'] = 0
+                    changes.append('Reclaim Potential recovered')
             if cd.get('subclass') == 'Eldritch Knight':
                 # Subclass caster: Fighter isn't in _SPELLCASTING_CLASSES, so reset the
                 # EK's spell slots here (same shape as the class-caster reset above).

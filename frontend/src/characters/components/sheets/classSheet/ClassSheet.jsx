@@ -22,6 +22,7 @@ import { BookOpen, ChevronRight, Plus, X } from 'lucide-react';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import SubclassPickerWithDetail from '@/characters/components/subclass/SubclassPickerWithDetail';
 import SubclassDetails from '@/characters/components/subclass/SubclassDetails';
+import CompanionPanel from '@/characters/components/companions/CompanionPanel';
 import PortentTracker from '@/characters/components/subclass/PortentTracker';
 import CombatBlock from '@/characters/components/sheets/classSheet/CombatBlock';
 import CasterSpellBlock from '@/characters/components/sheets/classSheet/CasterSpellBlock';
@@ -233,6 +234,19 @@ export default function ClassSheet({
     </Field>
   ) : null;
 
+  // Derived statblock for any companion the subclass summons (see companions/companionData.js).
+  // Data-driven rather than registered per subclass, so it needs no config entry — any
+  // config-driven class whose subclass gains a companion gets it, and every other sheet
+  // renders nothing.
+  const companionBlock = !creation && data.subclass ? (
+    <CompanionPanel
+      charClass={config.className}
+      subclass={data.subclass}
+      edition={config.edition}
+      level={level}
+    />
+  ) : null;
+
   const portentBlock = config.caster?.portent ? (
     <PortentTracker subclass={data.subclass} level={level} data={data} onChange={onChange} readOnly={readOnly} />
   ) : null;
@@ -354,6 +368,7 @@ export default function ClassSheet({
         </p>
       )}
       {subclassPanelBlock}
+      {companionBlock}
       {subclassLevelChoiceBlock}
       {poolBlock(true)}
       {portentBlock}
@@ -419,6 +434,7 @@ export default function ClassSheet({
       {showFeatures && notesBlock}
       {showFeatures && subclassFieldBlock}
       {showFeatures && subclassPanelBlock}
+      {showFeatures && companionBlock}
       {showFeatures && subclassLevelChoiceBlock}
       {showFeatures && poolBlock(false)}
       {showFeatures && poolBlock(true)}

@@ -324,6 +324,62 @@ describe('CharacterList — rest buttons (GM view)', () => {
     expect(screen.getByText('Fighting Spirit')).toBeInTheDocument();
   });
 
+  // The Echo Knight's three pools unlock at three different levels and two different rest
+  // types, so the summary has to be level-aware in both directions.
+  it('long rest summary lists only Unleash Incarnation for a L5 Echo Knight', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], character_data: { subclass: 'Echo Knight' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText('Unleash Incarnation')).toBeInTheDocument();
+    expect(screen.queryByText('Shadow Martyr')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reclaim Potential')).not.toBeInTheDocument();
+  });
+
+  it('long rest summary lists all three Echo Knight pools at L15', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], level: 15, character_data: { subclass: 'Echo Knight' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText('Unleash Incarnation')).toBeInTheDocument();
+    expect(screen.getByText('Shadow Martyr')).toBeInTheDocument();
+    expect(screen.getByText('Reclaim Potential')).toBeInTheDocument();
+  });
+
+  it('short rest summary lists Shadow Martyr alone, and only from L10', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], level: 10, character_data: { subclass: 'Echo Knight' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('short-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a short rest/i));
+    expect(screen.getByText('Shadow Martyr')).toBeInTheDocument();
+    // The other two are long-rest only — a short rest must not promise them back.
+    expect(screen.queryByText('Unleash Incarnation')).not.toBeInTheDocument();
+  });
+
+  it('short rest summary omits Shadow Martyr below L10', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], level: 9, character_data: { subclass: 'Echo Knight' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('short-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a short rest/i));
+    expect(screen.queryByText('Shadow Martyr')).not.toBeInTheDocument();
+  });
+
   it('confirmation dialog shows selected character names', async () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));

@@ -1623,6 +1623,154 @@ class TestInitiativeRest:
         )
         assert self._data(client, char_id, h_gm)["unwavering_mark_used"] == 3
 
+    # ── Echo Knight: Unleash Incarnation + Shadow Martyr + Reclaim Potential ──
+    # Three pools, three unlock levels, and Shadow Martyr is the only one that comes back on a
+    # short rest — so the resets have to be level-aware in both directions. As with the
+    # Cavalier, the reset only zeroes the spent count; the pool SIZE is a frontend concern.
+
+    def _echo_knight(self, client, headers, campaign_id, *, level=15, data=None, constitution=10):
+        resp = client.post("/api/characters", json={
+            "name": "Vess", "race": "Human", "char_class": "Fighter", "level": level,
+            "constitution": constitution,
+            "campaign_id": campaign_id,
+            "character_data": {"subclass": "Echo Knight", **(data or {})},
+        }, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def test_echo_knight_pools_reset_on_a_long_rest(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._echo_knight(client, h_gm, campaign_id, data={
+            "unleash_incarnation_used": 3, "shadow_martyr_used": 1, "reclaim_potential_used": 2,
+        })
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["unleash_incarnation_used"] == 0
+        assert cd["shadow_martyr_used"] == 0
+        assert cd["reclaim_potential_used"] == 0
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Unleash Incarnation recovered" in changes
+        assert "Shadow Martyr recovered" in changes
+        assert "Reclaim Potential recovered" in changes
+
+    def test_long_rest_promises_only_the_earned_echo_knight_pools(self, client):
+        # Unleash Incarnation is level 3; Shadow Martyr 10; Reclaim Potential 15. A level-5
+        # Echo Knight must not be told a rest gave back features they haven't earned.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._echo_knight(client, h_gm, campaign_id, level=5, data={"unleash_incarnation_used": 2})
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Unleash Incarnation recovered" in changes
+        assert "Shadow Martyr recovered" not in changes
+        assert "Reclaim Potential recovered" not in changes
+        assert self._data(client, char_id, h_gm)["unleash_incarnation_used"] == 0
+
+    def test_short_rest_recovers_shadow_martyr_alone(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._echo_knight(client, h_gm, campaign_id, data={
+            "unleash_incarnation_used": 3, "shadow_martyr_used": 1, "reclaim_potential_used": 2,
+        })
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["shadow_martyr_used"] == 0
+        # The other two are long-rest only.
+        assert cd["unleash_incarnation_used"] == 3
+        assert cd["reclaim_potential_used"] == 2
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Shadow Martyr recovered" in changes
+        assert "Unleash Incarnation recovered" not in changes
+
+    def test_short_rest_leaves_shadow_martyr_below_level_10(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._echo_knight(client, h_gm, campaign_id, level=9, data={"shadow_martyr_used": 1})
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]}, headers=h_gm,
+        )
+        assert self._data(client, char_id, h_gm)["shadow_martyr_used"] == 1
+        assert "Shadow Martyr recovered" not in resp.json()["applied_to"][0]["changes"]
+
+    def test_echo_knight_pools_untouched_for_another_subclass(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        resp = client.post("/api/characters", json={
+            "name": "Champ", "race": "Human", "char_class": "Fighter", "level": 15,
+            "campaign_id": campaign_id,
+            "character_data": {"subclass": "Champion", "unleash_incarnation_used": 3},
+        }, headers=h_gm)
+        char_id = resp.json()["id"]
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        assert self._data(client, char_id, h_gm)["unleash_incarnation_used"] == 3
+
+    # ── Legion of One (Echo Knight L18) — the initiative half of the feature ──
+
+    def test_legion_of_one_regains_a_use_when_empty(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        # CON 10 → a one-use pool, so one spent use IS empty.
+        char_id = self._echo_knight(client, h_gm, campaign_id, level=18,
+                                    data={"unleash_incarnation_used": 1})
+
+        body = self._roll(client, campaign_id, [char_id], h_gm).json()
+        assert self._data(client, char_id, h_gm)["unleash_incarnation_used"] == 0
+        assert any("Legion of One" in c for c in body["applied_to"][0]["changes"])
+
+    def test_legion_of_one_does_nothing_with_a_use_left(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        # CON 16 → a three-use pool; two spent is not empty.
+        char_id = self._echo_knight(client, h_gm, campaign_id, level=18, constitution=16,
+                                    data={"unleash_incarnation_used": 2})
+
+        self._roll(client, campaign_id, [char_id], h_gm)
+        assert self._data(client, char_id, h_gm)["unleash_incarnation_used"] == 2
+
+    def test_legion_of_one_sizes_empty_by_constitution(self, client):
+        # The case a flat pool size would get wrong: three spent uses is empty at CON 16
+        # but would look like plenty left against any fixed number.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._echo_knight(client, h_gm, campaign_id, level=18, constitution=16,
+                                    data={"unleash_incarnation_used": 3})
+
+        self._roll(client, campaign_id, [char_id], h_gm)
+        assert self._data(client, char_id, h_gm)["unleash_incarnation_used"] == 2
+
+    def test_legion_of_one_is_level_gated(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._echo_knight(client, h_gm, campaign_id, level=17,
+                                    data={"unleash_incarnation_used": 1})
+
+        self._roll(client, campaign_id, [char_id], h_gm)
+        assert self._data(client, char_id, h_gm)["unleash_incarnation_used"] == 1
+
+    def test_legion_of_one_is_not_a_rest(self, client):
+        # Rolling initiative must not hand back Second Wind or the other Echo Knight pools.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._echo_knight(client, h_gm, campaign_id, level=18, data={
+            "unleash_incarnation_used": 1, "shadow_martyr_used": 1,
+            "reclaim_potential_used": 2, "second_wind_used": 1,
+        })
+
+        self._roll(client, campaign_id, [char_id], h_gm)
+        cd = self._data(client, char_id, h_gm)
+        assert cd["shadow_martyr_used"] == 1
+        assert cd["reclaim_potential_used"] == 2
+        assert cd["second_wind_used"] == 1
+
     def test_tireless_spirit_regains_a_use_when_empty(self, client):
         h_gm, _, campaign_id = self._setup(client)
         char_id = self._samurai(client, h_gm, campaign_id, used=3)

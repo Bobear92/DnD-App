@@ -1461,3 +1461,79 @@ describe('buildActionEconomy — Cavalier (Fighter subclass)', () => {
     expect(champ.reaction.find((e) => e.key === 'universal:Opportunity Attack').riders ?? []).toHaveLength(0);
   });
 });
+
+describe('buildActionEconomy — Echo Knight (Fighter subclass)', () => {
+  const ekArgs = (level, extra = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Echo Knight',
+    level,
+    edition: '5e',
+    characterData: {},
+    inventory: [],
+    attacks: [{
+      uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true,
+      damageBreakdown: [{ label: 'weapon die', value: '1d8' }, { label: 'STR', value: 3 }],
+    }],
+    scores: { strength: 16, constitution: 16 },
+    spellIndex: {},
+    ...extra,
+  });
+  const entry = (level, bucket, name, extra) =>
+    buildActionEconomy(ekArgs(level, extra))[bucket].find((e) => e.name === name);
+
+  it('Manifest Echo is a bonus action from L3', () => {
+    const e = entry(3, 'bonus', 'Manifest Echo');
+    expect(e.cost).toBe('bonus action');
+    expect(e.source).toBe('Subclass');
+  });
+
+  it("shows the echo's real AC, computed from level — not a formula the player has to resolve", () => {
+    // Same number the Features-tab statblock shows; both come from echoArmorClass.
+    expect(entry(3, 'bonus', 'Manifest Echo').detail).toMatch(/AC 16/);
+    expect(entry(17, 'bonus', 'Manifest Echo').detail).toMatch(/AC 20/);
+  });
+
+  it('mentions the second echo only once Legion of One is online', () => {
+    expect(entry(17, 'bonus', 'Manifest Echo').detail).not.toMatch(/Legion of One/);
+    expect(entry(18, 'bonus', 'Manifest Echo').detail).toMatch(/creates two/i);
+  });
+
+  it('Unleash Incarnation costs no action but does spend a use', () => {
+    // It rides on the Attack action you were taking anyway; the tracker is what it needs.
+    const e = entry(3, 'no_action', 'Unleash Incarnation');
+    expect(e.cost).toBe('no action');
+    expect(e.resourceKey).toBe('unleash_incarnation_used');
+  });
+
+  it('Echo Avatar is an action from L7, and is not concentration', () => {
+    expect(entry(3, 'action', 'Echo Avatar')).toBeFalsy();
+    const e = entry(7, 'action', 'Echo Avatar');
+    expect(e.cost).toBe('action');
+    expect(e.detail).not.toMatch(/concentration/i);
+    expect(e.detail).toMatch(/1,000 feet/);
+  });
+
+  it('Shadow Martyr is a reaction from L10, wired to its short-rest pool', () => {
+    expect(entry(9, 'reaction', 'Shadow Martyr')).toBeFalsy();
+    const e = entry(10, 'reaction', 'Shadow Martyr');
+    expect(e.resourceKey).toBe('shadow_martyr_used');
+    // The recharge the app's old feature text omitted entirely.
+    expect(e.detail).toMatch(/short or long rest/i);
+  });
+
+  it('Reclaim Potential computes its temp HP from Constitution', () => {
+    expect(entry(14, 'no_action', 'Reclaim Potential')).toBeFalsy();
+    const e = entry(15, 'no_action', 'Reclaim Potential');
+    expect(e.detail).toMatch(/2d6 \+3/);          // CON 16
+    expect(e.resourceKey).toBe('reclaim_potential_used');
+    expect(entry(15, 'no_action', 'Reclaim Potential', { scores: { constitution: 8 } }).detail)
+      .toMatch(/2d6 -1/);
+  });
+
+  it('gives another Fighter subclass none of it', () => {
+    const champ = buildActionEconomy(ekArgs(18, { subclass: 'Champion' }));
+    expect(champ.bonus.find((e) => e.name === 'Manifest Echo')).toBeFalsy();
+    expect(champ.no_action.find((e) => e.name === 'Unleash Incarnation')).toBeFalsy();
+    expect(champ.reaction.find((e) => e.name === 'Shadow Martyr')).toBeFalsy();
+  });
+});

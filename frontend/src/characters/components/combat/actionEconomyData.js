@@ -33,6 +33,7 @@ import {
   arcaneShotImproved,
 } from '@/characters/components/classData/arcaneShotData';
 import { getBreathWeapon } from '@/characters/components/race/breathWeaponData';
+import { echoArmorClass } from '@/characters/components/companions/companionData';
 import { buildBreakdown } from '@/characters/components/skills/skillMath';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
@@ -130,6 +131,52 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
       // Applying an option costs nothing — it rides on an arrow you were firing anyway.
       'Arcane Shot': { tab: 'no_action', cost: 'no action', resourceKey: 'arcane_shot_used', description: 'When you fire an arrow from a shortbow or longbow as part of the Attack action, apply one of your known Arcane Shot options to it — one option per attack. Recharges on a short or long rest.' },
       'Curving Shot': { tab: 'bonus', cost: 'bonus action', description: 'When you miss with a magic arrow, use a bonus action to reroll the attack against a different target within 60 feet of the original one.' },
+    },
+    'Echo Knight': {
+      // The echo's AC comes from companionData so this card and the statblock on the Features
+      // tab can't drift; everything else about the echo lives there rather than being retyped
+      // into a paragraph on a combat card.
+      'Manifest Echo': {
+        tab: 'bonus', cost: 'bonus action',
+        compute: ({ level }) => ({
+          detail: `Manifest an echo of yourself in an unoccupied space within 15 feet — 1 HP,`
+            + ` AC ${echoArmorClass(level)}, destroyed by any damage. Your attacks can originate`
+            + ` from its space, and 15 feet of your movement swaps you with it.`
+            + (level >= 18 ? ' Legion of One: the same bonus action creates two.' : ''),
+        }),
+        description: 'Manifest an echo of yourself in an unoccupied space within 15 feet.',
+      },
+      // Costs no action of its own — it rides on the Attack action you were taking anyway —
+      // but it does spend a use, so the card carries the tracker (the Arcane Shot shape).
+      'Unleash Incarnation': {
+        tab: 'no_action', cost: 'no action', resourceKey: 'unleash_incarnation_used',
+        description: "When you take the Attack action, make one additional melee attack from your echo's"
+          + ' position. Recharges on a long rest.',
+      },
+      'Echo Avatar': {
+        tab: 'action', cost: 'action',
+        description: "See through your echo's eyes and hear through its ears for up to 10 minutes,"
+          + ' while your own body is blinded and deafened. The echo can be up to 1,000 feet away.'
+          + ' Ending it early requires no action.',
+      },
+      'Shadow Martyr': {
+        tab: 'reaction', cost: 'reaction', resourceKey: 'shadow_martyr_used',
+        description: 'Before an attack roll is made against another creature you can see, teleport'
+          + ' your echo to within 5 feet of it and make the attack target the echo instead —'
+          + ' which can make it miss. Recharges on a short or long rest.',
+      },
+      // Triggered, not chosen: it fires when the echo dies. It still spends a use, so it needs
+      // the tracker, and no_action is where a triggered freebie belongs.
+      'Reclaim Potential': {
+        tab: 'no_action', cost: 'no action', resourceKey: 'reclaim_potential_used',
+        compute: ({ scores }) => ({
+          detail: 'When an echo of yours is destroyed by taking damage, gain'
+            + ` 2d6 ${formatSigned(abilityMod(scores?.constitution ?? 10))} temporary hit points —`
+            + ' provided you have no temporary hit points already. Recharges on a long rest.',
+        }),
+        description: 'When an echo of yours is destroyed by taking damage, gain 2d6 + your'
+          + ' Constitution modifier temporary hit points, provided you have none already.',
+      },
     },
     Cavalier: {
       // Unwavering Mark is TWO things at two different costs, so it is surfaced as two things.
