@@ -1367,6 +1367,98 @@ describe('buildActionEconomy — ENTRY_RIDERS (Sentinel)', () => {
   });
 });
 
+// The second entry rider, and the first that is EQUIPMENT-gated: the reach clause is only true
+// while you're actually holding a qualifying polearm.
+describe('buildActionEconomy — ENTRY_RIDERS (Polearm Master)', () => {
+  const PAM = {
+    id: 24,
+    name: 'Polearm Master',
+    level: 4,
+    effects: [
+      {
+        kind: 'action',
+        name: 'Polearm butt-end attack',
+        economy: 'bonus',
+        description: "Make a melee attack with the weapon's opposite end (1d4 bludgeoning).",
+      },
+      { kind: 'note', text: 'Creatures provoke an opportunity attack when they enter your reach.' },
+    ],
+  };
+  const weapon = (name, properties) => ({
+    uid: name, category: 'weapons', name, weapon_type: 'Melee', equipped: true, properties,
+  });
+  const HALBERD = weapon('Halberd', '["Heavy", "Reach", "Two-Handed"]');
+  const PIKE = weapon('Pike', '["Heavy", "Reach", "Two-Handed"]');
+  const SPEAR = weapon('Spear', '["Thrown", "Versatile", "Monk"]');
+  const LONGSWORD = weapon('Longsword', '["Versatile"]');
+
+  const args = ({ feats = [PAM], inventory = [HALBERD], edition = '5e' } = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Champion',
+    level: 5,
+    edition,
+    characterData: { feats },
+    inventory,
+    attacks: [{ uid: 'Halberd', name: 'Halberd', toHit: '+7', damage: '1d10 + 4 slashing', proficient: true }],
+    scores: { strength: 18, dexterity: 12 },
+    spellIndex: {},
+  });
+  const riderSources = (a) => (buildActionEconomy(a).reaction
+    .find((e) => e.key === 'universal:Opportunity Attack').riders ?? []).map((r) => r.source);
+
+  it('rides on the Opportunity Attack while a qualifying polearm is equipped', () => {
+    expect(riderSources(args())).toEqual(['Polearm Master']);
+  });
+
+  it('says creatures provoke on ENTERING your reach — the clause the feat note never surfaced', () => {
+    const rider = buildActionEconomy(args()).reaction
+      .find((e) => e.key === 'universal:Opportunity Attack').riders[0];
+    expect(rider.text).toMatch(/enter your reach/i);
+    expect(rider.text).toMatch(/not only when they leave/i);
+  });
+
+  it('is hidden when no polearm is equipped — the same gate the bonus attack uses', () => {
+    expect(riderSources(args({ inventory: [LONGSWORD] }))).toEqual([]);
+    expect(riderSources(args({ inventory: [] }))).toEqual([]);
+  });
+
+  it('is hidden without the feat, polearm or not', () => {
+    expect(riderSources(args({ feats: [] }))).toEqual([]);
+  });
+
+  // RAW the feat's two halves take DIFFERENT weapon lists, which is why the reach clause has
+  // its own predicate: 5e drops the spear and adds the pike.
+  it('5e: a pike qualifies but a spear does not', () => {
+    expect(riderSources(args({ inventory: [PIKE] }))).toEqual(['Polearm Master']);
+    expect(riderSources(args({ inventory: [SPEAR] }))).toEqual([]);
+  });
+
+  it('2024: a spear qualifies, and so does any Heavy + Reach weapon', () => {
+    const ed = { edition: '5.5e' };
+    expect(riderSources(args({ ...ed, inventory: [SPEAR] }))).toEqual(['Polearm Master']);
+    expect(riderSources(args({ ...ed, inventory: [HALBERD] }))).toEqual(['Polearm Master']);
+    expect(riderSources(args({ ...ed, inventory: [LONGSWORD] }))).toEqual([]);
+  });
+
+  it('an unequipped polearm does not count — you have to be holding it', () => {
+    expect(riderSources(args({ inventory: [{ ...HALBERD, equipped: false }] }))).toEqual([]);
+  });
+
+  it('stacks with Sentinel on the same card, in table order', () => {
+    const sentinel = { id: 30, name: 'Sentinel', level: 4, effects: [] };
+    expect(riderSources(args({ feats: [PAM, sentinel] }))).toEqual(['Polearm Master', 'Sentinel']);
+  });
+
+  it('leaves the feat bonus-action attack entry alone', () => {
+    const bonus = buildActionEconomy(args()).bonus.find((e) => e.source === 'Feat');
+    expect(bonus.name).toMatch(/butt-end/i);
+    // The bonus half is gated on its OWN (different) weapon list — a spear still enables it.
+    const withSpear = buildActionEconomy(args({ inventory: [SPEAR] })).bonus
+      .find((e) => e.source === 'Feat');
+    expect(withSpear).toBeTruthy();
+  });
+});
+
 describe('buildActionEconomy — Cavalier (Fighter subclass)', () => {
   const cavArgs = (level, extra = {}) => ({
     charClass: 'Fighter',

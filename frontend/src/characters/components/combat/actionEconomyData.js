@@ -296,7 +296,8 @@ function matchesRiderScope(entry, scope) {
  *
  * `entryKey` is the target's key (`universal:Opportunity Attack`, `feature:Action Surge`). The
  * attach loop searches every bucket, so a rider needn't know which one its target lives in.
- * `applies(ctx)` is the gate — class/subclass/level, a feat, whatever the feature keys on.
+ * `applies(ctx)` is the gate — class/subclass/level, a feat, the equipped `inventory`, whatever
+ * the feature keys on.
  * `text` is authored here for the same reason ATTACK_RIDERS' is: FEAT rules text lives only in
  * the backend compendium, and this module is pure and does no fetching.
  */
@@ -324,6 +325,20 @@ export const ENTRY_RIDERS = [
   // that is not an opportunity attack at all, so it stays its own entry: the feat's
   // "Sentinel Strike" action effect. Authored once for both editions — the 2024 rewrite
   // keeps all three clauses.
+  // Polearm Master's reach clause is EQUIPMENT-GATED, so it is the reason `applies` gets the
+  // inventory: the rider is true only while you actually hold a qualifying polearm, and shown
+  // to a character swinging a longsword it would be a lie. Hiding it when none is equipped
+  // matches how the feat's other half (the bonus attack) is already gated. The text stays
+  // edition-neutral and names no weapons — the gate is what knows the list, and the card only
+  // exists when you're holding one, so reprinting it here would be noise.
+  {
+    source: 'Polearm Master',
+    entryKey: 'universal:Opportunity Attack',
+    applies: ({ feats, inventory, edition }) =>
+      hasFeat(feats, 'Polearm Master') && hasEquipped(inventory, isPolearmReachWeapon(edition)),
+    text: "While you're wielding your polearm, creatures also provoke your opportunity attacks"
+      + ' when they enter your reach, not only when they leave it.',
+  },
   {
     source: 'Sentinel',
     entryKey: 'universal:Opportunity Attack',
@@ -458,6 +473,26 @@ const isPureRangedWeapon = (e) =>
 /** A polearm that enables the Polearm Master bonus attack: glaive, halberd, quarterstaff, or spear. */
 const isPolearm = (e) =>
   e.category === 'weapons' && /\b(glaive|halberd|quarterstaff|spear)\b/.test((e.name || '').toLowerCase());
+
+/**
+ * A weapon whose reach triggers Polearm Master's OPPORTUNITY-ATTACK clause — deliberately not
+ * the same predicate as `isPolearm` above, because RAW the feat's two halves take different
+ * weapon lists. 5e: the bonus attack takes glaive, halberd, quarterstaff or SPEAR, while the
+ * reach clause takes glaive, halberd, PIKE or quarterstaff — spear out, pike in. (The
+ * compendium's own feat text flattens both to one list; the gate follows the rulebook.) 2024
+ * restates the clause as quarterstaff, spear, or any weapon with Heavy AND Reach, so it reads off
+ * properties rather than names and picks up a homebrew polearm for free.
+ */
+const isPolearmReachWeapon = (edition) => (e) => {
+  if (e.category !== 'weapons') return false;
+  const name = (e.name || '').toLowerCase();
+  if (edition === '5.5e' || edition === '2024') {
+    const props = (e.properties || '').toLowerCase();
+    return /\b(quarterstaff|spear)\b/.test(name)
+      || (props.includes('heavy') && props.includes('reach'));
+  }
+  return /\b(glaive|halberd|pike|quarterstaff)\b/.test(name);
+};
 
 /** A finesse weapon — the Defensive Duelist reaction only works while wielding one. */
 const isFinesseWeapon = (e) =>
@@ -1238,7 +1273,7 @@ export function buildActionEconomy({
   // clauses are a rider.
   const allEntries = Object.values(buckets).flat();
   for (const rider of ENTRY_RIDERS) {
-    if (!rider.applies({ charClass, subclass, level, edition, feats, characterData })) continue;
+    if (!rider.applies({ charClass, subclass, level, edition, feats, characterData, inventory })) continue;
     const target = allEntries.find((e) => e.key === rider.entryKey);
     if (!target) continue;
     target.riders = [...(target.riders || []), { source: rider.source, text: rider.text }];
