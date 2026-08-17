@@ -88,6 +88,44 @@ function RiderLine({ rider }) {
 }
 
 /**
+ * A limited-use feature that rides on THIS attack, rendered inside the attack's own card:
+ * name, one line of rules text, and its own Use control spending its own pool.
+ *
+ * The control sits inside the block, not at the card's top-right, so the remaining count reads
+ * as belonging to the FEATURE rather than to the attack — a "5 / 5 remaining" beside a
+ * longsword would say the longsword had five uses. Same reasoning as ArcaneShotBlock.
+ *
+ * Used by Echo Knight **Unleash Incarnation**. Arcane Shot deliberately keeps its own richer
+ * block (a menu of options plus a save DC, neither of which this can express); if a third
+ * rich one appears, fold that into this rather than writing a third block.
+ */
+function AttachedFeatureBlock({ feature, entryKey, resource, onChange, readOnly, isGm }) {
+  const slug = String(feature.key || feature.name).toLowerCase().replace(/\s+/g, '-');
+  return (
+    <div
+      className="mt-2 rounded-md border border-dashed bg-muted/20 px-2.5 py-2"
+      data-testid={`ae-attached-${slug}-${entryKey}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold">{feature.name}</div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">{feature.note}</p>
+        </div>
+        {resource && (
+          <RestResourceControl
+            row={resource}
+            onChange={onChange}
+            readOnly={readOnly}
+            isGm={isGm}
+            idPrefix={`ae-attached-${slug}`}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Arcane Shot, rendered inside the card of the bow attack it rides on. The header row —
  * cost, save DC, and the Use control spending the shared pool — is always visible, because
  * that is the at-a-glance combat state. The OPTIONS collapse behind a toggle (closed by
@@ -184,7 +222,7 @@ function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, i
   );
 }
 
-function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, inventory = [], onInventoryChange }) {
+function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, inventory = [], onInventoryChange, resourceByKey = {} }) {
   // Power attack (Great Weapon Master on Heavy melee / Sharpshooter on ranged): when a weapon
   // entry carries a `powerAttack` variant, a toggle swaps the displayed to-hit/damage between
   // the normal and −5/+10 numbers. The variant names its own feat, so one control serves both.
@@ -406,6 +444,19 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
             isGm={isGm}
           />
         )}
+        {/* Limited-use features that ride on THIS attack (Unleash Incarnation), each with its
+            own pool — read off the card you're already looking at mid-attack. */}
+        {entry.attachedFeatures?.map((f) => (
+          <AttachedFeatureBlock
+            key={f.key || f.name}
+            feature={f}
+            entryKey={entry.key}
+            resource={f.resourceKey ? resourceByKey[f.resourceKey] : null}
+            onChange={onChange}
+            readOnly={readOnly}
+            isGm={isGm}
+          />
+        ))}
       </div>
       {/* Rest-rechargeable features get the same Use button as the Features tab. */}
       {topResource && (
@@ -594,6 +645,7 @@ export default function ActionEconomyTab({
                     key={e.key} entry={e} resource={resourceFor(e)} onChange={onChange}
                     readOnly={readOnly} isGm={isGm} campaignId={campaignId}
                     inventory={inventory} onInventoryChange={onChange ? handleInventoryChange : null}
+                    resourceByKey={restByKey}
                   />
                 ))}
               </div>

@@ -582,6 +582,96 @@ describe('CharacterDetail', () => {
     });
   });
 
+  // QA: a GM awarded enough XP for two levels at once. The first level-up cleared
+  // level_up_pending outright, so the character stalled at the intermediate level and only
+  // started climbing again when another point of XP made the award path recompute the flag.
+  describe('Leveling card — banked XP spanning several levels', () => {
+    // Fighter 8 → 9 gains Indomitable and no ASI, so the wizard is HP → Features → Confirm.
+    // Level 9 needs 48,000 XP and level 10 needs 64,000.
+    const atLevel8 = (experience_points) => ({
+      ...BASE_CHARACTER, level: 8, experience_points, level_up_pending: true,
+      character_data: { ...BASE_CHARACTER.character_data, hp_max: 68 },
+    });
+
+    async function completeWizard() {
+      fireEvent.click(await screen.findByText(/Level Up Available/));
+      fireEvent.click(await screen.findByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+    }
+
+    it('keeps level_up_pending set when the XP already covers the next level too', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'experience' } });
+      useAuth.mockReturnValue({ user: { id: 2 } });
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: atLevel8(70000) });
+      characterService.updateCharacter.mockResolvedValue({
+        success: true, data: { ...atLevel8(70000), level: 9 },
+      });
+      renderDetail();
+      await completeWizard();
+      await waitFor(() => {
+        expect(characterService.updateCharacter).toHaveBeenCalledWith('1',
+          expect.objectContaining({ level: 9, level_up_pending: true })
+        );
+      });
+    });
+
+    it('clears level_up_pending when the XP stops short of the level after', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'experience' } });
+      useAuth.mockReturnValue({ user: { id: 2 } });
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: atLevel8(50000) });
+      characterService.updateCharacter.mockResolvedValue({
+        success: true, data: { ...atLevel8(50000), level: 9 },
+      });
+      renderDetail();
+      await completeWizard();
+      await waitFor(() => {
+        expect(characterService.updateCharacter).toHaveBeenCalledWith('1',
+          expect.objectContaining({ level: 9, level_up_pending: false })
+        );
+      });
+    });
+
+    // In a milestone campaign the flag is GM-triggered and XP means nothing, so a stored XP
+    // total must not re-arm the wizard on its own.
+    it('always clears level_up_pending in a milestone campaign, whatever the XP total', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'milestone' } });
+      useAuth.mockReturnValue({ user: { id: 2 } });
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: atLevel8(70000) });
+      characterService.updateCharacter.mockResolvedValue({
+        success: true, data: { ...atLevel8(70000), level: 9 },
+      });
+      renderDetail();
+      await completeWizard();
+      await waitFor(() => {
+        expect(characterService.updateCharacter).toHaveBeenCalledWith('1',
+          expect.objectContaining({ level: 9, level_up_pending: false })
+        );
+      });
+    });
+
+    it('does not re-arm past level 20', async () => {
+      useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'experience' } });
+      useAuth.mockReturnValue({ user: { id: 2 } });
+      const atLevel19 = {
+        ...BASE_CHARACTER, level: 19, experience_points: 355000, level_up_pending: true,
+        character_data: { ...BASE_CHARACTER.character_data, hp_max: 150 },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: atLevel19 });
+      characterService.updateCharacter.mockResolvedValue({
+        success: true, data: { ...atLevel19, level: 20 },
+      });
+      renderDetail();
+      await completeWizard();
+      await waitFor(() => {
+        expect(characterService.updateCharacter).toHaveBeenCalledWith('1',
+          expect.objectContaining({ level: 20, level_up_pending: false })
+        );
+      });
+    });
+  });
+
   describe('subrace and racial data display', () => {
     it('shows subrace badge alongside race in read-only view', async () => {
       useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player' } });
@@ -910,6 +1000,91 @@ describe('CharacterDetail', () => {
       await openStatsSubTab('hp');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByTestId('relentless-endurance-note')).not.toBeInTheDocument();
+    });
+
+    // A class rest resource flagged `hpAdjacent` is an HP mechanic — Reclaim Potential grants
+    // temporary hit points — so its tracker sits with the HP boxes rather than in the features
+    // area, where the player would have to go looking for it after their echo is destroyed.
+    describe('hpAdjacent class resource (Echo Knight Reclaim Potential)', () => {
+      const echoKnight = (level) => ({
+        ...BASE_CHARACTER,
+        level,
+        character_data: { ...BASE_CHARACTER.character_data, subclass: 'Echo Knight' },
+      });
+
+      it('renders the tracker in the HP & Movement sub-tab at L15', async () => {
+        characterService.getCharacterById.mockResolvedValue({ success: true, data: echoKnight(15) });
+        renderDetail();
+        await openStatsSubTab('hp');
+        expect(await screen.findByTestId('rest-resource-reclaim_potential_used')).toBeInTheDocument();
+      });
+
+      it('is absent below the unlock level', async () => {
+        characterService.getCharacterById.mockResolvedValue({ success: true, data: echoKnight(14) });
+        renderDetail();
+        await openStatsSubTab('hp');
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+        expect(screen.queryByTestId('rest-resource-reclaim_potential_used')).not.toBeInTheDocument();
+      });
+
+      it('is absent for another subclass at the same level', async () => {
+        characterService.getCharacterById.mockResolvedValue({
+          success: true,
+          data: { ...echoKnight(15), character_data: { ...BASE_CHARACTER.character_data, subclass: 'Champion' } },
+        });
+        renderDetail();
+        await openStatsSubTab('hp');
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+        expect(screen.queryByTestId('rest-resource-reclaim_potential_used')).not.toBeInTheDocument();
+      });
+
+      // The regression the ClassSheet exclusion exists to prevent: moving it must MOVE it,
+      // not add a second copy. The other Echo Knight pools stay in the features area.
+      it('appears exactly once on the page, and the other Echo Knight pools stay put', async () => {
+        characterService.getCharacterById.mockResolvedValue({ success: true, data: echoKnight(15) });
+        renderDetail();
+        await openStatsSubTab('hp');
+        await screen.findByTestId('rest-resource-reclaim_potential_used');
+        expect(screen.getAllByTestId('rest-resource-reclaim_potential_used')).toHaveLength(1);
+        expect(screen.getByTestId('rest-resource-unleash_incarnation_used')).toBeInTheDocument();
+        expect(screen.getByTestId('rest-resource-shadow_martyr_used')).toBeInTheDocument();
+      });
+
+      // The racial tracker carries its own "RACIAL FEATURES" heading and the class tracker has
+      // none, so a class resource placed after it reads as a racial trait. Class comes first.
+      it('sits ABOVE the Racial Features group, not under its heading', async () => {
+        characterService.getCharacterById.mockResolvedValue({
+          success: true,
+          data: {
+            ...echoKnight(15),
+            race: 'Half-Orc',
+            character_data: {
+              ...BASE_CHARACTER.character_data,
+              subclass: 'Echo Knight',
+              race_traits: ['Relentless Endurance'],
+            },
+          },
+        });
+        renderDetail();
+        await openStatsSubTab('hp');
+        const reclaim = await screen.findByTestId('rest-resource-reclaim_potential_used');
+        const racial = screen.getByTestId('racial-resource-tracker');
+        expect(reclaim.compareDocumentPosition(racial))
+          .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      });
+
+      it('lets the owner spend a use, persisting immediately', async () => {
+        characterService.getCharacterById.mockResolvedValue({ success: true, data: echoKnight(15) });
+        characterService.updateCharacter.mockResolvedValue({ success: true, data: echoKnight(15) });
+        renderDetail();
+        await openStatsSubTab('hp');
+        await screen.findByTestId('rest-resource-reclaim_potential_used');
+        fireEvent.click(screen.getByLabelText('Use Reclaim Potential (Long Rest)'));
+        fireEvent.click(screen.getByTestId('rest-use-confirm-button'));
+        await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalled());
+        const payload = characterService.updateCharacter.mock.calls.at(-1)[1];
+        expect(payload.character_data.reclaim_potential_used).toBe(1);
+      });
     });
 
     it('shows a Survivor note by the HP section for a L18 Champion (5 + CON regain)', async () => {

@@ -512,14 +512,12 @@ function matches(entry, { charClass, subclass, level, edition, raceTraits }) {
 const titleCase = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
 
 /**
- * The damage-type column. The bludgeoning/piercing/slashing triple is by far the most common
- * set and spelled out it swamps the row, so it collapses to "B / P / S".
+ * The damage-type column. Types are spelled out in full — the column is the first thing a
+ * player scans to answer "is this damage halved?", and an initialism ("B / P / S") makes them
+ * decode it. The row has the width for the words.
  */
 export function formatDamageTypes(types = []) {
-  const lower = types.map((t) => String(t).toLowerCase());
-  const isBps = lower.length === 3 && BPS.every((t) => lower.includes(t));
-  if (isBps) return 'B / P / S';
-  return lower.map(titleCase).join(' / ');
+  return types.map((t) => titleCase(String(t).toLowerCase())).join(' / ');
 }
 
 /** The value column — what the defense actually does to the damage. */

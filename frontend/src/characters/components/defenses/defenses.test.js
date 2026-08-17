@@ -31,12 +31,16 @@ const HAM_2024 = {
 };
 
 describe('formatDamageTypes', () => {
-  it('collapses the bludgeoning/piercing/slashing triple', () => {
-    expect(formatDamageTypes(['bludgeoning', 'piercing', 'slashing'])).toBe('B / P / S');
+  // Spelled out, never an initialism — the column is what a player scans to answer
+  // "is this damage halved?", and "B / P / S" makes them decode it first.
+  it('spells out the bludgeoning/piercing/slashing triple', () => {
+    expect(formatDamageTypes(['bludgeoning', 'piercing', 'slashing']))
+      .toBe('Bludgeoning / Piercing / Slashing');
   });
 
-  it('collapses the triple regardless of order', () => {
-    expect(formatDamageTypes(['slashing', 'bludgeoning', 'piercing'])).toBe('B / P / S');
+  it('keeps the authored order', () => {
+    expect(formatDamageTypes(['slashing', 'bludgeoning', 'piercing']))
+      .toBe('Slashing / Bludgeoning / Piercing');
   });
 
   it('title-cases and joins any other set', () => {
@@ -148,7 +152,7 @@ describe('getDefenses — conditional class features', () => {
     expect(alwaysOn).toHaveLength(0);
     expect(situational).toHaveLength(1);
     expect(situational[0].name).toBe('Rage');
-    expect(situational[0].typeLabel).toBe('B / P / S');
+    expect(situational[0].typeLabel).toBe('Bludgeoning / Piercing / Slashing');
     expect(situational[0].condition).toBe('while raging');
   });
 

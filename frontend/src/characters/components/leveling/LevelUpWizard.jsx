@@ -74,6 +74,15 @@ function progressionValue(progression, key, lvl) {
 }
 
 /**
+ * The class table's "Ability Score Improvement" row. It drives the wizard's dedicated ASI /
+ * ASI-or-Feat / Feat steps, so it is deliberately NOT listed as a feature on the New Features
+ * step or in the Confirm recap — those steps ARE the feature, and naming it a second time as
+ * a thing you "gain" reads as a separate reward (QA: a Fighter at 14 saw a New Features step
+ * whose only entry was the choice the very next step then asked them to make).
+ */
+const isAsiFeature = (f) => /ability score improvement/i.test(f?.name || '');
+
+/**
  * Optional "replace one of your known X" control shown in level-up steps for features that allow
  * a swap-on-level-up (Battle Master maneuvers, Eldritch Invocations, Metamagic). Picking one to
  * swap out frees a slot so the player chooses one extra new option to fill it.
@@ -143,7 +152,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // Ability Score Improvement: every class gains the "Ability Score Improvement" feature
   // at its ASI levels (4/8/12/16/19, +6/14 Fighter, +10 Rogue) — detect it from the
   // feature list so the wizard prompts for the increase. (Class-agnostic.)
-  const needsAsi = features.some((f) => /ability score improvement/i.test(f.name || ''));
+  const needsAsi = features.some(isAsiFeature);
 
   // GM-controlled: what an ASI level grants — ability increase only, a choice of ASI or a
   // feat (RAW 5e default), or both. Drives whether the wizard shows the choice/feat steps.
@@ -311,14 +320,19 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
 
   // Class features shown on the Features step: when we can resolve the chosen subclass's
   // features for this level, swap the generic placeholder(s) for the real feature(s); otherwise
-  // leave the placeholder text in place (better than dropping it).
+  // leave the placeholder text in place (better than dropping it). The ASI row is dropped
+  // either way — the wizard's own ASI/Feat steps are how that feature is delivered.
   const displayFeatures = useMemo(() => {
-    if (subclassFeaturesAtLevel.length === 0) return features;
-    return [
+    const base = subclassFeaturesAtLevel.length === 0 ? features : [
       ...features.filter((f) => !isSubclassPlaceholder(f)),
       ...subclassFeaturesAtLevel.map((f) => ({ ...f, _subclass: true })),
     ];
+    return base.filter((f) => !isAsiFeature(f));
   }, [features, subclassFeaturesAtLevel]);
+
+  // With the ASI row removed, an ASI-only level has nothing left to show, so the step is
+  // dropped rather than rendered as an empty page the player has to click past.
+  const needsFeaturesStep = displayFeatures.length > 0;
   // Subclass grants gained at this level — proficiency picks (Battle Master Student of War) or
   // class-pool picks (Champion Additional Fighting Style), unified in subclassGrants.js. Drives
   // the Subclass Grants step.
@@ -387,7 +401,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const STEPS = [
     'hp',
     ...(needsSubclass ? ['subclass'] : []),
-    'features',
+    ...(needsFeaturesStep ? ['features'] : []),
     ...(needsAsiChoice ? ['asi_choice'] : []),
     ...(wantsAsiStep ? ['asi'] : []),
     ...(wantsFeatStep ? ['feat'] : []),
@@ -441,7 +455,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   const STEP_LABELS = [
     'Hit Points',
     ...(needsSubclass ? ['Subclass'] : []),
-    'New Features',
+    ...(needsFeaturesStep ? ['New Features'] : []),
     ...(needsAsiChoice ? ['ASI or Feat'] : []),
     ...(wantsAsiStep ? ['Ability Scores'] : []),
     ...(wantsFeatStep ? ['Feat'] : []),
@@ -1035,30 +1049,26 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
               At level {newLevel}, your <span className="font-medium text-foreground">{character.char_class}</span> gains:
             </p>
 
-            {displayFeatures.length === 0 ? (
-              <div className="rounded-md border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
-                No new class features at this level.
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                {displayFeatures.map((feat, i) => (
-                  <div key={i} className="rounded-md border bg-card p-3 space-y-1.5">
-                    <div className="font-semibold text-sm flex items-center gap-2">
-                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
-                        {i + 1}
+            {/* No empty state: the step is omitted entirely when there is nothing to list
+                (see needsFeaturesStep), so this branch can only ever have features. */}
+            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+              {displayFeatures.map((feat, i) => (
+                <div key={i} className="rounded-md border bg-card p-3 space-y-1.5">
+                  <div className="font-semibold text-sm flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                      {i + 1}
+                    </span>
+                    {feat.name}
+                    {feat._subclass && (
+                      <span className="rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-medium px-2 py-0.5">
+                        {effectiveSubclass}
                       </span>
-                      {feat.name}
-                      {feat._subclass && (
-                        <span className="rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-medium px-2 py-0.5">
-                          {effectiveSubclass}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{feat.description}</p>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
+                  <p className="text-xs text-muted-foreground leading-relaxed">{feat.description}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -1658,9 +1668,11 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                     <span className="font-medium text-primary">{subclassChoice}</span>
                   </div>
                 )}
+                {/* Same exclusion as the New Features step: the ASI has its own recap rows
+                    below (Ability scores / Feat), so naming it here too would double-count it. */}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">New features</span>
-                  <span className="font-medium">{features.length === 0 ? 'None' : features.map(f => f.name).join(', ')}</span>
+                  <span className="font-medium">{displayFeatures.length === 0 ? 'None' : displayFeatures.map(f => f.name).join(', ')}</span>
                 </div>
                 {needsSubclassGrants && (
                   <div className="flex justify-between">

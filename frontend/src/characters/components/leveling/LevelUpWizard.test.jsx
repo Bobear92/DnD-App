@@ -661,16 +661,69 @@ describe('LevelUpWizard', () => {
     });
   });
 
+  // QA: a Fighter reaching 14 got a "New Features" step whose single entry was "Ability Score
+  // Improvement" — the very choice the NEXT step then asked them to make. The ASI is delivered
+  // BY the ASI/Feat steps, so it is never also listed as a feature you gain.
+  describe('Features step — the ASI is not listed as a feature', () => {
+    const FIGHTER_L13 = {
+      ...FIGHTER_L2, level: 13,
+      character_data: { hp_max: 110, subclass: 'Champion', fighting_style: 'Defense' },
+    };
+
+    it('omits the New Features step entirely at an ASI-only level', () => {
+      render(<LevelUpWizard character={FIGHTER_L13} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      expect(screen.queryByText('New Features')).not.toBeInTheDocument();
+      expect(screen.queryByText('Ability Score Improvement')).not.toBeInTheDocument();
+      // The step it was duplicating is still there.
+      expect(screen.getByText('ASI or Feat')).toBeInTheDocument();
+    });
+
+    it('steps straight from Hit Points to the ASI-or-Feat choice', () => {
+      render(<LevelUpWizard character={FIGHTER_L13} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      expect(screen.getByTestId('asi-choice-asi')).toBeInTheDocument();
+    });
+
+    it('leaves the ASI out of the Confirm recap, which reports it in its own rows', async () => {
+      render(<LevelUpWizard character={FIGHTER_L13} campaign={CAMPAIGN_ASI_ONLY} onComplete={vi.fn()} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → asi
+      fireEvent.click(screen.getByTestId('asi-inc-strength'));
+      fireEvent.click(screen.getByTestId('asi-inc-dexterity'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // asi → confirm
+      expect(await screen.findByText('New features')).toBeInTheDocument();
+      expect(screen.getByText('None')).toBeInTheDocument();
+      expect(screen.queryByText('Ability Score Improvement')).not.toBeInTheDocument();
+      expect(screen.getByText('Ability scores')).toBeInTheDocument();
+    });
+
+    it('keeps the step and its real features at a level that grants BOTH', () => {
+      // A Monk 3→4 gains Slow Fall alongside the ASI — the case the filter has to be surgical
+      // about: drop only the ASI row, keep everything else and keep the step.
+      const MONK_L3 = {
+        id: 91, name: 'Tam', char_class: 'Monk', level: 3, constitution: 14,
+        character_data: { hp_max: 24, subclass: 'Way of the Open Hand' },
+      };
+      render(<LevelUpWizard character={MONK_L3} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      expect(screen.getByText('New Features')).toBeInTheDocument();
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      expect(screen.getByText('Slow Fall')).toBeInTheDocument();
+      expect(screen.queryByText('Ability Score Improvement')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Ability Score Improvement step', () => {
     // Fighter 3 → 4 is an ASI level.
     const FIGHTER_L3 = { ...FIGHTER_L2, level: 3, strength: 15, dexterity: 14 };
 
-    // asi_only mode → the ASI step appears directly (no ASI-or-Feat choice step).
+    // asi_only mode → the ASI step appears directly (no ASI-or-Feat choice step). A Fighter ASI
+    // level grants ASI alone, so there is no New Features step in between either.
     function toAsiStep(character = FIGHTER_L3, onComplete = vi.fn()) {
       render(<LevelUpWizard character={character} campaign={CAMPAIGN_ASI_ONLY} onComplete={onComplete} onClose={vi.fn()} />);
       fireEvent.click(screen.getByText('Take Average'));
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // hp → features
-      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // features → asi
+      fireEvent.click(screen.getByRole('button', { name: /Next/i })); // hp → asi
     }
 
     it('does not add an Ability Scores step at a non-ASI level (Fighter 1→2)', () => {
@@ -796,11 +849,12 @@ describe('LevelUpWizard', () => {
       ] },
     ];
 
+    // Every Fighter ASI level grants ASI and nothing else, and the ASI row is not listed as a
+    // "new feature" (the ASI steps ARE it), so there is no New Features step to click through.
     function toChoiceStep(character = FIGHTER_L3, campaign = CAMPAIGN_ASI_OR_FEAT, onComplete = vi.fn()) {
       render(<LevelUpWizard character={character} campaign={campaign} onComplete={onComplete} onClose={vi.fn()} />);
       fireEvent.click(screen.getByText('Take Average'));
-      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
-      fireEvent.click(screen.getByTestId('wizard-next')); // features → asi_choice
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → asi_choice
     }
 
     it('asi_only mode shows no ASI-or-Feat choice and no Feat step', () => {
@@ -864,8 +918,7 @@ describe('LevelUpWizard', () => {
       expect(screen.getByText('Ability Scores')).toBeInTheDocument();
       expect(screen.getByText('Feat')).toBeInTheDocument();
       fireEvent.click(screen.getByText('Take Average'));
-      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
-      fireEvent.click(screen.getByTestId('wizard-next')); // features → asi
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → asi (ASI-only level: no features step)
       fireEvent.click(screen.getByTestId('asi-inc-strength'));
       fireEvent.click(screen.getByTestId('asi-inc-dexterity'));
       fireEvent.click(screen.getByTestId('wizard-next')); // asi → feat

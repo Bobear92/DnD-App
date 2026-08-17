@@ -116,6 +116,25 @@ describe('DefensesPanel', () => {
     expect(screen.getByTestId(`${testId}-text`)).toHaveTextContent(/fire damage/i);
   });
 
+  // Feat rows carry no rules prose (the compendium description isn't fetched here), and the
+  // row already states the whole mechanic — amount, types, condition, qualifier. Found in QA:
+  // it rendered a chevron that expanded nothing when clicked.
+  it('gives a feat row a plain name, not a disclosure arrow that opens nothing', () => {
+    render(
+      <DefensesPanel
+        charClass="Fighter"
+        level={12}
+        edition="5e"
+        characterData={{ feats: [HAM_5E] }}
+        pb={4}
+      />,
+    );
+    const note = screen.getByTestId('defense-feat-heavy-armor-master-note');
+    expect(note).toHaveTextContent('Heavy Armor Master');
+    expect(note.tagName).not.toBe('BUTTON');
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('shows both groups when a character has each kind', () => {
     render(
       <DefensesPanel

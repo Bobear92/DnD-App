@@ -1011,3 +1011,50 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
     });
   });
 });
+
+// QA: Unleash Incarnation lived in the No Action tab, where it was hard to find — you reach
+// for it in the middle of taking the Attack action, so it belongs on the attack card itself.
+describe('ActionEconomyTab — Unleash Incarnation on the melee attack card', () => {
+  const echoKnight = (props = {}) => renderTab({
+    charClass: 'Fighter', subclass: 'Echo Knight', level: 5,
+    scores: { strength: 16, dexterity: 12, constitution: 16 },
+    inventory: [longswordEntry],
+    characterData: { subclass: 'Echo Knight' },
+    ...props,
+  });
+
+  it('renders the block inside the melee attack card, not as its own No Action entry', () => {
+    echoKnight();
+    const block = screen.getByTestId(/^ae-attached-unleash-incarnation-weapon:w1/);
+    expect(block).toHaveTextContent('Unleash Incarnation');
+    expect(block).toHaveTextContent(/additional melee attack with Longsword/);
+    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    expect(screen.queryByText('Unleash Incarnation')).not.toBeInTheDocument();
+  });
+
+  it('shows the remaining uses inside the block', () => {
+    // CON 16 → +3 uses per long rest, one already spent.
+    echoKnight({ characterData: { subclass: 'Echo Knight', unleash_incarnation_used: 1 } });
+    expect(screen.getByTestId(/^ae-attached-unleash-incarnation-weapon:w1/))
+      .toHaveTextContent('2 / 3 remaining');
+  });
+
+  it('spends a use from inside the block', () => {
+    const onChange = vi.fn();
+    echoKnight({ onChange });
+    fireEvent.click(screen.getByRole('button', { name: /Use Unleash Incarnation/i }));
+    fireEvent.click(screen.getByTestId('ae-attached-unleash-incarnation-use-confirm-button'));
+    expect(onChange).toHaveBeenCalledWith({ unleash_incarnation_used: 1 });
+  });
+
+  it('attaches to every melee attack card when two weapons are equipped', () => {
+    echoKnight({ inventory: [longswordEntry, greatswordEntry] });
+    expect(screen.getByTestId(/^ae-attached-unleash-incarnation-weapon:w1/)).toBeInTheDocument();
+    expect(screen.getByTestId(/^ae-attached-unleash-incarnation-weapon:gs1/)).toBeInTheDocument();
+  });
+
+  it('is absent for another Fighter subclass', () => {
+    echoKnight({ subclass: 'Champion', characterData: { subclass: 'Champion' } });
+    expect(screen.queryByTestId(/^ae-attached-unleash-incarnation/)).not.toBeInTheDocument();
+  });
+});

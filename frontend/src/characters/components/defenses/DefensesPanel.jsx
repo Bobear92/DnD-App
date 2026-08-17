@@ -69,7 +69,7 @@ function DefenseGroup({ label, testId, rows }) {
             className="flex items-start gap-2 rounded border px-2 py-1.5"
           >
             <span
-              className="text-xs font-medium w-24 shrink-0"
+              className="text-xs font-medium w-40 sm:w-56 shrink-0"
               data-testid={`defense-${row.key}-types`}
             >
               {row.typeLabel}

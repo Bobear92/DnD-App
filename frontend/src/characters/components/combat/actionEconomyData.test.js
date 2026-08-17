@@ -1676,11 +1676,74 @@ describe('buildActionEconomy — Echo Knight (Fighter subclass)', () => {
     expect(entry(18, 'bonus', 'Manifest Echo').detail).toMatch(/creates two/i);
   });
 
-  it('Unleash Incarnation costs no action but does spend a use', () => {
-    // It rides on the Attack action you were taking anyway; the tracker is what it needs.
-    const e = entry(3, 'no_action', 'Unleash Incarnation');
-    expect(e.cost).toBe('no action');
-    expect(e.resourceKey).toBe('unleash_incarnation_used');
+  // QA: as a standalone No Action entry it was unfindable — you reach for it in the middle of
+  // taking the Attack action, so it belongs on the attack card you are already reading.
+  describe('Unleash Incarnation attaches to the melee attack cards', () => {
+    it('rides on the melee weapon card with its own pool, not as its own entry', () => {
+      const eco = buildActionEconomy(ekArgs(3));
+      expect(eco.no_action.find((e) => e.name === 'Unleash Incarnation')).toBeFalsy();
+      const sword = eco.action.find((e) => e.name === 'Longsword');
+      expect(sword.attachedFeatures.map((f) => f.name)).toEqual(['Unleash Incarnation']);
+      expect(sword.attachedFeatures[0].resourceKey).toBe('unleash_incarnation_used');
+    });
+
+    it('names the weapon in the note, so the card reads on its own', () => {
+      const sword = buildActionEconomy(ekArgs(3)).action.find((e) => e.name === 'Longsword');
+      expect(sword.attachedFeatures[0].note).toMatch(/additional melee attack with Longsword/);
+      expect(sword.attachedFeatures[0].note).toMatch(/echo's position/);
+    });
+
+    it('does not attach the attack card its own top-level resource', () => {
+      // The pool belongs to the feature, not the longsword — a "5 / 5 remaining" on the
+      // weapon itself would claim the weapon had five uses.
+      const sword = buildActionEconomy(ekArgs(3)).action.find((e) => e.name === 'Longsword');
+      expect(sword.resourceKey).toBeUndefined();
+    });
+
+    it('attaches to every melee attack, not just the first', () => {
+      const twoWeapons = ekArgs(3, {
+        attacks: [
+          { uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true },
+          { uid: 'w2', name: 'Handaxe', toHit: '+5', damage: '1d6 + 3 slashing', proficient: true },
+        ],
+      });
+      const eco = buildActionEconomy(twoWeapons);
+      for (const name of ['Longsword', 'Handaxe']) {
+        expect(eco.action.find((e) => e.name === name).attachedFeatures).toHaveLength(1);
+      }
+    });
+
+    it('is absent before L3', () => {
+      const eco = buildActionEconomy(ekArgs(2));
+      expect(eco.action.find((e) => e.name === 'Longsword').attachedFeatures).toBeUndefined();
+      expect(eco.no_action.find((e) => e.name === 'Unleash Incarnation')).toBeFalsy();
+    });
+
+    it('another Fighter subclass gets neither the attachment nor the entry', () => {
+      const eco = buildActionEconomy({ ...ekArgs(3), subclass: 'Champion' });
+      expect(eco.action.find((e) => e.name === 'Longsword').attachedFeatures).toBeUndefined();
+      expect(eco.no_action.find((e) => e.name === 'Unleash Incarnation')).toBeFalsy();
+    });
+
+    // The feature must never simply vanish — a bow-only Echo Knight still has it, they just
+    // have nothing to hang it on, so it falls back to a standalone entry (Arcane Shot's shape).
+    it('falls back to a standalone entry when there is no melee attack to attach to', () => {
+      const bowOnly = ekArgs(3, {
+        // The melee flag is derived from the INVENTORY entry's weapon_type, so the fixture
+        // needs a real ranged weapon behind the attack row — not just a flag on the row.
+        inventory: [{
+          uid: 'w1', name: 'Longbow', category: 'weapons', weapon_type: 'Ranged',
+          equipped: true, hand: 'both',
+        }],
+        attacks: [{ uid: 'w1', name: 'Longbow', toHit: '+5', damage: '1d8 + 3 piercing', proficient: true }],
+      });
+      const eco = buildActionEconomy(bowOnly);
+      const melee = eco.action.filter((e) => e.source === 'Weapon' && e.melee);
+      expect(melee).toHaveLength(0);
+      const standalone = eco.no_action.find((e) => e.name === 'Unleash Incarnation');
+      expect(standalone).toBeTruthy();
+      expect(standalone.resourceKey).toBe('unleash_incarnation_used');
+    });
   });
 
   it('Echo Avatar is an action from L7, and is not concentration', () => {

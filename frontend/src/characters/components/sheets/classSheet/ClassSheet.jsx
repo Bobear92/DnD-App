@@ -202,8 +202,12 @@ export default function ClassSheet({
     </Field>
   ) : null;
 
-  const restResourcesBlock = (!creation && config.restResources?.length > 0) ? (
-    <RestResourceTracker resources={config.restResources} level={level} data={data} scores={scores} onChange={onChange} readOnly={readOnly} isGm={isGm} />
+  // A resource flagged `hpAdjacent` is an HP mechanic (Reclaim Potential's temporary hit
+  // points), so CharacterDetail renders it beside Max/Current/Temp HP instead — see
+  // hpAdjacentClassResources there. Excluded here so it appears once, not in both places.
+  const featureRestResources = (config.restResources ?? []).filter((r) => !r.hpAdjacent);
+  const restResourcesBlock = (!creation && featureRestResources.length > 0) ? (
+    <RestResourceTracker resources={featureRestResources} level={level} data={data} scores={scores} onChange={onChange} readOnly={readOnly} isGm={isGm} />
   ) : null;
 
   const notesBlock = config.notes?.map((n) => (

@@ -148,6 +148,10 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
       },
       // Costs no action of its own — it rides on the Attack action you were taking anyway —
       // but it does spend a use, so the card carries the tracker (the Arcane Shot shape).
+      // Rides on the Attack action, so it attaches to the MELEE attack cards rather than
+      // standing alone (the Arcane Shot shape). In the No Action tab it was unfindable: you
+      // reach for it in the middle of attacking, which is the card you're already reading.
+      // Falls back to its own entry only when no melee attack exists to hang it on.
       'Unleash Incarnation': {
         tab: 'no_action', cost: 'no action', resourceKey: 'unleash_incarnation_used',
         description: "When you take the Attack action, make one additional melee attack from your echo's"
@@ -1153,6 +1157,28 @@ export function buildActionEconomy({
         resourceKey: def.resourceKey,
       });
       continue;
+    }
+    // Unleash Incarnation is an EXTRA attack taken as part of the Attack action, so it belongs
+    // on the melee attack cards themselves — you reach for it mid-attack, and the No Action tab
+    // made you go looking. Attached rather than duplicated as sub-attack rows: the extra attack
+    // uses the same weapon at the same numbers already printed on the card; only its ORIGIN
+    // (the echo's position) differs. An unarmed strike is a melee attack, so it qualifies too.
+    if (fname === 'Unleash Incarnation') {
+      const meleeRows = buckets.action.filter((e) => e.source === 'Weapon' && e.melee);
+      // No melee attack to attach to (bow-only) — fall through to the standalone entry below
+      // so the feature never vanishes, the same fallback Arcane Shot and Weapon Bond use.
+      if (meleeRows.length > 0) {
+        for (const row of meleeRows) {
+          row.attachedFeatures = [...(row.attachedFeatures || []), {
+            key: fname,
+            name: fname,
+            note: `Make one additional melee attack with ${row.name} from your echo's position`
+              + ' as part of this Attack action. Recharges on a long rest.',
+            resourceKey: def.resourceKey,
+          }];
+        }
+        continue;
+      }
     }
     // A `compute` entry derives its own detail/meta from the character, the same way a
     // RACIAL_ACTIONS entry does — Ferocious Charger's save DC scales with level and Strength,

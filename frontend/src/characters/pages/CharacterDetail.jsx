@@ -25,6 +25,7 @@ import { getRaceGrantedSkillsFromTraits } from '@/characters/components/race/rac
 import { getBackgroundSkills } from '@/characters/components/race/backgroundSkillsData';
 import { getFeatGrantedSkills } from '@/characters/components/feats/featProficiencyData';
 import RacialResourceTracker from '@/characters/components/race/RacialResourceTracker';
+import RestResourceTracker from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import RestUseControl from '@/characters/components/race/RestUseControl';
 import JumpCard from '@/characters/components/combat/JumpCard';
 import WalletCard from '@/characters/components/inventory/WalletCard';
@@ -132,6 +133,19 @@ const XP_THRESHOLDS = [0, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000,
   64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 
 function xpForLevel(level) { return XP_THRESHOLDS[Math.min(level, 20)] ?? 355000; }
+
+/**
+ * Does this XP total already entitle a character AT `level` to the next one?
+ *
+ * Asked in two places — when XP is awarded, and again the moment a level-up completes. A
+ * single award can cover several levels, so the second call is what lets the character keep
+ * climbing; without it the pending flag is simply cleared and they stall until another point
+ * of XP happens to make the award path recompute it.
+ */
+function qualifiesForLevelUp(level, xp) {
+  const next = (level ?? 1) + 1;
+  return next <= 20 && (xp ?? 0) >= xpForLevel(next);
+}
 
 // The top of the 5e XP table (level 20). XP stops meaning anything past it — there is no
 // level 21 to earn — so a GM's award is clamped here rather than letting the total run away.
@@ -387,8 +401,7 @@ export default function CharacterDetail() {
     if (isNaN(toAdd) || toAdd <= 0) return;
     // Clamp at the level-20 threshold: an over-award tops out rather than overflowing.
     const newXp = Math.min(MAX_XP, (character.experience_points ?? 0) + toAdd);
-    const nextLevel = (character.level ?? 1) + 1;
-    const pendingLevelUp = nextLevel <= 20 && newXp >= xpForLevel(nextLevel);
+    const pendingLevelUp = qualifiesForLevelUp(character.level, newXp);
     setAddingXp(true);
     const result = await characterService.updateCharacter(characterId, {
       experience_points: newXp,
@@ -410,12 +423,20 @@ export default function CharacterDetail() {
   };
 
   const handleLevelUpComplete = async (newLevel, newCharacterData, extraUpdates = {}) => {
+    // One XP award can cover several levels, so the pending flag is RE-DERIVED against the
+    // new level rather than just cleared — otherwise a character who banked enough XP for
+    // two levels stalls after the first and needs another point of XP to shake it loose.
+    // Milestone campaigns clear it: there, pending is GM-triggered and XP means nothing.
+    const xpAfter = extraUpdates.experience_points ?? character.experience_points ?? 0;
+    const stillPending = campaign?.leveling_type === 'experience'
+      && qualifiesForLevelUp(newLevel, xpAfter);
+
     // extraUpdates carries top-level character fields changed by level-up (e.g. ability
     // score increases from an ASI). character_data holds everything else.
     const result = await characterService.updateCharacter(characterId, {
       level: newLevel,
       character_data: newCharacterData,
-      level_up_pending: false,
+      level_up_pending: stillPending,
       ...extraUpdates,
     });
     if (result.success) {
@@ -604,6 +625,36 @@ export default function CharacterDetail() {
       readOnly={!showEditable}
       includeKeys={HP_ADJACENT_RACIAL_KEYS}
     />
+  ) : null;
+
+  // The same idea for CLASS/subclass resources: a config row flagged `hpAdjacent` is an HP
+  // mechanic (Echo Knight Reclaim Potential grants temporary hit points), so its tracker sits
+  // with the HP boxes rather than in the features area. ClassSheet excludes these rows so the
+  // control appears exactly once. Only data-driven sheets have a config to read, which is the
+  // same progressive gap as the racial node above — a hand-written sheet has no restResources.
+  const hpAdjacentClassResources = (
+    getClassConfig(character.char_class, edition)?.restResources ?? []
+  ).filter((r) => r.hpAdjacent);
+  const hpAdjacentClassNode = (classSection.draft !== null && hpAdjacentClassResources.length > 0) ? (
+    <RestResourceTracker
+      resources={hpAdjacentClassResources}
+      level={identity.draft?.level ?? character.level}
+      data={classSection.draft}
+      scores={identity.draft ?? {}}
+      onChange={autoSaveClassPatch}
+      readOnly={!showEditable}
+      isGm={isGm && !playerView}
+    />
+  ) : null;
+
+  // Class resources go FIRST. RacialResourceTracker renders its own "RACIAL FEATURES" heading
+  // and the class tracker has no heading of its own, so anything placed after it reads as a
+  // racial trait — Reclaim Potential is a subclass feature and sat under that label.
+  const afterHpNode = (hpAdjacentRacialNode || hpAdjacentClassNode) ? (
+    <div className="space-y-2">
+      {hpAdjacentClassNode}
+      {hpAdjacentRacialNode}
+    </div>
   ) : null;
 
   return (
@@ -1619,10 +1670,12 @@ export default function CharacterDetail() {
                         })}
                       />
                     }
-                    afterHpNode={hpAdjacentRacialNode}
+                    afterHpNode={afterHpNode}
                   />
                   {/* Hand-written sheets don't support the afterHpNode slot yet — show the
-                      HP-adjacent racial tracker right below their combat block instead. */}
+                      HP-adjacent racial tracker right below their combat block instead. (Only
+                      the racial one: a hand-written sheet has no class config, so it can have
+                      no hpAdjacent class resources either.) */}
                   {!getClassConfig(character.char_class, edition) && hpAdjacentRacialNode}
                   {/* Feat speed bonus (e.g. Mobile +10). Data-driven sheets (Fighter/Wizard) fold it
                       into CombatBlock's Total Speed, so only the hand-written sheets — which can't yet —

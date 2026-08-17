@@ -117,6 +117,12 @@ export default function HitDicePage() {
               with the Durable feat it notes the guaranteed minimum before you roll. Expended dice come back through
               the rest controls on the character list when you take a long rest.
             </p>
+            <p>
+              If your table rolls physical dice, choose{' '}
+              <span className="font-medium text-foreground">Roll at the Table</span> in that dialog and type what you
+              rolled — one box per die. The Constitution modifier, the Durable minimum and the maximum-HP cap are
+              applied exactly the same way; only the dice come from you instead of the app.
+            </p>
           </Section>
 
           <Section title="Worked example">

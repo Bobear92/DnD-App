@@ -77,9 +77,12 @@ const REST_RESOURCES = [
     recharge: 'short', minLevel: 10, subclass: 'Echo Knight',
     description: 'Reaction: teleport your echo next to a creature about to be attacked and make the attack target the echo instead.',
   },
+  // `hpAdjacent` moves the tracker out of the features area and up beside Max/Current/Temp
+  // HP: what this feature DOES is grant temporary hit points, so it belongs where the player
+  // is already looking when they gain them — next to the box they type the number into.
   {
     key: 'reclaim_potential_used', label: 'Reclaim Potential (Long Rest)', total: abilityModUses('constitution'),
-    recharge: 'long', minLevel: 15, subclass: 'Echo Knight',
+    recharge: 'long', minLevel: 15, subclass: 'Echo Knight', hpAdjacent: true,
     description: 'When an echo of yours is destroyed by damage, gain 2d6 + your Constitution modifier temporary hit points — provided you have none already.',
   },
   {

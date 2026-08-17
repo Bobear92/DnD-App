@@ -38,9 +38,25 @@ describe('FeatureNote', () => {
     expect(screen.getByTestId('wm').className).toContain('text-foreground');
   });
 
-  it('renders no text block when there is nothing to expand', () => {
+  // A chevron that opens nothing tells the reader there is more to read and then refuses to
+  // show it — the QA report that motivated this. With no text the name is a plain label.
+  it('renders a plain label — no disclosure control — when there is nothing to expand', () => {
+    render(<FeatureNote name="Bare" testId="b" />);
+    const el = screen.getByTestId('b');
+    expect(el).toHaveTextContent('Bare');
+    expect(el.tagName).not.toBe('BUTTON');
+    expect(el).not.toHaveAttribute('aria-expanded');
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('still shows nothing to expand after a click on the bare label', () => {
     render(<FeatureNote name="Bare" testId="b" />);
     fireEvent.click(screen.getByTestId('b'));
     expect(screen.queryByTestId('b-text')).toBeNull();
+  });
+
+  it('keeps the tone colour on the bare label', () => {
+    render(<FeatureNote name="Bare" testId="b" tone="amber" />);
+    expect(screen.getByTestId('b').className).toContain('text-amber-600');
   });
 });

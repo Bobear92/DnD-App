@@ -168,3 +168,109 @@ describe('HitDiceTracker — heal mode (onHeal provided)', () => {
     });
   });
 });
+
+describe('HitDiceTracker — Roll at the Table (manual entry)', () => {
+  const baseProps = {
+    hitDie: 10,
+    level: 5,
+    used: 0,
+    conMod: 2,
+    currentHp: 45,
+    maxHp: 60,
+  };
+
+  const openManual = (props = {}) => {
+    render(<HitDiceTracker {...baseProps} {...props} />);
+    fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
+    fireEvent.click(screen.getByTestId('hit-dice-mode-manual'));
+  };
+
+  it('defaults to rolling in the app — no inputs until the method is chosen', () => {
+    render(<HitDiceTracker {...baseProps} onHeal={() => {}} />);
+    fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
+    expect(screen.getByTestId('hit-dice-mode-auto')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByTestId('hit-dice-manual-entry')).not.toBeInTheDocument();
+  });
+
+  it('shows one input per die and resizes with the die count', () => {
+    openManual({ onHeal: () => {} });
+    expect(screen.getByTestId('hit-dice-manual-input-0')).toBeInTheDocument();
+    expect(screen.queryByTestId('hit-dice-manual-input-1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('More Hit Dice'));
+    expect(screen.getByTestId('hit-dice-manual-input-1')).toBeInTheDocument();
+  });
+
+  it('uses the typed die instead of rolling, and never calls Math.random', () => {
+    const random = vi.spyOn(Math, 'random');
+    const onHeal = vi.fn();
+    openManual({ onHeal });
+    fireEvent.change(screen.getByTestId('hit-dice-manual-input-0'), { target: { value: '7' } });
+    fireEvent.click(screen.getByTestId('hit-dice-roll-btn'));
+    // 7 + 2 CON = 9; 45 → 54
+    expect(onHeal).toHaveBeenCalledWith({ hit_dice_used: 1, current_hp: 54 });
+    expect(random).not.toHaveBeenCalled();
+    expect(screen.getByText('+9 HP regained')).toBeInTheDocument();
+  });
+
+  it('sums several typed dice', () => {
+    const onHeal = vi.fn();
+    openManual({ onHeal });
+    fireEvent.click(screen.getByLabelText('More Hit Dice'));
+    fireEvent.change(screen.getByTestId('hit-dice-manual-input-0'), { target: { value: '3' } });
+    fireEvent.change(screen.getByTestId('hit-dice-manual-input-1'), { target: { value: '8' } });
+    fireEvent.click(screen.getByTestId('hit-dice-roll-btn'));
+    // (3+2) + (8+2) = 15; 45 → 60 (capped at max)
+    expect(onHeal).toHaveBeenCalledWith({ hit_dice_used: 2, current_hp: 60 });
+  });
+
+  it('blocks submission until every die has a valid value', () => {
+    openManual({ onHeal: () => {} });
+    fireEvent.click(screen.getByLabelText('More Hit Dice'));
+    expect(screen.getByTestId('hit-dice-roll-btn')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('hit-dice-manual-input-0'), { target: { value: '5' } });
+    expect(screen.getByTestId('hit-dice-roll-btn')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('hit-dice-manual-input-1'), { target: { value: '5' } });
+    expect(screen.getByTestId('hit-dice-roll-btn')).not.toBeDisabled();
+  });
+
+  it('rejects a value outside 1–hitDie with an error', () => {
+    openManual({ onHeal: () => {} });
+    fireEvent.change(screen.getByTestId('hit-dice-manual-input-0'), { target: { value: '11' } });
+    expect(screen.getByTestId('hit-dice-manual-error')).toBeInTheDocument();
+    expect(screen.getByTestId('hit-dice-roll-btn')).toBeDisabled();
+  });
+
+  it('still applies the Durable floor to a low typed die', () => {
+    const onHeal = vi.fn();
+    openManual({ onHeal, durable: true });
+    fireEvent.change(screen.getByTestId('hit-dice-manual-input-0'), { target: { value: '1' } });
+    fireEvent.click(screen.getByTestId('hit-dice-roll-btn'));
+    // 1 + 2 = 3, raised to the Durable minimum of 4; 45 → 49
+    expect(onHeal).toHaveBeenCalledWith({ hit_dice_used: 1, current_hp: 49 });
+    expect(screen.getByTestId('hit-dice-durable-applied')).toBeInTheDocument();
+  });
+
+  it('says the dice were Entered, not Rolled', () => {
+    openManual({ onHeal: () => {} });
+    fireEvent.change(screen.getByTestId('hit-dice-manual-input-0'), { target: { value: '6' } });
+    fireEvent.click(screen.getByTestId('hit-dice-roll-btn'));
+    expect(screen.getByTestId('hit-dice-result')).toHaveTextContent(/Entered/);
+    expect(screen.getByTestId('hit-dice-result')).not.toHaveTextContent(/Rolled/);
+  });
+
+  it('labels the button Apply rather than Roll', () => {
+    openManual({ onHeal: () => {} });
+    expect(screen.getByTestId('hit-dice-roll-btn')).toHaveTextContent('Apply 1 Hit Die');
+  });
+
+  it('resets to the rolling method when the dialog is reopened', () => {
+    render(<HitDiceTracker {...baseProps} onHeal={() => {}} />);
+    fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
+    fireEvent.click(screen.getByTestId('hit-dice-mode-manual'));
+    fireEvent.change(screen.getByTestId('hit-dice-manual-input-0'), { target: { value: '4' } });
+    fireEvent.click(screen.getByText('Cancel'));
+    fireEvent.click(screen.getByTestId('hit-dice-use-btn'));
+    expect(screen.getByTestId('hit-dice-mode-auto')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByTestId('hit-dice-manual-entry')).not.toBeInTheDocument();
+  });
+});
