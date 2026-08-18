@@ -75,6 +75,30 @@ describe('useRestResource', () => {
     expect(rows[0].description).toBe('Does the thing.');
   });
 
+  // A pool's NAME is not always constant either: the Psi Warrior's Psionic Energy die grows
+  // d6 → d12 with level, and the die size is the thing the row is read for.
+  describe('a label that varies with level', () => {
+    const resource = {
+      key: 'psi', total: () => 4, recharge: 'long',
+      label: (level) => `Psionic Energy — d${level >= 5 ? 8 : 6}`,
+    };
+
+    it('resolves a function label against the level', () => {
+      expect(useRestResource({ resources: [resource], level: 3, data: {} })[0].label)
+        .toBe('Psionic Energy — d6');
+      expect(useRestResource({ resources: [resource], level: 5, data: {} })[0].label)
+        .toBe('Psionic Energy — d8');
+    });
+
+    it('leaves a plain string label untouched', () => {
+      const rows = useRestResource({
+        resources: [{ key: 'x', label: 'Second Wind', total: () => 1, recharge: 'short' }],
+        level: 5, data: {},
+      });
+      expect(rows[0].label).toBe('Second Wind');
+    });
+  });
+
   // Not every pool is sized by level: the Cavalier's two pools hold ability-modifier uses,
   // so `total` receives a context alongside the level.
   describe('ability-derived totals', () => {

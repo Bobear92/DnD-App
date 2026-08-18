@@ -7,8 +7,8 @@
  * editable value.
  *
  * Config entry shape:
- *   { key, label, total: (level, ctx)=>number, recharge: 'short'|'long', minLevel?: number,
- *     subclass?: string, description?: string }
+ *   { key, label: string|((level, ctx)=>string), total: (level, ctx)=>number,
+ *     recharge: 'short'|'long', minLevel?: number, subclass?: string, description?: string }
  *   — description is a short "what it does" line shown under the label; `subclass` limits the
  *     resource to characters of that subclass (Arcane Archer's Arcane Shot uses), so a
  *     subclass pool costs a data entry rather than a bespoke panel.
@@ -30,10 +30,14 @@ export function useRestResource({ resources = [], level = 1, data = {}, scores =
     .filter((r) => !r.subclass || r.subclass === data.subclass)
     .map((r) => {
       const total = typeof r.total === 'function' ? r.total(level, { scores, data }) : r.total;
+      // `label` takes the same treatment as `total` for the same reason: a pool's NAME is not
+      // always constant either. The Psi Warrior's Psionic Energy die grows d6 → d12 with level,
+      // and the die size is the thing a player reads off the row.
+      const label = typeof r.label === 'function' ? r.label(level, { scores, data }) : r.label;
       const used = data[r.key] ?? 0;
       return {
         key: r.key,
-        label: r.label,
+        label,
         description: r.description,
         recharge: r.recharge,
         total,

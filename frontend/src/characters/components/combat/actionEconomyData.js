@@ -32,6 +32,7 @@ import {
   isArcaneShotBow, getArcaneShotOptions, arcaneShotSaveDc, arcaneShotSaveDcBreakdown,
   arcaneShotImproved,
 } from '@/characters/components/classData/arcaneShotData';
+import { psionicDieAndInt, psiSaveDc, bulwarkTargets } from '@/characters/components/classData/psiWarriorData';
 import { getBreathWeapon } from '@/characters/components/race/breathWeaponData';
 import { echoArmorClass } from '@/characters/components/companions/companionData';
 import { buildBreakdown } from '@/characters/components/skills/skillMath';
@@ -121,6 +122,111 @@ export const CLASS_FEATURE_ACTIONS_2024 = {
 // class feature tables, whose subclass levels are generic placeholders ("Martial
 // Archetype Feature") that can never match a real feature name. Adding a subclass
 // feature here is pure data entry.
+//
+// A feature name may map to a SINGLE entry or to an ARRAY of them: some features bundle
+// several powers at different costs under one name (the Psi Warrior's Psionic Power is a
+// reaction, an action and an attack rider all at once), and one card would have to pick a
+// single cost badge and misstate the rest. Array members carry their own `name`; a single
+// entry takes the feature's name, or its `displayName` when the trigger a player scans for
+// differs from the feature name (Cavalier's Unwavering Mark → "Marked Target").
+
+/**
+ * Psi Warrior (Fighter, TCoE / PHB-2024) — identical in both editions, so it is authored once
+ * and registered in both maps below.
+ *
+ * Psionic Energy is the app's first ONE POOL, MANY CONSUMERS resource: five of these six entries
+ * spend the same `psionic_energy_used` dice, so they all carry that one `resourceKey` and the
+ * class config holds a single pool row. Three of them (Telekinetic Movement, Psi-Powered Leap,
+ * Bulwark of Force) are FREE once per rest and cost a die only after that, which is why each has
+ * its own small charge key as well — two costs, two counters, both visible.
+ *
+ * Every number is read out of psiWarriorData rather than written into a string: the die size
+ * scales d6 → d12 with level, and the stored feature blurbs say a flat "d6".
+ */
+const PSI_WARRIOR_ACTIONS = {
+  // Psionic Power is ONE feature name carrying THREE powers at three different costs, which is
+  // why a feature may map to an ARRAY here. Folding them into one card would have to pick a
+  // single cost badge and lie about the other two.
+  'Psionic Power': [
+    // Psionic Strike rides on a weapon attack you were making anyway, so it attaches to the
+    // attack cards (`attachedAs`, see ATTACHED_FEATURES). This entry is the FALLBACK shown only
+    // when there is no weapon attack to hang it on — the Arcane Shot / Weapon Bond shape.
+    {
+      name: 'Psionic Strike', attachedAs: 'Psionic Strike',
+      tab: 'no_action', cost: 'no action', resourceKey: 'psionic_energy_used',
+      description: 'Once per turn when you hit a creature within 30 feet with a weapon attack,'
+        + ' spend a Psionic Energy die to deal extra force damage.',
+      compute: ({ level, scores }) => ({
+        detail: 'Once per turn when you hit a creature within 30 feet with a weapon attack, spend'
+          + ` a Psionic Energy die to deal an extra ${psionicDieAndInt(level, scores?.intelligence ?? 10)}`
+          + ' force damage. Equip a weapon to apply it to an attack.',
+      }),
+    },
+    {
+      name: 'Protective Field',
+      tab: 'reaction', cost: 'reaction', resourceKey: 'psionic_energy_used',
+      description: 'When you or a creature you can see within 30 feet takes damage, spend a'
+        + ' Psionic Energy die to reduce that damage.',
+      compute: ({ level, scores }) => ({
+        detail: 'When you or a creature you can see within 30 feet takes damage, spend a Psionic'
+          + ` Energy die to reduce that damage by ${psionicDieAndInt(level, scores?.intelligence ?? 10)},`
+          + ' to a minimum reduction of 1.',
+      }),
+    },
+    // An ACTION, not the bonus action the stored blurb claims (a Magic action in 2024).
+    {
+      name: 'Telekinetic Movement',
+      tab: 'action', cost: 'action', resourceKey: 'telekinetic_movement_used',
+      description: 'Move one Large or smaller object, or one willing creature, up to 30 feet to a'
+        + ' space you can see within 30 feet. Free once per short or long rest; after that, spend'
+        + ' a Psionic Energy die instead.',
+    },
+  ],
+  // Two powers again: one costs a bonus action of its own, the other rides on Psionic Strike.
+  'Telekinetic Adept': [
+    {
+      name: 'Psi-Powered Leap',
+      tab: 'bonus', cost: 'bonus action', resourceKey: 'psi_powered_leap_used',
+      description: 'Gain a flying speed equal to twice your walking speed until the end of the'
+        + ' turn. Free once per long rest; after that, spend a Psionic Energy die instead.',
+    },
+    {
+      name: 'Telekinetic Thrust', attachedAs: 'Telekinetic Thrust',
+      tab: 'no_action', cost: 'no action',
+      description: 'When your Psionic Strike hits, you can force the target to make a Strength'
+        + ' saving throw or be knocked prone or pushed up to 10 feet away.',
+    },
+  ],
+  // Guarded Mind's psychic resistance is a passive and belongs to the Defenses card, not here.
+  // Only its second half — spending a die to shrug off a condition — costs anything, and it
+  // fires at the start of your turn rather than on an action you choose.
+  'Guarded Mind': {
+    tab: 'no_action', cost: 'no action', resourceKey: 'psionic_energy_used',
+    displayName: 'Guarded Mind (end a condition)',
+    description: 'If you start your turn charmed or frightened, spend a Psionic Energy die to end'
+      + ' that condition on yourself.',
+  },
+  'Bulwark of Force': {
+    tab: 'bonus', cost: 'bonus action', resourceKey: 'bulwark_of_force_used',
+    description: 'Give yourself and other creatures within 30 feet half cover for 1 minute. Free'
+      + ' once per long rest; after that, spend a Psionic Energy die instead.',
+    compute: ({ scores }) => ({
+      detail: `Choose up to ${bulwarkTargets(scores?.intelligence ?? 10)} creatures within 30 feet`
+        + ' (you may include yourself). Each gains half cover for 1 minute. Free once per long'
+        + ' rest; after that, spend a Psionic Energy die instead.',
+    }),
+  },
+  // The at-will *telekinesis* half of this feature has no home yet: nothing in the app models a
+  // leveled spell granted at will to a non-caster (the Spells tab's subclass source handles
+  // cantrips only). It is stated here as prose so the player at least reads it on the card that
+  // carries the half we CAN mechanize — the bonus-action attack it enables.
+  'Telekinetic Master': {
+    tab: 'bonus', cost: 'bonus action',
+    description: 'You can cast telekinesis at will, without a spell slot or components, using'
+      + ' Intelligence as your spellcasting ability. While you are concentrating on it, you can'
+      + ' make one weapon attack as a bonus action on each of your turns.',
+  },
+};
 
 export const SUBCLASS_FEATURE_ACTIONS_5E = {
   Fighter: {
@@ -153,6 +259,7 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
       // reach for it in the middle of attacking, which is the card you're already reading.
       // Falls back to its own entry only when no melee attack exists to hang it on.
       'Unleash Incarnation': {
+        attachedAs: 'Unleash Incarnation',
         tab: 'no_action', cost: 'no action', resourceKey: 'unleash_incarnation_used',
         description: "When you take the Attack action, make one additional melee attack from your echo's"
           + ' position. Recharges on a long rest.',
@@ -229,6 +336,7 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
         }),
       },
     },
+    'Psi Warrior': PSI_WARRIOR_ACTIONS,
   },
 };
 
@@ -237,6 +345,11 @@ export const SUBCLASS_FEATURE_ACTIONS_2024 = {
     'Eldritch Knight': {
       'Weapon Bond': { tab: 'bonus', cost: 'bonus action', description: "Summon a bonded weapon to your hand (bonus action). You can't be disarmed of a bonded weapon while it's on the same plane. Bonding takes a 1-hour ritual; you can bond up to two weapons." },
     },
+    // The 2024 Psi Warrior renames nothing and moves no level — the mechanical clauses are the
+    // same in both editions — so the entries are authored once and registered in both maps
+    // rather than copied. Copying is how the Champion's edition-specific Remarkable Athlete
+    // would go wrong; here there is genuinely nothing to diverge.
+    'Psi Warrior': PSI_WARRIOR_ACTIONS,
   },
 };
 
@@ -279,6 +392,62 @@ export const ATTACK_RIDERS = [
       + ' that is smaller than your mount. You can also force an attack that targets your mount'
       + ' to target you instead, and when your mount makes a Dexterity saving throw for half'
       + ' damage it instead takes no damage on a success and half on a failure.',
+  },
+];
+
+/**
+ * LIMITED-USE features that ride on a weapon attack — the `attachedFeatures` slot. Each renders
+ * as a block INSIDE that attack's card with its own Use control, so a feature you reach for in
+ * the middle of the Attack action is read off the card you are already looking at.
+ *
+ * Distinct from ATTACK_RIDERS above: a rider is always-on prose with no cost, while these SPEND
+ * a resource and therefore need a tracker. (Arcane Shot is a third shape again — an options menu
+ * plus a save DC — and keeps its own richer block; fold it in here if a second rich one appears.)
+ *
+ * Kept as a TABLE from the second entry, the same trigger that produced ATTACK_RIDERS and
+ * ENTRY_RIDERS: Unleash Incarnation was a hand-written attach block, and Psionic Strike would
+ * have been a near-identical copy of it.
+ *
+ * `feature` is the SUBCLASS_DATA feature name that carries it, so the entry is level-gated by
+ * the same `subclassFeaturesKnownAtLevel` walk as every other subclass feature — a display name
+ * that differs from the feature name (Psionic Power → Psionic Strike) lives in `name`.
+ * `scope` picks which attack cards get it: 'melee' (an unarmed strike counts), 'ranged', 'all'.
+ * `applies(ctx)` is the gate. `note(row, ctx)` builds the block's text from the attack it landed
+ * on, so it can name the weapon. `resourceKey` links it to the tracker it spends.
+ *
+ * When NO attack matches the scope, the feature falls through to its standalone entry rather
+ * than vanishing — a bow-only Echo Knight must still see Unleash Incarnation somewhere.
+ */
+export const ATTACHED_FEATURES = [
+  {
+    name: 'Unleash Incarnation',
+    scope: 'melee',
+    resourceKey: 'unleash_incarnation_used',
+    // Attached rather than duplicated as sub-attack rows: the extra attack uses the same weapon
+    // at the same numbers already printed on the card; only its ORIGIN (the echo's position)
+    // differs.
+    note: (row) => `Make one additional melee attack with ${row.name} from your echo's position`
+      + ' as part of this Attack action. Recharges on a long rest.',
+  },
+  {
+    // RAW keys on "a weapon attack", not a melee one, so a Psi Warrior's bow gets it too — hence
+    // scope 'all'. The 30-foot limit is stated in the note instead, since range is the player's
+    // call and not something the card can check.
+    name: 'Psionic Strike',
+    scope: 'all',
+    resourceKey: 'psionic_energy_used',
+    note: (row, { level, scores }) => 'Once per turn when you hit a creature within 30 feet with'
+      + ` ${row.name}, spend a Psionic Energy die to deal an extra`
+      + ` ${psionicDieAndInt(level, scores?.intelligence ?? 10)} force damage.`,
+  },
+  {
+    // Fires on a Psionic Strike hit, so it belongs on the same cards rather than on a card of
+    // its own — and it costs nothing extra, which is why it carries no resourceKey.
+    name: 'Telekinetic Thrust',
+    scope: 'all',
+    note: (_row, { level, scores }) => 'When your Psionic Strike hits, you can force the target to'
+      + ` make a Strength saving throw (DC ${psiSaveDc(level, scores?.intelligence ?? 10)}).`
+      + ' On a failure it is knocked prone or pushed up to 10 feet away, your choice.',
   },
 ];
 
@@ -1064,8 +1233,13 @@ export function buildActionEconomy({
   const subclassFeatures = subclassFeatureMap[charClass]?.[subclass] || {};
   const attackByWeaponUid = new Map(weaponRows.filter((a) => a.uid).map((a) => [a.uid, a]));
   for (const fname of subclassFeaturesKnownAtLevel(charClass, edition, subclass, level)) {
-    const def = subclassFeatures[fname];
-    if (!def) continue;
+    const raw = subclassFeatures[fname];
+    if (!raw) continue;
+    // A feature name may map to one entry or to several (see the map header). The hand-shaped
+    // cases below — Weapon Bond, Arcane Shot, Unwavering Mark — are all single entries, so they
+    // read `def`; the general path at the bottom walks `defs`.
+    const defs = Array.isArray(raw) ? raw : [raw];
+    const def = defs[0];
     // Weapon Bond with weapons actually bonded (Items tab → Bonded Weapons): replace the
     // generic entry with one per bonded weapon — "Bonded Rapier" — carrying the weapon's
     // damage info, plus its real attack row when it's equipped.
@@ -1158,46 +1332,51 @@ export function buildActionEconomy({
       });
       continue;
     }
-    // Unleash Incarnation is an EXTRA attack taken as part of the Attack action, so it belongs
-    // on the melee attack cards themselves — you reach for it mid-attack, and the No Action tab
-    // made you go looking. Attached rather than duplicated as sub-attack rows: the extra attack
-    // uses the same weapon at the same numbers already printed on the card; only its ORIGIN
-    // (the echo's position) differs. An unarmed strike is a melee attack, so it qualifies too.
-    if (fname === 'Unleash Incarnation') {
-      const meleeRows = buckets.action.filter((e) => e.source === 'Weapon' && e.melee);
-      // No melee attack to attach to (bow-only) — fall through to the standalone entry below
-      // so the feature never vanishes, the same fallback Arcane Shot and Weapon Bond use.
-      if (meleeRows.length > 0) {
-        for (const row of meleeRows) {
-          row.attachedFeatures = [...(row.attachedFeatures || []), {
-            key: fname,
-            name: fname,
-            note: `Make one additional melee attack with ${row.name} from your echo's position`
-              + ' as part of this Attack action. Recharges on a long rest.',
-            resourceKey: def.resourceKey,
-          }];
+    // A feature may bundle several powers at different costs (Psi Warrior's Psionic Power), so
+    // the general path walks a list. Single-entry features are the one-element case.
+    for (const d of defs) {
+      const dname = d.name || d.displayName || fname;
+      // A power that RIDES on a weapon attack belongs on the attack cards themselves — you reach
+      // for it mid-attack, and a separate tab entry makes you go looking. See ATTACHED_FEATURES.
+      // When no attack matches its scope (a bow-only Echo Knight), it falls through to the
+      // standalone entry below so the feature never vanishes — the fallback Arcane Shot and
+      // Weapon Bond use.
+      if (d.attachedAs) {
+        const a = ATTACHED_FEATURES.find((x) => x.name === d.attachedAs);
+        const rows = a
+          ? buckets.action.filter((e) => e.source === 'Weapon' && matchesRiderScope(e, a.scope))
+          : [];
+        if (rows.length > 0) {
+          for (const row of rows) {
+            row.attachedFeatures = [...(row.attachedFeatures || []), {
+              key: a.name,
+              name: a.name,
+              note: a.note(row, { level, scores, characterData }),
+              resourceKey: a.resourceKey ?? null,
+            }];
+          }
+          continue;
         }
-        continue;
       }
+      // A `compute` entry derives its own detail/meta from the character, the same way a
+      // RACIAL_ACTIONS entry does — Ferocious Charger's save DC scales with level and Strength,
+      // so a fixed string would show the wrong number to everyone but one character.
+      const computed = d.compute ? d.compute({ characterData, level, scores }) : null;
+      push(d.tab, {
+        key: `subclass:${dname}`,
+        name: dname,
+        source: 'Subclass',
+        cost: d.cost,
+        detail: computed?.detail ?? d.description,
+        // A computed save DC the feature imposes — `{label, breakdown}`, rendered as a clickable
+        // number rather than arithmetic inside `detail`.
+        saveDc: computed?.saveDc ?? null,
+        // True for a reaction that does NOT spend your one normal reaction (Vigilant Defender).
+        // The tab gives these their own section so they read as an additional economy.
+        extraReaction: !!d.extraReaction,
+        resourceKey: d.resourceKey,
+      });
     }
-    // A `compute` entry derives its own detail/meta from the character, the same way a
-    // RACIAL_ACTIONS entry does — Ferocious Charger's save DC scales with level and Strength,
-    // so a fixed string would show the wrong number to everyone but one character.
-    const computed = def.compute ? def.compute({ characterData, level, scores }) : null;
-    push(def.tab, {
-      key: `subclass:${fname}`,
-      name: def.displayName || fname,
-      source: 'Subclass',
-      cost: def.cost,
-      detail: computed?.detail ?? def.description,
-      // A computed save DC the feature imposes — `{label, breakdown}`, rendered as a clickable
-      // number rather than arithmetic inside `detail`.
-      saveDc: computed?.saveDc ?? null,
-      // True for a reaction that does NOT spend your one normal reaction (Vigilant Defender).
-      // The tab gives these their own section so they read as an additional economy.
-      extraReaction: !!def.extraReaction,
-      resourceKey: def.resourceKey,
-    });
   }
 
   // Riders that hang off WEAPON ATTACK cards (see ATTACK_RIDERS). Runs after the weapon push,

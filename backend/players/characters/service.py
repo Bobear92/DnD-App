@@ -829,6 +829,15 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             if cd.get('subclass') == 'Echo Knight' and level >= 10:
                 patch['shadow_martyr_used'] = 0
                 changes.append('Shadow Martyr recovered')
+            if cd.get('subclass') == 'Psi Warrior':
+                # The Psionic Energy POOL itself is long-rest only. What comes back on a short
+                # rest are the two once-per-rest charges: the bonus action that regains one die,
+                # and the free use of Telekinetic Movement. Both are flat single uses, so the
+                # reset just zeroes the spent count. (The free uses of Psi-Powered Leap and
+                # Bulwark of Force are long-rest — see the long branch below.)
+                patch['psionic_energy_regain_used'] = 0
+                patch['telekinetic_movement_used'] = 0
+                changes.append('Psionic Energy die regain & Telekinetic Movement recovered')
         if cls == 'Bard' and (edition == '5.5e' or level >= 5):
             patch['bardic_inspiration_used'] = 0
             changes.append('Bardic Inspiration recovered')
@@ -912,6 +921,21 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
                 if level >= 15:
                     patch['reclaim_potential_used'] = 0
                     changes.append('Reclaim Potential recovered')
+            if cd.get('subclass') == 'Psi Warrior':
+                # The whole Psionic Energy pool returns, plus the two short-rest charges (a long
+                # rest is also a short one) and the long-rest free uses. The pool SIZE stays a
+                # frontend concern (config restResources, 2 x proficiency bonus) — this only
+                # zeroes the spent count, as with the Cavalier and Echo Knight pools.
+                patch['psionic_energy_used'] = 0
+                patch['psionic_energy_regain_used'] = 0
+                patch['telekinetic_movement_used'] = 0
+                changes.append('Psionic Energy dice recovered')
+                if level >= 7:
+                    patch['psi_powered_leap_used'] = 0
+                    changes.append('Psi-Powered Leap recovered')
+                if level >= 15:
+                    patch['bulwark_of_force_used'] = 0
+                    changes.append('Bulwark of Force recovered')
             if cd.get('subclass') == 'Eldritch Knight':
                 # Subclass caster: Fighter isn't in _SPELLCASTING_CLASSES, so reset the
                 # EK's spell slots here (same shape as the class-caster reset above).

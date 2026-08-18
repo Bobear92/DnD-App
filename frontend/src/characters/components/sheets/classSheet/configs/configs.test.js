@@ -82,4 +82,64 @@ describe('class configs — validity', () => {
       expect(pool('reclaim_potential_used').recharge).toBe('long');
     });
   });
+
+  describe('Psi Warrior pools', () => {
+    const pool = (key) => FIGHTER_5E.restResources.find((r) => r.key === key);
+    const KEYS = [
+      'psionic_energy_used', 'psionic_energy_regain_used', 'telekinetic_movement_used',
+      'psi_powered_leap_used', 'bulwark_of_force_used',
+    ];
+
+    it('are gated to the Psi Warrior subclass, so no other Fighter sees them', () => {
+      for (const key of KEYS) expect(pool(key).subclass).toBe('Psi Warrior');
+    });
+
+    it('unlock at the level the feature does', () => {
+      expect(pool('psionic_energy_used').minLevel).toBe(3);
+      expect(pool('psionic_energy_regain_used').minLevel).toBe(3);
+      expect(pool('telekinetic_movement_used').minLevel).toBe(3);
+      expect(pool('psi_powered_leap_used').minLevel).toBe(7);
+      expect(pool('bulwark_of_force_used').minLevel).toBe(15);
+    });
+
+    // One pool, many consumers: the dice are spent by Psionic Strike, Protective Field and
+    // Guarded Mind alike, so there is a SINGLE row rather than one per feature.
+    it('sizes the Psionic Energy pool at twice the proficiency bonus', () => {
+      const uses = (level) => pool('psionic_energy_used').total(level, { scores: {} });
+      expect(uses(3)).toBe(4);
+      expect(uses(9)).toBe(8);
+      expect(uses(17)).toBe(12);
+    });
+
+    // The stored feature blurb says a flat "d6s" in both editions; the label is a function of
+    // level precisely so the row shows the die the character actually rolls.
+    it('names the die in a label that scales with level', () => {
+      const label = (level) => pool('psionic_energy_used').label(level, { scores: {} });
+      expect(label(3)).toMatch(/d6/);
+      expect(label(5)).toMatch(/d8/);
+      expect(label(17)).toMatch(/d12/);
+    });
+
+    it('splits the charges across both rest types the way RAW does', () => {
+      // The pool is long-rest only; the bonus-action regain and the free Telekinetic Movement
+      // come back on a short rest, which is the distinction the whole split exists for.
+      expect(pool('psionic_energy_used').recharge).toBe('long');
+      expect(pool('psionic_energy_regain_used').recharge).toBe('short');
+      expect(pool('telekinetic_movement_used').recharge).toBe('short');
+      expect(pool('psi_powered_leap_used').recharge).toBe('long');
+      expect(pool('bulwark_of_force_used').recharge).toBe('long');
+    });
+
+    it('gives every once-per-rest charge exactly one use', () => {
+      for (const key of KEYS.slice(1)) {
+        expect(pool(key).total(20, { scores: {} })).toBe(1);
+      }
+    });
+
+    // A player can never restore a resource in this app, so the regain row must say who can
+    // rather than implying the button hands a die back.
+    it('tells the player the GM restores the regained die', () => {
+      expect(pool('psionic_energy_regain_used').description).toMatch(/GM/);
+    });
+  });
 });

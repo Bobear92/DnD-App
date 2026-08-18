@@ -59,6 +59,11 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
       if (characterData?.subclass === 'Battle Master') items.push('Superiority Dice');
       if (characterData?.subclass === 'Arcane Archer') items.push('Arcane Shot');
       if (characterData?.subclass === 'Echo Knight' && level >= 10) items.push('Shadow Martyr');
+      // The Psionic Energy POOL is long-rest only; a short rest returns just the two
+      // once-per-rest charges that spend alongside it.
+      if (characterData?.subclass === 'Psi Warrior') {
+        items.push('Psionic Energy die regain & Telekinetic Movement');
+      }
     }
     if (cls === 'Bard' && (is2024 || level >= 5)) items.push('Bardic Inspiration');
     if ((cls === 'Cleric' || cls === 'Paladin') && is2024) items.push('Channel Divinity');
@@ -90,6 +95,11 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
       items.push('Unleash Incarnation');
       if (level >= 10) items.push('Shadow Martyr');
       if (level >= 15) items.push('Reclaim Potential');
+    }
+    if (characterData?.subclass === 'Psi Warrior') {
+      items.push('Psionic Energy dice');
+      if (level >= 7) items.push('Psi-Powered Leap');
+      if (level >= 15) items.push('Bulwark of Force');
     }
   }
   else if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');

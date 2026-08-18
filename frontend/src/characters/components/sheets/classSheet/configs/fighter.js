@@ -10,6 +10,7 @@ import {
   FIGHTER_SUBCLASSES_5E, FIGHTER_SUBCLASSES_2024,
 } from '@/characters/components/classData/classChoicesData';
 import { ARCANE_SHOT_USES } from '@/characters/components/classData/arcaneShotData';
+import { psionicDie, psionicDiceTotal } from '@/characters/components/classData/psiWarriorData';
 import BattleMasterPanel from '@/characters/components/subclass/BattleMasterPanel';
 import WeaponBondPanel from '@/characters/components/subclass/WeaponBondPanel';
 
@@ -88,6 +89,45 @@ const REST_RESOURCES = [
   {
     key: 'indomitable_used', label: 'Indomitable (Long Rest)', total: indomitableTotal, recharge: 'long', minLevel: 9,
     description: 'Reroll a failed saving throw — you must use the new roll.',
+  },
+  // Subclass-gated: only a Psi Warrior sees these five. Psionic Energy is the app's first
+  // ONE POOL, MANY CONSUMERS resource — six separate features spend the same dice — so it is a
+  // single row here and every Action Economy card that spends it carries the same `resourceKey`
+  // rather than each feature getting a pool of its own. The die SIZE scales with level, so it is
+  // read out of psiWarriorData instead of being written into the label.
+  {
+    key: 'psionic_energy_used',
+    label: (level) => `Psionic Energy Dice — ${psionicDie(level)} (Long Rest)`,
+    total: (level) => psionicDiceTotal(level),
+    recharge: 'long', minLevel: 3, subclass: 'Psi Warrior',
+    description: 'The pool that fuels Protective Field, Psionic Strike, Telekinetic Movement and your other psionic powers. All of it returns on a long rest.',
+  },
+  // The bonus-action regain is its own once-per-short-rest charge rather than a property of the
+  // pool: RAW you can do it again only after a rest, whatever the pool is doing. Spending the
+  // charge does NOT hand a die back automatically — a player can never restore a resource in
+  // this app, only the GM's − control can, which is what the description says out loud.
+  {
+    key: 'psionic_energy_regain_used', label: 'Regain a Psionic Energy Die (Short Rest)',
+    total: () => 1, recharge: 'short', minLevel: 3, subclass: 'Psi Warrior',
+    description: 'Bonus action: recover one expended Psionic Energy die. Ask your GM to add the die back above.',
+  },
+  // Telekinetic Movement and Psi-Powered Leap are each FREE once per rest and cost a Psionic
+  // Energy die every time after that. These rows track the free use; the die is spent from the
+  // pool above, so the two costs stay visibly separate.
+  {
+    key: 'telekinetic_movement_used', label: 'Telekinetic Movement — free use (Short Rest)',
+    total: () => 1, recharge: 'short', minLevel: 3, subclass: 'Psi Warrior',
+    description: 'Action: move one Large or smaller object, or one willing creature, up to 30 feet. Once the free use is spent, spend a Psionic Energy die instead.',
+  },
+  {
+    key: 'psi_powered_leap_used', label: 'Psi-Powered Leap — free use (Long Rest)',
+    total: () => 1, recharge: 'long', minLevel: 7, subclass: 'Psi Warrior',
+    description: 'Bonus action: gain a flying speed equal to twice your walking speed until the end of the turn. Once the free use is spent, spend a Psionic Energy die instead.',
+  },
+  {
+    key: 'bulwark_of_force_used', label: 'Bulwark of Force — free use (Long Rest)',
+    total: () => 1, recharge: 'long', minLevel: 15, subclass: 'Psi Warrior',
+    description: 'Bonus action: give yourself and other creatures within 30 feet half cover for 1 minute. Once the free use is spent, spend a Psionic Energy die instead.',
   },
   // Subclass-gated: only a Samurai sees this. Three uses per long rest; the temporary hit points
   // scale, which is progression information rather than a "when you got it" tag, so it is spelled

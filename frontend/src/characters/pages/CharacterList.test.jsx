@@ -380,6 +380,51 @@ describe('CharacterList — rest buttons (GM view)', () => {
     expect(screen.queryByText('Shadow Martyr')).not.toBeInTheDocument();
   });
 
+  // The Psi Warrior splits across both rest types differently from every other subclass: the
+  // Psionic Energy POOL is long-rest only, while two of the charges spent alongside it return on
+  // a short rest. A summary that flattened the two would promise the dice back after a nap.
+  it('long rest summary lists the Psionic Energy dice, gated by level', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], character_data: { subclass: 'Psi Warrior' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText('Psionic Energy dice')).toBeInTheDocument();
+    expect(screen.queryByText('Psi-Powered Leap')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bulwark of Force')).not.toBeInTheDocument();
+  });
+
+  it('long rest summary adds Psi-Powered Leap and Bulwark of Force at L15', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], level: 15, character_data: { subclass: 'Psi Warrior' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText('Psionic Energy dice')).toBeInTheDocument();
+    expect(screen.getByText('Psi-Powered Leap')).toBeInTheDocument();
+    expect(screen.getByText('Bulwark of Force')).toBeInTheDocument();
+  });
+
+  it('short rest summary returns the charges but never the Psionic Energy dice', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], level: 15, character_data: { subclass: 'Psi Warrior' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('short-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a short rest/i));
+    expect(screen.getByText('Psionic Energy die regain & Telekinetic Movement')).toBeInTheDocument();
+    expect(screen.queryByText('Psionic Energy dice')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bulwark of Force')).not.toBeInTheDocument();
+  });
+
   it('confirmation dialog shows selected character names', async () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));

@@ -1778,3 +1778,172 @@ describe('buildActionEconomy — Echo Knight (Fighter subclass)', () => {
     expect(champ.reaction.find((e) => e.name === 'Shadow Martyr')).toBeFalsy();
   });
 });
+
+describe('buildActionEconomy — Psi Warrior (Fighter subclass)', () => {
+  const pwArgs = (level, extra = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Psi Warrior',
+    level,
+    edition: '5e',
+    characterData: {},
+    inventory: [],
+    attacks: [{
+      uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true,
+    }],
+    scores: { strength: 16, intelligence: 16 },
+    spellIndex: {},
+    ...extra,
+  });
+  const entry = (level, bucket, name, extra) =>
+    buildActionEconomy(pwArgs(level, extra))[bucket].find((e) => e.name === name);
+
+  // The whole point of routing every number through psiWarriorData: the stored feature blurb
+  // says a flat "d6s" in both editions, and a card built from that text lies from 5th level on.
+  describe('Psionic Strike attaches to the weapon attack cards', () => {
+    it('rides on the weapon card with the shared Psionic Energy pool', () => {
+      const eco = buildActionEconomy(pwArgs(3));
+      expect(eco.no_action.find((e) => e.name === 'Psionic Strike')).toBeFalsy();
+      const sword = eco.action.find((e) => e.name === 'Longsword');
+      expect(sword.attachedFeatures.map((f) => f.name)).toEqual(['Psionic Strike']);
+      expect(sword.attachedFeatures[0].resourceKey).toBe('psionic_energy_used');
+    });
+
+    it('names the weapon and scales the die with level', () => {
+      const at3 = buildActionEconomy(pwArgs(3)).action.find((e) => e.name === 'Longsword');
+      expect(at3.attachedFeatures[0].note).toMatch(/with Longsword/);
+      expect(at3.attachedFeatures[0].note).toMatch(/1d6 \+ 3 force damage/);
+      const at11 = buildActionEconomy(pwArgs(11)).action.find((e) => e.name === 'Longsword');
+      expect(at11.attachedFeatures[0].note).toMatch(/1d10 \+ 3 force damage/);
+    });
+
+    // RAW is "a weapon attack", not a melee one — a Psi Warrior with a bow gets it too. This is
+    // the case that makes the attach scope 'all' rather than the Echo Knight's 'melee'.
+    it('attaches to a RANGED weapon attack as well', () => {
+      const bowOnly = pwArgs(3, {
+        inventory: [{
+          uid: 'w1', name: 'Longbow', category: 'weapons', weapon_type: 'Ranged',
+          equipped: true, hand: 'both',
+        }],
+        attacks: [{ uid: 'w1', name: 'Longbow', toHit: '+5', damage: '1d8 + 3 piercing', proficient: true }],
+      });
+      const eco = buildActionEconomy(bowOnly);
+      const bow = eco.action.find((e) => e.name === 'Longbow');
+      expect(bow.attachedFeatures.map((f) => f.name)).toEqual(['Psionic Strike']);
+      expect(eco.no_action.find((e) => e.name === 'Psionic Strike')).toBeFalsy();
+    });
+
+    // A bare-handed character still gets an Unarmed Strike row, and RAW an unarmed strike IS a
+    // melee weapon attack — the same call Unleash Incarnation and Unwavering Mark already make.
+    // So a Psi Warrior with nothing equipped keeps the feature on that card rather than falling
+    // back; the standalone fallback branch is the shared one the Echo Knight bow-only case
+    // exercises, and stays in place for a character with no attack row at all.
+    it('attaches to the unarmed strike when nothing is equipped', () => {
+      const eco = buildActionEconomy(pwArgs(3, { attacks: [] }));
+      const unarmed = eco.action.find((e) => e.name === 'Unarmed Strike');
+      expect(unarmed.attachedFeatures.map((f) => f.name)).toEqual(['Psionic Strike']);
+      expect(eco.no_action.find((e) => e.name === 'Psionic Strike')).toBeFalsy();
+    });
+
+    it('is absent before L3 and for another subclass', () => {
+      expect(buildActionEconomy(pwArgs(2)).action.find((e) => e.name === 'Longsword').attachedFeatures)
+        .toBeUndefined();
+      expect(buildActionEconomy(pwArgs(3, { subclass: 'Champion' })).action
+        .find((e) => e.name === 'Longsword').attachedFeatures).toBeUndefined();
+    });
+  });
+
+  // Telekinetic Thrust fires on a Psionic Strike hit, so it rides on the same cards rather than
+  // becoming a bonus-action card for something that costs nothing.
+  describe('Telekinetic Thrust rides alongside Psionic Strike from L7', () => {
+    it('adds a second attached block with a computed save DC', () => {
+      const sword = buildActionEconomy(pwArgs(7)).action.find((e) => e.name === 'Longsword');
+      expect(sword.attachedFeatures.map((f) => f.name))
+        .toEqual(['Psionic Strike', 'Telekinetic Thrust']);
+      // 8 + PB 3 + INT 3
+      expect(sword.attachedFeatures[1].note).toMatch(/DC 14/);
+      expect(sword.attachedFeatures[1].note).toMatch(/knocked prone or pushed/);
+    });
+
+    it('costs nothing of its own, so it carries no resource', () => {
+      const sword = buildActionEconomy(pwArgs(7)).action.find((e) => e.name === 'Longsword');
+      expect(sword.attachedFeatures[1].resourceKey).toBeNull();
+    });
+
+    it('is absent at L6', () => {
+      const sword = buildActionEconomy(pwArgs(6)).action.find((e) => e.name === 'Longsword');
+      expect(sword.attachedFeatures.map((f) => f.name)).toEqual(['Psionic Strike']);
+    });
+  });
+
+  it('Protective Field is a reaction from L3 that spends the shared pool', () => {
+    const e = entry(3, 'reaction', 'Protective Field');
+    expect(e.resourceKey).toBe('psionic_energy_used');
+    expect(e.detail).toMatch(/1d6 \+ 3/);
+    // The floor RAW gives it, which the stored blurb omits.
+    expect(e.detail).toMatch(/minimum reduction of 1/);
+  });
+
+  // The stored blurb calls this a bonus action in BOTH editions; RAW is an action.
+  it('Telekinetic Movement is an ACTION with its own free short-rest use', () => {
+    const e = entry(3, 'action', 'Telekinetic Movement');
+    expect(e.cost).toBe('action');
+    expect(e.resourceKey).toBe('telekinetic_movement_used');
+    expect(e.detail).toMatch(/spend a Psionic Energy die instead/);
+  });
+
+  // The stored blurb says "fly speed equal to walking speed" — RAW is twice.
+  it('Psi-Powered Leap is a bonus action from L7 granting twice your walking speed', () => {
+    expect(entry(6, 'bonus', 'Psi-Powered Leap')).toBeFalsy();
+    const e = entry(7, 'bonus', 'Psi-Powered Leap');
+    expect(e.cost).toBe('bonus action');
+    expect(e.detail).toMatch(/twice your walking speed/);
+    expect(e.resourceKey).toBe('psi_powered_leap_used');
+  });
+
+  it("Guarded Mind's condition break is a no-action die spend from L10", () => {
+    expect(entry(9, 'no_action', 'Guarded Mind (end a condition)')).toBeFalsy();
+    const e = entry(10, 'no_action', 'Guarded Mind (end a condition)');
+    expect(e.resourceKey).toBe('psionic_energy_used');
+    expect(e.detail).toMatch(/charmed or frightened/);
+    // The passive psychic resistance belongs to the Defenses card, not to an action bucket.
+    expect(e.detail).not.toMatch(/resistance/i);
+  });
+
+  it('Bulwark of Force counts its targets from Intelligence, floored at one', () => {
+    expect(entry(14, 'bonus', 'Bulwark of Force')).toBeFalsy();
+    expect(entry(15, 'bonus', 'Bulwark of Force').detail).toMatch(/up to 3 creatures/);
+    expect(entry(15, 'bonus', 'Bulwark of Force', { scores: { intelligence: 20 } }).detail)
+      .toMatch(/up to 5 creatures/);
+    expect(entry(15, 'bonus', 'Bulwark of Force', { scores: { intelligence: 8 } }).detail)
+      .toMatch(/up to 1 creature/);
+  });
+
+  // The at-will telekinesis grant has no mechanism in the app, so it is stated as prose on the
+  // card carrying the half that IS mechanized — rather than silently dropped.
+  it('Telekinetic Master ships the bonus attack, with the telekinesis grant as prose', () => {
+    expect(entry(17, 'bonus', 'Telekinetic Master')).toBeFalsy();
+    const e = entry(18, 'bonus', 'Telekinetic Master');
+    expect(e.cost).toBe('bonus action');
+    expect(e.detail).toMatch(/cast telekinesis at will/);
+    expect(e.detail).toMatch(/one weapon attack as a bonus action/);
+    expect(e.resourceKey).toBeUndefined();
+  });
+
+  // The 2024 revision renames nothing and moves no level, so both maps point at one authored
+  // table — this is the test that keeps them from being copied apart later.
+  it('gives a 2024 Psi Warrior the identical set of entries', () => {
+    const names = (edition) => {
+      const eco = buildActionEconomy(pwArgs(18, { edition }));
+      return Object.values(eco).flat().filter((e) => e.source === 'Subclass').map((e) => e.name).sort();
+    };
+    expect(names('5.5e')).toEqual(names('5e'));
+    expect(names('5.5e')).toContain('Bulwark of Force');
+  });
+
+  it('gives another Fighter subclass none of it', () => {
+    const champ = buildActionEconomy(pwArgs(18, { subclass: 'Champion' }));
+    expect(champ.reaction.find((e) => e.name === 'Protective Field')).toBeFalsy();
+    expect(champ.bonus.find((e) => e.name === 'Bulwark of Force')).toBeFalsy();
+    expect(champ.action.find((e) => e.name === 'Telekinetic Movement')).toBeFalsy();
+  });
+});

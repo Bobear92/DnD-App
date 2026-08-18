@@ -1718,6 +1718,100 @@ class TestInitiativeRest:
         )
         assert self._data(client, char_id, h_gm)["unleash_incarnation_used"] == 3
 
+    # ── Psi Warrior: the Psionic Energy pool + four once-per-rest charges ──
+    # The subclass splits across BOTH rest types in a way none of the others do: the dice pool
+    # is long-rest only, but two of the charges that spend alongside it come back on a short
+    # rest. Authored once for both editions — the 2024 Psi Warrior is mechanically identical.
+
+    def _psi_warrior(self, client, headers, campaign_id, *, level=15, data=None):
+        resp = client.post("/api/characters", json={
+            "name": "Kael", "race": "Human", "char_class": "Fighter", "level": level,
+            "campaign_id": campaign_id,
+            "character_data": {"subclass": "Psi Warrior", **(data or {})},
+        }, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def test_psi_warrior_pools_reset_on_a_long_rest(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._psi_warrior(client, h_gm, campaign_id, data={
+            "psionic_energy_used": 5, "psionic_energy_regain_used": 1,
+            "telekinetic_movement_used": 1, "psi_powered_leap_used": 1,
+            "bulwark_of_force_used": 1,
+        })
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["psionic_energy_used"] == 0
+        assert cd["psionic_energy_regain_used"] == 0
+        assert cd["telekinetic_movement_used"] == 0
+        assert cd["psi_powered_leap_used"] == 0
+        assert cd["bulwark_of_force_used"] == 0
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Psionic Energy dice recovered" in changes
+        assert "Psi-Powered Leap recovered" in changes
+        assert "Bulwark of Force recovered" in changes
+
+    def test_long_rest_promises_only_the_earned_psi_warrior_features(self, client):
+        # Psionic Power is level 3; Psi-Powered Leap 7; Bulwark of Force 15. A level-5 Psi
+        # Warrior must not be told a rest gave back features they haven't earned.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._psi_warrior(client, h_gm, campaign_id, level=5,
+                                    data={"psionic_energy_used": 4})
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Psionic Energy dice recovered" in changes
+        assert "Psi-Powered Leap recovered" not in changes
+        assert "Bulwark of Force recovered" not in changes
+        assert self._data(client, char_id, h_gm)["psionic_energy_used"] == 0
+
+    def test_short_rest_recovers_the_charges_but_not_the_dice(self, client):
+        # The distinction the whole split exists for: a short rest hands back the bonus-action
+        # regain and the free Telekinetic Movement, and leaves the POOL alone.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._psi_warrior(client, h_gm, campaign_id, data={
+            "psionic_energy_used": 5, "psionic_energy_regain_used": 1,
+            "telekinetic_movement_used": 1, "psi_powered_leap_used": 1,
+            "bulwark_of_force_used": 1,
+        })
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["psionic_energy_regain_used"] == 0
+        assert cd["telekinetic_movement_used"] == 0
+        # Long-rest only — all three untouched.
+        assert cd["psionic_energy_used"] == 5
+        assert cd["psi_powered_leap_used"] == 1
+        assert cd["bulwark_of_force_used"] == 1
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Psionic Energy die regain & Telekinetic Movement recovered" in changes
+        assert "Psionic Energy dice recovered" not in changes
+
+    def test_psi_warrior_pools_untouched_for_another_subclass(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        resp = client.post("/api/characters", json={
+            "name": "Champ", "race": "Human", "char_class": "Fighter", "level": 15,
+            "campaign_id": campaign_id,
+            "character_data": {"subclass": "Champion", "psionic_energy_used": 5},
+        }, headers=h_gm)
+        char_id = resp.json()["id"]
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        assert self._data(client, char_id, h_gm)["psionic_energy_used"] == 5
+
     # ── Legion of One (Echo Knight L18) — the initiative half of the feature ──
 
     def test_legion_of_one_regains_a_use_when_empty(self, client):

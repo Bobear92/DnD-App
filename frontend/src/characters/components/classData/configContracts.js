@@ -91,7 +91,11 @@ export function validateClassConfig(config, label = 'class config') {
   else config.restResources.forEach((r, i) => {
     const L = `${label}.restResources[${i}]`;
     if (!isStr(r?.key)) e.push(`${L}.key must be a string`);
-    if (!isStr(r?.label)) e.push(`${L}.label must be a string`);
+    // `label` may be a function of level for the same reason `total` may be: the Psi Warrior's
+    // Psionic Energy die grows d6 → d12, and the die size is what the row is read for. A
+    // level-varying label must still resolve to a real string at every level.
+    if (isFn(r?.label)) eachLevel(r.label, `${L}.label`, (v) => (isStr(v) ? null : 'must return a non-empty string'), e);
+    else if (!isStr(r?.label)) e.push(`${L}.label must be a string or a level → string function`);
     if (!['short', 'long'].includes(r?.recharge)) e.push(`${L}.recharge must be 'short' or 'long'`);
     if (!isLevel(r?.minLevel)) e.push(`${L}.minLevel must be a level 1..20`);
     eachLevel(r?.total, `${L}.total`, nonNegNumber, e);
