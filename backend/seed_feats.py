@@ -392,7 +392,10 @@ FEAT_EFFECTS_2024 = {
                      fixed=[{"name": "Invisibility", "level": 2}], free_cast="long_rest", ability="none", label="Shadow Touched"),
         _note("Invisibility and the chosen spell are each castable once per long rest for free, or with a spell slot."),
     ],
-    "Sharpshooter": [_abil("dexterity"), _note("Long range imposes no disadvantage; ignore half and three-quarters cover; add your proficiency bonus to a ranged weapon's damage on the Attack action.")],
+    # Bypass Cover stays a note (no distance-to-target model to attach cover to). Firing in
+    # Melee and Long Shot are both mechanized on the attack card — the spacing note and the
+    # range band respectively — the same hardcoded route the 5e Sharpshooter clauses take.
+    "Sharpshooter": [_abil("dexterity"), _note("Ignore half and three-quarters cover; no disadvantage firing within 5 ft of an enemy; ranged weapons' normal range increases by 30 ft.")],
     "Shield Master": [
         _abil("strength"),
         _action("Shield Shove (Bonus)", "bonus", "When you wield a shield and take the Attack action",
@@ -556,7 +559,12 @@ FEATS_2024 = [
     ("Ritual Caster", "General feat. Increase Intelligence, Wisdom, or Charisma by 1. You gain a ritual book with two 1st-level ritual spells and can add more ritual spells you find.", "Level 4+", False),
     ("Sentinel", "General feat. Increase Strength or Dexterity by 1. A creature hit by your opportunity attack has speed 0 that turn, creatures provoke even when Disengaging, and you can react to attack a creature that attacks an ally near you.", "Level 4+", False),
     ("Shadow Touched", "General feat. Increase Intelligence, Wisdom, or Charisma by 1. You learn Invisibility and one 1st-level illusion or necromancy spell, castable once per long rest for free or with slots.", "Level 4+", False),
-    ("Sharpshooter", "General feat. Increase Dexterity by 1. Long range doesn't impose disadvantage, your ranged weapon attacks ignore half and three-quarters cover, and you can add your proficiency bonus to a ranged weapon's damage when you take the Attack action.", "Level 4+, Dexterity 13+", False),
+    # 2024 Sharpshooter is NOT the 2014 feat with a damage bonus bolted on. It drops the
+    # -5/+10 entirely, replaces "long range imposes no disadvantage" with a flat +30 ft of
+    # NORMAL range (Long Shot), and gains the within-5-ft clause that 2014 gave only to
+    # Crossbow Expert. The "+proficiency bonus to damage" that used to be written here is
+    # Great Weapon Master's Heavy Weapon Master benefit, not Sharpshooter's.
+    ("Sharpshooter", "General feat. Increase Dexterity by 1. Your ranged weapon attacks ignore half cover and three-quarters cover, being within 5 feet of an enemy doesn't impose disadvantage on your ranged attack rolls, and your ranged weapons' normal range increases by 30 feet.", "Level 4+, Dexterity 13+", False),
     ("Shield Master", "General feat. Increase Strength by 1. While wielding a shield you can shove as a bonus action, add the shield's AC to Dexterity saves against single-target effects, and avoid damage on a successful Dexterity save.", "Level 4+, Strength 13+", False),
     ("Skill Expert", "General feat. Increase one ability score by 1, gain proficiency in one skill, and gain Expertise in one skill you're proficient with.", "Level 4+", False),
     ("Skulker", "General feat. Increase Dexterity by 1. You can Hide as a bonus action while lightly obscured, missing a ranged attack doesn't reveal you, and you gain Blindsight 10 feet in darkness against creatures within range.", "Level 4+, Dexterity 13+", False),

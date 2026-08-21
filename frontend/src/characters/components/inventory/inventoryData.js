@@ -621,6 +621,9 @@ export function computeAttack(weapon, { scores = {}, level = 1, proficient = fal
  * than in each surface so the Items tab and the Action Economy tab can't disagree about whether
  * a weapon overcomes nonmagical resistance. `computeAttack` stays about the numbers.
  */
+/** 2024 Sharpshooter's Long Shot: ranged weapons' NORMAL range increases by this many feet. */
+const LONG_SHOT_BONUS_FT = 30;
+
 /** A weapon that IS a ranged weapon, as opposed to a melee one thrown at something. */
 const isPureRangedWeapon = (w) =>
   (w?.weapon_type || '').toLowerCase() === 'ranged';
@@ -654,6 +657,37 @@ export function weaponRange(weapon) {
   };
 }
 
+/**
+ * A weapon's band with any feature that CHANGES it already applied — the answer a card shows.
+ *
+ * Sharpshooter does different things to the band in each edition, which is the whole reason this
+ * is edition-aware rather than a single `hasFeat` check:
+ *   2014 — long range imposes no disadvantage. The band is unchanged; the THRESHOLD stops
+ *          mattering, so the card says so instead of printing a different number.
+ *   2024 — Long Shot: normal range increases by 30 ft. A real number change, and the long-range
+ *          disadvantage is NOT lifted — a 2024 Sharpshooter still suffers it past the (larger)
+ *          normal range.
+ *
+ * Either way it applies only to a TRUE ranged weapon: a thrown dagger is a melee weapon making a
+ * ranged attack, the same line `isPureRangedWeapon` draws for the damage toggle.
+ */
+export function resolveWeaponRange(weapon, { feats = [], edition = '5e' } = {}) {
+  const band = weaponRange(weapon);
+  if (!band || !isPureRangedWeapon(weapon) || !hasFeat(feats, 'Sharpshooter')) return band;
+  const is2024 = edition === '5.5e' || edition === '2024';
+  if (!is2024) return { ...band, longRangeOk: true, longRangeSource: 'Sharpshooter' };
+  const normal = band.normal + LONG_SHOT_BONUS_FT;
+  // The long band does NOT move: RAW raises normal range only, which narrows the disadvantage
+  // window rather than sliding it. A weapon with no long band keeps none.
+  return {
+    ...band,
+    normal,
+    label: `${band.thrown ? 'Thrown ' : ''}${band.long ? `${normal}/${band.long}` : `${normal}`} ft`,
+    rangeBonusFt: LONG_SHOT_BONUS_FT,
+    rangeBonusSource: 'Sharpshooter',
+  };
+}
+
 export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [], armorProfText = '', raceArmor = [], hexWeaponUid = null, charClass = null, subclass = null } = {}) {
   const equipped = (inventory || []).filter((e) => e.category === 'weapons' && e.equipped);
   // Dueling requires wielding a single weapon (a shield is fine, a second weapon is not).
@@ -676,12 +710,7 @@ export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfT
     row.magical = magicalAttackSource(w, { charClass, subclass, level, edition });
     // The distance band, resolved ONCE here so the Items tab and the Action Economy card can
     // never disagree — the same reason `magical` is resolved here rather than per surface.
-    // Sharpshooter lifts the long-range disadvantage, and only for a true ranged weapon: a
-    // thrown dagger is a melee weapon making a ranged attack, the same line the -5/+10 draws.
-    const band = weaponRange(w);
-    row.range = band && hasFeat(feats, 'Sharpshooter') && isPureRangedWeapon(w)
-      ? { ...band, longRangeOk: true, longRangeSource: 'Sharpshooter' }
-      : band;
+    row.range = resolveWeaponRange(w, { feats, edition });
     return row;
   });
 }

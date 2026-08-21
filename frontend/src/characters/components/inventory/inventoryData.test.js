@@ -11,7 +11,7 @@ import {
   nonProficientEquippedArmor, armorNonProficiencyNote, wornNonProficientArmor,
   assignHand, handContents, migrateHands, freeHandCount,
   isTwoHandedWeapon, weaponVersatileDie, isVersatileWeapon, isShieldEntry,
-  weaponRange,
+  weaponRange, resolveWeaponRange,
 } from '@/characters/components/inventory/inventoryData';
 
 const armor = (over) => ({ uid: Math.random().toString(), category: 'armor', equipped: false, ...over });
@@ -865,5 +865,55 @@ describe('getAttacks — range band', () => {
     const band = rangeOf([axe], SS);
     expect(band).toMatchObject({ thrown: true, normal: 20 });
     expect(band.longRangeOk).toBeFalsy();
+  });
+});
+
+
+// Sharpshooter changes the band DIFFERENTLY in each edition, which is why the resolver is
+// edition-aware rather than a single hasFeat check. Getting this wrong applied the 2014 rule to
+// 2024 characters.
+describe('resolveWeaponRange — Sharpshooter by edition', () => {
+  const bow = { name: 'Longbow', weapon_type: 'Ranged', range_normal: 150, range_long: 600 };
+  const axe = { name: 'Handaxe', weapon_type: 'Melee', range_normal: 20, range_long: 60 };
+  const SS = [{ id: 40, name: 'Sharpshooter' }];
+
+  it('leaves the band alone without the feat', () => {
+    expect(resolveWeaponRange(bow, { edition: '5e' })).toMatchObject({ normal: 150, long: 600 });
+    expect(resolveWeaponRange(bow, { edition: '5.5e' }).rangeBonusFt).toBeUndefined();
+  });
+
+  // 2014: the numbers don't move, the threshold stops mattering.
+  it('2014 lifts the long-range disadvantage without changing the numbers', () => {
+    const r = resolveWeaponRange(bow, { feats: SS, edition: '5e' });
+    expect(r).toMatchObject({ normal: 150, long: 600, longRangeOk: true, longRangeSource: 'Sharpshooter' });
+    expect(r.rangeBonusFt).toBeUndefined();
+  });
+
+  // 2024 Long Shot: +30 ft of NORMAL range. The long band does not move, so the disadvantage
+  // window narrows rather than sliding.
+  it('2024 adds 30 ft of normal range and leaves the long band', () => {
+    const r = resolveWeaponRange(bow, { feats: SS, edition: '5.5e' });
+    expect(r).toMatchObject({ normal: 180, long: 600, label: '180/600 ft', rangeBonusFt: 30 });
+  });
+
+  // The regression this whole edition split exists to prevent.
+  it('2024 does NOT lift the long-range disadvantage', () => {
+    expect(resolveWeaponRange(bow, { feats: SS, edition: '5.5e' }).longRangeOk).toBeFalsy();
+  });
+
+  it('applies to neither edition on a thrown melee weapon', () => {
+    expect(resolveWeaponRange(axe, { feats: SS, edition: '5e' }).longRangeOk).toBeFalsy();
+    expect(resolveWeaponRange(axe, { feats: SS, edition: '5.5e' }).rangeBonusFt).toBeUndefined();
+  });
+
+  it('gives a melee weapon no band to modify', () => {
+    expect(resolveWeaponRange({ name: 'Longsword', weapon_type: 'Melee' }, { feats: SS, edition: '5.5e' }))
+      .toBeNull();
+  });
+
+  it('handles a weapon with no long band', () => {
+    const net = { name: 'Net', weapon_type: 'Ranged', range_normal: 5, range_long: null };
+    expect(resolveWeaponRange(net, { feats: SS, edition: '5.5e' }))
+      .toMatchObject({ normal: 35, long: null, label: '35 ft' });
   });
 });

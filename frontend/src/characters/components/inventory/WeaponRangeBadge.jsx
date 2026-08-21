@@ -23,12 +23,19 @@ import { cn } from '@/lib/utils';
  */
 export default function WeaponRangeBadge({ range, testId }) {
   if (!range) return null;
-  const { long, label, longRangeOk, longRangeSource } = range;
+  const { long, label, longRangeOk, longRangeSource, rangeBonusFt, rangeBonusSource } = range;
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-1.5" data-testid={testId}>
       <span className="text-[11px] font-medium text-foreground tabular-nums">
         Range {label}
       </span>
+      {/* A feature that MOVED the number says so, so a player checking their sheet against the
+          book doesn't read the larger normal range as a bug. */}
+      {rangeBonusFt && (
+        <span className="text-[11px] text-emerald-600 leading-tight" data-testid={`${testId}-bonus`}>
+          +{rangeBonusFt} ft normal range ({rangeBonusSource})
+        </span>
+      )}
       {/* Only a weapon with a LONG band has a disadvantage threshold to explain. */}
       {long && (
         <span

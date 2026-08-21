@@ -370,8 +370,8 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
             data-testid={`ae-power-attack-toggle-${entry.key}`}
           >
             {powerOn
-              ? `${entry.powerAttack.source}: on (−5 hit / +10 dmg)`
-              : `Use ${entry.powerAttack.source} (−5 hit / +10 dmg)`}
+              ? `${entry.powerAttack.source}: on (${entry.powerAttack.offer})`
+              : `Use ${entry.powerAttack.source} (${entry.powerAttack.offer})`}
           </button>
         )}
         {entry.warning && (

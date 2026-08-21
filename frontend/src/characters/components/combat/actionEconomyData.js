@@ -790,20 +790,42 @@ function addFlatDamage(damage, amount) {
 }
 
 /**
- * The −5 attack / +10 damage power attack (5e/2014). TWO feats grant the identical mechanic on
- * disjoint weapon sets — Great Weapon Master on a Heavy melee weapon, Sharpshooter on a ranged
- * weapon — so they share one variant builder and one UI toggle, parameterised by `source` (the
- * feat name, which labels the to-hit breakdown and the button). Given a computed weapon attack
- * row, returns the modified { toHit, toHitBreakdown, damage }; the flat damage modifier is
- * parsed out of the row's damage string and raised by 10.
+ * An OPT-IN damage variant on a weapon attack, shown behind a toggle rather than folded into the
+ * printed damage — the rule CLAUDE.md states for once-per-turn and situational extras (Sneak
+ * Attack, Divine Smite, Rage): a conditional bonus baked into a flat string claims damage the
+ * character does not always deal.
+ *
+ * Two editions, two different mechanics under one toggle:
+ *
+ *   2014 — −5 to hit for +10 damage. TWO feats grant it on disjoint weapon sets (Great Weapon
+ *          Master on a Heavy melee weapon, Sharpshooter on a ranged one), so one builder serves
+ *          both, parameterised by `source`.
+ *   2024 — Great Weapon Master's **Heavy Weapon Master**: +your proficiency bonus to damage, no
+ *          attack penalty, once per turn. Sharpshooter has NO damage bonus in 2024 (the version
+ *          of this app's compendium that said otherwise was wrong — that clause is GWM's), so
+ *          only GWM reaches this path in 2024.
+ *
+ * `pb` is required for the 2024 shape and ignored by the 2014 one.
  */
-export function powerAttackVariant(attackRow = {}, source = 'Great Weapon Master') {
+export function powerAttackVariant(attackRow = {}, source = 'Great Weapon Master', { edition = '5e', pb = 2 } = {}) {
+  const is2024 = edition === '5.5e' || edition === '2024';
+  if (is2024) {
+    // No to-hit change: the 2024 feat trades the gamble for a smaller, reliable bonus.
+    return {
+      toHit: attackRow.toHit,
+      toHitBreakdown: attackRow.toHitBreakdown || [],
+      damage: addFlatDamage(attackRow.damage, pb),
+      damageBreakdown: [...(attackRow.damageBreakdown || []), { label: source, value: pb }],
+      oncePerTurn: true,
+    };
+  }
   const base = parseInt(attackRow.toHit, 10) || 0;
   return {
     toHit: formatSigned(base - 5),
     toHitBreakdown: [...(attackRow.toHitBreakdown || []), { label: source, value: -5 }],
     damage: addFlatDamage(attackRow.damage, 10),
     damageBreakdown: [...(attackRow.damageBreakdown || []), { label: source, value: 10 }],
+    oncePerTurn: false,
   };
 }
 
@@ -846,12 +868,18 @@ export function buildActionEconomy({
   // feat upgrades the unarmed die (e.g. Tavern Brawler's 1d4) so the upgrade is visible.
   const feats = characterData.feats || [];
   const unarmedDice = getFeatUnarmedDice(feats);
-  // Great Weapon Master's −5/+10 power attack is the 2014 mechanic; the 2024 feat replaces it
-  // with a flat +PB, so the toggle is 5e-only.
-  const gwm = !is2024 && hasFeat(feats, 'Great Weapon Master');
-  // Sharpshooter's −5/+10 is likewise the 2014 mechanic — the 2024 feat replaces it with a flat
-  // +PB on ranged damage, so this toggle is 5e-only too.
+  // Great Weapon Master offers a damage toggle in BOTH editions, but a different one: -5/+10 in
+  // 2014, +proficiency-bonus-once-per-turn (Heavy Weapon Master) in 2024. powerAttackVariant
+  // owns that split; this flag just says the character has the feat.
+  const gwm = hasFeat(feats, 'Great Weapon Master');
+  // Sharpshooter's -5/+10 is 2014 ONLY. The 2024 feat has no damage bonus at all — its three
+  // benefits are cover, firing in melee, and +30 ft of normal range, none of which is a toggle.
   const sharpshooter = !is2024 && hasFeat(feats, 'Sharpshooter');
+  // Who lifts the within-5-ft disadvantage on ranged attacks. Crossbow Expert in both editions;
+  // 2024 Sharpshooter as well (Firing in Melee), which the 2014 Sharpshooter does NOT do.
+  const meleeFiringSource = hasFeat(feats, 'Crossbow Expert') ? 'Crossbow Expert'
+    : (is2024 && hasFeat(feats, 'Sharpshooter')) ? 'Sharpshooter'
+    : null;
   // GWM's crit/kill bonus-attack reminder (both editions) — co-located on melee weapon rows,
   // so it sits next to the power attack rather than off in the Bonus Actions list.
   const gwmBonusNote = greatWeaponMasterNote(feats);
@@ -880,7 +908,7 @@ export function buildActionEconomy({
         : (sharpshooter && isPureRangedWeapon(weapon)) ? 'Sharpshooter'
         : null;
       if (powerSource) {
-        const v = powerAttackVariant(atk, powerSource);
+        const v = powerAttackVariant(atk, powerSource, { edition, pb: profBonus(level) });
         powerAttack = {
           source: powerSource,
           toHit: v.toHit,
@@ -889,6 +917,11 @@ export function buildActionEconomy({
           damageBreakdown: v.damageBreakdown,
           damageFlags: `${flag}${disadv}`,
           detailRest: `to hit · ${v.damage}${flag}${disadv}`,
+          // What the toggle COSTS, for its button label. The 2014 gamble and the 2024
+          // once-per-turn bonus are different enough that one label would misstate one of them.
+          offer: v.oncePerTurn
+            ? `+${profBonus(level)} dmg, once per turn`
+            : '−5 hit / +10 dmg',
         };
       }
     }
@@ -916,9 +949,12 @@ export function buildActionEconomy({
       range: atk.range || null,
       // Situational note: a ranged/thrown attack has disadvantage while an enemy is within
       // 5 ft. Crossbow Expert removes it. Rendered with a link to the Spacing page.
+      // 2024 Sharpshooter's "Firing in Melee" grants the same lift Crossbow Expert does — a
+      // clause the 2014 feat did not have, which is why the source is edition-dependent. Either
+      // feat alone is enough, so the note names whichever the character actually has.
       spacingNote: (weapon && isRangedWeapon(weapon))
-        ? (hasFeat(feats, 'Crossbow Expert')
-            ? 'No disadvantage firing while an enemy is within 5 ft (Crossbow Expert).'
+        ? (meleeFiringSource
+            ? `No disadvantage firing while an enemy is within 5 ft (${meleeFiringSource}).`
             : 'Ranged attacks have disadvantage while an enemy is within 5 ft.')
         : null,
       // Half-Orc Savage Attacks: extra damage die on a melee weapon crit. Shown on melee

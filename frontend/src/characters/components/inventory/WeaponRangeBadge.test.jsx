@@ -36,6 +36,21 @@ describe('WeaponRangeBadge', () => {
     expect(screen.queryByTestId('r-note')).not.toBeInTheDocument();
   });
 
+  // A feature that MOVED the number names itself, so a player checking the sheet against the
+  // book doesn't read the larger normal range as a bug.
+  it('credits a feature that increased the normal range', () => {
+    render(<WeaponRangeBadge range={band({ normal: 180, label: '180/600 ft', rangeBonusFt: 30, rangeBonusSource: 'Sharpshooter' })} testId="r" />);
+    expect(screen.getByTestId('r')).toHaveTextContent('Range 180/600 ft');
+    expect(screen.getByTestId('r-bonus')).toHaveTextContent('+30 ft normal range (Sharpshooter)');
+    // 2024 Long Shot raises the range; it does NOT lift the disadvantage past it.
+    expect(screen.getByTestId('r-note')).toHaveTextContent('disadvantage past 180 ft');
+  });
+
+  it('shows no bonus line for an unmodified band', () => {
+    render(<WeaponRangeBadge range={band()} testId="r" />);
+    expect(screen.queryByTestId('r-bonus')).not.toBeInTheDocument();
+  });
+
   it('marks a thrown weapon as thrown', () => {
     render(<WeaponRangeBadge range={band({ thrown: true, normal: 20, long: 60, label: 'Thrown 20/60 ft' })} testId="r" />);
     expect(screen.getByTestId('r')).toHaveTextContent('Range Thrown 20/60 ft');

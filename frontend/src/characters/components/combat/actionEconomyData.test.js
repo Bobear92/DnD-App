@@ -713,12 +713,81 @@ describe('buildActionEconomy — Fighter', () => {
       expect(buildActionEconomy(notProf).action.find((e) => e.name === 'Greatsword').powerAttack).toBeNull();
     });
 
-    it('does not attach the −5/+10 powerAttack in 2024 (the feat has no such option)', () => {
+    // 2024 replaces the -5/+10 gamble with Heavy Weapon Master: +PB damage, no attack penalty,
+    // once per turn. It stays a TOGGLE rather than folding into the printed damage, because a
+    // once-per-turn bonus baked into a flat string claims damage you don't always deal.
+    describe('2024 Heavy Weapon Master (+PB damage)', () => {
+      const gwm2024 = (level = 4) => {
+        const args = fighterArgs(level, '5.5e');
+        args.inventory = [greatsword];
+        args.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', damage: '2d6 + 3 slashing', proficient: true }];
+        args.characterData = { feats: [GWM] };
+        return buildActionEconomy(args).action.find((e) => e.name === 'Greatsword').powerAttack;
+      };
+
+      it('adds the proficiency bonus to damage', () => {
+        expect(gwm2024(4).damage).toMatch(/2d6 \+ 5 slashing/);
+      });
+
+      it('scales with the proficiency bonus', () => {
+        expect(gwm2024(17).damage).toMatch(/2d6 \+ 9 slashing/);  // PB 6 at 17th
+      });
+
+      // The 2024 feat trades the gamble away — taking a to-hit penalty here would be the 2014
+      // mechanic leaking through.
+      it('leaves the attack roll alone', () => {
+        expect(gwm2024(4).toHit).toBe('+6');
+      });
+
+      it('labels the offer as once per turn, not as -5/+10', () => {
+        expect(gwm2024(4).offer).toBe('+2 dmg, once per turn');
+      });
+
+      it('names the source in the damage breakdown', () => {
+        expect(gwm2024(4).damageBreakdown).toContainEqual({ label: 'Great Weapon Master', value: 2 });
+      });
+    });
+
+    // Sharpshooter is the counter-example: its damage option is 2014-only. The 2024 feat has no
+    // damage bonus at all, so offering one would invent a rule.
+    it('gives a 2024 Sharpshooter no damage toggle', () => {
       const args = fighterArgs(4, '5.5e');
-      args.inventory = [greatsword];
-      args.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', damage: '2d6 + 3 slashing', proficient: true }];
-      args.characterData = { feats: [GWM] };
-      expect(buildActionEconomy(args).action.find((e) => e.name === 'Greatsword').powerAttack).toBeNull();
+      args.inventory = [{ uid: 'lb', name: 'Longbow', category: 'weapons', equipped: true, weapon_type: 'Ranged' }];
+      args.attacks = [{ uid: 'lb', name: 'Longbow', toHit: '+6', damage: '1d8 + 3 piercing', proficient: true }];
+      args.characterData = { feats: [{ id: 40, name: 'Sharpshooter', level: 4 }] };
+      expect(buildActionEconomy(args).action.find((e) => e.name === 'Longbow').powerAttack).toBeNull();
+    });
+  });
+
+  // 2024 Sharpshooter's "Firing in Melee" grants the same lift Crossbow Expert does — a clause
+  // the 2014 feat does not have.
+  describe('Firing in Melee (within-5-ft disadvantage)', () => {
+    const bow = { uid: 'lb', name: 'Longbow', category: 'weapons', equipped: true, weapon_type: 'Ranged' };
+    const SS = { id: 40, name: 'Sharpshooter', level: 4 };
+    const noteFor = (edition, feats) => {
+      const args = fighterArgs(4, edition);
+      args.inventory = [bow];
+      args.attacks = [{ uid: 'lb', name: 'Longbow', toHit: '+6', damage: '1d8 + 3 piercing', proficient: true }];
+      args.characterData = { feats };
+      return buildActionEconomy(args).action.find((e) => e.name === 'Longbow').spacingNote;
+    };
+
+    it('states the disadvantage for a character with neither feat', () => {
+      expect(noteFor('5.5e', [])).toMatch(/have disadvantage while an enemy is within 5 ft/);
+    });
+
+    it('a 2024 Sharpshooter lifts it, and is named as the source', () => {
+      expect(noteFor('5.5e', [SS])).toMatch(/No disadvantage firing .* \(Sharpshooter\)/);
+    });
+
+    // The regression: 2014 Sharpshooter has no such clause, so the note must stand.
+    it('a 2014 Sharpshooter does NOT lift it', () => {
+      expect(noteFor('5e', [SS])).toMatch(/have disadvantage while an enemy is within 5 ft/);
+    });
+
+    it('Crossbow Expert still wins the attribution when both are held', () => {
+      expect(noteFor('5.5e', [SS, { id: 12, name: 'Crossbow Expert', level: 4 }]))
+        .toMatch(/\(Crossbow Expert\)/);
     });
   });
 
