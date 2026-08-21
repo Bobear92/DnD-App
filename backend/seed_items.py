@@ -41,6 +41,37 @@ def _desc(data: dict) -> str:
     return "\n\n".join(data.get("desc", []) or [])
 
 
+def _weapon_range(data: dict) -> tuple[int | None, int | None]:
+    """
+    The distance band a weapon attacks at, as (normal, long).
+
+    A RANGED weapon carries it in `range`. A thrown MELEE weapon carries its melee reach in
+    `range` (always 5) and the useful band in `throw_range` — so reading `range` for everything
+    would file every dagger and longsword as a 5-ft "ranged" weapon. A melee weapon with no
+    throw gets (None, None): its 5 ft is reach, not a band, and Reach weapons make that 10.
+    """
+    if (data.get("weapon_range") or "").lower() == "ranged":
+        band = data.get("range") or {}
+    else:
+        band = data.get("throw_range") or {}
+    normal, long = band.get("normal"), band.get("long")
+    if normal is None:
+        return None, None
+    return normal, long
+
+
+def _srd_index(name: str) -> str:
+    """
+    A weapon name as the SRD API indexes it. The DB stores display names ("Crossbow, light")
+    while the API uses "crossbow-light" — punctuation is DROPPED, not dashed, so a naive
+    space-to-dash swap yields "crossbow,-light" and 404s every crossbow.
+    """
+    slug = name.lower()
+    for ch in (",", "'", "(", ")", "."):
+        slug = slug.replace(ch, "")
+    return "-".join(slug.split())
+
+
 def _fetch(client: httpx.Client, path: str) -> dict | None:
     try:
         r = client.get(f"{API_BASE}{path}", timeout=10)
@@ -84,6 +115,7 @@ def seed_equipment(db, client) -> tuple[int, int]:
                 continue
             damage = data.get("damage") or {}
             props = ", ".join(p["name"] for p in data.get("properties", []) or [])
+            range_normal, range_long = _weapon_range(data)
             db.add(Weapon(
                 name=name,
                 weapon_category=data.get("weapon_category") or "—",
@@ -91,6 +123,8 @@ def seed_equipment(db, client) -> tuple[int, int]:
                 damage=(damage.get("damage_dice") or "—"),
                 damage_type=((damage.get("damage_type") or {}).get("name") or "—"),
                 properties=props or None,
+                range_normal=range_normal,
+                range_long=range_long,
                 cost=_cost(data),
                 weight=_weight(data),
                 description=_desc(data) or None,
@@ -195,6 +229,8 @@ WEAPONS_CURATED = [
         "damage": "1d4",
         "damage_type": "Bludgeoning",
         "properties": "Thrown (range 20/60)",
+        "range_normal": 20,
+        "range_long": 60,
         "cost": "—",
         "weight": "—",
         "description": (
@@ -226,6 +262,47 @@ FOOD_DRINK = [
     {"name": "Meat (Chunk)", "item_type": "Food", "category": "Provisions", "cost": "3 sp", "weight": "—"},
     {"name": "Rations (1 day)", "item_type": "Food", "category": "Provisions", "cost": "5 sp", "weight": "2 lb.", "effect": "Dry foodstuffs suitable for extended travel."},
 ]
+
+
+def backfill_weapon_ranges(db, client) -> tuple[int, int]:
+    """
+    Fill `range_normal`/`range_long` on system weapons that predate those columns.
+
+    The create path SKIPS an existing weapon, so a plain re-run would leave every weapon seeded
+    before this column with a NULL band forever. Same shape as seed_feats.py backfilling
+    `effects` onto already-seeded feats.
+
+    Only ever writes a band it actually found onto a row that is missing one — it never nulls an
+    existing value, so a GM's hand-edited range survives a re-seed.
+    """
+    filled = checked = 0
+    # A curated weapon is not in the SRD API at all, so its band comes from WEAPONS_CURATED —
+    # which the create path skipped for any row that already existed.
+    curated = {
+        w["name"]: (w.get("range_normal"), w.get("range_long"))
+        for w in WEAPONS_CURATED if w.get("range_normal") is not None
+    }
+    rows = db.query(Weapon).filter(
+        Weapon.owner_type == OwnerType.system,
+        Weapon.range_normal.is_(None),
+    ).all()
+    for w in rows:
+        checked += 1
+        if w.name in curated:
+            w.range_normal, w.range_long = curated[w.name]
+            filled += 1
+            continue
+        data = _fetch(client, f"/api/2014/equipment/{_srd_index(w.name)}")
+        if not data:
+            continue
+        normal, long = _weapon_range(data)
+        if normal is None:
+            continue
+        w.range_normal, w.range_long = normal, long
+        filled += 1
+        time.sleep(0.05)
+    db.commit()
+    return filled, checked
 
 
 def seed_curated(db) -> tuple[int, int]:
@@ -263,6 +340,10 @@ def main():
             print("Seeding magic items...")
             mc, ms = seed_magic_items(db, client)
             print(f"  Magic items: {mc} created, {ms} skipped.\n")
+
+            print("Backfilling weapon ranges...")
+            bf, bc = backfill_weapon_ranges(db, client)
+            print(f"  Weapon ranges: {bf} filled of {bc} missing one.\n")
 
         print("Seeding curated weapons + potions + food/drink...")
         cc, cs = seed_curated(db)

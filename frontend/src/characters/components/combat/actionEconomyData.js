@@ -134,11 +134,16 @@ export const CLASS_FEATURE_ACTIONS_2024 = {
  * Psi Warrior (Fighter, TCoE / PHB-2024) — identical in both editions, so it is authored once
  * and registered in both maps below.
  *
- * Psionic Energy is the app's first ONE POOL, MANY CONSUMERS resource: five of these six entries
+ * Psionic Energy is the app's first ONE POOL, MANY CONSUMERS resource: five of these entries
  * spend the same `psionic_energy_used` dice, so they all carry that one `resourceKey` and the
  * class config holds a single pool row. Three of them (Telekinetic Movement, Psi-Powered Leap,
  * Bulwark of Force) are FREE once per rest and cost a die only after that, which is why each has
- * its own small charge key as well — two costs, two counters, both visible.
+ * its own small charge key AS WELL AS `fallbackResourceKey` pointing at the pool — two costs, two
+ * counters, one Use button that spends whichever one is actually paying.
+ *
+ * It is also the app's first resource that REFILLS another: the bonus-action die regain carries
+ * `restoresResourceKey`, so using it hands a die back rather than telling the player to ask their
+ * GM, and `hidden` keeps it off the tab while the pool is full.
  *
  * Every number is read out of psiWarriorData rather than written into a string: the die size
  * scales d6 → d12 with level, and the stored feature blurbs say a flat "d6".
@@ -177,9 +182,22 @@ const PSI_WARRIOR_ACTIONS = {
     {
       name: 'Telekinetic Movement',
       tab: 'action', cost: 'action', resourceKey: 'telekinetic_movement_used',
+      fallbackResourceKey: 'psionic_energy_used',
       description: 'Move one Large or smaller object, or one willing creature, up to 30 feet to a'
         + ' space you can see within 30 feet. Free once per short or long rest; after that, spend'
         + ' a Psionic Energy die instead.',
+    },
+    // Not a power the dice fuel but the valve that refills them: as a bonus action you regain
+    // ONE expended die, and can't again until a rest. It carries `restoresResourceKey` so the
+    // Use button actually hands the die back, and `hidden` so it only appears with a die
+    // missing — offering "regain a die" on a full pool is a button that does nothing.
+    {
+      name: 'Regain a Psionic Energy Die',
+      tab: 'bonus', cost: 'bonus action', resourceKey: 'psionic_energy_regain_used',
+      restoresResourceKey: 'psionic_energy_used',
+      hidden: ({ characterData }) => (characterData?.psionic_energy_used ?? 0) <= 0,
+      description: "Regain one expended Psionic Energy die. You cannot do this again until"
+        + ' you finish a short or long rest.',
     },
   ],
   // Two powers again: one costs a bonus action of its own, the other rides on Psionic Strike.
@@ -187,6 +205,7 @@ const PSI_WARRIOR_ACTIONS = {
     {
       name: 'Psi-Powered Leap',
       tab: 'bonus', cost: 'bonus action', resourceKey: 'psi_powered_leap_used',
+      fallbackResourceKey: 'psionic_energy_used',
       description: 'Gain a flying speed equal to twice your walking speed until the end of the'
         + ' turn. Free once per long rest; after that, spend a Psionic Energy die instead.',
     },
@@ -208,6 +227,7 @@ const PSI_WARRIOR_ACTIONS = {
   },
   'Bulwark of Force': {
     tab: 'bonus', cost: 'bonus action', resourceKey: 'bulwark_of_force_used',
+    fallbackResourceKey: 'psionic_energy_used',
     description: 'Give yourself and other creatures within 30 feet half cover for 1 minute. Free'
       + ' once per long rest; after that, spend a Psionic Energy die instead.',
     compute: ({ scores }) => ({
@@ -392,6 +412,25 @@ export const ATTACK_RIDERS = [
       + ' that is smaller than your mount. You can also force an attack that targets your mount'
       + ' to target you instead, and when your mount makes a Dexterity saving throw for half'
       + ' damage it instead takes no damage on a success and half on a failure.',
+  },
+  {
+    source: 'Sharpshooter',
+    // `scope: 'ranged'` is every non-melee weapon card. A THROWN handaxe is a melee weapon
+    // making a ranged attack, so it keeps its melee card and does not get this — deliberate,
+    // and the same line isPureRangedWeapon already draws for the -5/+10 toggle. RAW clause 2
+    // ("your ranged attacks") arguably reaches a thrown attack, but that card is primarily the
+    // melee one and a cover clause on it would read as applying to the melee swing.
+    scope: 'ranged',
+    applies: ({ feats }) => hasFeat(feats, 'Sharpshooter'),
+    // COVER ONLY. Each of the feat's other clauses is shown as a number on this same card
+    // rather than as prose here, which is the point of modelling range as data:
+    //   - long range: the range badge says "no disadvantage past 150 ft (Sharpshooter)"
+    //   - the -5/+10: the power attack toggle
+    //   - within 5 ft: not Sharpshooter's clause at all (Crossbow Expert's), and the card's own
+    //     spacing note already owns it
+    // Cover has no number to attach to — the app has no distance-to-target model — so it stays
+    // prose, and is the only part that does.
+    text: 'Your ranged attacks ignore half cover and three-quarters cover.',
   },
 ];
 
@@ -872,6 +911,9 @@ export function buildActionEconomy({
       // resistance/immunity to nonmagical damage) — resolved once in getAttacks, so this tab
       // and the Items tab always agree. Null for a mundane weapon.
       magical: atk.magical || null,
+      // The weapon's distance band, resolved by getAttacks so this tab and the Items tab read
+      // one answer. Null for a melee weapon with no throw range.
+      range: atk.range || null,
       // Situational note: a ranged/thrown attack has disadvantage while an enemy is within
       // 5 ft. Crossbow Expert removes it. Rendered with a link to the Spacing page.
       spacingNote: (weapon && isRangedWeapon(weapon))
@@ -1358,6 +1400,10 @@ export function buildActionEconomy({
           continue;
         }
       }
+      // An entry may hide itself when it would be a no-op for THIS character (the Psi Warrior's
+      // die regain with a full pool). Level gating is already handled upstream; this is for
+      // state the level can't express.
+      if (d.hidden && d.hidden({ characterData, level, scores })) continue;
       // A `compute` entry derives its own detail/meta from the character, the same way a
       // RACIAL_ACTIONS entry does — Ferocious Charger's save DC scales with level and Strength,
       // so a fixed string would show the wrong number to everyone but one character.
@@ -1375,6 +1421,10 @@ export function buildActionEconomy({
         // The tab gives these their own section so they read as an additional economy.
         extraReaction: !!d.extraReaction,
         resourceKey: d.resourceKey,
+        // A second resource this entry's Use control touches: one it falls back to SPENDING once
+        // its own charge is gone, or one it hands a use back TO. See RestResourceControl.
+        fallbackResourceKey: d.fallbackResourceKey ?? null,
+        restoresResourceKey: d.restoresResourceKey ?? null,
       });
     }
   }

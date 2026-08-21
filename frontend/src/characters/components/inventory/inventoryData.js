@@ -621,6 +621,39 @@ export function computeAttack(weapon, { scores = {}, level = 1, proficient = fal
  * than in each surface so the Items tab and the Action Economy tab can't disagree about whether
  * a weapon overcomes nonmagical resistance. `computeAttack` stays about the numbers.
  */
+/** A weapon that IS a ranged weapon, as opposed to a melee one thrown at something. */
+const isPureRangedWeapon = (w) =>
+  (w?.weapon_type || '').toLowerCase() === 'ranged';
+
+/**
+ * The distance band a weapon attacks at: `{ normal, long, label, thrown }`, or null when it has
+ * none. A pure melee weapon has no band — its 5 ft is REACH, a different concept (and a Reach
+ * weapon's is 10) — so it returns null rather than a fake "5 ft".
+ *
+ * A THROWN melee weapon does have one: the range it can be thrown. `thrown` says which kind it
+ * is, so a card can say "Thrown 20/60 ft" rather than implying a dagger is a ranged weapon.
+ *
+ * `long` may be null on its own — a weapon with one distance and no falloff (a net) — in which
+ * case the label carries a single number instead of a band.
+ *
+ * The two numbers come from the weapons table as INTEGERS (`range_normal`/`range_long`), never
+ * parsed out of the properties text, which is why "Thrown (range 20/60)" living in `properties`
+ * is display prose here and not a data source.
+ */
+export function weaponRange(weapon) {
+  const normal = Number(weapon?.range_normal);
+  if (!Number.isFinite(normal) || normal <= 0) return null;
+  const longRaw = Number(weapon?.range_long);
+  const long = Number.isFinite(longRaw) && longRaw > 0 ? longRaw : null;
+  const thrown = !isPureRangedWeapon(weapon);
+  return {
+    normal,
+    long,
+    thrown,
+    label: `${thrown ? 'Thrown ' : ''}${long ? `${normal}/${long}` : `${normal}`} ft`,
+  };
+}
+
 export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [], armorProfText = '', raceArmor = [], hexWeaponUid = null, charClass = null, subclass = null } = {}) {
   const equipped = (inventory || []).filter((e) => e.category === 'weapons' && e.equipped);
   // Dueling requires wielding a single weapon (a shield is fine, a second weapon is not).
@@ -641,6 +674,14 @@ export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfT
     }
     // `{source, note}` when a feature makes this weapon's attacks magical, else null.
     row.magical = magicalAttackSource(w, { charClass, subclass, level, edition });
+    // The distance band, resolved ONCE here so the Items tab and the Action Economy card can
+    // never disagree — the same reason `magical` is resolved here rather than per surface.
+    // Sharpshooter lifts the long-range disadvantage, and only for a true ranged weapon: a
+    // thrown dagger is a melee weapon making a ranged attack, the same line the -5/+10 draws.
+    const band = weaponRange(w);
+    row.range = band && hasFeat(feats, 'Sharpshooter') && isPureRangedWeapon(w)
+      ? { ...band, longRangeOk: true, longRangeSource: 'Sharpshooter' }
+      : band;
     return row;
   });
 }

@@ -13,11 +13,13 @@ import { ARCANE_SHOT_USES } from '@/characters/components/classData/arcaneShotDa
 import { psionicDie, psionicDiceTotal } from '@/characters/components/classData/psiWarriorData';
 import BattleMasterPanel from '@/characters/components/subclass/BattleMasterPanel';
 import WeaponBondPanel from '@/characters/components/subclass/WeaponBondPanel';
+import PsionicEnergyPanel from '@/characters/components/subclass/PsionicEnergyPanel';
 
 // Interactive per-subclass panels (maneuver picker + superiority dice, bonded weapons, etc.).
 const FIGHTER_SUBCLASS_PANELS = {
   'Battle Master': BattleMasterPanel,
   'Eldritch Knight': WeaponBondPanel,
+  'Psi Warrior': PsionicEnergyPanel,
 };
 
 const FIGHTER_SKILLS = [
@@ -103,30 +105,38 @@ const REST_RESOURCES = [
     description: 'The pool that fuels Protective Field, Psionic Strike, Telekinetic Movement and your other psionic powers. All of it returns on a long rest.',
   },
   // The bonus-action regain is its own once-per-short-rest charge rather than a property of the
-  // pool: RAW you can do it again only after a rest, whatever the pool is doing. Spending the
-  // charge does NOT hand a die back automatically — a player can never restore a resource in
-  // this app, only the GM's − control can, which is what the description says out loud.
+  // pool: RAW you can do it again only after a rest, whatever the pool is doing. `restoresKey`
+  // makes the Use button actually hand a die back — the ONE place a player restores a resource
+  // in this app, because here the restore IS the feature firing, not a player editing a counter,
+  // and it is gated behind this row's own charge. `hidden` drops the row while the pool is full,
+  // since regaining a die you haven't spent does nothing.
   {
     key: 'psionic_energy_regain_used', label: 'Regain a Psionic Energy Die (Short Rest)',
     total: () => 1, recharge: 'short', minLevel: 3, subclass: 'Psi Warrior',
-    description: 'Bonus action: recover one expended Psionic Energy die. Ask your GM to add the die back above.',
+    restoresKey: 'psionic_energy_used',
+    hidden: ({ data }) => (data?.psionic_energy_used ?? 0) <= 0,
+    description: 'Bonus action: recover one expended Psionic Energy die.',
   },
-  // Telekinetic Movement and Psi-Powered Leap are each FREE once per rest and cost a Psionic
-  // Energy die every time after that. These rows track the free use; the die is spent from the
-  // pool above, so the two costs stay visibly separate.
+  // Telekinetic Movement, Psi-Powered Leap and Bulwark of Force are each FREE once per rest and
+  // cost a Psionic Energy die every time after that. These rows track the free use; `fallbackKey`
+  // points the Use button at the pool above once the free use is gone, so the control keeps
+  // working instead of going dead while the character can still legally use the feature.
   {
     key: 'telekinetic_movement_used', label: 'Telekinetic Movement — free use (Short Rest)',
     total: () => 1, recharge: 'short', minLevel: 3, subclass: 'Psi Warrior',
+    fallbackKey: 'psionic_energy_used',
     description: 'Action: move one Large or smaller object, or one willing creature, up to 30 feet. Once the free use is spent, spend a Psionic Energy die instead.',
   },
   {
     key: 'psi_powered_leap_used', label: 'Psi-Powered Leap — free use (Long Rest)',
     total: () => 1, recharge: 'long', minLevel: 7, subclass: 'Psi Warrior',
+    fallbackKey: 'psionic_energy_used',
     description: 'Bonus action: gain a flying speed equal to twice your walking speed until the end of the turn. Once the free use is spent, spend a Psionic Energy die instead.',
   },
   {
     key: 'bulwark_of_force_used', label: 'Bulwark of Force — free use (Long Rest)',
     total: () => 1, recharge: 'long', minLevel: 15, subclass: 'Psi Warrior',
+    fallbackKey: 'psionic_energy_used',
     description: 'Bonus action: give yourself and other creatures within 30 feet half cover for 1 minute. Once the free use is spent, spend a Psionic Energy die instead.',
   },
   // Subclass-gated: only a Samurai sees this. Three uses per long rest; the temporary hit points

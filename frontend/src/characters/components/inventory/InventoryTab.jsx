@@ -14,6 +14,7 @@ import {
 } from '@/characters/components/inventory/ammunitionData';
 import WeaponAmmoControl from '@/characters/components/inventory/WeaponAmmoControl';
 import MagicAttackBadge from '@/characters/components/inventory/MagicAttackBadge';
+import WeaponRangeBadge from '@/characters/components/inventory/WeaponRangeBadge';
 import WeaponPropertyBadges from '@/characters/components/inventory/WeaponPropertyBadges';
 import { weaponBadges, weaponFacets } from '@/characters/components/inventory/weaponPropertyData';
 import ItemPickerDialog from '@/characters/components/inventory/ItemPickerDialog';
@@ -359,6 +360,9 @@ export default function InventoryTab({
                   {a.hexNote && (
                     <span className="text-[11px] text-violet-600 leading-tight" data-testid={`attack-hex-${a.uid}`}>{a.hexNote}</span>
                   )}
+                  {/* Same band, same component as the Action Economy card — resolved once in
+                      getAttacks so the two surfaces cannot disagree. */}
+                  <WeaponRangeBadge range={a.range} testId={`attack-range-${a.uid}`} />
                 </div>
               ))}
             </div>

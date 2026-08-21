@@ -13,6 +13,7 @@ import { gatherProficiencies } from '@/characters/components/inventory/inventory
 import { isHexWarrior, hexWeaponUid as storedHexWeaponUid } from '@/characters/components/inventory/weaponBondData';
 import WeaponAmmoControl from '@/characters/components/inventory/WeaponAmmoControl';
 import MagicAttackBadge from '@/characters/components/inventory/MagicAttackBadge';
+import WeaponRangeBadge from '@/characters/components/inventory/WeaponRangeBadge';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import {
   buildActionEconomy, characterSpellNames, TABS, TAB_LABELS, SOURCE_ORDER,
@@ -234,6 +235,12 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
   // the block — so the Use button reads as belonging to that feature, not to the attack.
   const attached = entry.arcaneShot ? resource : null;
   const topResource = entry.arcaneShot ? null : resource;
+  // A second resource this entry's Use control touches: one it falls back to SPENDING once its
+  // own free use is gone (Telekinetic Movement → Psionic Energy dice), or one it hands a use
+  // back TO (the Psi Warrior's die regain). Looked up in the same index the attached-feature
+  // blocks use, so a card gets live counts for both without extra threading.
+  const fallbackResource = entry.fallbackResourceKey ? resourceByKey[entry.fallbackResourceKey] ?? null : null;
+  const restoresResource = entry.restoresResourceKey ? resourceByKey[entry.restoresResourceKey] ?? null : null;
   // The live inventory entry behind an Ammunition weapon (the ammo control needs the weapon's
   // stored `ammo_uid`, which only the inventory has).
   const ammoWeapon = entry.needsAmmo && entry.weaponUid
@@ -309,6 +316,14 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
           </p>
         ) : (
           entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>
+        )}
+        {/* The distance band, directly under the numbers it qualifies. Separate from the spacing
+            note below, which is a different rule about a different distance (an enemy within
+            5 ft), so the two are never merged into one line. */}
+        {entry.range && (
+          <div className="mt-0.5">
+            <WeaponRangeBadge range={entry.range} testId={`ae-range-${entry.key}`} />
+          </div>
         )}
         {/* A save DC this feature imposes, as a clickable number rather than arithmetic baked
             into the sentence above it — the same treatment the Arcane Shot DC gets. */}
@@ -460,7 +475,15 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
       </div>
       {/* Rest-rechargeable features get the same Use button as the Features tab. */}
       {topResource && (
-        <RestResourceControl row={topResource} onChange={onChange} readOnly={readOnly} isGm={isGm} idPrefix="ae-rest" />
+        <RestResourceControl
+          row={topResource}
+          fallbackRow={fallbackResource}
+          restoresRow={restoresResource}
+          onChange={onChange}
+          readOnly={readOnly}
+          isGm={isGm}
+          idPrefix="ae-rest"
+        />
       )}
     </div>
   );

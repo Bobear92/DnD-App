@@ -49,6 +49,16 @@ export function psionicDie(level = 1) {
   return `d${psionicDieSize(level)}`;
 }
 
+/**
+ * The next level at which the Psionic Energy die grows, as `{ level, die }` — null once the die
+ * is already at its maximum. Progression information (what the pool BECOMES), not a "when you
+ * got it" tag, so a sheet can spell it out in words.
+ */
+export function nextPsionicDieStep(level = 1) {
+  const next = [...DIE_STEPS].reverse().find((s) => s.level > Number(level));
+  return next ? { level: next.level, die: `d${next.die}` } : null;
+}
+
 /** Pool size: twice the proficiency bonus. */
 export function psionicDiceTotal(level = 1) {
   return 2 * profBonus(level);

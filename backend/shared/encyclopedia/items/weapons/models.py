@@ -17,6 +17,19 @@ class Weapon(Base):
     damage_type = Column(String(50), nullable=False)
 
     properties = Column(Text)
+
+    # The distance band at which this weapon attacks: normal range, then long range (attacks
+    # beyond normal but within long are at disadvantage). Two INTEGERS rather than a "150/600"
+    # string so consumers never parse prose — the same call the spells table's free-text `range`
+    # got wrong and that `docs/spell-upcast-review.md` exists to document.
+    #
+    # NULL for a weapon with no band. A melee weapon's 5-ft "range" is REACH, a different concept
+    # (a Reach weapon's is 10 ft), so it is deliberately not stored here. A thrown melee weapon
+    # DOES get a band — its throw range — because that is a real distance attack.
+    # `range_long` alone may be NULL for a weapon with a single distance and no falloff.
+    range_normal = Column(Integer, nullable=True)
+    range_long = Column(Integer, nullable=True)
+
     cost = Column(String(50), nullable=False)
     weight = Column(String(50), nullable=False)
 

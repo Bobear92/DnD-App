@@ -11,6 +11,7 @@ import {
   nonProficientEquippedArmor, armorNonProficiencyNote, wornNonProficientArmor,
   assignHand, handContents, migrateHands, freeHandCount,
   isTwoHandedWeapon, weaponVersatileDie, isVersatileWeapon, isShieldEntry,
+  weaponRange,
 } from '@/characters/components/inventory/inventoryData';
 
 const armor = (over) => ({ uid: Math.random().toString(), category: 'armor', equipped: false, ...over });
@@ -790,5 +791,79 @@ describe('armor Stealth disadvantage', () => {
       expect(armorStealthNote(halfPlate({ equipped: true }), { feats: mam }))
         .toMatch(/negated by Medium Armor Master/i);
     });
+  });
+});
+
+
+// A weapon's distance band. Two integers off the weapons table, never parsed from the
+// properties text — "Thrown (range 20/60)" living in `properties` is display prose.
+describe('weaponRange', () => {
+  const ranged = (over = {}) => ({ name: 'Longbow', weapon_type: 'Ranged', range_normal: 150, range_long: 600, ...over });
+  const thrown = (over = {}) => ({ name: 'Handaxe', weapon_type: 'Melee', range_normal: 20, range_long: 60, ...over });
+
+  it('reads the band off a ranged weapon', () => {
+    expect(weaponRange(ranged())).toMatchObject({ normal: 150, long: 600, thrown: false, label: '150/600 ft' });
+  });
+
+  // The distinction the card needs: a dagger is a MELEE weapon you can throw, not a bow.
+  it('marks a thrown melee weapon as thrown and says so in the label', () => {
+    expect(weaponRange(thrown())).toMatchObject({ thrown: true, label: 'Thrown 20/60 ft' });
+  });
+
+  // A pure melee weapon's 5 ft is REACH, a different concept (a Reach weapon's is 10), so the
+  // band must be absent rather than a misleading "5 ft".
+  it('gives a melee weapon with no throw range no band at all', () => {
+    expect(weaponRange({ name: 'Longsword', weapon_type: 'Melee' })).toBeNull();
+    expect(weaponRange({ name: 'Longsword', weapon_type: 'Melee', range_normal: null })).toBeNull();
+    expect(weaponRange({ name: 'Longsword', weapon_type: 'Melee', range_normal: 0 })).toBeNull();
+  });
+
+  it('handles a single distance with no falloff', () => {
+    expect(weaponRange(ranged({ name: 'Net', range_normal: 5, range_long: null })))
+      .toMatchObject({ normal: 5, long: null, label: '5 ft' });
+  });
+
+  it('is null for a weapon that predates the columns', () => {
+    expect(weaponRange({ name: 'Longbow', weapon_type: 'Ranged' })).toBeNull();
+    expect(weaponRange(undefined)).toBeNull();
+  });
+});
+
+// Sharpshooter lifts the long-range disadvantage. The decision lives HERE, in getAttacks, so the
+// Items tab and the Action Economy card cannot give different answers — the same reason
+// `magical` is resolved here.
+describe('getAttacks — range band', () => {
+  const bow = { uid: 'w1', category: 'weapons', name: 'Longbow', weapon_type: 'Ranged', equipped: true, range_normal: 150, range_long: 600 };
+  const axe = { uid: 'w2', category: 'weapons', name: 'Handaxe', weapon_type: 'Melee', equipped: true, range_normal: 20, range_long: 60 };
+  const sword = { uid: 'w3', category: 'weapons', name: 'Longsword', weapon_type: 'Melee', equipped: true };
+  const SS = [{ id: 40, name: 'Sharpshooter' }];
+  const rows = (inventory, feats = []) => getAttacks({
+    inventory, feats, scores: { strength: 16, dexterity: 16 }, level: 5,
+    weaponProfText: 'Simple weapons, martial weapons',
+  });
+  const rangeOf = (inventory, feats) => rows(inventory, feats)[0].range;
+
+  it('puts the band on the attack row', () => {
+    expect(rangeOf([bow])).toMatchObject({ normal: 150, long: 600 });
+  });
+
+  it('leaves a melee weapon without one', () => {
+    expect(rangeOf([sword])).toBeNull();
+  });
+
+  it('flags the long-range band for a Sharpshooter and names the source', () => {
+    expect(rangeOf([bow], SS)).toMatchObject({ longRangeOk: true, longRangeSource: 'Sharpshooter' });
+  });
+
+  it('does not flag it without the feat', () => {
+    expect(rangeOf([bow]).longRangeOk).toBeFalsy();
+  });
+
+  // RAW Sharpshooter reads "a ranged weapon". A thrown handaxe is a melee weapon making a ranged
+  // attack, so it keeps its band but not the lift — the same line the -5/+10 toggle draws.
+  it('does not flag a THROWN melee weapon, which is not a ranged weapon', () => {
+    const band = rangeOf([axe], SS);
+    expect(band).toMatchObject({ thrown: true, normal: 20 });
+    expect(band.longRangeOk).toBeFalsy();
   });
 });

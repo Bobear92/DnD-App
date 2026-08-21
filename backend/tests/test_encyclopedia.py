@@ -427,3 +427,76 @@ class TestSpellEdition:
         spells = self._names(client, gm_h, campaign_id=campaign_id, edition="5.5e")
         assert len(spells) == 1
         assert spells[0]["description"] == "GM 2024 override."
+
+
+class TestWeaponRange:
+    """
+    A weapon's distance band — two integers, not a "150/600" string, so the sheet never parses
+    prose to answer "what's my longbow's range?". Melee weapons have no band: their 5 ft is
+    REACH, a different concept, while a THROWN melee weapon does get one (its throw range).
+    """
+
+    PREFIX = "/api/encyclopedia/items/weapons"
+
+    def _create(self, client, headers, **over):
+        payload = {**WEAPON, **over}
+        r = client.post(self.PREFIX, json=payload, headers=headers)
+        assert r.status_code == 201, r.text
+        return r.json()
+
+    def test_range_defaults_to_null(self, client):
+        """A melee weapon carries no band — the columns must not invent a 0 or a 5."""
+        admin_h, _ = make_admin(client)
+        body = self._create(client, admin_h)
+        assert body["range_normal"] is None
+        assert body["range_long"] is None
+
+    def test_range_round_trips_in_detail(self, client):
+        admin_h, _ = make_admin(client)
+        created = self._create(
+            client, admin_h, name="Test Longbow", weapon_type="Ranged",
+            range_normal=150, range_long=600,
+        )
+        body = client.get(f"{self.PREFIX}/{created['id']}", headers=admin_h).json()
+        assert body["range_normal"] == 150
+        assert body["range_long"] == 600
+
+    def test_range_present_in_list(self, client):
+        """The list endpoint is what the character sheet reads — a field missing from the list
+        schema is silently dropped there while the detail endpoint looks fine."""
+        admin_h, _ = make_admin(client)
+        self._create(
+            client, admin_h, name="Test Shortbow", weapon_type="Ranged",
+            range_normal=80, range_long=320,
+        )
+        rows = client.get(self.PREFIX, headers=admin_h).json()
+        row = next(w for w in rows if w["name"] == "Test Shortbow")
+        assert row["range_normal"] == 80
+        assert row["range_long"] == 320
+
+    def test_range_survives_update(self, client):
+        admin_h, _ = make_admin(client)
+        created = self._create(client, admin_h, name="Test Dagger", range_normal=20, range_long=60)
+        r = client.put(
+            f"{self.PREFIX}/{created['id']}",
+            json={"range_normal": 30, "range_long": 120},
+            headers=admin_h,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["range_normal"] == 30
+        assert r.json()["range_long"] == 120
+
+    def test_long_range_may_be_null_on_its_own(self, client):
+        """A weapon with one distance and no falloff — a normal band with no long band is valid
+        and must not be coerced."""
+        admin_h, _ = make_admin(client)
+        body = self._create(client, admin_h, name="Test Net", weapon_type="Ranged", range_normal=5)
+        assert body["range_normal"] == 5
+        assert body["range_long"] is None
+
+    def test_negative_range_rejected(self, client):
+        admin_h, _ = make_admin(client)
+        r = client.post(
+            self.PREFIX, json={**WEAPON, "name": "Test Bad", "range_normal": -10}, headers=admin_h
+        )
+        assert r.status_code == 422

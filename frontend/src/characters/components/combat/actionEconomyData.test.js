@@ -1234,11 +1234,19 @@ describe('buildActionEconomy — ATTACK_RIDERS', () => {
     characterData: {},
     inventory: [
       { uid: 'w1', category: 'weapons', name: 'Longsword', weapon_type: 'Melee', equipped: true },
-      { uid: 'w2', category: 'weapons', name: 'Longbow', weapon_type: 'Ranged', equipped: true },
+      {
+        uid: 'w2', category: 'weapons', name: 'Longbow', weapon_type: 'Ranged', equipped: true,
+        range_normal: 150, range_long: 600,
+      },
     ],
+    // `range` is resolved by getAttacks upstream, so an attack row carries it already — the
+    // Sharpshooter flag on the band is what these tests assert against.
     attacks: [
       { uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true },
-      { uid: 'w2', name: 'Longbow', toHit: '+5', damage: '1d8 + 1 piercing', proficient: true },
+      {
+        uid: 'w2', name: 'Longbow', toHit: '+5', damage: '1d8 + 1 piercing', proficient: true,
+        range: { normal: 150, long: 600, thrown: false, label: '150/600 ft' },
+      },
     ],
     scores: { strength: 16, dexterity: 12 },
     spellIndex: {},
@@ -1278,6 +1286,85 @@ describe('buildActionEconomy — ATTACK_RIDERS', () => {
   it('reaches an unarmed strike, which is a melee attack', () => {
     const bare = { ...mounted, inventory: [], attacks: [] };
     expect(ridersOn('Unarmed Strike', bare)).toContain('Mounted Combatant');
+  });
+
+  // Sharpshooter's long-range and cover clauses had no home: the -5/+10 got a toggle on the card
+  // while the other two stayed prose on the feat card, which is not where you read them.
+  describe('Sharpshooter', () => {
+    const ss = { characterData: { feats: [{ id: 40, name: 'Sharpshooter', level: 4 }] } };
+    const riderOn = (name, extra) => buildActionEconomy(args(extra)).action
+      .find((e) => e.source === 'Weapon' && e.name === name)?.riders
+      ?.find((r) => r.source === 'Sharpshooter');
+
+    it('lands on ranged attacks only', () => {
+      expect(ridersOn('Longbow', ss)).toContain('Sharpshooter');
+      expect(ridersOn('Longsword', ss)).not.toContain('Sharpshooter');
+    });
+
+    it('omits it entirely without the feat', () => {
+      expect(ridersOn('Longbow')).not.toContain('Sharpshooter');
+    });
+
+    // Cover is the ONLY clause left in prose — every other one is now a number on this card.
+    // The app has no distance-to-target model, so cover has nothing to attach to.
+    it('carries the cover clause and nothing else', () => {
+      const rider = riderOn('Longbow', ss);
+      expect(rider.text).toMatch(/half cover and three-quarters cover/i);
+      expect(rider.text).not.toMatch(/long range/i);
+    });
+
+    // The long-range clause moved OUT of the rider and onto the range band. The DECISION is
+    // getAttacks' (so the Items tab gets the same answer) — see inventoryData's weaponRange
+    // tests; this tab's job is to carry the band through to the card untouched.
+    it('carries the band through to the card, Sharpshooter flag and all', () => {
+      const flagged = args(ss);
+      flagged.attacks = flagged.attacks.map((a) => (a.name === 'Longbow'
+        ? { ...a, range: { ...a.range, longRangeOk: true, longRangeSource: 'Sharpshooter' } }
+        : a));
+      const bow = buildActionEconomy(flagged).action.find((e) => e.name === 'Longbow');
+      expect(bow.range).toMatchObject({ longRangeOk: true, longRangeSource: 'Sharpshooter' });
+    });
+
+    it('carries an unflagged band through unchanged', () => {
+      const bow = buildActionEconomy(args()).action.find((e) => e.name === 'Longbow');
+      expect(bow.range).toMatchObject({ normal: 150, long: 600 });
+      expect(bow.range.longRangeOk).toBeFalsy();
+    });
+
+    // A melee weapon has no band at all — its 5 ft is reach, a different concept.
+    it('gives a melee weapon no band to annotate', () => {
+      expect(buildActionEconomy(args(ss)).action.find((e) => e.name === 'Longsword').range)
+        .toBeNull();
+    });
+
+    // The -5/+10 is already a toggle on this card; repeating it in the rider would read as a
+    // second, separate bonus on top of the one the toggle applies.
+    it('does not restate the power attack the card already offers', () => {
+      const bow = buildActionEconomy(args(ss)).action.find((e) => e.name === 'Longbow');
+      expect(bow.powerAttack).toBeTruthy();
+      expect(riderOn('Longbow', ss).text).not.toMatch(/-5|\+10|penalty/i);
+    });
+
+    // Sharpshooter does NOT lift the within-5-ft disadvantage (Crossbow Expert does), so the
+    // rider must not imply it while the card's own spacing note still stands.
+    it('says nothing about attacking within 5 feet', () => {
+      expect(riderOn('Longbow', ss).text).not.toMatch(/5 f(ee)?t|within 5/i);
+    });
+
+    // The two clauses are worded identically in the 2024 feat, so one edition-neutral row serves
+    // both — the same call Polearm Master's rider makes.
+    it('applies in 2024 as well, where the card has no power-attack toggle', () => {
+      const in2024 = { ...ss, edition: '5.5e' };
+      expect(ridersOn('Longbow', in2024)).toContain('Sharpshooter');
+      expect(buildActionEconomy(args(in2024)).action.find((e) => e.name === 'Longbow').powerAttack)
+        .toBeFalsy();
+    });
+
+    it('stacks with another ranged rider rather than replacing it', () => {
+      const bow = buildActionEconomy(args(ss)).action.find((e) => e.name === 'Longbow');
+      expect(bow.riders.map((r) => r.source)).toEqual(['Sharpshooter']);
+      expect(bow.detail ?? '').not.toMatch(/Sharpshooter/);
+    });
   });
 });
 
@@ -1938,6 +2025,58 @@ describe('buildActionEconomy — Psi Warrior (Fighter subclass)', () => {
     };
     expect(names('5.5e')).toEqual(names('5e'));
     expect(names('5.5e')).toContain('Bulwark of Force');
+  });
+
+  // The three free-once-per-rest powers each carry a SECOND cost. Before this, spending the free
+  // use left the card reading "0 / 1 remaining" with a dead Use button while the character could
+  // still legally use the feature for a die — the card said unavailable when it wasn't.
+  describe('free-use powers fall back to the Psionic Energy pool', () => {
+    it('Telekinetic Movement points its fallback at the shared pool', () => {
+      const e = entry(3, 'action', 'Telekinetic Movement');
+      expect(e.resourceKey).toBe('telekinetic_movement_used');
+      expect(e.fallbackResourceKey).toBe('psionic_energy_used');
+    });
+
+    it('Psi-Powered Leap and Bulwark of Force do the same', () => {
+      expect(entry(7, 'bonus', 'Psi-Powered Leap').fallbackResourceKey).toBe('psionic_energy_used');
+      expect(entry(15, 'bonus', 'Bulwark of Force').fallbackResourceKey).toBe('psionic_energy_used');
+    });
+
+    // A power that costs a die EVERY time must not claim a free use it never had.
+    it('leaves the always-costs-a-die powers without a fallback', () => {
+      expect(entry(3, 'reaction', 'Protective Field').fallbackResourceKey).toBeFalsy();
+      expect(entry(10, 'no_action', 'Guarded Mind (end a condition)').fallbackResourceKey).toBeFalsy();
+    });
+  });
+
+  // The bonus-action regain was reset by the backend on every rest but had no UI at all — there
+  // was no way to spend the charge it was clearing.
+  describe('the bonus-action die regain', () => {
+    const spent = (n) => ({ characterData: { psionic_energy_used: n } });
+
+    it('is hidden while the pool is full', () => {
+      expect(entry(3, 'bonus', 'Regain a Psionic Energy Die')).toBeFalsy();
+    });
+
+    it('appears once a die has been spent, and hands one back', () => {
+      const e = entry(3, 'bonus', 'Regain a Psionic Energy Die', spent(1));
+      expect(e.cost).toBe('bonus action');
+      expect(e.resourceKey).toBe('psionic_energy_regain_used');
+      expect(e.restoresResourceKey).toBe('psionic_energy_used');
+    });
+
+    // It is the valve that refills the pool, so it must never SPEND from it.
+    it('does not spend a die to regain a die', () => {
+      const e = entry(3, 'bonus', 'Regain a Psionic Energy Die', spent(2));
+      expect(e.resourceKey).not.toBe('psionic_energy_used');
+      expect(e.fallbackResourceKey).toBeFalsy();
+    });
+
+    it('is available from 3rd level in both editions', () => {
+      expect(entry(3, 'bonus', 'Regain a Psionic Energy Die', {
+        ...spent(1), edition: '5.5e',
+      })).toBeTruthy();
+    });
   });
 
   it('gives another Fighter subclass none of it', () => {

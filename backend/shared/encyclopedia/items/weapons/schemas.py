@@ -11,6 +11,8 @@ class WeaponBase(BaseModel):
     damage: str = Field(..., min_length=1, max_length=50)
     damage_type: str = Field(..., min_length=1, max_length=50)
     properties: Optional[str] = None
+    range_normal: Optional[int] = Field(None, ge=0)
+    range_long: Optional[int] = Field(None, ge=0)
     cost: str = Field(..., min_length=1, max_length=50)
     weight: str = Field(..., min_length=1, max_length=50)
     description: Optional[str] = None
@@ -28,6 +30,8 @@ class WeaponUpdate(BaseModel):
     damage: Optional[str] = Field(None, min_length=1, max_length=50)
     damage_type: Optional[str] = Field(None, min_length=1, max_length=50)
     properties: Optional[str] = None
+    range_normal: Optional[int] = Field(None, ge=0)
+    range_long: Optional[int] = Field(None, ge=0)
     cost: Optional[str] = Field(None, min_length=1, max_length=50)
     weight: Optional[str] = Field(None, min_length=1, max_length=50)
     description: Optional[str] = None

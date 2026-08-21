@@ -136,10 +136,34 @@ describe('class configs — validity', () => {
       }
     });
 
-    // A player can never restore a resource in this app, so the regain row must say who can
-    // rather than implying the button hands a die back.
-    it('tells the player the GM restores the regained die', () => {
-      expect(pool('psionic_energy_regain_used').description).toMatch(/GM/);
+    // The regain row is the ONE sanctioned exception to "a player never restores a resource":
+    // handing the die back IS the feature firing, and it is gated behind the row's own charge.
+    // It used to punt to the GM in prose, which left the backend clearing a charge nobody could
+    // spend.
+    it('hands the die back itself rather than telling the player to ask the GM', () => {
+      const regain = pool('psionic_energy_regain_used');
+      expect(regain.restoresKey).toBe('psionic_energy_used');
+      expect(regain.description).not.toMatch(/GM/);
+    });
+
+    // Offering "regain a die" on a full pool is a button that does nothing.
+    it('hides the regain row until a die has actually been spent', () => {
+      const regain = pool('psionic_energy_regain_used');
+      expect(regain.hidden({ level: 3, data: {}, scores: {} })).toBe(true);
+      expect(regain.hidden({ level: 3, data: { psionic_energy_used: 1 }, scores: {} })).toBe(false);
+    });
+
+    // The three free-once-per-rest powers cost a die after that, so their Use control has to
+    // keep working once the free use is gone instead of claiming the feature is unavailable.
+    it('points every free-use power at the pool as its fallback cost', () => {
+      for (const key of ['telekinetic_movement_used', 'psi_powered_leap_used', 'bulwark_of_force_used']) {
+        expect(pool(key).fallbackKey).toBe('psionic_energy_used');
+      }
+    });
+
+    // The valve that refills the pool must never spend from it.
+    it('does not give the regain row a fallback cost', () => {
+      expect(pool('psionic_energy_regain_used').fallbackKey).toBeFalsy();
     });
   });
 });

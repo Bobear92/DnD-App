@@ -143,6 +143,27 @@ describe('ClassSheet — rest resource descriptions', () => {
       .toHaveTextContent('advantage on your weapon attack rolls');
   });
 
+  // The pool card answers "how many dice do I have and what do I roll?" — the tracker states a
+  // remaining count and each power's card states its own formula, but nothing stated the pool.
+  it('shows the Psionic Energy pool card under the Psi Warrior subclass tab', () => {
+    render(
+      <FighterSheet
+        data={{ ...FIGHTER_DATA, subclass: 'Psi Warrior' }}
+        level={5}
+        section="features"
+        scores={{ intelligence: 16 }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Psi Warrior Features/i }));
+    expect(screen.getByTestId('psionic-energy-pool')).toHaveTextContent('6 × d8');
+  });
+
+  it('gives another Fighter subclass no Psionic Energy card', () => {
+    fighter();
+    fireEvent.click(screen.getByRole('button', { name: /Champion Features/i }));
+    expect(screen.queryByTestId('psionic-energy-panel')).not.toBeInTheDocument();
+  });
+
   it('hides Fighting Spirit from a Champion', () => {
     render(<FighterSheet data={{ ...FIGHTER_DATA, subclass: 'Champion' }} level={10} section="features" />);
     expect(screen.queryByTestId('rest-resource-fighting_spirit_used')).not.toBeInTheDocument();

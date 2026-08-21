@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   psionicDieSize, psionicDie, psionicDiceTotal, psionicDieAndInt,
   psiSaveDc, psiSaveDcBreakdown, bulwarkTargets,
+  nextPsionicDieStep,
 } from '@/characters/components/classData/psiWarriorData';
 
 describe('psiWarriorData', () => {
@@ -65,5 +66,29 @@ describe('psiWarriorData', () => {
     expect(bulwarkTargets(20)).toBe(5);
     expect(bulwarkTargets(10)).toBe(1);
     expect(bulwarkTargets(8)).toBe(1);
+  });
+});
+
+// The die-growth steps as PROGRESSION information — what the pool becomes — so a sheet can say
+// it in words instead of tagging a feature with the level it was gained.
+describe('nextPsionicDieStep', () => {
+  it('names the next growth level and die', () => {
+    expect(nextPsionicDieStep(3)).toEqual({ level: 5, die: 'd8' });
+    expect(nextPsionicDieStep(4)).toEqual({ level: 5, die: 'd8' });
+    expect(nextPsionicDieStep(5)).toEqual({ level: 11, die: 'd10' });
+    expect(nextPsionicDieStep(11)).toEqual({ level: 17, die: 'd12' });
+  });
+
+  it('returns null once the die is at its maximum', () => {
+    expect(nextPsionicDieStep(17)).toBeNull();
+    expect(nextPsionicDieStep(20)).toBeNull();
+  });
+
+  // Whatever it reports must be the size psionicDie actually hands back at that level.
+  it('agrees with psionicDie at the level it names', () => {
+    for (const lvl of [3, 5, 11]) {
+      const step = nextPsionicDieStep(lvl);
+      expect(psionicDie(step.level)).toBe(step.die);
+    }
   });
 });
