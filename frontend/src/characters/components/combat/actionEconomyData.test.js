@@ -340,7 +340,7 @@ describe('buildActionEconomy — Fighter', () => {
     expect(ec.action.map((e) => e.name)).toContain('Study'); // 2024 universal action
   });
 
-  it('collapses known spells into one "Cast a Spell" entry per casting-time bucket', () => {
+  it('lists each spell in the bucket its casting time costs', () => {
     const args = fighterArgs(3, '5e');
     args.characterData = { prepared_spells: ['Healing Word', 'Shield', 'Fireball', 'Mage Hand'] };
     args.spellIndex = {
@@ -350,17 +350,143 @@ describe('buildActionEconomy — Fighter', () => {
       'mage hand': { casting_time: '1 action', level: 0, school: 'Conjuration' },
     };
     const ec = buildActionEconomy(args);
-    // Individual spells are no longer listed — one generic entry per bucket.
-    const spellActions = ec.action.filter((e) => e.source === 'Spell');
-    expect(spellActions).toHaveLength(1);
-    expect(spellActions[0].name).toBe('Cast a Spell');
-    expect(ec.action.map((e) => e.name)).not.toContain('Fireball');
-    expect(ec.action.map((e) => e.name)).not.toContain('Mage Hand');
-    expect(ec.bonus.find((e) => e.source === 'Spell').name).toBe('Cast a Spell');
-    expect(ec.reaction.find((e) => e.source === 'Spell').name).toBe('Cast a Spell');
+    // Cantrips first, then by level — the order a caster scans in.
+    expect(ec.action.filter((e) => e.source === 'Spell').map((e) => e.name))
+      .toEqual(['Mage Hand', 'Fireball']);
+    expect(ec.bonus.filter((e) => e.source === 'Spell').map((e) => e.name)).toEqual(['Healing Word']);
+    expect(ec.reaction.filter((e) => e.source === 'Spell').map((e) => e.name)).toEqual(['Shield']);
+    // The old collapsed pointer is gone.
+    expect(ec.action.map((e) => e.name)).not.toContain('Cast a Spell');
   });
 
-  it('shows no "Cast a Spell" entry when the character can cast nothing', () => {
+  it('says the level and school on a spell card, and flags concentration', () => {
+    const args = fighterArgs(3, '5e');
+    args.characterData = { prepared_spells: ['Fireball', 'Hex'] };
+    args.spellIndex = {
+      fireball: { casting_time: '1 action', level: 3, school: 'Evocation' },
+      hex: { casting_time: '1 bonus action', level: 1, school: 'Enchantment', concentration: true },
+    };
+    const ec = buildActionEconomy(args);
+    expect(ec.action.find((e) => e.name === 'Fireball').detail).toBe('Level 3 · Evocation');
+    // Concentration changes what you can do on LATER turns, so it belongs on the card.
+    expect(ec.bonus.find((e) => e.name === 'Hex').detail).toMatch(/Concentration/);
+  });
+
+  it('leaves out a spell whose casting time is longer than a turn', () => {
+    const args = fighterArgs(3, '5e');
+    args.characterData = { prepared_spells: ['Fireball', 'Find Familiar'] };
+    args.spellIndex = {
+      fireball: { casting_time: '1 action', level: 3, school: 'Evocation' },
+      'find familiar': { casting_time: '1 hour', level: 1, school: 'Conjuration', ritual: true },
+    };
+    const ec = buildActionEconomy(args);
+    const names = [...ec.action, ...ec.bonus, ...ec.reaction].map((e) => e.name);
+    expect(names).toContain('Fireball');
+    // Not a combat action — left off rather than filed under a wrong bucket.
+    expect(names).not.toContain('Find Familiar');
+  });
+
+  it('leaves out a spell the compendium does not know, rather than guessing a bucket', () => {
+    const args = fighterArgs(3, '5e');
+    args.characterData = { prepared_spells: ['Homebrew Bolt'] };
+    args.spellIndex = {};
+    const ec = buildActionEconomy(args);
+    expect([...ec.action, ...ec.bonus, ...ec.reaction].map((e) => e.name)).not.toContain('Homebrew Bolt');
+  });
+
+  describe('spells reach the tab from every source the Spells tab shows', () => {
+    const idx = {
+      'hellish rebuke': { casting_time: '1 reaction', level: 1, school: 'Evocation' },
+      thaumaturgy: { casting_time: '1 action', level: 0, school: 'Transmutation' },
+      telekinesis: { casting_time: '1 action', level: 5, school: 'Transmutation', concentration: true },
+      'misty step': { casting_time: '1 bonus action', level: 2, school: 'Conjuration' },
+      fireball: { casting_time: '1 action', level: 3, school: 'Evocation' },
+    };
+
+    it('lists a RACIAL reaction spell — the gap that hid a Tiefling reaction entirely', () => {
+      const args = fighterArgs(5, '5e');
+      args.race = 'Tiefling';
+      args.characterData = { race_traits: ['Infernal Legacy'] };
+      args.spellIndex = idx;
+      const ec = buildActionEconomy(args);
+      const rebuke = ec.reaction.find((e) => e.name === 'Hellish Rebuke');
+      expect(rebuke).toBeTruthy();
+      expect(rebuke.source).toBe('Spell');
+      expect(rebuke.detail).toMatch(/From racial/);
+      // The trait meters it, so the card gets the same Use control the Spells-tab row has,
+      // writing the SAME key — one counter, two surfaces, no drift.
+      expect(rebuke.resourceKey).toBe('infernal_hellish_rebuke_used');
+    });
+
+    it('lists a race-granted CANTRIP', () => {
+      const args = fighterArgs(5, '5e');
+      args.race = 'Tiefling';
+      args.characterData = { race_traits: ['Infernal Legacy'] };
+      args.spellIndex = idx;
+      expect(buildActionEconomy(args).action.map((e) => e.name)).toContain('Thaumaturgy');
+    });
+
+    it('lists a SUBCLASS-granted spell (Psi Warrior telekinesis)', () => {
+      const args = fighterArgs(18, '5e');
+      args.subclass = 'Psi Warrior';
+      args.spellIndex = idx;
+      const tk = buildActionEconomy(args).action.find((e) => e.name === 'Telekinesis');
+      expect(tk).toBeTruthy();
+      expect(tk.detail).toMatch(/From subclass/);
+      expect(tk.detail).toMatch(/Concentration/);
+      // No slot and no counter — at will.
+      expect(tk.resourceKey).toBeUndefined();
+    });
+
+    it('does not list it before the subclass feature is earned', () => {
+      const args = fighterArgs(17, '5e');
+      args.subclass = 'Psi Warrior';
+      args.spellIndex = idx;
+      expect(buildActionEconomy(args).action.map((e) => e.name)).not.toContain('Telekinesis');
+    });
+
+    it('lists a FEAT-granted spell and carries its free-cast key', () => {
+      const args = fighterArgs(5, '5e');
+      args.characterData = {
+        feats: [{
+          name: 'Fey Touched',
+          choices: {
+            spell_grant: {
+              fixed: [{ name: 'Misty Step', level: 2 }],
+              free_casts: ['Misty Step'],
+              ability: 'intelligence',
+            },
+          },
+        }],
+      };
+      args.spellIndex = idx;
+      const ms = buildActionEconomy(args).bonus.find((e) => e.name === 'Misty Step');
+      expect(ms).toBeTruthy();
+      expect(ms.detail).toMatch(/From feat/);
+      expect(ms.resourceKey).toBe('feat_freecast_misty_step_used');
+    });
+
+    it('names the source only when it is NOT the class list', () => {
+      const args = fighterArgs(5, '5e');
+      args.characterData = { prepared_spells: ['Fireball'] };
+      args.spellIndex = idx;
+      // "From class" on every spell of a Wizard's list would be pure noise.
+      expect(buildActionEconomy(args).action.find((e) => e.name === 'Fireball').detail)
+        .not.toMatch(/From/);
+    });
+
+    it('lists a spell known from two sources exactly once, keeping the class attribution', () => {
+      const args = fighterArgs(5, '5e');
+      args.race = 'Tiefling';
+      args.characterData = { race_traits: ['Infernal Legacy'], cantrips: ['Thaumaturgy'] };
+      args.spellIndex = idx;
+      const hits = buildActionEconomy(args).action.filter((e) => e.name === 'Thaumaturgy');
+      expect(hits).toHaveLength(1);
+      expect(hits[0].detail).not.toMatch(/From racial/);
+    });
+  });
+
+  it('shows no Spell entries at all when the character can cast nothing', () => {
     const args = fighterArgs(3, '5e');
     const ec = buildActionEconomy(args);
     expect(ec.action.some((e) => e.source === 'Spell')).toBe(false);
@@ -2074,15 +2200,87 @@ describe('buildActionEconomy — Psi Warrior (Fighter subclass)', () => {
       .toMatch(/up to 1 creature/);
   });
 
-  // The at-will telekinesis grant has no mechanism in the app, so it is stated as prose on the
-  // card carrying the half that IS mechanized — rather than silently dropped.
-  it('Telekinetic Master ships the bonus attack, with the telekinesis grant as prose', () => {
-    expect(entry(17, 'bonus', 'Telekinetic Master')).toBeFalsy();
-    const e = entry(18, 'bonus', 'Telekinetic Master');
-    expect(e.cost).toBe('bonus action');
-    expect(e.detail).toMatch(/cast telekinesis at will/);
-    expect(e.detail).toMatch(/one weapon attack as a bonus action/);
-    expect(e.resourceKey).toBeUndefined();
+  // Two costs, so two cards. The single card this replaced was badged 'bonus action' while its
+  // headline half — casting telekinesis — is an action, so the badge mis-stated the feature.
+  describe('Telekinetic Master pairs the spell with the attack it enables', () => {
+    it('puts casting telekinesis on an ACTION card', () => {
+      expect(entry(17, 'action', 'Cast Telekinesis')).toBeFalsy();
+      const e = entry(18, 'action', 'Cast Telekinesis');
+      expect(e.cost).toBe('action');
+      expect(e.detail).toMatch(/at will/i);
+      expect(e.detail).toMatch(/Intelligence/);
+      // At will means no counter to spend — nothing for a Use control to touch.
+      expect(e.resourceKey).toBeUndefined();
+    });
+
+    it('pairs the weapon attack with telekinesis as an ACTION + BONUS combo', () => {
+      // Not a lone bonus action: RAW telekinesis is exerted as your action each round, so the
+      // bonus attack only ever happens on a turn whose action IS telekinesis. Filed under
+      // 'bonus' the card sat alone with nothing naming the action that enables it.
+      expect(entry(17, 'action+bonus', 'Telekinetic Master')).toBeFalsy();
+      const e = entry(18, 'action+bonus', 'Telekinetic Master');
+      expect(e.cost).toBe('action + bonus action');
+      // The app models no concentration state, so the gate is TEXT on the card, not a filter.
+      expect(e.detail).toMatch(/concentrating on telekinesis/i);
+      expect(e.resourceKey).toBeUndefined();
+    });
+
+    it('leads the combo with a Telekinesis ACTION half that is not an attack', () => {
+      const e = entry(18, 'action+bonus', 'Telekinetic Master');
+      // The Action half is the ONLY summary row; the bonus half is a full card (below).
+      expect(e.subAttacks).toHaveLength(1);
+      const [first] = e.subAttacks;
+      expect(first.label).toBe('Action');
+      expect(first.name).toBe('Telekinesis');
+      expect(first.detail).toMatch(/your action each round/i);
+      expect(first.toHit).toBeUndefined();
+    });
+
+    it('ships the FULL weapon entry as the bonus half, not a summary row', () => {
+      // The bonus attack is an ordinary weapon attack, so taking it needs everything the
+      // Actions-tab card carries. A {name, toHit, damage} row could show none of it.
+      const eco = buildActionEconomy(pwArgs(18));
+      const e = eco['action+bonus'].find((x) => x.name === 'Telekinetic Master');
+      expect(e.bonusEntries).toHaveLength(1);
+      const [bonus] = e.bonusEntries;
+      expect(bonus.name).toBe('Longsword');
+      expect(bonus.toHit).toBe('+5');
+      expect(bonus.damage).toBe('1d8 + 3 slashing');
+      // The SAME object as the Actions-tab card — a reference, deliberately not a copy, so
+      // anything attached to the weapon later in the pipeline shows up here too.
+      expect(bonus).toBe(eco.action.find((x) => x.name === 'Longsword'));
+    });
+
+    it('carries Psionic Strike on the bonus attack, since it is the same weapon attack', () => {
+      const eco = buildActionEconomy(pwArgs(18));
+      const [bonus] = eco['action+bonus'].find((x) => x.name === 'Telekinetic Master').bonusEntries;
+      // The reference is what makes this work: Psionic Strike is attached while processing an
+      // EARLIER subclass feature, and Telekinetic Thrust at 7th, both before this entry is built.
+      expect(bonus.attachedFeatures.map((f) => f.name))
+        .toEqual(['Psionic Strike', 'Telekinetic Thrust']);
+    });
+
+    it('includes a RANGED attack too — RAW says a weapon attack, not a melee one', () => {
+      const e = entry(18, 'action+bonus', 'Telekinetic Master', {
+        attacks: [
+          { uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true },
+          { uid: 'w2', name: 'Longbow', toHit: '+7', damage: '1d8 + 4 piercing', proficient: true, ranged: true },
+        ],
+      });
+      expect(e.bonusEntries.map((b) => b.name)).toEqual(['Longsword', 'Longbow']);
+    });
+
+    it('falls back to the unarmed strike when no weapon is held', () => {
+      // A bare-handed Psi Warrior still has a weapon attack to make, so the feature never has an
+      // empty state — the card offers the unarmed strike rather than an instruction.
+      const e = entry(18, 'action+bonus', 'Telekinetic Master', { attacks: [] });
+      expect(e.bonusEntries.map((b) => b.name)).toEqual(['Unarmed Strike']);
+    });
+
+    it('leaves nothing stranded in the Bonus Actions tab', () => {
+      expect(entry(18, 'bonus', 'Telekinetic Master')).toBeFalsy();
+      expect(entry(18, 'bonus', 'Telekinetic Weapon Attack')).toBeFalsy();
+    });
   });
 
   // The 2024 revision renames nothing and moves no level, so both maps point at one authored

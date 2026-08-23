@@ -36,6 +36,10 @@ import { psionicDieAndInt, psiSaveDc, bulwarkTargets } from '@/characters/compon
 import { getBreathWeapon } from '@/characters/components/race/breathWeaponData';
 import { echoArmorClass } from '@/characters/components/companions/companionData';
 import { buildBreakdown } from '@/characters/components/skills/skillMath';
+import { computeRaceGrantedCantrips } from '@/characters/components/race/raceCantrips';
+import { getRacialSpellResources } from '@/characters/components/race/racialRestResources';
+import { getSubclassGrantedSpells } from '@/characters/components/classData/subclassSpells';
+import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
 const ECONOMY_COST_LABEL = {
@@ -236,16 +240,36 @@ const PSI_WARRIOR_ACTIONS = {
         + ' rest; after that, spend a Psionic Energy die instead.',
     }),
   },
-  // The at-will *telekinesis* half of this feature has no home yet: nothing in the app models a
-  // leveled spell granted at will to a non-caster (the Spells tab's subclass source handles
-  // cantrips only). It is stated here as prose so the player at least reads it on the card that
-  // carries the half we CAN mechanize — the bonus-action attack it enables.
-  'Telekinetic Master': {
-    tab: 'bonus', cost: 'bonus action',
-    description: 'You can cast telekinesis at will, without a spell slot or components, using'
-      + ' Intelligence as your spellcasting ability. While you are concentrating on it, you can'
-      + ' make one weapon attack as a bonus action on each of your turns.',
-  },
+  // Two costs, so two cards — the same split Psionic Power and Telekinetic Adept take. Casting
+  // telekinesis is an ACTION; the weapon attack it enables is a bonus action. A single card had
+  // to pick one badge and wore 'bonus action', which mis-stated the half a player actually opens
+  // the tab to find. The spell itself now also lives in the Spells tab's Subclass source
+  // (subclassSpells.js), so this card carries the cost and the trigger, not the spell's text.
+  'Telekinetic Master': [
+    {
+      name: 'Cast Telekinesis',
+      tab: 'action', cost: 'action',
+      description: 'Cast telekinesis at will, without a spell slot or components, using'
+        + ' Intelligence as your spellcasting ability. It requires concentration, so it ends if'
+        + ' you lose concentration or cast another spell that needs it.',
+    },
+    {
+      // An ACTION + BONUS combo, not a lone bonus action — the pairing is the feature. RAW
+      // telekinesis is exerted "as your action each round", so the turn this bonus attack lives
+      // in is a telekinesis turn: on the first, the action casts it (you are concentrating from
+      // that moment, so the attack is already live); on every turn after, the action re-exerts
+      // it. Filed under 'bonus' it sat alone in the Bonus Actions tab with nothing naming the
+      // action that enables it, which is not something a player can act on — found in QA.
+      // The concentration gate stays TEXT rather than a filter: the app models no concentration
+      // state (the line Rage and durations sit behind), so it is stated the way the Defenses
+      // panel states every situational entry.
+      name: 'Telekinetic Master',
+      tab: 'action+bonus', cost: 'action + bonus action',
+      description: 'While you are concentrating on telekinesis, you can make one weapon attack as'
+        + ' a bonus action on each of your turns.',
+      telekineticAttack: true,
+    },
+  ],
 };
 
 export const SUBCLASS_FEATURE_ACTIONS_5E = {
@@ -612,6 +636,60 @@ export function classifyCastingTime(castingTime) {
   return null; // 1 minute / 10 minutes / ritual etc. — not an in-combat action
 }
 
+/**
+ * Every spell the character could cast in a turn, from ALL FOUR sources the Spells tab shows —
+ * class, racial, subclass and feats — as `[{name, source, resourceKey}]`.
+ *
+ * `characterSpellNames` below reads only the class lists, which is why a Tiefling's Hellish
+ * Rebuke (a reaction!) and a Psi Warrior's telekinesis never reached this tab: the Reactions tab
+ * showed nothing while the character plainly had a reaction spell. Anything the Spells tab lists
+ * as castable belongs in the action economy under the action it costs.
+ *
+ * `resourceKey` is carried where a source meters the spell (a racial spell is once per rest), so
+ * the entry gets the same Use control every other limited-use card has, writing the SAME
+ * character_data key the Spells-tab row writes — the WeaponAmmoControl arrangement, where one
+ * control appearing on two surfaces is safe precisely because both spend through one key.
+ *
+ * Ritual-book spells (Ritual Caster) are deliberately EXCLUDED: they can be cast only as
+ * rituals, which takes 10 minutes and is never a combat action.
+ */
+export function castableSpells({
+  characterData = {}, charClass, subclass, level = 1, edition = '5e', race, subrace,
+} = {}) {
+  const seen = new Set();
+  const out = [];
+  const add = (name, source, resourceKey = null) => {
+    const key = (name || '').toLowerCase();
+    // First source wins: a spell known from the class list AND granted by a feat is one card,
+    // and it keeps the class attribution rather than looking like a feat freebie.
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push({ name, source, resourceKey });
+  };
+
+  for (const name of characterSpellNames(characterData)) add(name, 'Class');
+
+  for (const name of computeRaceGrantedCantrips({ race, character_data: characterData })) {
+    add(name, 'Racial');
+  }
+  for (const r of getRacialSpellResources(characterData.race_traits ?? [], level)) {
+    add(r.name, 'Racial', r.resourceKey ?? null);
+  }
+
+  for (const name of characterData.subclass_cantrips ?? []) add(name, 'Subclass');
+  const granted = getSubclassGrantedSpells({ charClass, subclass, level, edition });
+  for (const g of [...granted.cantrips, ...granted.leveled]) add(g.spell, 'Subclass');
+
+  const feat = getFeatGrantedSpells(characterData.feats);
+  // A feat-granted leveled spell is often a 1/long-rest FREE cast, metered by its own key — so
+  // the card gets a Use control writing exactly what the Spells-tab tracker writes.
+  const freeCastKey = new Map(feat.freeCasts.map((f) => [(f.name || '').toLowerCase(), f.usedKey]));
+  for (const c of feat.cantrips) add(c.name, 'Feat');
+  for (const l of feat.leveled) add(l.name, 'Feat', freeCastKey.get((l.name || '').toLowerCase()) ?? null);
+
+  return out;
+}
+
 /** Unique castable spell names: cantrips + prepared + known (NOT the unprepared spellbook). */
 export function characterSpellNames(characterData = {}) {
   const seen = new Set();
@@ -848,6 +926,8 @@ export function buildActionEconomy({
   spellIndex = {},
   armorProfText = '',
   raceArmor = [],
+  race,
+  subrace,
 } = {}) {
   const is2024 = edition === '5.5e' || edition === '2024';
   const buckets = { no_action: [], action: [], bonus: [], 'action+bonus': [], reaction: [] };
@@ -1444,15 +1524,47 @@ export function buildActionEconomy({
       // RACIAL_ACTIONS entry does — Ferocious Charger's save DC scales with level and Strength,
       // so a fixed string would show the wrong number to everyone but one character.
       const computed = d.compute ? d.compute({ characterData, level, scores }) : null;
+      // "One weapon attack" — RAW keys on a weapon attack, not a melee one, so EVERY weapon row
+      // qualifies (a bow, an unarmed strike), which is the one way this differs from Unwavering
+      // Mark's melee-only follow-up. There is no damage bonus, so the rows mirror your normal
+      // attacks exactly rather than folding anything in. The card is kept even with no rows: any
+      // weapon can trigger it, so an empty-handed character is between weapons, not excluded.
+      const telekineticRows = d.telekineticAttack
+        ? buckets.action.filter((e) => e.source === 'Weapon')
+        : null;
+      // The Action half names the spell that enables the bonus attack, so the combo reads as one
+      // turn. It is not an attack, so it carries `detail` instead of to-hit/damage — the shape
+      // Tavern Brawler's Grapple half uses.
+      const telekineticCombo = telekineticRows
+        ? [{
+          label: 'Action',
+          name: 'Telekinesis',
+          detail: 'Cast telekinesis, or exert your will on one creature or object you can see'
+            + ' within range — telekinesis takes your action each round it is used.',
+        }]
+        : null;
       push(d.tab, {
         key: `subclass:${dname}`,
         name: dname,
         source: 'Subclass',
         cost: d.cost,
-        detail: computed?.detail ?? d.description,
+        detail: telekineticCombo
+          ? `${d.description} Telekinesis takes your action each round, so the two happen on the`
+            + ' same turn.'
+          : (computed?.detail ?? d.description),
         // A computed save DC the feature imposes — `{label, breakdown}`, rendered as a clickable
         // number rather than arithmetic inside `detail`.
         saveDc: computed?.saveDc ?? null,
+        subAttacks: telekineticCombo ?? computed?.subAttacks ?? null,
+        // The bonus half is an ORDINARY weapon attack, so it ships the whole weapon entry rather
+        // than a summary row: the player still needs the range band, Psionic Strike, the
+        // Sharpshooter toggle, spacing and ammunition to actually take it, and a thin
+        // {name, toHit, damage} row can show none of that. These are REFERENCES to the entries
+        // already in the Actions bucket — deliberately not copies, so anything attached to a
+        // weapon later in the pipeline (Psionic Strike/Telekinetic Thrust from an earlier
+        // subclass feature, the ATTACK_RIDERS applied at the very end) is picked up here for
+        // free instead of being frozen at whatever the entry looked like mid-build.
+        bonusEntries: telekineticRows && telekineticRows.length > 0 ? telekineticRows : null,
         // True for a reaction that does NOT spend your one normal reaction (Vigilant Defender).
         // The tab gives these their own section so they read as an additional economy.
         extraReaction: !!d.extraReaction,
@@ -1521,26 +1633,43 @@ export function buildActionEconomy({
     });
   }
 
-  // Spells — collapse to a single "Cast a Spell" entry per casting-time bucket the
-  // character actually has a castable spell in, rather than listing every spell (which
-  // cluttered the tab). The full spell list, slots, and casting live on the Spells tab.
-  // Only appears when the character can cast a spell with that casting time.
-  const spellCastTabs = new Set();
-  for (const name of characterSpellNames(characterData)) {
-    const spell = spellIndex[(name || '').toLowerCase()];
-    if (!spell) continue; // unknown to the compendium — can't classify
-    const cls = classifyCastingTime(spell.casting_time);
-    if (!cls) continue; // longer-than-a-turn casting time — not a combat action
-    spellCastTabs.add(cls.tab);
-  }
-  for (const tab of ['action', 'bonus', 'reaction']) {
-    if (!spellCastTabs.has(tab)) continue;
-    push(tab, {
-      key: `spell:${tab}`,
-      name: 'Cast a Spell',
+  // Spells — ONE CARD PER SPELL, filed under the action it actually costs. This used to collapse
+  // to a single "Cast a Spell" pointer per bucket because listing them all cluttered the tab;
+  // collapsible source groups removed that constraint, and the pointer was answering "can I cast
+  // something?" when the question mid-combat is "which of my spells is a bonus action?".
+  // Drawn from every source the Spells tab shows, so a reaction spell known only from a race or
+  // a subclass stops being invisible here.
+  const spellRows = castableSpells({ characterData, charClass, subclass, level, edition, race, subrace })
+    .map((sp) => ({ ...sp, spell: spellIndex[(sp.name || '').toLowerCase()] }))
+    // Unknown to the compendium → can't classify. A longer-than-a-turn casting time (1 minute,
+    // ritual) is not a combat action and is left off rather than filed under a wrong bucket.
+    .filter((sp) => sp.spell && classifyCastingTime(sp.spell.casting_time))
+    // Cantrips first, then by level, then alphabetically — the order a caster scans in.
+    .sort((a, b) => (a.spell.level ?? 0) - (b.spell.level ?? 0) || a.name.localeCompare(b.name));
+
+  for (const sp of spellRows) {
+    const cls = classifyCastingTime(sp.spell.casting_time);
+    const lvl = sp.spell.level ?? 0;
+    const bits = [
+      lvl === 0 ? 'Cantrip' : `Level ${lvl}`,
+      sp.spell.school,
+      // Concentration is the one flag that changes what you can do on LATER turns, so it belongs
+      // on the card rather than only in the spell's detail dialog.
+      sp.spell.concentration ? 'Concentration' : null,
+      sp.spell.ritual ? 'Ritual' : null,
+      // Where the spell comes from, but only when it is NOT the class list — a Wizard's spells
+      // being "from the class" is noise; a spell you have because of your race is not.
+      sp.source === 'Class' ? null : `From ${sp.source.toLowerCase()}`,
+    ].filter(Boolean);
+    push(cls.tab, {
+      key: `spell:${sp.name}`,
+      name: sp.name,
       source: 'Spell',
-      cost: ECONOMY_COST_LABEL[tab],
-      detail: 'See the Spells tab for your spells, slots, and casting details.',
+      cost: cls.cost,
+      detail: bits.join(' · '),
+      // Set only where the SOURCE meters the spell (racial once-per-rest, a feat's free cast).
+      // A class spell is paid for with slots, which this tab deliberately does not track.
+      resourceKey: sp.resourceKey ?? undefined,
     });
   }
 

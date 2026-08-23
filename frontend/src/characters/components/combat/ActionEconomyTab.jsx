@@ -16,7 +16,7 @@ import MagicAttackBadge from '@/characters/components/inventory/MagicAttackBadge
 import WeaponRangeBadge from '@/characters/components/inventory/WeaponRangeBadge';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import {
-  buildActionEconomy, characterSpellNames, TABS, TAB_LABELS, SOURCE_ORDER,
+  buildActionEconomy, castableSpells, TABS, TAB_LABELS, SOURCE_ORDER,
 } from '@/characters/components/combat/actionEconomyData';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { useRestResource } from '@/characters/components/sheets/classSheet/hooks/useRestResource';
@@ -269,7 +269,9 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
           <div className="mt-1 space-y-0.5">
             {entry.subAttacks.map((sa) => (
               <div
-                key={sa.label}
+                // Label alone collides whenever a card has several same-labelled rows —
+                // Unwavering Mark emits one 'Attack' row per melee weapon.
+                key={`${sa.label}-${sa.name}`}
                 className="flex flex-wrap items-baseline gap-x-2 text-xs"
                 data-testid={`ae-twf-${sa.label.toLowerCase().replace(/\s+/g, '-')}`}
               >
@@ -294,6 +296,34 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
                   ) : (sa.detail || '')}
                 </span>
               </div>
+            ))}
+          </div>
+        )}
+        {/* The bonus half of an Action+Bonus combo when it is an ORDINARY weapon attack
+            (Telekinetic Master). Rendered as the real attack card rather than a summary row,
+            because taking the attack needs everything that card carries — the range band,
+            Psionic Strike's Use control, the Sharpshooter toggle, spacing, ammunition. The key
+            is prefixed at RENDER time (not in the data) so the nested copy's testids can't
+            collide with the same weapon's own card in the Actions tab, while the entry object
+            stays a live reference right up to the moment it is drawn. */}
+        {entry.bonusEntries?.length > 0 && (
+          <div className="mt-1.5 space-y-1.5" data-testid={`ae-combo-bonus-${entry.key}`}>
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+              Bonus Action — one weapon attack
+            </span>
+            {entry.bonusEntries.map((be) => (
+              <ItemRow
+                key={be.key}
+                entry={{ ...be, key: `${entry.key}-bonus-${be.key}` }}
+                resource={be.resourceKey ? resourceByKey[be.resourceKey] : null}
+                onChange={onChange}
+                readOnly={readOnly}
+                isGm={isGm}
+                campaignId={campaignId}
+                inventory={inventory}
+                onInventoryChange={onInventoryChange}
+                resourceByKey={resourceByKey}
+              />
             ))}
           </div>
         )}
@@ -496,6 +526,43 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
  * menu) plus a curated per-class feature map (see actionEconomyData.js). Button-based
  * sub-tabs (not Radix Tabs) to avoid nested tab contexts.
  */
+// Group headings that read better than the bare source key.
+const SOURCE_GROUP_LABELS = { Weapon: 'Weapon Attacks', Spell: 'Spells' };
+
+/**
+ * A source-group heading ("Weapon Attacks", "Subclass", "General"). Becomes a collapse toggle
+ * only when the active tab holds MORE THAN ONE group — with a single group there is nothing to
+ * scan past, so a disclosure triangle would be a control that solves no problem. Declared at
+ * module scope (never inside a component) so toggling one group can't remount its own subtree.
+ */
+function GroupHeading({ id, label, count, collapsible, open, onToggle, tone = 'muted' }) {
+  const titleClass = cn(
+    'text-xs font-semibold uppercase tracking-wide',
+    tone === 'primary' ? 'text-primary' : 'text-muted-foreground'
+  );
+  if (!collapsible) return <h3 className={titleClass}>{label}</h3>;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="flex w-full items-center gap-1.5 text-left"
+      data-testid={`ae-group-toggle-${id}`}
+    >
+      <ChevronDown
+        className={cn(
+          'h-3.5 w-3.5 shrink-0 transition-transform',
+          tone === 'primary' ? 'text-primary' : 'text-muted-foreground',
+          !open && '-rotate-90'
+        )}
+      />
+      <h3 className={titleClass}>{label}</h3>
+      {/* The count matters most while collapsed — it says how much is hidden behind the heading. */}
+      <Badge variant="secondary" className="text-[10px] px-1.5">{count}</Badge>
+    </button>
+  );
+}
+
 export default function ActionEconomyTab({
   charClass, subclass, level = 1, edition = '5e',
   characterData = {}, inventory = [], scores = {}, race, subrace, campaignId,
@@ -504,11 +571,21 @@ export default function ActionEconomyTab({
   const [active, setActive] = useState('action');
   const [spellIndex, setSpellIndex] = useState({});
   const [loading, setLoading] = useState(false);
+  // `${tab}:${groupId}` → true when that group is collapsed. Groups default to OPEN, so the tab
+  // reads exactly as it did before anyone touches a heading.
+  const [collapsedGroups, setCollapsedGroups] = useState({});
 
-  const spellNames = useMemo(() => characterSpellNames(characterData), [characterData]);
+  // The fetch gate must use the SAME source set the cards are built from. Gating on the class
+  // lists alone meant a character whose only spells come from a race, subclass or feat (a Psi
+  // Warrior with telekinesis) fetched nothing, so the catalog was empty and every one of their
+  // spells was silently unclassifiable.
+  const spellNames = useMemo(
+    () => castableSpells({ characterData, charClass, subclass, level, edition, race, subrace }),
+    [characterData, charClass, subclass, level, edition, race, subrace],
+  );
 
-  // Fetch the spell catalog only when the character actually knows spells, then index
-  // by lowercased name → { casting_time, level, school } for classification.
+  // Fetch the spell catalog only when the character actually knows spells, then index by
+  // lowercased name → { casting_time, level, school, concentration, ritual } for classification.
   useEffect(() => {
     if (spellNames.length === 0) { setSpellIndex({}); return; }
     let cancelled = false;
@@ -517,7 +594,10 @@ export default function ActionEconomyTab({
       if (cancelled) return;
       const idx = {};
       for (const s of all || []) {
-        idx[(s.name || '').toLowerCase()] = { casting_time: s.casting_time, level: s.level, school: s.school };
+        idx[(s.name || '').toLowerCase()] = {
+          casting_time: s.casting_time, level: s.level, school: s.school,
+          concentration: s.concentration, ritual: s.ritual,
+        };
       }
       setSpellIndex(idx);
       setLoading(false);
@@ -550,8 +630,8 @@ export default function ActionEconomyTab({
   const cappedLoadingWeapon = attacks.find((a) => a.loadingNote && !/ignored/i.test(a.loadingNote));
 
   const economy = useMemo(
-    () => buildActionEconomy({ charClass, subclass, level, edition, characterData, inventory, attacks, scores, spellIndex, armorProfText, raceArmor }),
-    [charClass, subclass, level, edition, characterData, inventory, attacks, spellIndex, armorProfText, raceArmor]
+    () => buildActionEconomy({ charClass, subclass, level, edition, characterData, inventory, attacks, scores, spellIndex, armorProfText, raceArmor, race, subrace }),
+    [charClass, subclass, level, edition, characterData, inventory, attacks, spellIndex, armorProfText, raceArmor, race, subrace]
   );
 
   // Rest-rechargeable resources from the class config (Fighter: Second Wind, Action Surge,
@@ -592,39 +672,56 @@ export default function ActionEconomyTab({
     .map((src) => [src, special.filter((e) => e.source === src)])
     .filter(([, list]) => list.length > 0);
 
+  // Collapsing is offered only when a tab has more than one group to scan past — the Actions tab
+  // routinely stacks Weapon Attacks + Subclass + General, while Reactions is often a single
+  // group where a disclosure triangle would be a control that solves no problem.
+  const groupCount = grouped.length + (universal.length > 0 ? 1 : 0)
+    + (extraReactions.length > 0 ? 1 : 0);
+  const collapsible = groupCount > 1;
+  // Keyed by TAB as well as group, so collapsing "General" on Actions doesn't also collapse it on
+  // Bonus Actions, and a choice survives switching tabs and coming back.
+  const groupKey = (id) => `${active}:${id}`;
+  const isOpen = (id) => !collapsedGroups[groupKey(id)];
+  const toggleGroup = (id) => setCollapsedGroups((c) => ({ ...c, [groupKey(id)]: !c[groupKey(id)] }));
+
   return (
     <div className="space-y-4" data-testid="action-economy-tab">
-      <div className="flex justify-end -mb-2">
+      {/* Sub-tab selector. The "Learn more" link shares this row rather than sitting in its own
+          right-aligned strip pulled down with a negative margin — with five tabs the strip wrapped
+          to a second line and rode up into the link, clipping it (found in QA). Here the tabs wrap
+          inside their own flex child and the link is a shrink-0 sibling, so the two can never
+          occupy the same space however narrow the viewport gets. */}
+      <div className="flex items-start justify-between gap-3 border-b border-border pb-2">
+        <div className="flex flex-wrap gap-1">
+          {TABS.map((tab) => {
+            const Icon = TAB_ICONS[tab];
+            const count = (economy[tab] || []).length;
+            return (
+              <button
+                key={tab}
+                onClick={() => setActive(tab)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  active === tab ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+                )}
+                data-testid={`ae-subtab-${tab}`}
+              >
+                <Icon className="h-4 w-4" />
+                {TAB_LABELS[tab]}
+                {count > 0 && <Badge variant="secondary" className="text-xs px-1.5">{count}</Badge>}
+              </button>
+            );
+          })}
+        </div>
+        {/* mt-1.5 matches the buttons' vertical padding so the link's baseline lines up with the
+            first row of tabs rather than floating above them. */}
         <Link
           to={`/campaigns/${campaignId}/encyclopedia/mechanics/action-economy`}
-          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          className="mt-1.5 inline-flex shrink-0 items-center gap-1 text-xs text-primary hover:underline"
           data-testid="action-economy-learn-more"
         >
           Learn more <ArrowUpRight className="w-3 h-3" />
         </Link>
-      </div>
-
-      {/* Sub-tab selector */}
-      <div className="flex flex-wrap gap-1 border-b border-border pb-2">
-        {TABS.map((tab) => {
-          const Icon = TAB_ICONS[tab];
-          const count = (economy[tab] || []).length;
-          return (
-            <button
-              key={tab}
-              onClick={() => setActive(tab)}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                active === tab ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
-              )}
-              data-testid={`ae-subtab-${tab}`}
-            >
-              <Icon className="h-4 w-4" />
-              {TAB_LABELS[tab]}
-              {count > 0 && <Badge variant="secondary" className="text-xs px-1.5">{count}</Badge>}
-            </button>
-          );
-        })}
       </div>
 
       {active === 'action' && economy.attacksPerAction > 1 && (
@@ -646,7 +743,16 @@ export default function ActionEconomyTab({
         <div className="space-y-4">
           {grouped.map(([src, list]) => (
             <div key={src} className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{src === 'Weapon' ? 'Weapon Attacks' : src}</h3>
+              <GroupHeading
+                id={src}
+                label={SOURCE_GROUP_LABELS[src] ?? src}
+                count={list.length}
+                collapsible={collapsible}
+                open={isOpen(src)}
+                onToggle={() => toggleGroup(src)}
+              />
+              {isOpen(src) && (
+              <>
               {src === 'Spell' && badArmor && (
                 <p className="text-[11px] text-amber-600 leading-tight" data-testid="ae-armor-spells">
                   You can't cast spells while wearing {badArmor.name} — you're not proficient with it.
@@ -672,15 +778,26 @@ export default function ActionEconomyTab({
                   />
                 ))}
               </div>
+              </>
+              )}
             </div>
           ))}
 
           {universal.length > 0 && (
             <div className="space-y-2" data-testid="ae-universal">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">General — available to everyone</h3>
-              <div className="space-y-2 opacity-80">
-                {universal.map((e) => <ItemRow key={e.key} entry={e} />)}
-              </div>
+              <GroupHeading
+                id="universal"
+                label="General — available to everyone"
+                count={universal.length}
+                collapsible={collapsible}
+                open={isOpen('universal')}
+                onToggle={() => toggleGroup('universal')}
+              />
+              {isOpen('universal') && (
+                <div className="space-y-2 opacity-80">
+                  {universal.map((e) => <ItemRow key={e.key} entry={e} />)}
+                </div>
+              )}
             </div>
           )}
 
@@ -692,16 +809,26 @@ export default function ActionEconomyTab({
               className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3"
               data-testid="ae-extra-reactions"
             >
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-primary">
-                Extra reactions — on other creatures&apos; turns
-              </h3>
-              <p className="text-[11px] text-muted-foreground leading-tight">
-                These don&apos;t use your one normal reaction, so you can still take one of the
-                reactions above in the same round.
-              </p>
-              <div className="space-y-2">
-                {extraReactions.map((e) => <ItemRow key={e.key} entry={e} />)}
-              </div>
+              <GroupHeading
+                id="extra-reactions"
+                label="Extra reactions — on other creatures' turns"
+                count={extraReactions.length}
+                collapsible={collapsible}
+                open={isOpen('extra-reactions')}
+                onToggle={() => toggleGroup('extra-reactions')}
+                tone="primary"
+              />
+              {isOpen('extra-reactions') && (
+                <>
+                  <p className="text-[11px] text-muted-foreground leading-tight">
+                    These don&apos;t use your one normal reaction, so you can still take one of the
+                    reactions above in the same round.
+                  </p>
+                  <div className="space-y-2">
+                    {extraReactions.map((e) => <ItemRow key={e.key} entry={e} />)}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

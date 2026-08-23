@@ -220,14 +220,14 @@ describe('ActionEconomyTab', () => {
   it("shows a can't-cast note under the Spell section while wearing non-proficient armor", async () => {
     const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
     renderTab({ charClass: 'Wizard', inventory: [chainMailEntry], characterData: { prepared_spells: ['Fireball'] } });
-    await waitFor(() => expect(screen.getByText('Cast a Spell')).toBeInTheDocument());
+    await screen.findByText('Fireball');
     expect(screen.getByTestId('ae-armor-spells')).toHaveTextContent(/can't cast spells while wearing Chain Mail/i);
   });
 
   it('no armor-spells note when the worn armor is proficient', async () => {
     const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
     renderTab({ charClass: 'Fighter', inventory: [chainMailEntry], characterData: { prepared_spells: ['Fireball'] } });
-    await waitFor(() => expect(screen.getByText('Cast a Spell')).toBeInTheDocument());
+    await screen.findByText('Fireball');
     expect(screen.queryByTestId('ae-armor-spells')).not.toBeInTheDocument();
   });
 
@@ -309,7 +309,7 @@ describe('ActionEconomyTab', () => {
 
   it('shows a ranged-spell spacing note under the Spell section', async () => {
     renderTab({ characterData: { prepared_spells: ['Fireball'] } });
-    await waitFor(() => expect(screen.getByText('Cast a Spell')).toBeInTheDocument());
+    await screen.findByText('Fireball');
     expect(screen.getByTestId('ae-spacing-spells')).toHaveTextContent(/ranged attack roll/i);
     expect(screen.getByTestId('spacing-learn-more-spells')).toHaveAttribute('href', '/campaigns/1/encyclopedia/mechanics/spacing');
   });
@@ -334,20 +334,27 @@ describe('ActionEconomyTab', () => {
     expect(encyclopediaService.getSpells).not.toHaveBeenCalled();
   });
 
-  it('collapses known spells into one "Cast a Spell" entry per casting-time bucket', async () => {
+  it('lists each known spell under the tab its casting time costs', async () => {
     renderTab({ characterData: { prepared_spells: ['Healing Word', 'Shield', 'Fireball'] } });
     await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(1, '5e'));
-    // A single "Cast a Spell" entry shows on the default Actions tab — not each spell
-    await waitFor(() => expect(screen.getByText('Cast a Spell')).toBeInTheDocument());
-    expect(screen.queryByText('Fireball')).not.toBeInTheDocument();
-    // The bonus-action spell collapses to a "Cast a Spell" bonus entry
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
-    expect(screen.getByText('Cast a Spell')).toBeInTheDocument();
+    // The action spell is named on the Actions tab — the old generic pointer is gone.
+    await screen.findByText('Fireball');
+    expect(screen.queryByText('Cast a Spell')).not.toBeInTheDocument();
     expect(screen.queryByText('Healing Word')).not.toBeInTheDocument();
-    // The reaction spell collapses to a "Cast a Spell" reaction entry
+    // ...and each of the others sits under the tab it actually costs.
+    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    expect(screen.getByText('Healing Word')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
-    expect(screen.getByText('Cast a Spell')).toBeInTheDocument();
-    expect(screen.queryByText('Shield')).not.toBeInTheDocument();
+    expect(screen.getByText('Shield')).toBeInTheDocument();
+  });
+
+  it('heads the spell group "Spells" and shows it only when there are some', async () => {
+    renderTab({ characterData: { prepared_spells: ['Fireball'] } });
+    await screen.findByText('Fireball');
+    expect(screen.getByText('Spells')).toBeInTheDocument();
+    cleanup();
+    renderTab(); // a Fighter who casts nothing
+    expect(screen.queryByText('Spells')).not.toBeInTheDocument();
   });
 
   it('shows Two-Weapon Fighting with main-hand/off-hand weapon rows on the Action+Bonus tab', () => {
@@ -357,6 +364,131 @@ describe('ActionEconomyTab', () => {
     expect(screen.getByText('Two-Weapon Fighting')).toBeInTheDocument();
     expect(screen.getByTestId('ae-twf-main-hand')).toHaveTextContent('Shortsword');
     expect(screen.getByTestId('ae-twf-off-hand')).toHaveTextContent('Dagger');
+  });
+
+  // The bonus half of Telekinetic Master is an ordinary weapon attack, so the combo card has to
+  // carry the whole attack card — not a {name, toHit, damage} summary row. A player reaching for
+  // it still needs the range band, Psionic Strike's Use control and the spacing rule to take it.
+  it('renders the Telekinetic Master bonus half as a FULL weapon card', () => {
+    const longbow = {
+      uid: 'lb1', category: 'weapons', equipped: true, name: 'Longbow',
+      weapon_category: 'Martial', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing',
+      properties: '["Ammunition", "Heavy", "Two-Handed"]', range_normal: 150, range_long: 600,
+    };
+    renderTab({
+      level: 18,
+      inventory: [longbow],
+      subclass: 'Psi Warrior',
+      scores: { strength: 12, dexterity: 20, intelligence: 18 },
+    });
+    fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+    expect(screen.getByText('Telekinetic Master')).toBeInTheDocument();
+
+    const bonus = screen.getByTestId('ae-combo-bonus-subclass:Telekinetic Master');
+    expect(bonus).toHaveTextContent('Longbow');
+    // The range band, which a summary row could not show.
+    expect(bonus).toHaveTextContent('150/600');
+    // Psionic Strike rides on this same attack, with its own Use control inside the card.
+    expect(bonus).toHaveTextContent('Psionic Strike');
+    // The within-5-ft rule for a ranged weapon.
+    expect(bonus).toHaveTextContent(/disadvantage/i);
+  });
+
+  it('keeps the nested bonus card testids distinct from the weapon own card', () => {
+    const longbow = {
+      uid: 'lb1', category: 'weapons', equipped: true, name: 'Longbow',
+      weapon_category: 'Martial', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing',
+      properties: '["Ammunition", "Two-Handed"]', range_normal: 150, range_long: 600,
+    };
+    renderTab({
+      level: 18,
+      inventory: [longbow],
+      subclass: 'Psi Warrior',
+      scores: { strength: 12, dexterity: 20, intelligence: 18 },
+    });
+    // Actions tab has the weapon's own card...
+    expect(screen.getByTestId('ae-range-weapon:lb1:0')).toBeInTheDocument();
+    // ...and the combo's nested copy is key-PREFIXED, so neither getByTestId is ambiguous.
+    fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+    expect(
+      screen.getByTestId('ae-range-subclass:Telekinetic Master-bonus-weapon:lb1:0')
+    ).toBeInTheDocument();
+  });
+
+  describe('collapsible source groups', () => {
+    // A Psi Warrior's Actions tab stacks Weapon Attacks + Subclass + General, which is exactly
+    // the case worth collapsing — you scroll past two groups to reach the third.
+    const psiProps = {
+      level: 18,
+      subclass: 'Psi Warrior',
+      inventory: [longswordEntry],
+      scores: { strength: 16, dexterity: 12, intelligence: 18 },
+    };
+
+    it('makes each group a toggle when the tab has more than one', () => {
+      renderTab(psiProps);
+      expect(screen.getByTestId('ae-group-toggle-Weapon')).toBeInTheDocument();
+      expect(screen.getByTestId('ae-group-toggle-Subclass')).toBeInTheDocument();
+      expect(screen.getByTestId('ae-group-toggle-universal')).toBeInTheDocument();
+    });
+
+    it('starts every group open, so the tab reads as it always did', () => {
+      renderTab(psiProps);
+      expect(screen.getByTestId('ae-group-toggle-Weapon')).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText('Longsword')).toBeInTheDocument();
+    });
+
+    it('hides the entries of a group when its heading is clicked, and brings them back', () => {
+      renderTab(psiProps);
+      fireEvent.click(screen.getByTestId('ae-group-toggle-Weapon'));
+      expect(screen.getByTestId('ae-group-toggle-Weapon')).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByText('Longsword')).not.toBeInTheDocument();
+      // The heading itself stays, so the group is still findable.
+      expect(screen.getByText('Weapon Attacks')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('ae-group-toggle-Weapon'));
+      expect(screen.getByText('Longsword')).toBeInTheDocument();
+    });
+
+    it('collapses only the group clicked', () => {
+      renderTab(psiProps);
+      fireEvent.click(screen.getByTestId('ae-group-toggle-Weapon'));
+      expect(screen.getByTestId('ae-group-toggle-Subclass')).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('shows a count on the heading, so a collapsed group says how much is hidden', () => {
+      renderTab(psiProps);
+      fireEvent.click(screen.getByTestId('ae-group-toggle-universal'));
+      // The universal action menu is several entries; the badge survives the collapse.
+      expect(screen.getByTestId('ae-group-toggle-universal').textContent).toMatch(/\d/);
+    });
+
+    it('keeps the collapse per TAB — the same group on another tab is unaffected', () => {
+      renderTab(psiProps);
+      fireEvent.click(screen.getByTestId('ae-group-toggle-universal'));
+      expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'false');
+      // Reactions has its own General group (Opportunity Attack) — still open.
+      fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+      expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'true');
+      // ...and returning to Actions remembers the choice rather than silently reopening.
+      fireEvent.click(screen.getByTestId('ae-subtab-action'));
+      expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('offers NO toggle when the tab has only one group', () => {
+      // A plain Fighter's Action+Bonus tab holds the single Two-Weapon Fighting group — there is
+      // nothing to scan past, so a disclosure triangle would be a control that solves no problem.
+      const light = (uid, name) => ({
+        uid, category: 'weapons', equipped: true, name, weapon_type: 'Melee',
+        weapon_category: 'Martial', damage: '1d6', damage_type: 'piercing',
+        properties: '["Finesse", "Light"]',
+      });
+      renderTab({ inventory: [light('a', 'Shortsword'), light('b', 'Dagger')] });
+      fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+      expect(screen.getByText('Two-Weapon Fighting')).toBeInTheDocument();
+      expect(screen.queryByTestId('ae-group-toggle-Weapon')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('ae-group-toggle-universal')).not.toBeInTheDocument();
+    });
   });
 
   it('shows the empty note on Action+Bonus without two light weapons', () => {

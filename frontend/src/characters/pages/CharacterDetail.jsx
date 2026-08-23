@@ -54,6 +54,7 @@ import { hasRelentlessEndurance, RELENTLESS_ENDURANCE_NOTE } from '@/characters/
 import { computeRaceGrantedCantrips } from '@/characters/components/race/raceCantrips';
 import { survivorNote, heroicWarriorNote } from '@/characters/components/subclass/subclassCombatNotes';
 import { getSubclassCaster } from '@/characters/components/classData/subclassCasterData';
+import { getSubclassGrantedSpells } from '@/characters/components/classData/subclassSpells';
 import InspirationCard from '@/characters/components/combat/InspirationCard';
 import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
@@ -604,9 +605,24 @@ export default function CharacterDetail() {
   // Cantrips granted by a SUBCLASS feature (Arcane Archer Lore) — stored by the subclass-grant
   // mechanism, shown as their own Spells-tab source the way race-granted cantrips are.
   const subclassCantrips = (classSection.draft ?? character.character_data)?.subclass_cantrips ?? [];
+  // Spells a subclass FEATURE grants outright (Psi Warrior's Telekinetic Master → telekinesis at
+  // will). Derived from class+subclass+level rather than stored, because there is no choice to
+  // store — the opposite shape from subclass_cantrips above, which is a level-up pick. Both feed
+  // the one "Subclass" source so a character never sees two subclass spell cards.
+  const subclassGranted = getSubclassGrantedSpells({
+    charClass: character.char_class,
+    subclass: (classSection.draft ?? character.character_data)?.subclass,
+    level: identity.draft?.level ?? character.level,
+    edition,
+  });
+  const subclassSpells = [
+    ...subclassCantrips.map((name) => ({ name, level: 0 })),
+    ...subclassGranted.cantrips.map((g) => ({ name: g.spell, level: 0, grant: g })),
+    ...subclassGranted.leveled.map((g) => ({ name: g.spell, level: g.level, grant: g })),
+  ];
   const hasSpells = SPELLCASTING_CLASSES.has(character.char_class) || subclassCaster
     || raceGrantedCantrips.length > 0 || raceGrantedLeveled.length > 0
-    || subclassCantrips.length > 0 || hasFeatSpells;
+    || subclassSpells.length > 0 || hasFeatSpells;
   const tabCount = hasSpells ? 6 : 5;
 
   const calendarEras = calendar?.eras ?? [];
@@ -1976,7 +1992,7 @@ export default function CharacterDetail() {
                     // Subclass-granted cantrips (Arcane Archer Lore) have no fold path into the
                     // shared level strip, so they always get their own source rather than
                     // silently disappearing on a caster that folds.
-                    subclassCantrips.length > 0 && { key: 'subclass', label: 'Subclass' },
+                    subclassSpells.length > 0 && { key: 'subclass', label: 'Subclass' },
                     !foldSources && (raceGrantedCantrips.length > 0 || raceGrantedLeveled.length > 0)
                       && { key: 'racial', label: 'Racial' },
                     !foldSources && hasFeat && { key: 'feats', label: 'Feats' },
@@ -2029,13 +2045,29 @@ export default function CharacterDetail() {
                       )}
 
                       {active === 'subclass' && (
-                        <div className="rounded-lg border bg-card p-4 space-y-2" data-testid="subclass-cantrips">
+                        <div className="rounded-lg border bg-card p-4 space-y-2" data-testid="subclass-spells">
                           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            {(classSection.draft ?? character.character_data)?.subclass} Cantrips
+                            {(classSection.draft ?? character.character_data)?.subclass} Spells
                           </div>
+                          {/* A feature-granted spell names the feature and the ability it uses on
+                              its own row: a Psi Warrior casting telekinesis with INT has no
+                              spellcasting ability anywhere else on the sheet to infer it from. */}
                           <SpellLevelTabs
-                            spells={subclassCantrips.map(name => ({ name, level: 0 }))}
+                            spells={subclassSpells}
                             testIdPrefix="subclass-spell-tab"
+                            rowExtras={(name) => {
+                              const g = subclassSpells.find(sp => sp.name === name)?.grant;
+                              if (!g) return null;
+                              return (
+                                <span
+                                  className="text-[11px] text-muted-foreground"
+                                  data-testid={`subclass-spell-grant-${name}`}
+                                >
+                                  {g.atWill ? 'At will' : g.feature}
+                                  {g.ability ? ` · ${g.ability}` : ''}
+                                </span>
+                              );
+                            }}
                           />
                           <p className="text-xs text-muted-foreground">Always known. No spell slot required.</p>
                         </div>

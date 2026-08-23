@@ -1437,8 +1437,48 @@ describe('CharacterDetail', () => {
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
       // Only source present → renders directly, no toggle buttons.
-      expect(screen.getByTestId('subclass-cantrips')).toHaveTextContent('Arcane Archer Cantrips');
-      expect(screen.getByTestId('subclass-cantrips')).toHaveTextContent('Druidcraft');
+      expect(screen.getByTestId('subclass-spells')).toHaveTextContent('Arcane Archer Spells');
+      expect(screen.getByTestId('subclass-spells')).toHaveTextContent('Druidcraft');
+    });
+
+    // Telekinetic Master grants telekinesis outright at 18th — a LEVELED spell handed to a
+    // non-caster with no pick to store, so it is derived from class+subclass+level rather than
+    // read out of character_data the way a chosen cantrip is.
+    it('shows telekinesis in the Subclass source for an 18th-level Psi Warrior', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          level: 18,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Psi Warrior' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByRole('tab', { name: /Spells/i })).toBeInTheDocument();
+      const card = await screen.findByTestId('subclass-spells');
+      expect(card).toHaveTextContent('Psi Warrior Spells');
+      expect(card).toHaveTextContent('Telekinesis');
+      // The Fighter has no spellcasting ability anywhere else on the sheet, so the row has to
+      // say which one this feature dictates.
+      expect(screen.getByTestId('subclass-spell-grant-Telekinesis')).toHaveTextContent('At will');
+      expect(screen.getByTestId('subclass-spell-grant-Telekinesis')).toHaveTextContent('Intelligence');
+    });
+
+    it('does not give a 17th-level Psi Warrior telekinesis or a Spells tab', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          level: 17,
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Psi Warrior' },
+        },
+      });
+      renderDetail();
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      // A Psi Warrior is a non-caster, so below 18 there is no spell source at all.
+      expect(screen.queryByRole('tab', { name: /Spells/i })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('subclass-spells')).not.toBeInTheDocument();
     });
 
     // Infernal Legacy grants a leveled spell (Hellish Rebuke at 3, Darkness at 5) on top of the
