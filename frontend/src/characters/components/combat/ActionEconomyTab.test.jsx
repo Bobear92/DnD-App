@@ -24,7 +24,45 @@ const greatswordEntry = {
   weapon_category: 'Martial', weapon_type: 'Melee', damage: '2d6', damage_type: 'Slashing', properties: '["Two-Handed", "Heavy"]',
 };
 
+/**
+ * Source groups render CLOSED by default (the headings are the tab's index). Almost every test
+ * here is about what a CARD says, not about the disclosure, so the harness opens every group
+ * after rendering or switching tabs. The default itself is asserted deliberately, by the
+ * `collapsible source groups` block, which renders through `renderRaw`/`rawTab` instead.
+ */
+function openGroups() {
+  screen.queryAllByRole('button', { expanded: false })
+    .filter((b) => (b.getAttribute('data-testid') || '').startsWith('ae-group-toggle-'))
+    .forEach((b) => fireEvent.click(b));
+}
+
+/** Switch sub-tab, then open that tab's groups. */
+function goToTab(tab) {
+  fireEvent.click(screen.getByTestId(`ae-subtab-${tab}`));
+  openGroups();
+}
+
+/**
+ * The Spell group only exists once the catalog fetch resolves, so it is still closed after the
+ * synchronous open pass. Await its heading, then open what appeared.
+ */
+async function openGroupsAfterSpells() {
+  await screen.findByTestId('ae-group-toggle-Spell');
+  openGroups();
+}
+
+/** Switch sub-tab without touching the groups — for tests about the disclosure itself. */
+function rawTab(tab) {
+  fireEvent.click(screen.getByTestId(`ae-subtab-${tab}`));
+}
+
 function renderTab(props = {}) {
+  const result = renderRaw(props);
+  openGroups();
+  return result;
+}
+
+function renderRaw(props = {}) {
   return render(
     <MemoryRouter>
       <ActionEconomyTab
@@ -70,14 +108,14 @@ describe('ActionEconomyTab', () => {
     renderTab({ level: 2 });
     // Not on the default Actions tab
     expect(screen.queryByText('Action Surge')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     expect(screen.getByText('Action Surge')).toBeInTheDocument();
   });
 
   it('shows a Use button for Second Wind (Bonus) and persists the use via onChange', () => {
     const onChange = vi.fn();
     renderTab({ onChange });
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     fireEvent.click(screen.getByRole('button', { name: /Use Second Wind/i }));
     fireEvent.click(screen.getByTestId('ae-rest-use-confirm-button'));
     expect(onChange).toHaveBeenCalledWith({ second_wind_used: 1 });
@@ -86,7 +124,7 @@ describe('ActionEconomyTab', () => {
   it('shows a Use button for Action Surge (No Action) and persists the use', () => {
     const onChange = vi.fn();
     renderTab({ level: 2, onChange });
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     fireEvent.click(screen.getByRole('button', { name: /Use Action Surge/i }));
     fireEvent.click(screen.getByTestId('ae-rest-use-confirm-button'));
     expect(onChange).toHaveBeenCalledWith({ action_surge_used: 1 });
@@ -135,13 +173,13 @@ describe('ActionEconomyTab', () => {
 
   it('disables the Use button when the resource is exhausted', () => {
     renderTab({ characterData: { second_wind_used: 1 }, onChange: vi.fn() });
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.getByRole('button', { name: /Use Second Wind/i })).toBeDisabled();
   });
 
   it('does NOT show a player the − recover button for a spent feature (spend-only; returns on a rest)', () => {
     renderTab({ level: 2, characterData: { action_surge_used: 1 }, onChange: vi.fn() });
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     expect(screen.getByRole('button', { name: /Use Action Surge/i })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /Recover Action Surge/i })).not.toBeInTheDocument();
   });
@@ -149,14 +187,14 @@ describe('ActionEconomyTab', () => {
   it('gives the GM (isGm) a − recover button to correct a spent feature', () => {
     const onChange = vi.fn();
     renderTab({ level: 2, characterData: { action_surge_used: 1 }, onChange, isGm: true });
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     fireEvent.click(screen.getByRole('button', { name: /Recover Action Surge/i }));
     expect(onChange).toHaveBeenCalledWith({ action_surge_used: 0 });
   });
 
   it('hides the Use button in readOnly mode', () => {
     renderTab({ readOnly: true });
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.queryByRole('button', { name: /Use Second Wind/i })).not.toBeInTheDocument();
     expect(screen.getByText('Second Wind')).toBeInTheDocument(); // still listed, just no control
   });
@@ -220,14 +258,14 @@ describe('ActionEconomyTab', () => {
   it("shows a can't-cast note under the Spell section while wearing non-proficient armor", async () => {
     const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
     renderTab({ charClass: 'Wizard', inventory: [chainMailEntry], characterData: { prepared_spells: ['Fireball'] } });
-    await screen.findByText('Fireball');
+    await openGroupsAfterSpells();
     expect(screen.getByTestId('ae-armor-spells')).toHaveTextContent(/can't cast spells while wearing Chain Mail/i);
   });
 
   it('no armor-spells note when the worn armor is proficient', async () => {
     const chainMailEntry = { uid: 'a1', category: 'armor', equipped: true, name: 'Chain Mail', armor_type: 'heavy', armor_class: 16 };
     renderTab({ charClass: 'Fighter', inventory: [chainMailEntry], characterData: { prepared_spells: ['Fireball'] } });
-    await screen.findByText('Fireball');
+    await openGroupsAfterSpells();
     expect(screen.queryByTestId('ae-armor-spells')).not.toBeInTheDocument();
   });
 
@@ -307,24 +345,67 @@ describe('ActionEconomyTab', () => {
     expect(screen.queryByTestId('ae-remarkable-move-weapon:w1:0')).not.toBeInTheDocument();
   });
 
+  // A spell card answers "what does it cost me?"; the next question is always the spell's own
+  // text, which lives one tab over — so the NAME is a link into the Spells tab.
+  it('links a spell card to that spell in the Spells tab', async () => {
+    const onNavigateToSpell = vi.fn();
+    renderTab({ characterData: { prepared_spells: ['Fireball'] }, onNavigateToSpell });
+    await openGroupsAfterSpells();
+    fireEvent.click(screen.getByTestId('ae-spell-link-Fireball'));
+    expect(onNavigateToSpell).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Fireball', level: 3, source: 'class' })
+    );
+  });
+
+  it('sends a subclass-granted spell to the Subclass source, not the class list', async () => {
+    // The jump has to land on the source the spell is actually filed under, or it opens a list
+    // the spell isn't in.
+    const onNavigateToSpell = vi.fn();
+    renderTab({
+      subclass: 'Arcane Archer',
+      characterData: { subclass_cantrips: ['Fireball'] },
+      onNavigateToSpell,
+    });
+    await openGroupsAfterSpells();
+    fireEvent.click(screen.getByTestId('ae-spell-link-Fireball'));
+    expect(onNavigateToSpell).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Fireball', source: 'subclass' })
+    );
+  });
+
+  it('leaves a spell name as plain text when there is nowhere to navigate', async () => {
+    // The encyclopedia renders this same tab with no character sheet behind it.
+    renderTab({ characterData: { prepared_spells: ['Fireball'] } });
+    await openGroupsAfterSpells();
+    expect(screen.queryByTestId('ae-spell-link-Fireball')).not.toBeInTheDocument();
+    expect(screen.getByText('Fireball')).toBeInTheDocument();
+  });
+
+  it('does NOT turn a non-spell card into a link', () => {
+    renderTab({ onNavigateToSpell: vi.fn() });
+    goToTab('bonus');
+    expect(screen.getByText('Second Wind')).toBeInTheDocument();
+    expect(screen.queryAllByTestId(/^ae-spell-link-/)).toHaveLength(0);
+  });
+
   it('shows a ranged-spell spacing note under the Spell section', async () => {
     renderTab({ characterData: { prepared_spells: ['Fireball'] } });
-    await screen.findByText('Fireball');
+    await openGroupsAfterSpells();
     expect(screen.getByTestId('ae-spacing-spells')).toHaveTextContent(/ranged attack roll/i);
     expect(screen.getByTestId('spacing-learn-more-spells')).toHaveAttribute('href', '/campaigns/1/encyclopedia/mechanics/spacing');
   });
 
   it('shows Second Wind under the Bonus Actions tab', () => {
     renderTab();
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.getByText('Second Wind')).toBeInTheDocument();
   });
 
   it('shows Indomitable under No Action and Opportunity Attack under Reactions at level 9', () => {
     renderTab({ level: 9 });
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     expect(screen.getByText('Indomitable')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+    goToTab('reaction');
     expect(screen.getByText('Opportunity Attack')).toBeInTheDocument();
     expect(screen.queryByText('Indomitable')).not.toBeInTheDocument();
   });
@@ -337,20 +418,21 @@ describe('ActionEconomyTab', () => {
   it('lists each known spell under the tab its casting time costs', async () => {
     renderTab({ characterData: { prepared_spells: ['Healing Word', 'Shield', 'Fireball'] } });
     await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(1, '5e'));
+    await openGroupsAfterSpells();
     // The action spell is named on the Actions tab — the old generic pointer is gone.
-    await screen.findByText('Fireball');
+    expect(screen.getByText('Fireball')).toBeInTheDocument();
     expect(screen.queryByText('Cast a Spell')).not.toBeInTheDocument();
     expect(screen.queryByText('Healing Word')).not.toBeInTheDocument();
     // ...and each of the others sits under the tab it actually costs.
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.getByText('Healing Word')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+    goToTab('reaction');
     expect(screen.getByText('Shield')).toBeInTheDocument();
   });
 
   it('heads the spell group "Spells" and shows it only when there are some', async () => {
     renderTab({ characterData: { prepared_spells: ['Fireball'] } });
-    await screen.findByText('Fireball');
+    await openGroupsAfterSpells();
     expect(screen.getByText('Spells')).toBeInTheDocument();
     cleanup();
     renderTab(); // a Fighter who casts nothing
@@ -360,7 +442,7 @@ describe('ActionEconomyTab', () => {
   it('shows Two-Weapon Fighting with main-hand/off-hand weapon rows on the Action+Bonus tab', () => {
     const light = (uid, name) => ({ uid, category: 'weapons', equipped: true, name, weapon_type: 'Melee', weapon_category: 'Martial', damage: '1d6', damage_type: 'piercing', properties: '["Finesse", "Light"]' });
     renderTab({ inventory: [light('a', 'Shortsword'), light('b', 'Dagger')] });
-    fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+    goToTab('action+bonus');
     expect(screen.getByText('Two-Weapon Fighting')).toBeInTheDocument();
     expect(screen.getByTestId('ae-twf-main-hand')).toHaveTextContent('Shortsword');
     expect(screen.getByTestId('ae-twf-off-hand')).toHaveTextContent('Dagger');
@@ -381,7 +463,7 @@ describe('ActionEconomyTab', () => {
       subclass: 'Psi Warrior',
       scores: { strength: 12, dexterity: 20, intelligence: 18 },
     });
-    fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+    goToTab('action+bonus');
     expect(screen.getByText('Telekinetic Master')).toBeInTheDocument();
 
     const bonus = screen.getByTestId('ae-combo-bonus-subclass:Telekinetic Master');
@@ -409,7 +491,7 @@ describe('ActionEconomyTab', () => {
     // Actions tab has the weapon's own card...
     expect(screen.getByTestId('ae-range-weapon:lb1:0')).toBeInTheDocument();
     // ...and the combo's nested copy is key-PREFIXED, so neither getByTestId is ambiguous.
-    fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+    goToTab('action+bonus');
     expect(
       screen.getByTestId('ae-range-subclass:Telekinetic Master-bonus-weapon:lb1:0')
     ).toBeInTheDocument();
@@ -426,53 +508,55 @@ describe('ActionEconomyTab', () => {
     };
 
     it('makes each group a toggle when the tab has more than one', () => {
-      renderTab(psiProps);
+      renderRaw(psiProps);
       expect(screen.getByTestId('ae-group-toggle-Weapon')).toBeInTheDocument();
       expect(screen.getByTestId('ae-group-toggle-Subclass')).toBeInTheDocument();
       expect(screen.getByTestId('ae-group-toggle-universal')).toBeInTheDocument();
     });
 
-    it('starts every group open, so the tab reads as it always did', () => {
-      renderTab(psiProps);
+    it('starts every group CLOSED, so the headings are the index rather than a wall of cards', () => {
+      renderRaw(psiProps);
+      expect(screen.getByTestId('ae-group-toggle-Weapon')).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByTestId('ae-group-toggle-Subclass')).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'false');
+      // The heading is there; its entries are not until it is opened.
+      expect(screen.getByText('Weapon Attacks')).toBeInTheDocument();
+      expect(screen.queryByText('Longsword')).not.toBeInTheDocument();
+    });
+
+    it('shows the entries of a group when its heading is clicked, and hides them again', () => {
+      renderRaw(psiProps);
+      fireEvent.click(screen.getByTestId('ae-group-toggle-Weapon'));
       expect(screen.getByTestId('ae-group-toggle-Weapon')).toHaveAttribute('aria-expanded', 'true');
       expect(screen.getByText('Longsword')).toBeInTheDocument();
-    });
-
-    it('hides the entries of a group when its heading is clicked, and brings them back', () => {
-      renderTab(psiProps);
       fireEvent.click(screen.getByTestId('ae-group-toggle-Weapon'));
-      expect(screen.getByTestId('ae-group-toggle-Weapon')).toHaveAttribute('aria-expanded', 'false');
       expect(screen.queryByText('Longsword')).not.toBeInTheDocument();
-      // The heading itself stays, so the group is still findable.
       expect(screen.getByText('Weapon Attacks')).toBeInTheDocument();
-      fireEvent.click(screen.getByTestId('ae-group-toggle-Weapon'));
-      expect(screen.getByText('Longsword')).toBeInTheDocument();
     });
 
-    it('collapses only the group clicked', () => {
-      renderTab(psiProps);
+    it('opens only the group clicked', () => {
+      renderRaw(psiProps);
       fireEvent.click(screen.getByTestId('ae-group-toggle-Weapon'));
-      expect(screen.getByTestId('ae-group-toggle-Subclass')).toHaveAttribute('aria-expanded', 'true');
-      expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByTestId('ae-group-toggle-Subclass')).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'false');
     });
 
-    it('shows a count on the heading, so a collapsed group says how much is hidden', () => {
-      renderTab(psiProps);
-      fireEvent.click(screen.getByTestId('ae-group-toggle-universal'));
-      // The universal action menu is several entries; the badge survives the collapse.
+    it('shows a count on the heading, so a closed group says how much is hidden', () => {
+      renderRaw(psiProps);
+      // The universal action menu is several entries; the badge is what a closed group offers.
       expect(screen.getByTestId('ae-group-toggle-universal').textContent).toMatch(/\d/);
     });
 
-    it('keeps the collapse per TAB — the same group on another tab is unaffected', () => {
-      renderTab(psiProps);
+    it('keeps the open state per TAB — the same group on another tab is unaffected', () => {
+      renderRaw(psiProps);
       fireEvent.click(screen.getByTestId('ae-group-toggle-universal'));
-      expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'false');
-      // Reactions has its own General group (Opportunity Attack) — still open.
-      fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
       expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'true');
-      // ...and returning to Actions remembers the choice rather than silently reopening.
-      fireEvent.click(screen.getByTestId('ae-subtab-action'));
+      // Reactions has its own General group (Opportunity Attack) — still closed.
+      rawTab('reaction');
       expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'false');
+      // ...and returning to Actions remembers the choice rather than silently re-closing.
+      rawTab('action');
+      expect(screen.getByTestId('ae-group-toggle-universal')).toHaveAttribute('aria-expanded', 'true');
     });
 
     it('offers NO toggle when the tab has only one group', () => {
@@ -483,8 +567,8 @@ describe('ActionEconomyTab', () => {
         weapon_category: 'Martial', damage: '1d6', damage_type: 'piercing',
         properties: '["Finesse", "Light"]',
       });
-      renderTab({ inventory: [light('a', 'Shortsword'), light('b', 'Dagger')] });
-      fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+      renderRaw({ inventory: [light('a', 'Shortsword'), light('b', 'Dagger')] });
+      rawTab('action+bonus');
       expect(screen.getByText('Two-Weapon Fighting')).toBeInTheDocument();
       expect(screen.queryByTestId('ae-group-toggle-Weapon')).not.toBeInTheDocument();
       expect(screen.queryByTestId('ae-group-toggle-universal')).not.toBeInTheDocument();
@@ -493,7 +577,7 @@ describe('ActionEconomyTab', () => {
 
   it('shows the empty note on Action+Bonus without two light weapons', () => {
     renderTab();
-    fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+    goToTab('action+bonus');
     expect(screen.getByTestId('ae-empty')).toBeInTheDocument();
   });
 
@@ -503,7 +587,7 @@ describe('ActionEconomyTab', () => {
       { kind: 'action', name: 'Grapple (Tavern Brawler)', economy: 'bonus', trigger: 'After an unarmed hit', description: 'Grapple the target.' },
     ] };
     renderTab({ inventory: [], characterData: { feats: [tavernBrawler] } });
-    fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+    goToTab('action+bonus');
     expect(screen.getByText('Tavern Brawler')).toBeInTheDocument();
     expect(screen.getByTestId('ae-twf-action')).toHaveTextContent('Unarmed Strike');
     expect(screen.getByTestId('ae-twf-action')).toHaveTextContent('1d4');
@@ -615,7 +699,7 @@ describe('ActionEconomyTab', () => {
     renderTab({ inventory: [greatswordEntry], scores: { strength: 16 }, characterData: { feats: [gwmFeat] } });
     expect(screen.getByTestId('ae-gwm-weapon:gs1:0')).toHaveTextContent(/critical hit.*bonus action/i);
     // The standalone "Cleave (Bonus Attack)" entry is also present in the Bonus Actions bucket.
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.getByText(/cleave/i)).toBeInTheDocument();
   });
 
@@ -626,20 +710,20 @@ describe('ActionEconomyTab', () => {
 
   it('shows Weapon Bond as a Subclass bonus action for an Eldritch Knight at L3', () => {
     renderTab({ subclass: 'Eldritch Knight', level: 3 });
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.getByText('Weapon Bond')).toBeInTheDocument();
     expect(screen.getByText(/summon/i)).toBeInTheDocument();
   });
 
   it('shows no Weapon Bond for a Champion', () => {
     renderTab({ subclass: 'Champion', level: 3 });
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.queryByText('Weapon Bond')).not.toBeInTheDocument();
   });
 
   it('renders the War Magic combo on Action+Bonus for an Eldritch Knight at L7', () => {
     renderTab({ subclass: 'Eldritch Knight', level: 7 });
-    fireEvent.click(screen.getByTestId('ae-subtab-action+bonus'));
+    goToTab('action+bonus');
     expect(screen.getByText('War Magic')).toBeInTheDocument();
     // Sub rows: cast a cantrip (Action) + the equipped weapon (Bonus)
     expect(screen.getByTestId('ae-twf-action')).toHaveTextContent(/cast a cantrip/i);
@@ -661,7 +745,7 @@ describe('ActionEconomyTab', () => {
 
   it('shows Arcane Charge on its own line under Action Surge for an Eldritch Knight at L15', () => {
     renderTab({ subclass: 'Eldritch Knight', level: 15 });
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     const rider = screen.getByTestId('ae-rider-arcane-charge');
     expect(rider).toHaveTextContent('Arcane Charge');
     // Collapsed to the name — the rules text arrives on click.
@@ -675,7 +759,7 @@ describe('ActionEconomyTab', () => {
 
   it('collapses a rider again on a second click', () => {
     renderTab({ subclass: 'Eldritch Knight', level: 15 });
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     const rider = screen.getByTestId('ae-rider-arcane-charge');
     expect(rider).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(rider);
@@ -687,7 +771,7 @@ describe('ActionEconomyTab', () => {
 
   it('shows no rider line for a Champion at L15', () => {
     renderTab({ subclass: 'Champion', level: 15 });
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     expect(screen.queryByTestId('ae-rider-arcane-charge')).not.toBeInTheDocument();
   });
 });
@@ -707,7 +791,7 @@ describe('ActionEconomyTab — Cavalier Unwavering Mark', () => {
 
   it('shows the follow-up attack as a Marked Target bonus action with folded damage', () => {
     renderTab({ subclass: 'Cavalier', level: 7 });
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.getByText('Marked Target')).toBeInTheDocument();
     // Half Fighter level is already in the number, and advantage is stated on the row.
     const row = screen.getByTestId('ae-twf-attack');
@@ -718,7 +802,7 @@ describe('ActionEconomyTab — Cavalier Unwavering Mark', () => {
   it('shows neither surface for a Champion', () => {
     renderTab({ subclass: 'Champion', level: 7 });
     expect(screen.queryByTestId('ae-rider-unwavering-mark')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.queryByText('Marked Target')).not.toBeInTheDocument();
   });
 });
@@ -726,7 +810,7 @@ describe('ActionEconomyTab — Cavalier Unwavering Mark', () => {
 describe('ActionEconomyTab — extra reactions', () => {
   it('gives Vigilant Defender its own section in the Reactions tab', () => {
     renderTab({ subclass: 'Cavalier', level: 18 });
-    fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+    goToTab('reaction');
     const section = screen.getByTestId('ae-extra-reactions');
     expect(section).toHaveTextContent('Vigilant Defender');
     expect(section).toHaveTextContent(/on other creatures' turns/i);
@@ -736,7 +820,7 @@ describe('ActionEconomyTab — extra reactions', () => {
 
   it('keeps it out of the ordinary reaction groups', () => {
     renderTab({ subclass: 'Cavalier', level: 18 });
-    fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+    goToTab('reaction');
     // The Subclass group holds Warding Maneuver, not the extra reaction.
     const extra = screen.getByTestId('ae-extra-reactions');
     const universal = screen.getByTestId('ae-universal');
@@ -746,11 +830,11 @@ describe('ActionEconomyTab — extra reactions', () => {
 
   it('shows no such section below L18 or for another subclass', () => {
     renderTab({ subclass: 'Cavalier', level: 17 });
-    fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+    goToTab('reaction');
     expect(screen.queryByTestId('ae-extra-reactions')).not.toBeInTheDocument();
     cleanup();
     renderTab({ subclass: 'Champion', level: 18 });
-    fireEvent.click(screen.getByTestId('ae-subtab-reaction'));
+    goToTab('reaction');
     expect(screen.queryByTestId('ae-extra-reactions')).not.toBeInTheDocument();
   });
 });
@@ -760,7 +844,7 @@ describe('ActionEconomyTab — a feature-imposed save DC', () => {
 
   it('shows the DC as a number, with the arithmetic behind a click', () => {
     renderTab({ subclass: 'Cavalier', level: 15, scores: { strength: 16, dexterity: 12, constitution: 14 } });
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     // L15 → PB +5, STR 16 → +3, so 8 + 5 + 3 = 16.
     const dc = screen.getByTestId(`ae-save-dc-${KEY}`);
     expect(dc).toHaveTextContent('16');
@@ -774,7 +858,7 @@ describe('ActionEconomyTab — a feature-imposed save DC', () => {
 
   it('keeps the arithmetic out of the rules sentence', () => {
     renderTab({ subclass: 'Cavalier', level: 15 });
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     expect(screen.getByText(/move at least 10 feet in a straight line/i))
       .not.toHaveTextContent(/8 \+ PB/);
   });
@@ -826,7 +910,7 @@ describe('ActionEconomyTab — damage breakdown', () => {
 
   it("names the mark's half-level term on the Marked Target row", () => {
     renderTab({ subclass: 'Cavalier', level: 7, inventory: [longswordEntry] });
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     fireEvent.click(screen.getByTestId('ae-sub-damage-attack'));
     expect(screen.getByTestId('ae-sub-damage-attack-breakdown'))
       .toHaveTextContent(/half Fighter level \(Unwavering Mark\)/i);
@@ -845,7 +929,7 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
       inventory: [rapierEntry],
       characterData: { bonded_weapon_uids: ['rp1'] },
     });
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.getByText('Bonded Rapier')).toBeInTheDocument();
     expect(screen.queryByText('Weapon Bond')).not.toBeInTheDocument();
     // equipped bonded weapon → its real attack row renders as a sub-row
@@ -854,7 +938,7 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
 
   it('keeps the generic Weapon Bond entry with a picker hint when nothing is bonded', () => {
     renderTab({ subclass: 'Eldritch Knight', level: 3, inventory: [rapierEntry] });
-    fireEvent.click(screen.getByTestId('ae-subtab-bonus'));
+    goToTab('bonus');
     expect(screen.getByText('Weapon Bond')).toBeInTheDocument();
     expect(screen.getByText(/no weapon bonded yet/i)).toBeInTheDocument();
   });
@@ -969,7 +1053,7 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
     it('renders the block inside the bow attack card, not as its own entry', () => {
       archer();
       expect(screen.getByTestId(/^ae-arcane-shot-weapon:lb1/)).toBeInTheDocument();
-      fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+      goToTab('no_action');
       expect(screen.queryByText('Arcane Shot')).not.toBeInTheDocument();
     });
 
@@ -1070,7 +1154,7 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
     it('does not attach to a crossbow — that archer keeps the standalone entry', () => {
       archer({ inventory: [crossbowEntry] });
       expect(screen.queryByTestId(/^ae-arcane-shot-/)).not.toBeInTheDocument();
-      fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+      goToTab('no_action');
       expect(screen.getByText('Arcane Shot')).toBeInTheDocument();
     });
 
@@ -1160,7 +1244,7 @@ describe('ActionEconomyTab — Unleash Incarnation on the melee attack card', ()
     const block = screen.getByTestId(/^ae-attached-unleash-incarnation-weapon:w1/);
     expect(block).toHaveTextContent('Unleash Incarnation');
     expect(block).toHaveTextContent(/additional melee attack with Longsword/);
-    fireEvent.click(screen.getByTestId('ae-subtab-no_action'));
+    goToTab('no_action');
     expect(screen.queryByText('Unleash Incarnation')).not.toBeInTheDocument();
   });
 

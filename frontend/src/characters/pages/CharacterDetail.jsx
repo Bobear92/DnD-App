@@ -47,6 +47,7 @@ import { hpRollBase, effectiveMaxHp as computeEffectiveMaxHp, remarkableAthlete 
 import { initiativeBreakdown, initiativeFeatNote } from '@/characters/components/combat/initiativeData';
 import { draconicLabel } from '@/characters/components/subclass/draconicData';
 import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
+import { SpellFocusProvider, useSpellFocusController } from '@/characters/components/spells/SpellFocusContext';
 import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 import { getRacialSpellResources } from '@/characters/components/race/racialRestResources';
@@ -208,6 +209,21 @@ export default function CharacterDetail() {
   // `passive:${key}`. One at a time. (Skills keep their own equivalent state in SkillsDisplay.)
   const [openStat, setOpenStat] = useState(null);
   const [spellSource, setSpellSource] = useState('class'); // Spells tab source sub-tab: 'class' | 'racial' | 'feats'
+  // The sheet's tab is CONTROLLED (it was `defaultValue`) because a spell card in the Action
+  // Economy tab links to that spell in the Spells tab, and only the owner of the tab state can
+  // make that jump.
+  const [activeTab, setActiveTab] = useState('narrative');
+  // "Jump to this spell": the Action Economy tab's spell cards link to the spell's own row. The
+  // three pieces of state that reach it are owned in three places — the tab here, the source
+  // toggle here, and the level strip deep inside the Spells tab — so the first two are set
+  // directly and the last reads the name off this context.
+  const spellFocus = useSpellFocusController();
+  const goToSpell = (ref) => {
+    if (!ref?.name) return;
+    setActiveTab('spells');
+    if (ref.source) setSpellSource(ref.source);
+    spellFocus.focusSpell(ref.name);
+  };
 
   const [xpInput, setXpInput] = useState('');
   const [addingXp, setAddingXp] = useState(false);
@@ -763,7 +779,8 @@ export default function CharacterDetail() {
 
         {/* Tabbed character sheet */}
         {identity.draft && (
-          <Tabs defaultValue="narrative" className="space-y-4">
+          <SpellFocusProvider value={spellFocus}>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${tabCount},1fr)` }}>
               <TabsTrigger value="narrative" className="flex items-center gap-1.5">
                 <BookOpen className="h-3.5 w-3.5" /> Narrative
@@ -1922,6 +1939,7 @@ export default function CharacterDetail() {
                   onChange={autoSaveClassPatch}
                   readOnly={!showEditable}
                   isGm={isGm && !playerView}
+                  onNavigateToSpell={goToSpell}
                 />
               )}
             </TabsContent>
@@ -2127,6 +2145,7 @@ export default function CharacterDetail() {
               </TabsContent>
             )}
           </Tabs>
+          </SpellFocusProvider>
         )}
       </div>
 

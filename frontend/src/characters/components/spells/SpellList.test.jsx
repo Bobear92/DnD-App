@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import SpellList from '@/characters/components/spells/SpellList';
+import { SpellFocusProvider, useSpellFocus } from '@/characters/components/spells/SpellFocusContext';
 
 let mockEdition = '5e';
 vi.mock('@/campaigns/CampaignContext', () => ({
@@ -607,6 +608,50 @@ describe('SpellList', () => {
       render(<SpellList spells={['Fire Bolt']} label="Cantrips" isCantrips spellAttackBonus={7} />);
       await waitFor(() => screen.getByText('Fire Bolt'));
       expect(screen.queryByTestId('cantrip-meta-Fire Bolt')).not.toBeInTheDocument();
+    });
+  });
+
+  // The destination of a "jump to this spell" from an Action Economy spell card. The level strips
+  // above have opened the tab holding it; landing on the right list with nothing marked still
+  // leaves the reader hunting a name.
+  describe('jump-to-spell focus', () => {
+    function Jump({ name }) {
+      const { focusSpell } = useSpellFocus();
+      return <button type="button" data-testid="jump" onClick={() => focusSpell(name)}>go</button>;
+    }
+
+    const renderWithJump = (name, props = {}) => render(
+      <SpellFocusProvider>
+        <Jump name={name} />
+        <SpellList spells={['Burning Hands', 'Magic Missile']} readOnly singleGroup {...props} />
+      </SpellFocusProvider>
+    );
+
+    it('marks the focused row, and only that row', () => {
+      renderWithJump('Magic Missile');
+      expect(screen.queryByTestId('spell-row-focused-Magic Missile')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('jump'));
+      expect(screen.getByTestId('spell-row-focused-Magic Missile')).toBeInTheDocument();
+      expect(screen.queryByTestId('spell-row-focused-Burning Hands')).not.toBeInTheDocument();
+    });
+
+    it('scrolls the focused row into view', () => {
+      const scrollIntoView = vi.fn();
+      const original = window.HTMLElement.prototype.scrollIntoView;
+      window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+      try {
+        renderWithJump('Magic Missile');
+        fireEvent.click(screen.getByTestId('jump'));
+        expect(scrollIntoView).toHaveBeenCalled();
+      } finally {
+        window.HTMLElement.prototype.scrollIntoView = original;
+      }
+    });
+
+    it('marks nothing when the focused spell is not in this list', () => {
+      renderWithJump('Fireball');
+      fireEvent.click(screen.getByTestId('jump'));
+      expect(screen.queryByTestId(/^spell-row-focused-/)).not.toBeInTheDocument();
     });
   });
 });

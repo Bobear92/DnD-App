@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import SpellList from '@/characters/components/spells/SpellList';
+import { useFocusedSpell } from '@/characters/components/spells/SpellFocusContext';
 import { cn } from '@/lib/utils';
 
 const tabLabel = (lvl) => (lvl === 0 ? 'Cantrips' : `Lvl ${lvl}`);
@@ -30,6 +31,18 @@ export default function SpellLevelTabs({
   }, [spells]);
   const levels = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
   const [active, setActive] = useState(null);
+  // A "jump to this spell" request from the Action Economy tab: open the level tab holding it.
+  // Scoped by `has`, so a strip that doesn't hold the spell leaves the request for one that does.
+  // `?? 0` matches how byLevel buckets, so a spell stored without a level still resolves to
+  // Cantrips rather than reading as "not here".
+  const levelOf = (name) => {
+    const sp = spells.find((x) => x.name === name);
+    return sp ? (sp.level ?? 0) : null;
+  };
+  useFocusedSpell(
+    (name) => levelOf(name) != null,
+    (name) => setActive(levelOf(name)),
+  );
   const activeLevel = (active != null && byLevel[active]) ? active : (levels[0] ?? null);
 
   if (levels.length === 0) {

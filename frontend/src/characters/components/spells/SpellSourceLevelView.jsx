@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useCampaign } from '@/campaigns/CampaignContext';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
 import SpellList from '@/characters/components/spells/SpellList';
+import { useFocusedSpell } from '@/characters/components/spells/SpellFocusContext';
 
 const ORD = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th', 6: '6th', 7: '7th', 8: '8th', 9: '9th' };
 const levelLabel = (l) => (l === 0 ? 'Cantrips' : (ORD[l] ?? `Level ${l}`));
@@ -85,6 +86,35 @@ export default function SpellSourceLevelView({
     : classLeveledNames.filter((n) => levelMap[n] === l).length
       + featLeveled.filter((f) => f.level === l).length
       + racialLeveled.filter((r) => r.level === l).length);
+
+  // A "jump to this spell" request from the Action Economy tab. This view owns BOTH axes, so it
+  // sets the level tab and the source toggle together — landing on the right level with the wrong
+  // source selected shows a list the spell isn't in, which reads as the jump having failed.
+  // `locate` returns null for a spell this view doesn't hold, leaving the request to the strip
+  // that does; a leveled spell's level comes from the catalog, so this resolves only once the
+  // fetch lands (which useFocusedSpell is built to wait for).
+  const locate = (name) => {
+    if (classCantrips.includes(name)) return { level: 0, source: 'class' };
+    if (racialCantrips.includes(name)) return { level: 0, source: 'racial' };
+    if (featCantrips.includes(name)) return { level: 0, source: 'feats' };
+    const racial = racialLeveled.find((r) => r.name === name);
+    if (racial) return { level: racial.level, source: 'racial' };
+    const feat = featLeveled.find((f) => f.name === name);
+    if (feat) return { level: feat.level, source: 'feats' };
+    if (classLeveledNames.includes(name) && levelMap[name] != null) {
+      return { level: levelMap[name], source: 'class' };
+    }
+    return null;
+  };
+  useFocusedSpell(
+    (name) => locate(name) != null,
+    (name) => {
+      const at = locate(name);
+      if (!at) return;
+      setActiveLevel(at.level);
+      setActiveSource(at.source);
+    },
+  );
 
   const classAt = (l) => (l === 0 ? classCantrips.length > 0 : classLeveledNames.some((n) => levelMap[n] === l));
   const racialAt = (l) => (l === 0 ? racialCantrips.length > 0 : racialLeveled.some((r) => r.level === l));

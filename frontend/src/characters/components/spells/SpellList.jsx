@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSpellFocus } from '@/characters/components/spells/SpellFocusContext';
 import { useCampaign } from '@/campaigns/CampaignContext';
 import { summarizeUpcast, summarizeCantrip } from '@/characters/components/spells/spellUpcast';
 
@@ -99,6 +100,15 @@ async function fetchSpellCatalog(campaignId, edition) {
  *                                          Legacy's Hellish Rebuke) instead of being listed a second time
  *                                          in a separate tracker card.
  */
+/**
+ * Ref callback that brings the focused row into view. A callback ref rather than an effect: the
+ * row it lands on changes as the level strip above switches tabs, and the node is exactly what
+ * needs scrolling. `block: 'nearest'` so a row already on screen doesn't jolt the page.
+ */
+const scrollIntoView = (node) => {
+  node?.scrollIntoView?.({ block: 'nearest' });
+};
+
 export default function SpellList({
   spells = [],
   onRemove,
@@ -117,6 +127,12 @@ export default function SpellList({
   rowExtras,
 }) {
   const ctx = useCampaign();
+  // The spell a "jump to this spell" request is pointing at (from the Action Economy tab). The
+  // level strips above have already opened the tab holding it; this row is the destination, so it
+  // scrolls itself into view and marks itself — landing on the right list with nothing indicated
+  // still leaves the reader hunting a name in a list.
+  const { focus } = useSpellFocus();
+  const focusName = focus?.name ?? null;
   const campaignId = ctx?.campaign?.id;
   const edition = ctx?.campaign?.edition;
   const [catalog, setCatalog] = useState([]);
@@ -242,8 +258,17 @@ export default function SpellList({
                 const slotLevels = castable ? castableSlotLevels(lvl, availableSlots) : [];
                 const castDisabled = castable && slotLevels.length === 0;
                 const meta = cantripMeta(name);
+                const focused = focusName === name;
                 return (
-                  <div key={name} className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/30 group">
+                  <div
+                    key={name}
+                    ref={focused ? scrollIntoView : undefined}
+                    data-testid={focused ? `spell-row-focused-${name}` : undefined}
+                    className={cn(
+                      'flex items-center justify-between px-3 py-1.5 hover:bg-muted/30 group',
+                      focused && 'bg-primary/10 ring-1 ring-inset ring-primary/50',
+                    )}
+                  >
                     <div className="flex-1 min-w-0">
                       <button
                         type="button"

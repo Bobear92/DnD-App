@@ -653,6 +653,18 @@ export function classifyCastingTime(castingTime) {
  * Ritual-book spells (Ritual Caster) are deliberately EXCLUDED: they can be cast only as
  * rituals, which takes 10 minutes and is never a combat action.
  */
+/**
+ * castableSpells' source → the Spells tab's source-toggle key. The two vocabularies differ by one
+ * word ('Feat' vs. the tab's plural 'feats'), so the mapping is written down once here instead of
+ * being lowercased at each call site and quietly missing that case.
+ */
+export const SPELL_TAB_SOURCE = {
+  Class: 'class',
+  Racial: 'racial',
+  Subclass: 'subclass',
+  Feat: 'feats',
+};
+
 export function castableSpells({
   characterData = {}, charClass, subclass, level = 1, edition = '5e', race, subrace,
 } = {}) {
@@ -1670,6 +1682,10 @@ export function buildActionEconomy({
       // Set only where the SOURCE meters the spell (racial once-per-rest, a feat's free cast).
       // A class spell is paid for with slots, which this tab deliberately does not track.
       resourceKey: sp.resourceKey ?? undefined,
+      // Where this spell lives in the Spells tab, so a card can link to it. Resolved HERE, where
+      // the source is already known, rather than re-derived by the tab from the card's prose.
+      // `source` is the Spells-tab source key, not the label on the card.
+      spellRef: { name: sp.name, level: lvl, source: SPELL_TAB_SOURCE[sp.source] ?? 'class' },
     });
   }
 

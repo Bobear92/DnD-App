@@ -1,6 +1,7 @@
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import SpellSourceLevelView from '@/characters/components/spells/SpellSourceLevelView';
+import { SpellFocusProvider, useSpellFocus } from '@/characters/components/spells/SpellFocusContext';
 
 // The component fetches the catalog (via encyclopediaService) to learn class spell levels.
 let mockCatalog = [];
@@ -176,5 +177,69 @@ describe('SpellSourceLevelView', () => {
     // Only cantrips present → one level → flat, no strip.
     await screen.findByTestId('class-content');
     expect(screen.queryByTestId('spell-level-tabs')).not.toBeInTheDocument();
+  });
+
+  // "Jump to this spell" from an Action Economy spell card. This view owns BOTH axes, so it has
+  // to set the level tab AND the source toggle — the right level with the wrong source shows a
+  // list the spell isn't in, which reads as the jump having failed.
+  describe('jump-to-spell focus', () => {
+    function Jump({ name }) {
+      const { focusSpell } = useSpellFocus();
+      return <button type="button" data-testid="jump" onClick={() => focusSpell(name)}>go</button>;
+    }
+
+    const viewWithJump = (name, props = {}) => render(
+      <SpellFocusProvider>
+        <Jump name={name} />
+        <SpellSourceLevelView
+          campaignId={1}
+          classCantrips={['Fire Bolt']}
+          classLeveledNames={['Shield', 'Mirror Image']}
+          racialCantrips={['Prestidigitation']}
+          featCantrips={['Guidance']}
+          featLeveled={[{ name: 'Bless', level: 1 }]}
+          characterLevel={7}
+          renderClass={renderClass}
+          {...props}
+        />
+      </SpellFocusProvider>
+    );
+
+    it('opens the level tab holding a class spell', async () => {
+      mockCatalog = CATALOG;
+      viewWithJump('Mirror Image');
+      await screen.findByTestId('spell-level-tabs');
+      expect(screen.getByTestId('class-content')).toHaveTextContent('CLASS-L0');
+      fireEvent.click(screen.getByTestId('jump'));
+      expect(screen.getByTestId('class-content')).toHaveTextContent('CLASS-L2');
+    });
+
+    it('sets the SOURCE as well as the level for a feat-granted spell', async () => {
+      mockCatalog = CATALOG;
+      viewWithJump('Bless');
+      await screen.findByTestId('spell-level-tabs');
+      fireEvent.click(screen.getByTestId('jump'));
+      // Level 1 holds both a class spell (Shield) and the feat's Bless, so the source toggle
+      // decides which list is on screen.
+      expect(screen.getByTestId('spell-source-feats-content')).toBeInTheDocument();
+      expect(screen.queryByTestId('class-content')).not.toBeInTheDocument();
+    });
+
+    it('honours a request that arrived BEFORE the catalog resolved', async () => {
+      // The click can land first; a class spell's level is only known once the fetch returns.
+      mockCatalog = CATALOG;
+      viewWithJump('Mirror Image');
+      fireEvent.click(screen.getByTestId('jump'));
+      // The jump lands in the fetch's continuation — a render later than the strip appearing.
+      await waitFor(() => expect(screen.getByTestId('class-content')).toHaveTextContent('CLASS-L2'));
+    });
+
+    it('leaves both axes alone for a spell this view does not hold', async () => {
+      mockCatalog = CATALOG;
+      viewWithJump('Counterspell');
+      await screen.findByTestId('spell-level-tabs');
+      fireEvent.click(screen.getByTestId('jump'));
+      expect(screen.getByTestId('class-content')).toHaveTextContent('CLASS-L0');
+    });
   });
 });

@@ -466,6 +466,64 @@ describe('buildActionEconomy — Fighter', () => {
       expect(ms.resourceKey).toBe('feat_freecast_misty_step_used');
     });
 
+    // A spell card links to that spell's own row in the Spells tab, so it carries where the
+    // spell lives. Resolved here, where the source is already known, rather than re-derived by
+    // the tab from the card's prose.
+    describe('spellRef — the link into the Spells tab', () => {
+      it('carries the name, level and source of a class spell', () => {
+        const args = fighterArgs(5, '5e');
+        args.characterData = { prepared_spells: ['Fireball'] };
+        args.spellIndex = idx;
+        expect(buildActionEconomy(args).action.find((e) => e.name === 'Fireball').spellRef)
+          .toEqual({ name: 'Fireball', level: 3, source: 'class' });
+      });
+
+      it('files a race-granted spell under the Racial source', () => {
+        const args = fighterArgs(5, '5e');
+        args.race = 'Tiefling';
+        args.characterData = { race_traits: ['Infernal Legacy'] };
+        args.spellIndex = idx;
+        expect(buildActionEconomy(args).reaction.find((e) => e.name === 'Hellish Rebuke').spellRef)
+          .toEqual({ name: 'Hellish Rebuke', level: 1, source: 'racial' });
+      });
+
+      it('files a subclass-granted spell under the Subclass source', () => {
+        const args = fighterArgs(18, '5e');
+        args.subclass = 'Psi Warrior';
+        args.spellIndex = idx;
+        expect(buildActionEconomy(args).action.find((e) => e.name === 'Telekinesis').spellRef.source)
+          .toBe('subclass');
+      });
+
+      it("maps a feat-granted spell to the tab's PLURAL 'feats' key", () => {
+        // The one place the two vocabularies differ, which is why the mapping is written down.
+        const args = fighterArgs(5, '5e');
+        args.characterData = {
+          feats: [{
+            name: 'Fey Touched',
+            choices: { spell_grant: { fixed: [{ name: 'Misty Step', level: 2 }], ability: 'intelligence' } },
+          }],
+        };
+        args.spellIndex = idx;
+        expect(buildActionEconomy(args).bonus.find((e) => e.name === 'Misty Step').spellRef.source)
+          .toBe('feats');
+      });
+
+      it('gives a cantrip level 0, so the jump opens the Cantrips tab', () => {
+        const args = fighterArgs(5, '5e');
+        args.race = 'Tiefling';
+        args.characterData = { race_traits: ['Infernal Legacy'] };
+        args.spellIndex = idx;
+        expect(buildActionEconomy(args).action.find((e) => e.name === 'Thaumaturgy').spellRef.level)
+          .toBe(0);
+      });
+
+      it('is absent from a non-spell entry', () => {
+        expect(buildActionEconomy(fighterArgs(5, '5e')).bonus.find((e) => e.name === 'Second Wind').spellRef)
+          .toBeUndefined();
+      });
+    });
+
     it('names the source only when it is NOT the class list', () => {
       const args = fighterArgs(5, '5e');
       args.characterData = { prepared_spells: ['Fireball'] };

@@ -38,6 +38,17 @@ vi.mock('react-router-dom', async () => ({
   useNavigate: () => mockNavigate,
 }));
 
+// The Action Economy tab and the Spells tab both read the spell catalog through this service.
+vi.mock('@/encyclopedia/encyclopediaService', () => ({
+  default: {
+    getSpells: vi.fn(() => Promise.resolve([
+      { name: 'Fire Bolt', level: 0, school: 'Evocation', casting_time: '1 action' },
+      { name: 'Light', level: 0, school: 'Evocation', casting_time: '1 action' },
+      { name: 'Mage Armor', level: 1, school: 'Abjuration', casting_time: '1 action' },
+    ])),
+  },
+}));
+
 vi.mock('../../campaigns/CampaignContext', () => ({ useCampaign: vi.fn() }));
 vi.mock('../../auth/AuthContext', () => ({ useAuth: vi.fn() }));
 
@@ -55,8 +66,12 @@ vi.mock('@/characters/components/feats/FeatsSubTab', () => ({
 }));
 
 // Render all tab panels unconditionally so tests can find content without clicking tabs
+// The sheet's Tabs is CONTROLLED (a spell card in the Action Economy tab jumps to the Spells
+// tab). This mock still renders every TabsContent at once — which is what lets these tests reach
+// any tab's content without clicking — but it exposes the controlled value so the jump itself is
+// assertable.
 vi.mock('@/components/ui/tabs', () => ({
-  Tabs: ({ children }) => <div>{children}</div>,
+  Tabs: ({ value, children }) => <div data-testid="sheet-tabs" data-active-tab={value}>{children}</div>,
   TabsList: ({ children }) => <div role="tablist">{children}</div>,
   TabsTrigger: ({ value, children }) => <button role="tab" data-value={value}>{children}</button>,
   TabsContent: ({ children }) => <div>{children}</div>,
@@ -593,9 +608,13 @@ describe('CharacterDetail', () => {
       character_data: { ...BASE_CHARACTER.character_data, hp_max: 68 },
     });
 
+    // The first mount of the level-up wizard in a run is the slow one (its module graph is cold),
+    // and under full-suite load it exceeds findBy's 1s default. These waits get a longer budget,
+    // and the tests using them get a test timeout above it — a findBy budget at or above the
+    // global 5s test timeout just makes the TEST time out first, reporting nothing useful.
     async function completeWizard() {
-      fireEvent.click(await screen.findByText(/Level Up Available/));
-      fireEvent.click(await screen.findByText('Take Average'));
+      fireEvent.click(await screen.findByText(/Level Up Available/, {}, { timeout: 8000 }));
+      fireEvent.click(await screen.findByText('Take Average', {}, { timeout: 8000 }));
       fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
       fireEvent.click(screen.getByTestId('wizard-next')); // features → confirm
       fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
@@ -615,7 +634,7 @@ describe('CharacterDetail', () => {
           expect.objectContaining({ level: 9, level_up_pending: true })
         );
       });
-    });
+    }, 20000);
 
     it('clears level_up_pending when the XP stops short of the level after', async () => {
       useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'experience' } });
@@ -631,7 +650,7 @@ describe('CharacterDetail', () => {
           expect.objectContaining({ level: 9, level_up_pending: false })
         );
       });
-    });
+    }, 20000);
 
     // In a milestone campaign the flag is GM-triggered and XP means nothing, so a stored XP
     // total must not re-arm the wizard on its own.
@@ -649,7 +668,7 @@ describe('CharacterDetail', () => {
           expect.objectContaining({ level: 9, level_up_pending: false })
         );
       });
-    });
+    }, 20000);
 
     it('does not re-arm past level 20', async () => {
       useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm', leveling_type: 'experience' } });
@@ -669,7 +688,7 @@ describe('CharacterDetail', () => {
           expect.objectContaining({ level: 20, level_up_pending: false })
         );
       });
-    });
+    }, 20000);
   });
 
   describe('subrace and racial data display', () => {
@@ -1403,6 +1422,61 @@ describe('CharacterDetail', () => {
       // Non-caster → only the Feats source, so it renders directly (no source toggle buttons).
       expect(screen.getByText('Spells from Feats')).toBeInTheDocument();
       expect(screen.getByTestId('feat-freecast-Mage Armor')).toBeInTheDocument();
+    });
+
+    // The Action Economy tab answers "what does this spell cost me?"; the next question is the
+    // spell's own text, one tab over. Clicking the card's name has to land on the spell's row —
+    // which means the outer tab, the source toggle and the level strip all move together.
+    describe('jump from an Action Economy spell card to the Spells tab', () => {
+      const magicInitiateFighter = () => characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          char_class: 'Fighter',
+          character_data: {
+            skill_proficiencies: [],
+            feats: [{
+              id: 10,
+              name: 'Magic Initiate',
+              choices: {
+                spell_grant: {
+                  source: 'Wizard', ability: 'intelligence',
+                  cantrips: ['Fire Bolt'], leveled: [{ name: 'Mage Armor', level: 1 }],
+                  free_casts: ['Mage Armor'],
+                },
+              },
+            }],
+          },
+        },
+      });
+
+      // The Action Economy tab's source groups render closed, so the card has to be revealed
+      // first — exactly as the player does it.
+      async function openSpellCard(name) {
+        fireEvent.click(await screen.findByTestId('ae-group-toggle-Spell'));
+        return screen.getByTestId(`ae-spell-link-${name}`);
+      }
+
+      it('switches the sheet to the Spells tab', async () => {
+        magicInitiateFighter();
+        renderDetail();
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+        const link = await openSpellCard('Mage Armor');
+        expect(screen.getByTestId('sheet-tabs')).toHaveAttribute('data-active-tab', 'narrative');
+        fireEvent.click(link);
+        expect(screen.getByTestId('sheet-tabs')).toHaveAttribute('data-active-tab', 'spells');
+      });
+
+      it('marks the spell in the list, so the reader is not left hunting a name', async () => {
+        magicInitiateFighter();
+        renderDetail();
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+        fireEvent.click(await openSpellCard('Mage Armor'));
+        await waitFor(() =>
+          expect(screen.getByTestId('spell-row-focused-Mage Armor')).toBeInTheDocument());
+        // ...and only that spell, not the other one the same feat granted.
+        expect(screen.queryByTestId('spell-row-focused-Fire Bolt')).not.toBeInTheDocument();
+      });
     });
 
     it('shows the Spells tab + ritual book for a Fighter with Ritual Caster (no cantrips/leveled)', async () => {

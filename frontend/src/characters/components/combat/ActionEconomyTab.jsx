@@ -223,7 +223,7 @@ function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, i
   );
 }
 
-function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, inventory = [], onInventoryChange, resourceByKey = {} }) {
+function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, inventory = [], onInventoryChange, resourceByKey = {}, onNavigateToSpell }) {
   // Power attack (Great Weapon Master on Heavy melee / Sharpshooter on ranged): when a weapon
   // entry carries a `powerAttack` variant, a toggle swaps the displayed to-hit/damage between
   // the normal and −5/+10 numbers. The variant names its own feat, so one control serves both.
@@ -257,7 +257,24 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-sm">{entry.name}</span>
+          {/* A spell card links to that spell's own row in the Spells tab — this card answers
+              "what does it cost me?", and the next question is always the spell's actual text,
+              which lives one tab over. Only the NAME is the link, so the Use control and any
+              other card affordance stay separately clickable. Falls back to plain text wherever
+              there is nothing to navigate (the encyclopedia's copy of this tab). */}
+          {entry.spellRef && onNavigateToSpell ? (
+            <button
+              type="button"
+              onClick={() => onNavigateToSpell(entry.spellRef)}
+              className="font-medium text-sm text-left underline decoration-dotted underline-offset-4 hover:text-primary"
+              data-testid={`ae-spell-link-${entry.spellRef.name}`}
+              title={`Show ${entry.spellRef.name} in the Spells tab`}
+            >
+              {entry.name}
+            </button>
+          ) : (
+            <span className="font-medium text-sm">{entry.name}</span>
+          )}
           <Badge variant="outline" className="text-[10px] uppercase tracking-wide shrink-0">{entry.cost}</Badge>
           {/* This weapon's attacks overcome resistance/immunity to nonmagical damage. The SOURCE
               is named because it's what tells the player when the tag stops applying; clicking
@@ -566,14 +583,15 @@ function GroupHeading({ id, label, count, collapsible, open, onToggle, tone = 'm
 export default function ActionEconomyTab({
   charClass, subclass, level = 1, edition = '5e',
   characterData = {}, inventory = [], scores = {}, race, subrace, campaignId,
-  onChange, readOnly = false, isGm = false,
+  onChange, readOnly = false, isGm = false, onNavigateToSpell,
 }) {
   const [active, setActive] = useState('action');
   const [spellIndex, setSpellIndex] = useState({});
   const [loading, setLoading] = useState(false);
-  // `${tab}:${groupId}` → true when that group is collapsed. Groups default to OPEN, so the tab
-  // reads exactly as it did before anyone touches a heading.
-  const [collapsedGroups, setCollapsedGroups] = useState({});
+  // `${tab}:${groupId}` → true when that group has been EXPANDED. Groups default to CLOSED: a
+  // tab routinely stacks three groups of several cards each, and opening on a wall of them means
+  // scrolling to find out what the tab even holds. Closed, the headings + counts are the index.
+  const [expandedGroups, setExpandedGroups] = useState({});
 
   // The fetch gate must use the SAME source set the cards are built from. Gating on the class
   // lists alone meant a character whose only spells come from a race, subclass or feat (a Psi
@@ -681,8 +699,10 @@ export default function ActionEconomyTab({
   // Keyed by TAB as well as group, so collapsing "General" on Actions doesn't also collapse it on
   // Bonus Actions, and a choice survives switching tabs and coming back.
   const groupKey = (id) => `${active}:${id}`;
-  const isOpen = (id) => !collapsedGroups[groupKey(id)];
-  const toggleGroup = (id) => setCollapsedGroups((c) => ({ ...c, [groupKey(id)]: !c[groupKey(id)] }));
+  // A tab with a single group has no toggle to open it with, so it must always render open —
+  // otherwise the sole group would be closed behind a control that isn't there.
+  const isOpen = (id) => !collapsible || !!expandedGroups[groupKey(id)];
+  const toggleGroup = (id) => setExpandedGroups((c) => ({ ...c, [groupKey(id)]: !c[groupKey(id)] }));
 
   return (
     <div className="space-y-4" data-testid="action-economy-tab">
@@ -774,7 +794,7 @@ export default function ActionEconomyTab({
                     key={e.key} entry={e} resource={resourceFor(e)} onChange={onChange}
                     readOnly={readOnly} isGm={isGm} campaignId={campaignId}
                     inventory={inventory} onInventoryChange={onChange ? handleInventoryChange : null}
-                    resourceByKey={restByKey}
+                    resourceByKey={restByKey} onNavigateToSpell={onNavigateToSpell}
                   />
                 ))}
               </div>

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
+import { SpellFocusProvider, useSpellFocus } from '@/characters/components/spells/SpellFocusContext';
 
 // SpellList is tested on its own; mock it to isolate the tab logic + surface what it receives.
 vi.mock('@/characters/components/spells/SpellList', () => ({
@@ -62,6 +63,46 @@ describe('SpellLevelTabs', () => {
   it('tells SpellList not to re-derive levels (singleGroup)', () => {
     render(<SpellLevelTabs spells={SPELLS} />);
     expect(screen.getByTestId('spell-list')).toHaveAttribute('data-single-group', 'true');
+  });
+
+  // "Jump to this spell" from an Action Economy spell card: the strip has to open the level tab
+  // holding it, or the jump lands on a list the spell isn't in.
+  describe('jump-to-spell focus', () => {
+    function Jump({ name }) {
+      const { focusSpell } = useSpellFocus();
+      return <button type="button" data-testid="jump" onClick={() => focusSpell(name)}>go</button>;
+    }
+
+    const renderWithJump = (name, spells = SPELLS) => render(
+      <SpellFocusProvider>
+        <Jump name={name} />
+        <SpellLevelTabs spells={spells} />
+      </SpellFocusProvider>
+    );
+
+    it('opens the level tab holding the requested spell', () => {
+      renderWithJump('Mage Armor');
+      // Starts on Cantrips (the first level present).
+      expect(screen.queryByTestId('sl-Mage Armor')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('jump'));
+      expect(screen.getByTestId('sl-Mage Armor')).toBeInTheDocument();
+    });
+
+    it('opens the Cantrips tab for a cantrip requested from another level', () => {
+      renderWithJump('Fire Bolt');
+      fireEvent.click(screen.getByTestId('spell-level-tab-1'));
+      expect(screen.queryByTestId('sl-Fire Bolt')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('jump'));
+      expect(screen.getByTestId('sl-Fire Bolt')).toBeInTheDocument();
+    });
+
+    it('leaves the tab alone for a spell this strip does not hold', () => {
+      // Another source's strip owns that spell; stealing the jump would show the wrong list.
+      renderWithJump('Counterspell');
+      fireEvent.click(screen.getByTestId('spell-level-tab-1'));
+      fireEvent.click(screen.getByTestId('jump'));
+      expect(screen.getByTestId('sl-Mage Armor')).toBeInTheDocument();
+    });
   });
 
   it('renders an empty state when there are no spells', () => {
