@@ -9,6 +9,7 @@
  * All functions here are pure (return new arrays/objects) so the UI can persist
  * the result via the normal character_data save path.
  */
+import { activeEffectGrants } from '@/characters/components/effects/activeEffects';
 import { getAcOptions, hasFeat } from '@/characters/components/combat/combatBonuses';
 import { getFeatAcMods } from '@/characters/components/feats/featEffects';
 import { styleToHitBonus, styleDamageBonus, styleAcBonus } from '@/characters/components/combat/fightingStyles';
@@ -506,10 +507,21 @@ export function isHeavyWeapon(weapon = {}) {
 const SMALL_RACES = ['halfling', 'gnome'];
 
 /**
- * A character's creature size — prefers the stored `character_data.size`, else derives
- * it from the race name (Halfling / Gnome → Small, everything else → Medium).
+ * A character's creature size — an ACTIVE EFFECT that grows you wins (Giant's Might), else the
+ * stored `character_data.size`, else the race name (Halfling / Gnome → Small, else Medium).
+ *
+ * The effect is resolved here, at the single function every size consumer already calls, rather
+ * than at each of them — the Items tab, the Action Economy tab and the Heavy-weapon
+ * disadvantage rule all read size through this one door.
+ *
+ * `ctx` is optional so the many callers that just want the resting size need no change; pass
+ * `{ charClass, subclass, level, edition }` to have an active effect counted.
  */
-export function creatureSize(characterData = {}, race = '') {
+export function creatureSize(characterData = {}, race = '', ctx = null) {
+  if (ctx) {
+    const grown = activeEffectGrants({ characterData, ...ctx })?.size;
+    if (grown) return grown;
+  }
   if (characterData?.size) return characterData.size;
   const r = (race || '').toLowerCase();
   return SMALL_RACES.some((s) => r.includes(s)) ? 'Small' : 'Medium';

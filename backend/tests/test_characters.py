@@ -1814,6 +1814,104 @@ class TestInitiativeRest:
 
     # ── Legion of One (Echo Knight L18) — the initiative half of the feature ──
 
+    # ── Rune Knight (5e only) ────────────────────────────────────────────────
+    # Both pools hold proficiency-bonus uses and come back on a LONG rest only. Giant's Might is
+    # also the app's first ACTIVE EFFECT; a rest deliberately does not switch it off, because the
+    # effect lasts a minute and is long gone by then — the player clears it from the card.
+    def _rune_knight(self, client, headers, campaign_id, *, level=10, data=None):
+        resp = client.post("/api/characters", json={
+            "name": "Bryn", "race": "Human", "char_class": "Fighter", "level": level,
+            "campaign_id": campaign_id,
+            "character_data": {"subclass": "Rune Knight", **(data or {})},
+        }, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def test_rune_knight_pools_reset_on_a_long_rest(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._rune_knight(client, h_gm, campaign_id, data={
+            "giants_might_used": 3, "runic_shield_used": 2,
+        })
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["giants_might_used"] == 0
+        assert cd["runic_shield_used"] == 0
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Giant's Might recovered" in changes
+        assert "Runic Shield recovered" in changes
+
+    def test_long_rest_promises_only_the_earned_rune_knight_features(self, client):
+        # Giant's Might is level 3; Runic Shield is 7. A level-5 Rune Knight must not be told a
+        # rest gave back a feature they have not earned.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._rune_knight(client, h_gm, campaign_id, level=5,
+                                    data={"giants_might_used": 2})
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Giant's Might recovered" in changes
+        assert "Runic Shield recovered" not in changes
+        assert self._data(client, char_id, h_gm)["giants_might_used"] == 0
+
+    def test_rune_knight_pools_survive_a_short_rest(self, client):
+        # Neither pool is a short-rest one, so a nap must leave both spent counts alone.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._rune_knight(client, h_gm, campaign_id, data={
+            "giants_might_used": 3, "runic_shield_used": 2,
+        })
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["giants_might_used"] == 3
+        assert cd["runic_shield_used"] == 2
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Giant's Might recovered" not in changes
+        assert "Runic Shield recovered" not in changes
+
+    def test_a_long_rest_does_not_switch_off_a_running_giants_might(self, client):
+        # The effect lasts 1 minute and has ended in the fiction long before a rest, so the flag
+        # is the player's to clear from the card. A rest silently clearing it would make the
+        # toggle look like it had a duration the app does not model.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._rune_knight(client, h_gm, campaign_id, data={
+            "giants_might_used": 1, "active_effects": ["giants_might"],
+        })
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["giants_might_used"] == 0
+        assert cd["active_effects"] == ["giants_might"]
+
+    def test_rune_knight_pools_untouched_for_another_subclass(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        resp = client.post("/api/characters", json={
+            "name": "Other", "race": "Human", "char_class": "Fighter", "level": 10,
+            "campaign_id": campaign_id,
+            "character_data": {"subclass": "Champion", "giants_might_used": 3},
+        }, headers=h_gm)
+        char_id = resp.json()["id"]
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        assert self._data(client, char_id, h_gm)["giants_might_used"] == 3
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Giant's Might recovered" not in changes
+
     def test_legion_of_one_regains_a_use_when_empty(self, client):
         h_gm, _, campaign_id = self._setup(client)
         # CON 10 → a one-use pool, so one spent use IS empty.

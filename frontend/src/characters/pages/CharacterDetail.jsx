@@ -48,6 +48,7 @@ import { initiativeBreakdown, initiativeFeatNote } from '@/characters/components
 import { draconicLabel } from '@/characters/components/subclass/draconicData';
 import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
 import { SpellFocusProvider, useSpellFocusController } from '@/characters/components/spells/SpellFocusContext';
+import ActiveEffectsBanner from '@/characters/components/effects/ActiveEffectsBanner';
 import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 import { getRacialSpellResources } from '@/characters/components/race/racialRestResources';
@@ -764,6 +765,22 @@ export default function CharacterDetail() {
             onAddXp={handleAddXp}
             onMilestoneLevelUp={handleMilestoneLevelUp}
             onOpenWizard={() => setLevelUpWizardOpen(true)}
+          />
+        )}
+
+        {/* Effects the character has switched ON (Giant's Might). Deliberately ABOVE the tabs:
+            one effect changes numbers on several of them, so "am I transformed right now?" must
+            be answerable from wherever you happen to be looking. Wired centrally rather than
+            through a sheet slot, so hand-written sheets get it too (the Defenses-card shape). */}
+        {character && classSection.draft !== null && (
+          <ActiveEffectsBanner
+            characterData={classSection.draft}
+            charClass={character.char_class}
+            subclass={classSection.draft.subclass}
+            level={identity.draft?.level ?? character.level}
+            edition={edition}
+            onChange={autoSaveClassPatch}
+            readOnly={!showEditable}
           />
         )}
 

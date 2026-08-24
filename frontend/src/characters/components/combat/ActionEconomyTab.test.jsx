@@ -1273,4 +1273,83 @@ describe('ActionEconomyTab — Unleash Incarnation on the melee attack card', ()
     echoKnight({ subclass: 'Champion', characterData: { subclass: 'Champion' } });
     expect(screen.queryByTestId(/^ae-attached-unleash-incarnation/)).not.toBeInTheDocument();
   });
+
+  // The app's FIRST active effect. The toggle lives on the card whose action starts it, because
+  // activating it IS the action.
+  describe("Giant's Might — the active-effect toggle", () => {
+    const runeKnight = (props = {}) => renderTab({
+      subclass: 'Rune Knight', level: 10,
+      characterData: { subclass: 'Rune Knight' },
+      onChange: vi.fn(),
+      ...props,
+    });
+
+    const openBonus = () => goToTab('bonus');
+
+    it('renders the toggle on the card, reading Not active by default', () => {
+      runeKnight();
+      openBonus();
+      expect(screen.getByTestId("ae-effect-giants_might-subclass:Giant's Might")).toHaveTextContent('Not active');
+      expect(screen.getByTestId('ae-effect-start-giants_might')).toBeInTheDocument();
+    });
+
+    it('shows the remaining uses of the pool beside it', () => {
+      // PB at level 10 is 4.
+      runeKnight();
+      openBonus();
+      expect(screen.getByTestId('ae-effect-uses-giants_might')).toHaveTextContent('4 / 4');
+    });
+
+    it('spends a use AND switches the effect on in ONE patch', () => {
+      // Two patches could leave a spent charge with no effect running — the trap the single
+      // patch exists to prevent.
+      const onChange = vi.fn();
+      runeKnight({ onChange });
+      openBonus();
+      fireEvent.click(screen.getByTestId('ae-effect-start-giants_might'));
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenCalledWith({
+        active_effects: ['giants_might'],
+        giants_might_used: 1,
+      });
+    });
+
+    it('offers End — and ending never refunds the use', () => {
+      const onChange = vi.fn();
+      runeKnight({
+        characterData: { subclass: 'Rune Knight', active_effects: ['giants_might'], giants_might_used: 1 },
+        onChange,
+      });
+      openBonus();
+      expect(screen.getByTestId("ae-effect-giants_might-subclass:Giant's Might")).toHaveTextContent('Active now');
+      fireEvent.click(screen.getByTestId('ae-effect-end-giants_might'));
+      expect(onChange).toHaveBeenCalledWith({ active_effects: [] });
+    });
+
+    it('cannot be started with no uses left', () => {
+      runeKnight({
+        characterData: { subclass: 'Rune Knight', giants_might_used: 4 },
+      });
+      openBonus();
+      expect(screen.getByTestId('ae-effect-start-giants_might')).toBeDisabled();
+    });
+
+    it('is read-only for a viewer who cannot edit', () => {
+      runeKnight({ readOnly: true });
+      openBonus();
+      expect(screen.getByTestId('ae-effect-start-giants_might')).toBeDisabled();
+    });
+
+    it('does not also show the standard Use control — the toggle owns the spend', () => {
+      runeKnight();
+      openBonus();
+      expect(screen.queryByTestId('ae-rest-use-giants_might_used')).not.toBeInTheDocument();
+    });
+
+    it('shows no toggle for a subclass without an active effect', () => {
+      renderTab({ subclass: 'Champion', level: 10, characterData: { subclass: 'Champion' } });
+      goToTab('bonus');
+      expect(screen.queryByTestId(/^ae-effect-/)).not.toBeInTheDocument();
+    });
+  });
 });

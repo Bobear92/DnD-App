@@ -115,7 +115,7 @@ export default function InventoryTab({
   const weaponProfText = [profs.weapons || '', ...proficiencies.weapons.grants].filter(Boolean).join(', ');
   const raceWeapons = [...(getRaceGrantedWeapons(race, subrace) || []), ...proficiencies.weapons.grants];
 
-  const size = creatureSize(characterData, race);
+  const size = creatureSize(characterData, race, { charClass, subclass, level, edition });
   const styles = gatherFightingStyles(characterData);
   // Champion Fighter expanded crit range (Improved/Superior Critical) — applies to every
   // weapon attack, so it's shown on each weapon row. Null for everyone else.

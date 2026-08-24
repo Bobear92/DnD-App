@@ -936,6 +936,17 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
                 if level >= 15:
                     patch['bulwark_of_force_used'] = 0
                     changes.append('Bulwark of Force recovered')
+            if cd.get('subclass') == 'Rune Knight':
+                # Both pools hold proficiency-bonus uses; as with the Cavalier and Echo Knight,
+                # the pool SIZE stays a frontend concern (config restResources) and this only
+                # zeroes the spent count. Giant's Might is also an ACTIVE EFFECT — a long rest
+                # does NOT switch it off, because the effect lasts a minute and would have ended
+                # of its own accord long before the rest; the player clears it from the card.
+                patch['giants_might_used'] = 0
+                changes.append("Giant's Might recovered")
+                if level >= 7:
+                    patch['runic_shield_used'] = 0
+                    changes.append('Runic Shield recovered')
             if cd.get('subclass') == 'Eldritch Knight':
                 # Subclass caster: Fighter isn't in _SPELLCASTING_CLASSES, so reset the
                 # EK's spell slots here (same shape as the class-caster reset above).

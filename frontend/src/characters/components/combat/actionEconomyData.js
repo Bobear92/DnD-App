@@ -18,6 +18,7 @@
  * their auto-derived weapon attacks + spells + universal menu until their feature map
  * is authored — expand CLASS_FEATURE_ACTIONS_* class-by-class.
  */
+import { mightDie, sizeAt, isEffectActive } from '@/characters/components/effects/activeEffects';
 import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor } from '@/characters/components/inventory/inventoryData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
@@ -282,6 +283,32 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
       'Arcane Shot': { tab: 'no_action', cost: 'no action', resourceKey: 'arcane_shot_used', description: 'When you fire an arrow from a shortbow or longbow as part of the Attack action, apply one of your known Arcane Shot options to it — one option per attack. Recharges on a short or long rest.' },
       'Curving Shot': { tab: 'bonus', cost: 'bonus action', description: 'When you miss with a magic arrow, use a bonus action to reroll the attack against a different target within 60 feet of the original one.' },
     },
+    // Rune Knight is 5e-ONLY — the 2024 PHB ships Battle Master, Champion, Eldritch Knight and
+    // Psi Warrior, so there is deliberately no 5.5e entry for it.
+    'Rune Knight': {
+      // The first ACTIVE EFFECT in the app: Use spends a charge AND switches the effect on, so
+      // the card carries the toggle rather than a bare counter. Everything it changes — size,
+      // Strength advantage, the extra damage die — is resolved from `active_effects` by the
+      // consumers, so nothing here restates a number that lives in activeEffects.js.
+      "Giant's Might": {
+        tab: 'bonus', cost: 'bonus action', resourceKey: 'giants_might_used',
+        activeEffect: 'giants_might',
+        compute: ({ level }) => ({
+          detail: `For 1 minute you become ${sizeAt(level)} (if you have the room), have advantage`
+            + ` on Strength checks and Strength saving throws, and once on each of your turns one`
+            + ` attack with a weapon or an unarmed strike deals an extra ${mightDie(level)} damage.`
+            + (level >= 18 ? ' You can choose to become Large instead of Huge.' : ''),
+        }),
+        description: 'Grow, gain Strength advantage and an extra damage die for 1 minute.',
+      },
+      'Runic Shield': {
+        tab: 'reaction', cost: 'reaction', resourceKey: 'runic_shield_used',
+        // RAW: reroll the d20 and use the NEW roll. The stored feature blurb says "use the lower
+        // of the two rolls", which would make the feature strictly stronger than it is.
+        description: 'When another creature you can see within 60 feet is hit by an attack roll,'
+          + ' force the attacker to reroll the d20 and use the new roll.',
+      },
+    },
     'Echo Knight': {
       // The echo's AC comes from companionData so this card and the statblock on the Features
       // tab can't drift; everything else about the echo lives there rather than being retyped
@@ -415,6 +442,28 @@ export const SUBCLASS_FEATURE_ACTIONS_2024 = {
  * `text` is authored here rather than read from a table because FEAT rules text lives only in
  * the backend compendium; this module is pure and does no fetching.
  */
+// ── Giant's Might: the extra damage die ──────────────────────────────────────
+// A once-per-turn conditional extra — the same shape as Sneak Attack and Divine Smite, which is
+// why it is a RIDER and not folded into the flat damage string. Unlike those, the app now knows
+// whether it applies (the active-effect toggle), so the text states the die plainly while the
+// effect runs and names the condition while it doesn't.
+const giantsMightRider = {
+  source: "Giant's Might",
+  // RAW is "a weapon or an unarmed strike", so every attack card qualifies — including the bare
+  // hands of a Rune Knight who dropped their sword.
+  scope: 'all',
+  applies: ({ charClass, subclass, level }) =>
+    charClass === 'Fighter' && subclass === 'Rune Knight' && (level ?? 1) >= 3,
+  text: ({ level, characterData }) => {
+    const die = mightDie(level);
+    return isEffectActive(characterData, 'giants_might')
+      ? `Once on each of your turns, one of your attacks with a weapon or an unarmed strike`
+        + ` deals an extra ${die} damage on a hit.`
+      : `While Giant's Might is active, once on each of your turns one of your attacks with a`
+        + ` weapon or an unarmed strike deals an extra ${die} damage on a hit.`;
+  },
+};
+
 export const ATTACK_RIDERS = [
   {
     source: 'Unwavering Mark',
@@ -456,6 +505,7 @@ export const ATTACK_RIDERS = [
     // prose, and is the only part that does.
     text: 'Your ranged attacks ignore half cover and three-quarters cover.',
   },
+  giantsMightRider,
 ];
 
 /**
@@ -1581,6 +1631,10 @@ export function buildActionEconomy({
         // The tab gives these their own section so they read as an additional economy.
         extraReaction: !!d.extraReaction,
         resourceKey: d.resourceKey,
+        // The ACTIVE EFFECT this entry switches on (Giant's Might). The card renders a toggle
+        // instead of the plain Use control, because spending the charge and switching the effect
+        // on are one event — a counter that went down without the effect coming on is a trap.
+        activeEffect: d.activeEffect ?? null,
         // A second resource this entry's Use control touches: one it falls back to SPENDING once
         // its own charge is gone, or one it hands a use back TO. See RestResourceControl.
         fallbackResourceKey: d.fallbackResourceKey ?? null,
@@ -1592,9 +1646,14 @@ export function buildActionEconomy({
   // Riders that hang off WEAPON ATTACK cards (see ATTACK_RIDERS). Runs after the weapon push,
   // which is what creates the entries they attach to.
   for (const rider of ATTACK_RIDERS) {
-    if (!rider.applies({ charClass, subclass, level, edition, feats, characterData })) continue;
+    const riderCtx = { charClass, subclass, level, edition, feats, characterData };
+    if (!rider.applies(riderCtx)) continue;
+    // `text` may be a FUNCTION of the same context, not just a string: Giant's Might states its
+    // die plainly while the effect is switched on and names the condition while it isn't, and
+    // the die itself scales with level. A static string could only say one of those things.
+    const text = typeof rider.text === 'function' ? rider.text(riderCtx) : rider.text;
     for (const row of buckets.action.filter((e) => e.source === 'Weapon' && matchesRiderScope(e, rider.scope))) {
-      row.riders = [...(row.riders || []), { source: rider.source, text: rider.text }];
+      row.riders = [...(row.riders || []), { source: rider.source, text }];
     }
   }
 

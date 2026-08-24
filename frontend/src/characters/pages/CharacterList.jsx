@@ -101,6 +101,10 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
       if (level >= 7) items.push('Psi-Powered Leap');
       if (level >= 15) items.push('Bulwark of Force');
     }
+    if (characterData?.subclass === 'Rune Knight') {
+      items.push("Giant's Might");
+      if (level >= 7) items.push('Runic Shield');
+    }
   }
   else if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');
   else if (cls === 'Paladin') items.push('Lay on Hands, Divine Sense & Channel Divinity, spell preparation unlocked');

@@ -10,6 +10,7 @@ import {
   FIGHTER_SUBCLASSES_5E, FIGHTER_SUBCLASSES_2024,
 } from '@/characters/components/classData/classChoicesData';
 import { ARCANE_SHOT_USES } from '@/characters/components/classData/arcaneShotData';
+import { profBonus } from '@/characters/components/classData/classProgressionTables';
 import { psionicDie, psionicDiceTotal } from '@/characters/components/classData/psiWarriorData';
 import BattleMasterPanel from '@/characters/components/subclass/BattleMasterPanel';
 import WeaponBondPanel from '@/characters/components/subclass/WeaponBondPanel';
@@ -33,6 +34,9 @@ const FIGHTER_SKILLS = [
 const abilityModUses = (ability) => (_level, { scores = {} } = {}) =>
   Math.max(1, Math.floor(((scores[ability] ?? 10) - 10) / 2));
 
+// Both Rune Knight pools are sized by the proficiency bonus (Giant's Might, Runic Shield).
+const pbUses = (level) => profBonus(level);
+
 const actionSurgeTotal = (level) => (level >= 17 ? 2 : level >= 2 ? 1 : 0);
 const indomitableTotal = (level) => (level >= 17 ? 3 : level >= 13 ? 2 : level >= 9 ? 1 : 0);
 const extraAttacks = (level) => (level >= 20 ? 4 : level >= 11 ? 3 : level >= 5 ? 2 : 1);
@@ -54,6 +58,18 @@ const REST_RESOURCES = [
   {
     key: 'action_surge_used', label: 'Action Surge (Short Rest)', total: actionSurgeTotal, recharge: 'short', minLevel: 2,
     description: 'Take one additional action on your turn.',
+  },
+  // Subclass-gated: only a Rune Knight sees these two. Both hold proficiency-bonus uses, which
+  // is a third pool shape beside the flat counts and the ability-modifier ones above.
+  {
+    key: 'giants_might_used', label: "Giant's Might", total: pbUses, recharge: 'long', minLevel: 3,
+    subclass: 'Rune Knight',
+    description: 'Bonus action: grow, gain Strength advantage and an extra damage die for 1 minute.',
+  },
+  {
+    key: 'runic_shield_used', label: 'Runic Shield', total: pbUses, recharge: 'long', minLevel: 7,
+    subclass: 'Rune Knight',
+    description: "Reaction: force an attacker who hit another creature within 60 ft to reroll the d20.",
   },
   // Subclass-gated: only a Cavalier sees these two. Both hold ability-modifier uses (minimum
   // one) rather than a flat count, which is why their totals read the ability scores.

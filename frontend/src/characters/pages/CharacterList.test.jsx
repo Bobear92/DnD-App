@@ -425,6 +425,47 @@ describe('CharacterList — rest buttons (GM view)', () => {
     expect(screen.queryByText('Bulwark of Force')).not.toBeInTheDocument();
   });
 
+  // Both Rune Knight pools are LONG-rest only, so a nap must promise neither.
+  it('long rest summary lists the Rune Knight pools, gated by level', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], character_data: { subclass: 'Rune Knight' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText("Giant's Might")).toBeInTheDocument();
+    // Runic Shield unlocks at 7 — the default character is below it.
+    expect(screen.queryByText('Runic Shield')).not.toBeInTheDocument();
+  });
+
+  it('long rest summary adds Runic Shield from L7', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], level: 7, character_data: { subclass: 'Rune Knight' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText("Giant's Might")).toBeInTheDocument();
+    expect(screen.getByText('Runic Shield')).toBeInTheDocument();
+  });
+
+  it('short rest summary promises neither Rune Knight pool', async () => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], level: 7, character_data: { subclass: 'Rune Knight' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('short-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a short rest/i));
+    expect(screen.queryByText("Giant's Might")).not.toBeInTheDocument();
+    expect(screen.queryByText('Runic Shield')).not.toBeInTheDocument();
+  });
+
   it('confirmation dialog shows selected character names', async () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));

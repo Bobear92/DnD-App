@@ -432,6 +432,36 @@ describe('heavy weapon / size warnings', () => {
     expect(creatureSize({}, '')).toBe('Medium');
   });
 
+  // An ACTIVE EFFECT that grows you is resolved here, at the one function every size consumer
+  // already calls, so the Items tab and the Action Economy tab can't disagree about your size.
+  describe('creatureSize with an active effect', () => {
+    const rk = { charClass: 'Fighter', subclass: 'Rune Knight', level: 10, edition: '5e' };
+
+    it("grows a Rune Knight to Large while Giant's Might is active", () => {
+      expect(creatureSize({ active_effects: ['giants_might'] }, 'Human', rk)).toBe('Large');
+    });
+
+    it('to Huge once Runic Juggernaut lands', () => {
+      expect(creatureSize({ active_effects: ['giants_might'] }, 'Human', { ...rk, level: 18 }))
+        .toBe('Huge');
+    });
+
+    it('beats a stored size — the effect is what is in play right now', () => {
+      expect(creatureSize({ size: 'Small', active_effects: ['giants_might'] }, 'Human', rk))
+        .toBe('Large');
+    });
+
+    it('leaves the resting size alone while the effect is off', () => {
+      expect(creatureSize({}, 'Halfling', rk)).toBe('Small');
+      expect(creatureSize({ active_effects: [] }, 'Human', rk)).toBe('Medium');
+    });
+
+    it('is unchanged for callers that pass no effect context', () => {
+      // Most call sites just want the resting size and were not touched.
+      expect(creatureSize({ active_effects: ['giants_might'] }, 'Human')).toBe('Medium');
+    });
+  });
+
   it('5e: Small creature warns on Heavy weapons, Medium does not', () => {
     expect(weaponAttackWarning(greatsword, { size: 'Small', edition: '5e' })).toMatch(/Small creatures/i);
     expect(weaponAttackWarning(greatsword, { size: 'Medium', edition: '5e' })).toBeNull();

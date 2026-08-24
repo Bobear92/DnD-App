@@ -2,8 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Swords, Zap, Repeat, ShieldAlert, Sparkles, ArrowUpRight, ChevronDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import FeatureNote from '@/characters/components/shared/FeatureNote';
+import { isEffectActive, toggleEffectPatch } from '@/characters/components/effects/activeEffects';
 import encyclopediaService from '@/encyclopedia/encyclopediaService';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
 import { getRaceGrantedWeapons, getRaceGrantedArmor } from '@/characters/components/race/raceProficienciesData';
@@ -223,7 +225,69 @@ function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, i
   );
 }
 
-function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, inventory = [], onInventoryChange, resourceByKey = {}, onNavigateToSpell }) {
+/**
+ * The on/off switch for an ACTIVE EFFECT, rendered inside the card whose action starts it.
+ *
+ * Activating is one click that does two things — spends a charge and switches the effect on —
+ * because they are one event at the table. Ending it is a separate, free click: nothing refunds
+ * a use, and nothing tracks the duration (the app models no rounds), so the stated duration is
+ * text and the player switches it off when the fiction says so.
+ *
+ * Declared at module scope, never inside ItemRow, so toggling can't remount the card's subtree.
+ */
+function ActiveEffectToggle({ effectKey, entryKey, resource, characterData, onChange, readOnly }) {
+  const active = isEffectActive(characterData, effectKey);
+  const remaining = resource ? resource.remaining : null;
+  const canStart = !readOnly && !!onChange && (remaining === null || remaining > 0);
+  const start = () => {
+    const patch = toggleEffectPatch(characterData, effectKey, true);
+    // One patch, so a spent charge and a running effect can never disagree.
+    if (resource) patch[resource.key] = (resource.used ?? 0) + 1;
+    onChange(patch);
+  };
+  const end = () => onChange(toggleEffectPatch(characterData, effectKey, false));
+  return (
+    <div
+      className={cn(
+        'mt-2 flex flex-wrap items-center gap-2 rounded-md border px-2.5 py-2',
+        active ? 'border-primary/60 bg-primary/10' : 'border-border',
+      )}
+      data-testid={`ae-effect-${effectKey}-${entryKey}`}
+    >
+      <span className="text-xs font-medium">
+        {active ? 'Active now' : 'Not active'}
+      </span>
+      {resource && (
+        <span className="text-[11px] text-muted-foreground" data-testid={`ae-effect-uses-${effectKey}`}>
+          {resource.remaining} / {resource.total} uses
+        </span>
+      )}
+      <div className="ml-auto flex items-center gap-1.5">
+        {active ? (
+          <Button
+            type="button" size="sm" variant="outline"
+            disabled={readOnly || !onChange}
+            onClick={end}
+            data-testid={`ae-effect-end-${effectKey}`}
+          >
+            End
+          </Button>
+        ) : (
+          <Button
+            type="button" size="sm"
+            disabled={!canStart}
+            onClick={start}
+            data-testid={`ae-effect-start-${effectKey}`}
+          >
+            Use
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, inventory = [], onInventoryChange, resourceByKey = {}, onNavigateToSpell, characterData = {} }) {
   // Power attack (Great Weapon Master on Heavy melee / Sharpshooter on ranged): when a weapon
   // entry carries a `powerAttack` variant, a toggle swaps the displayed to-hit/damage between
   // the normal and −5/+10 numbers. The variant names its own feat, so one control serves both.
@@ -519,9 +583,24 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
             isGm={isGm}
           />
         ))}
+        {/* An ACTIVE EFFECT (Giant's Might) — the card is where you switch it on, because
+            activating it is the action. Spending a use and switching it on are ONE click: they
+            are the same event in the fiction, and a counter that went down without the effect
+            coming on would be a trap. Switching it off never refunds the use. */}
+        {entry.activeEffect && (
+          <ActiveEffectToggle
+            effectKey={entry.activeEffect}
+            entryKey={entry.key}
+            resource={topResource}
+            characterData={characterData}
+            onChange={onChange}
+            readOnly={readOnly}
+          />
+        )}
       </div>
-      {/* Rest-rechargeable features get the same Use button as the Features tab. */}
-      {topResource && (
+      {/* Rest-rechargeable features get the same Use button as the Features tab. A card carrying
+          an active-effect toggle owns its own spend, so it doesn't also get the standard one. */}
+      {topResource && !entry.activeEffect && (
         <RestResourceControl
           row={topResource}
           fallbackRow={fallbackResource}
@@ -628,7 +707,7 @@ export default function ActionEconomyTab({
   // Hex Warrior's martial weapons) — same assembly as the Items tab.
   const weaponProfText = [(CLASS_PROFICIENCIES_5E[charClass] || {}).weapons || '', ...proficiencies.weapons.grants].filter(Boolean).join(', ');
   const raceWeapons = [...(getRaceGrantedWeapons(race, subrace) || []), ...proficiencies.weapons.grants];
-  const size = creatureSize(characterData, race);
+  const size = creatureSize(characterData, race, { charClass, subclass, level, edition });
   const styles = gatherFightingStyles(characterData);
   // Armor proficiency context (class text + race trait grants + stored race/feat grants) —
   // worn non-proficient armor puts every STR/DEX attack roll at disadvantage and blocks casting.
@@ -795,6 +874,7 @@ export default function ActionEconomyTab({
                     readOnly={readOnly} isGm={isGm} campaignId={campaignId}
                     inventory={inventory} onInventoryChange={onChange ? handleInventoryChange : null}
                     resourceByKey={restByKey} onNavigateToSpell={onNavigateToSpell}
+                    characterData={characterData}
                   />
                 ))}
               </div>

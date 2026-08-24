@@ -2411,3 +2411,126 @@ describe('buildActionEconomy — Psi Warrior (Fighter subclass)', () => {
     expect(champ.action.find((e) => e.name === 'Telekinetic Movement')).toBeFalsy();
   });
 });
+
+// ── Rune Knight (Fighter subclass, 5e only) ──────────────────────────────────
+describe('buildActionEconomy — Rune Knight (Fighter subclass)', () => {
+  // The melee flag on an attack row is derived from the INVENTORY entry's weapon_type, so a
+  // rider scoped to melee needs a real weapon behind the row — not just the row.
+  const SWORD_INV = [{
+    uid: 'w1', name: 'Longsword', category: 'weapons', weapon_type: 'Melee',
+    equipped: true, hand: 'main',
+  }];
+
+  const rkArgs = (level, characterData = {}, edition = '5e', extra = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Rune Knight',
+    level,
+    edition,
+    characterData: { subclass: 'Rune Knight', ...characterData },
+    inventory: SWORD_INV,
+    attacks: [{ uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true }],
+    scores: { strength: 16 },
+    spellIndex: {},
+    ...extra,
+  });
+
+  const rk = (level, characterData = {}, edition = '5e') =>
+    buildActionEconomy(rkArgs(level, characterData, edition));
+
+  describe("Giant's Might", () => {
+    it('is a bonus action carrying its own pool', () => {
+      const gm = rk(3).bonus.find((e) => e.name === "Giant's Might");
+      expect(gm).toBeTruthy();
+      expect(gm.cost).toBe('bonus action');
+      expect(gm.resourceKey).toBe('giants_might_used');
+    });
+
+    it("is the app's first ACTIVE EFFECT, so the card names the effect it switches on", () => {
+      expect(rk(3).bonus.find((e) => e.name === "Giant's Might").activeEffect).toBe('giants_might');
+    });
+
+    it('states the size and die it grants, scaling with the later features', () => {
+      // Great Stature (L10) and Runic Juggernaut (L18) do nothing but change these numbers.
+      expect(rk(3).bonus.find((e) => e.name === "Giant's Might").detail)
+        .toMatch(/become Large.*extra 1d6/s);
+      expect(rk(10).bonus.find((e) => e.name === "Giant's Might").detail).toMatch(/extra 1d8/);
+      const l18 = rk(18).bonus.find((e) => e.name === "Giant's Might").detail;
+      expect(l18).toMatch(/become Huge/);
+      expect(l18).toMatch(/extra 1d10/);
+      // RAW the size increase at 18 is the player's option, not automatic.
+      expect(l18).toMatch(/can choose to become Large/);
+    });
+
+    it('says Strength CHECKS and Strength SAVING THROWS — not saves generally', () => {
+      // The stored feature blurb reads "advantage on Strength checks and saving throws".
+      expect(rk(3).bonus.find((e) => e.name === "Giant's Might").detail)
+        .toMatch(/Strength checks and Strength saving throws/);
+    });
+
+    it('is absent below level 3 and for another Fighter subclass', () => {
+      expect(rk(2).bonus.map((e) => e.name)).not.toContain("Giant's Might");
+      const champ = buildActionEconomy(rkArgs(10, {}, '5e', { subclass: 'Champion' }));
+      expect(champ.bonus.map((e) => e.name)).not.toContain("Giant's Might");
+    });
+  });
+
+  describe('the extra damage rides on every attack card', () => {
+    const riderOn = (ec, key) => (ec.action.find((e) => e.key === key)?.riders || [])
+      .find((r) => r.source === "Giant's Might");
+
+    it('attaches to a weapon attack', () => {
+      expect(riderOn(rk(3), 'weapon:w1:0')).toBeTruthy();
+    });
+
+    it('names the condition while the effect is switched OFF', () => {
+      // A bare "+1d6" would be false most of the time — the same reason Sneak Attack and Divine
+      // Smite are riders rather than part of the damage string.
+      expect(riderOn(rk(3), 'weapon:w1:0').text).toMatch(/While Giant's Might is active/);
+    });
+
+    it('states the die plainly once the effect is switched ON', () => {
+      const r = riderOn(rk(10, { active_effects: ['giants_might'] }), 'weapon:w1:0');
+      expect(r.text).not.toMatch(/While Giant's Might is active/);
+      expect(r.text).toMatch(/extra 1d8 damage/);
+    });
+
+    it('reaches an UNARMED strike too — RAW is "a weapon or an unarmed strike"', () => {
+      const bare = buildActionEconomy(rkArgs(3, {}, '5e', { inventory: [], attacks: [] }));
+      const unarmed = bare.action.find((e) => e.source === 'Weapon');
+      expect(unarmed.name).toBe('Unarmed Strike');
+      expect((unarmed.riders || []).some((r) => r.source === "Giant's Might")).toBe(true);
+    });
+
+    it('does not attach for another subclass', () => {
+      const champ = buildActionEconomy(rkArgs(10, {}, '5e', { subclass: 'Champion' }));
+      expect(riderOn(champ, 'weapon:w1:0')).toBeUndefined();
+    });
+  });
+
+  describe('Runic Shield', () => {
+    it('is a reaction with its own pool from level 7', () => {
+      const rs = rk(7).reaction.find((e) => e.name === 'Runic Shield');
+      expect(rs).toBeTruthy();
+      expect(rs.cost).toBe('reaction');
+      expect(rs.resourceKey).toBe('runic_shield_used');
+    });
+
+    it('says the attacker uses the NEW roll, not the lower of the two', () => {
+      // The stored feature blurb says "use the lower of the two rolls", which would make the
+      // feature strictly stronger than RAW.
+      const rs = rk(7).reaction.find((e) => e.name === 'Runic Shield');
+      expect(rs.detail).toMatch(/reroll the d20 and use the new roll/);
+      expect(rs.detail).not.toMatch(/lower/);
+    });
+
+    it('is absent below level 7', () => {
+      expect(rk(6).reaction.map((e) => e.name)).not.toContain('Runic Shield');
+    });
+  });
+
+  it('has no 2024 entry — the 2024 PHB ships no Rune Knight', () => {
+    const ec = rk(10, {}, '5.5e');
+    expect(ec.bonus.map((e) => e.name)).not.toContain("Giant's Might");
+    expect(ec.reaction.map((e) => e.name)).not.toContain('Runic Shield');
+  });
+});
