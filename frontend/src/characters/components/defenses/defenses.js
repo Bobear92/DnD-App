@@ -44,6 +44,8 @@ import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeat
 import { RACE_TRAIT_DESCRIPTIONS } from '@/characters/components/race/raceTraitsData';
 import { hasRaceTrait } from '@/characters/components/race/raceCombatNotes';
 import { getFeatDamageReductions } from '@/characters/components/feats/featEffects';
+import { isRuneActive } from '@/characters/components/inventory/runeCarving';
+import { getRune } from '@/characters/components/classData/runesData';
 
 /** The three things a defense can do to incoming damage. */
 export const DEFENSE_KINDS = ['resistance', 'immunity', 'reduction'];
@@ -121,6 +123,29 @@ export const DEFENSES = [
   },
 
   // ── Class features ────────────────────────────────────────────────────────────────────
+  // Rune Knight, Hill Rune. Gated on the rune being CARVED onto an equipped object rather
+  // than on merely knowing it — knowing a rune grants nothing (see runeCarving.js). Because
+  // the gate already proves the rune is live, this is an ALWAYS ON row: it appears exactly
+  // when it is true and disappears when the bearing item comes off, so it never needs the
+  // "while ..." text a condition would carry. Its rules text comes from RUNE_OPTIONS, the
+  // table that owns rune wording, so the two can't drift.
+  {
+    name: 'Hill Rune',
+    charClass: 'Fighter',
+    subclass: 'Rune Knight',
+    kind: 'resistance',
+    damageTypes: ['poison'],
+    minLevel: 7,
+    editions: ['5e'],
+    applies: (ctx) => isRuneActive('Hill Rune', ctx),
+    // The row is named for the RUNE, which is what a player looks for, but the subclass
+    // feature that grants it is "Rune Carving" — `featureName` keeps the drift guard pointed
+    // at the real feature. The rules text comes from RUNE_OPTIONS rather than that feature,
+    // whose blurb describes all six runes at once and would say almost nothing about poison.
+    featureName: 'Rune Carving',
+    description: getRune('Hill Rune')?.passive?.text ?? null,
+    condition: null,
+  },
   {
     name: 'Rage',
     charClass: 'Barbarian',
@@ -500,12 +525,17 @@ function lookupDescription(entry, edition) {
 }
 
 /** True when every gate the entry declares is satisfied by this character. */
-function matches(entry, { charClass, subclass, level, edition, raceTraits }) {
+function matches(entry, ctx) {
+  const { charClass, subclass, level, edition, raceTraits } = ctx;
   if (entry.charClass && entry.charClass !== charClass) return false;
   if (entry.subclass && entry.subclass !== subclass) return false;
   if (entry.race && !hasRaceTrait(raceTraits, entry.race)) return false;
   if ((level ?? 1) < (entry.minLevel ?? 1)) return false;
   if (entry.editions && !entry.editions.includes(edition)) return false;
+  // `applies` is the escape hatch for a gate the declarative keys cannot express — the Hill
+  // Rune depends on whether a rune is carved onto an EQUIPPED item, which is character_data
+  // state rather than class/level/edition. Entries without one are unaffected.
+  if (entry.applies && !entry.applies(ctx)) return false;
   return true;
 }
 

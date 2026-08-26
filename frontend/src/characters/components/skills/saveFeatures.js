@@ -25,6 +25,8 @@
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
+import { isRuneActive } from '@/characters/components/inventory/runeCarving';
+import { getRune } from '@/characters/components/classData/runesData';
 
 /**
  * @typedef {Object} SaveFeatureEntry
@@ -44,6 +46,19 @@ export const SAVE_FEATURES = [
     subclass: 'Cavalier',
     minLevel: 3,
     editions: ['5e'],
+  },
+  // Rune Knight, Hill Rune — advantage on saves against being poisoned. Gated on the rune
+  // being CARVED onto an equipped object, not on knowing it, so the row appears exactly when
+  // the advantage is real. Its text comes from RUNE_OPTIONS rather than the subclass feature
+  // table, because the feature there is "Rune Carving" and describes all six runes at once.
+  {
+    name: 'Hill Rune',
+    charClass: 'Fighter',
+    subclass: 'Rune Knight',
+    minLevel: 7,
+    editions: ['5e'],
+    applies: (ctx) => isRuneActive('Hill Rune', ctx),
+    description: getRune('Hill Rune')?.passive?.text ?? null,
   },
 ];
 
@@ -80,11 +95,15 @@ function lookupDescription(entry, edition) {
 }
 
 /** True when every gate the entry declares is satisfied by this character. */
-function matches(entry, { charClass, subclass, level, edition }) {
+function matches(entry, ctx) {
+  const { charClass, subclass, level, edition } = ctx;
   if (entry.charClass !== charClass) return false;
   if (entry.subclass && entry.subclass !== subclass) return false;
   if ((level ?? 1) < entry.minLevel) return false;
   if (entry.editions && !entry.editions.includes(edition)) return false;
+  // Escape hatch for gates the declarative keys cannot express — a rune depends on whether it
+  // is carved onto an EQUIPPED item, which is character_data state. See defenses.js, same shape.
+  if (entry.applies && !entry.applies(ctx)) return false;
   return true;
 }
 
@@ -94,9 +113,11 @@ function matches(entry, { charClass, subclass, level, edition }) {
  * @param {{ charClass?: string, subclass?: string, level?: number, edition?: string }} ctx
  * @returns {{ key: string, name: string, source: string, level: number, description: string|null }[]}
  */
-export function getSaveFeatures({ charClass, subclass, level = 1, edition = '5e' } = {}) {
+export function getSaveFeatures({
+  charClass, subclass, level = 1, edition = '5e', characterData = {},
+} = {}) {
   return SAVE_FEATURES
-    .filter((entry) => matches(entry, { charClass, subclass, level, edition }))
+    .filter((entry) => matches(entry, { charClass, subclass, level, edition, characterData }))
     .map((entry) => ({
       key: saveFeatureKey(entry),
       name: entry.name,

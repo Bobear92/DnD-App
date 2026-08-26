@@ -1912,6 +1912,97 @@ class TestInitiativeRest:
         changes = resp.json()["applied_to"][0]["changes"]
         assert "Giant's Might recovered" not in changes
 
+    # ── Channel Rune ─────────────────────────────────────────────────────────
+    # Each rune recharges INDEPENDENTLY (RAW is per rune), so there is a key each rather than
+    # one shared pool — and unlike the other two Rune Knight pools, Channel Rune comes back on
+    # a SHORT rest as well as a long one. The pool SIZE (1, or 2 from Master of Runes at 15th)
+    # stays a frontend concern, as with every other Fighter pool.
+    def test_channel_rune_resets_on_a_short_rest(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._rune_knight(client, h_gm, campaign_id, data={
+            "channel_rune_cloud_used": 1, "channel_rune_fire_used": 2,
+        })
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["channel_rune_cloud_used"] == 0
+        assert cd["channel_rune_fire_used"] == 0
+        assert "Channel Rune uses recovered" in resp.json()["applied_to"][0]["changes"]
+
+    def test_channel_rune_resets_on_a_long_rest_too(self, client):
+        # A long rest is also a short one, so the uses must come back there as well.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._rune_knight(client, h_gm, campaign_id, data={
+            "channel_rune_storm_used": 2, "giants_might_used": 3,
+        })
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["channel_rune_storm_used"] == 0
+        assert cd["giants_might_used"] == 0
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Channel Rune uses recovered" in changes
+        assert "Giant's Might recovered" in changes
+
+    def test_a_short_rest_returns_channel_rune_but_NOT_the_long_rest_pools(self, client):
+        # The split the subclass exists to test: a nap gives back the runes and nothing else.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._rune_knight(client, h_gm, campaign_id, data={
+            "channel_rune_hill_used": 1, "giants_might_used": 3, "runic_shield_used": 2,
+        })
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        assert cd["channel_rune_hill_used"] == 0
+        assert cd["giants_might_used"] == 3
+        assert cd["runic_shield_used"] == 2
+        changes = resp.json()["applied_to"][0]["changes"]
+        assert "Channel Rune uses recovered" in changes
+        assert "Giant's Might recovered" not in changes
+
+    def test_channel_rune_resets_every_rune_not_just_the_carved_ones(self, client):
+        # Which runes are carved is frontend state; the reset is unconditional so a rune moved
+        # onto a different object between rests can never keep a stale spent count.
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._rune_knight(client, h_gm, campaign_id, data={
+            "channel_rune_cloud_used": 1, "channel_rune_frost_used": 1,
+            "channel_rune_stone_used": 1, "channel_rune_hill_used": 1,
+            "channel_rune_storm_used": 1, "channel_rune_fire_used": 1,
+        })
+
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]}, headers=h_gm,
+        )
+        cd = self._data(client, char_id, h_gm)
+        for rune in ("cloud", "fire", "frost", "stone", "hill", "storm"):
+            assert cd[f"channel_rune_{rune}_used"] == 0, rune
+
+    def test_channel_rune_untouched_for_another_subclass(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        resp = client.post("/api/characters", json={
+            "name": "Other", "race": "Human", "char_class": "Fighter", "level": 10,
+            "campaign_id": campaign_id,
+            "character_data": {"subclass": "Champion", "channel_rune_cloud_used": 1},
+        }, headers=h_gm)
+        char_id = resp.json()["id"]
+
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]}, headers=h_gm,
+        )
+        assert self._data(client, char_id, h_gm)["channel_rune_cloud_used"] == 1
+        assert "Channel Rune uses recovered" not in resp.json()["applied_to"][0]["changes"]
+
     def test_legion_of_one_regains_a_use_when_empty(self, client):
         h_gm, _, campaign_id = self._setup(client)
         # CON 10 → a one-use pool, so one spent use IS empty.

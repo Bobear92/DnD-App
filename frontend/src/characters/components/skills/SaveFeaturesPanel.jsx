@@ -14,9 +14,9 @@ import { getSaveFeatures } from '@/characters/components/skills/saveFeatures';
  * Renders nothing when the character has no such features, so the panel costs no space
  * on the great majority of sheets.
  */
-export default function SaveFeaturesPanel({ charClass, subclass, level, edition }) {
+export default function SaveFeaturesPanel({ charClass, subclass, level, edition, characterData }) {
   const [openKey, setOpenKey] = useState(null);
-  const features = getSaveFeatures({ charClass, subclass, level, edition });
+  const features = getSaveFeatures({ charClass, subclass, level, edition, characterData });
 
   if (features.length === 0) return null;
 

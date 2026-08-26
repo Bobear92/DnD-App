@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ActionEconomyTab from '@/characters/components/combat/ActionEconomyTab';
 
@@ -1351,5 +1351,84 @@ describe('ActionEconomyTab — Unleash Incarnation on the melee attack card', ()
       goToTab('bonus');
       expect(screen.queryByTestId(/^ae-effect-/)).not.toBeInTheDocument();
     });
+  });
+});
+
+// "Calculate the total damage" — the arithmetic a player would otherwise do mid-turn. It sits at
+// CARD level under the printed damage, never folded INTO it: the printed string has to stay true
+// for an ordinary swing, and every term in the total is conditional.
+describe('ActionEconomyTab — "on a hit" damage total on the attack card', () => {
+  const runeKnight = (props = {}) => renderTab({
+    charClass: 'Fighter', subclass: 'Rune Knight', level: 7,
+    scores: { strength: 16, dexterity: 12, constitution: 14 },
+    inventory: [longswordEntry],
+    characterData: {
+      subclass: 'Rune Knight',
+      runes: ['Fire Rune'],
+      rune_items: { 'Fire Rune': 'w1' },
+      inventory: [longswordEntry],
+    },
+    ...props,
+  });
+
+  // The weapon entry key carries an index suffix (weapon:w1:0), so match on the prefix.
+  const total = () => screen.getByTestId(/^ae-damage-total-weapon:w1/);
+
+  it('shows the combined damage on the card, under the printed damage', () => {
+    runeKnight();
+    expect(total()).toHaveTextContent(/On a hit:/);
+    expect(total()).toHaveTextContent(/2d6 fire/);
+  });
+
+  it('leaves the printed damage alone — it must stay true for an ordinary swing', () => {
+    runeKnight();
+    const printed = screen.getByTestId(/^ae-damage-weapon:w1/);
+    expect(printed).toHaveTextContent('1d8');
+    expect(printed).not.toHaveTextContent(/fire/i);
+  });
+
+  // The total is what you read mid-swing; the rune's rules paragraph is reference you need once.
+  // If a later edit pushes the number back down into the rider block, this fails.
+  it('puts the total at the top of the card, ABOVE the Fire Rune block', () => {
+    runeKnight();
+    const totalEl = total();
+    const block = screen.getByTestId(/^ae-attached-fire-rune-weapon:w1/);
+    expect(totalEl.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+  });
+
+  it('names each source, so a grown total does not read as a bug in the weapon damage', () => {
+    runeKnight();
+    expect(total()).toHaveTextContent(/\(weapon\)/);
+    expect(total()).toHaveTextContent(/\(Fire Rune\)/);
+  });
+
+  it("includes Giant's Might while the effect is switched on", () => {
+    runeKnight({
+      characterData: {
+        subclass: 'Rune Knight',
+        runes: ['Fire Rune'],
+        rune_items: { 'Fire Rune': 'w1' },
+        inventory: [longswordEntry],
+        active_effects: ['giants_might'],
+      },
+    });
+    expect(total()).toHaveTextContent(/1d6/);
+    expect(total()).toHaveTextContent(/\(Giant's Might\)/);
+  });
+
+  it("excludes Giant's Might while it is off", () => {
+    runeKnight();
+    expect(total()).not.toHaveTextContent(/Giant's Might/);
+  });
+
+  it('shows no total when nothing adds damage', () => {
+    renderTab({
+      charClass: 'Fighter', subclass: 'Echo Knight', level: 5,
+      scores: { strength: 16, constitution: 16 },
+      inventory: [longswordEntry],
+      characterData: { subclass: 'Echo Knight' },
+    });
+    expect(screen.queryByTestId(/^ae-damage-total-/)).not.toBeInTheDocument();
   });
 });

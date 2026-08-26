@@ -202,3 +202,75 @@ describe('applyLevelChoice', () => {
     expect(patch.metamagic).toEqual(['Quickened Spell', 'Heightened Spell']); // Subtle Spell removed, Heightened added
   });
 });
+
+describe('Fighter → Rune Knight: Rune Carving', () => {
+  const runesAt = (oldLevel, newLevel) =>
+    getLevelChoices('Fighter', '5e', oldLevel, newLevel, 'Rune Knight')
+      .find((c) => c.key === 'runes');
+
+  it('offers two runes at level 3 — the pick QA found never happened', () => {
+    const choice = runesAt(2, 3);
+    expect(choice).toBeDefined();
+    expect(choice.count).toBe(2);
+    expect(choice.storeField).toBe('runes');
+  });
+
+  it('offers one more at 7, 10 and 15, and none at a level in between', () => {
+    expect(runesAt(6, 7).count).toBe(1);
+    expect(runesAt(9, 10).count).toBe(1);
+    expect(runesAt(14, 15).count).toBe(1);
+    expect(runesAt(3, 4)).toBeUndefined();
+    expect(runesAt(15, 16)).toBeUndefined();
+  });
+
+  it('is offered only to a Rune Knight, and never in 2024', () => {
+    expect(getLevelChoices('Fighter', '5e', 2, 3, 'Champion')).toEqual([]);
+    expect(getLevelChoices('Fighter', '5e', 2, 3, null)).toEqual([]);
+    expect(getLevelChoices('Fighter', '5.5e', 2, 3, 'Rune Knight')).toEqual([]);
+  });
+
+  it('hides Hill below level 7 and Storm below level 15', () => {
+    const choice = runesAt(2, 3);
+    const atL3 = availablePoolOptions(choice, {}, 3).map((o) => o.name);
+    expect(atL3).toEqual(['Cloud Rune', 'Fire Rune', 'Frost Rune', 'Stone Rune']);
+
+    const atL7 = availablePoolOptions(choice, {}, 7).map((o) => o.name);
+    expect(atL7).toContain('Hill Rune');
+    expect(atL7).not.toContain('Storm Rune');
+
+    expect(availablePoolOptions(choice, {}, 15).map((o) => o.name)).toContain('Storm Rune');
+  });
+
+  it('hides runes the character already knows', () => {
+    const choice = runesAt(6, 7);
+    const names = availablePoolOptions(choice, { runes: ['Fire Rune', 'Frost Rune'] }, 7).map((o) => o.name);
+    expect(names).not.toContain('Fire Rune');
+    expect(names).not.toContain('Frost Rune');
+    expect(names).toContain('Hill Rune');
+  });
+
+  it('writes the chosen runes to character_data.runes and supports the level-up swap', () => {
+    const choice = runesAt(6, 7);
+    expect(applyLevelChoice(choice, ['Hill Rune'], { runes: ['Fire Rune', 'Cloud Rune'] }))
+      .toEqual({ runes: ['Fire Rune', 'Cloud Rune', 'Hill Rune'] });
+    expect(applyLevelChoice(choice, ['Hill Rune'], { runes: ['Fire Rune', 'Cloud Rune'] }, 'Cloud Rune'))
+      .toEqual({ runes: ['Fire Rune', 'Hill Rune'] });
+  });
+
+  it('reports the cumulative runes a Rune Knight should already know', () => {
+    const earned = getEarnedLevelChoices('Fighter', '5e', 10, 'Rune Knight')
+      .find((c) => c.key === 'runes');
+    expect(earned.count).toBe(4);
+    expect(getEarnedLevelChoices('Fighter', '5e', 2, 'Rune Knight')).toEqual([]);
+  });
+
+  it('derives the save DC from CONSTITUTION and states the Channel Rune uses', () => {
+    const choice = runesAt(2, 3);
+    const atL3 = choice.derived(3, { constitution: 16, intelligence: 8 });
+    expect(atL3.value).toBe(13);                       // 8 + PB 2 + CON +3
+    expect(atL3.note).toMatch(/Constitution modifier \(\+3\)/);
+    expect(atL3.note).toMatch(/once per short or long rest/);
+    // Master of Runes doubles the uses at 15th level.
+    expect(choice.derived(15, { constitution: 16 }).note).toMatch(/twice per short or long rest/);
+  });
+});

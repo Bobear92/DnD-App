@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyCastingTime, characterSpellNames, attacksPerAction, canTwoWeaponFight,
   normalizeFeatureName, featuresKnownAtLevel, buildActionEconomy, powerAttackVariant,
-  subclassFeaturesKnownAtLevel,
+  subclassFeaturesKnownAtLevel, combineAttackDamage,
 } from '@/characters/components/combat/actionEconomyData';
 
 describe('classifyCastingTime', () => {
@@ -2532,5 +2532,233 @@ describe('buildActionEconomy — Rune Knight (Fighter subclass)', () => {
     const ec = rk(10, {}, '5.5e');
     expect(ec.bonus.map((e) => e.name)).not.toContain("Giant's Might");
     expect(ec.reaction.map((e) => e.name)).not.toContain('Runic Shield');
+  });
+});
+
+describe('buildActionEconomy — Channel Rune (Rune Knight)', () => {
+  const AXE = {
+    uid: 'w1', name: 'Battleaxe', category: 'weapons', weapon_type: 'Melee',
+    equipped: true, hand: 'main',
+  };
+  const SHEATHED = { uid: 'w2', name: 'Longbow', category: 'weapons', equipped: false };
+
+  const ae = (level, { runes = ['Cloud Rune', 'Frost Rune'], rune_items = {} } = {}) =>
+    buildActionEconomy({
+      charClass: 'Fighter',
+      subclass: 'Rune Knight',
+      level,
+      edition: '5e',
+      // character_data carries the inventory in the real app, and the rune gate reads it there.
+      characterData: {
+        subclass: 'Rune Knight', runes, rune_items, inventory: [AXE, SHEATHED],
+      },
+      inventory: [AXE, SHEATHED],
+      attacks: [{ uid: 'w1', name: 'Battleaxe', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true }],
+      scores: { strength: 16, constitution: 16 },
+      spellIndex: {},
+    });
+
+  const allEntries = (buckets) => Object.values(buckets).flatMap((b) => (Array.isArray(b) ? b : []));
+  const channelCards = (buckets) => allEntries(buckets).filter((e) => /^Channel Rune:/.test(e.name || ''));
+
+  it('shows no Channel Rune card while the runes are only KNOWN', () => {
+    expect(channelCards(ae(7))).toEqual([]);
+  });
+
+  it('shows a card once a rune is carved onto an equipped item', () => {
+    const cards = channelCards(ae(7, { rune_items: { 'Cloud Rune': 'w1' } }));
+    expect(cards.map((c) => c.name)).toEqual(['Channel Rune: Cloud']);
+  });
+
+  it('shows NO card while the bearing item is unequipped', () => {
+    expect(channelCards(ae(7, { rune_items: { 'Cloud Rune': 'w2' } }))).toEqual([]);
+  });
+
+  it('files each rune under its own action cost', () => {
+    const cloud = ae(7, { rune_items: { 'Cloud Rune': 'w1' } }).reaction
+      .find((e) => e.name === 'Channel Rune: Cloud');
+    expect(cloud.cost).toBe('reaction');
+
+    const frost = ae(7, { rune_items: { 'Frost Rune': 'w1' } }).bonus
+      .find((e) => e.name === 'Channel Rune: Frost');
+    expect(frost.cost).toBe('bonus action');
+  });
+
+  it('gives every rune its OWN resource key — they recharge independently', () => {
+    const cloud = channelCards(ae(7, { rune_items: { 'Cloud Rune': 'w1' } }))[0];
+    expect(cloud.resourceKey).toBe('channel_rune_cloud_used');
+
+    const frost = channelCards(ae(7, { rune_items: { 'Frost Rune': 'w1' } }))[0];
+    expect(frost.resourceKey).toBe('channel_rune_frost_used');
+  });
+
+  it('carries the rune Channel Rune text, not the passive half', () => {
+    const cloud = channelCards(ae(7, { rune_items: { 'Cloud Rune': 'w1' } }))[0];
+    expect(cloud.detail ?? cloud.description).toMatch(/becomes the target of the attack/i);
+    expect(cloud.detail ?? cloud.description).not.toMatch(/Sleight of Hand/i);
+  });
+
+  it("attaches the Fire Rune to the weapon attack it rides on, rather than giving it a card", () => {
+    const buckets = ae(7, { runes: ['Fire Rune'], rune_items: { 'Fire Rune': 'w1' } });
+    expect(channelCards(buckets)).toEqual([]);
+    const attack = buckets.action.find((e) => e.name === 'Battleaxe');
+    const fire = (attack.attachedFeatures ?? []).find((f) => f.name === 'Fire Rune');
+    expect(fire).toBeTruthy();
+    expect(fire.resourceKey).toBe('channel_rune_fire_used');
+    expect(fire.note).toMatch(/Battleaxe/);
+  });
+
+  it('states the Fire Rune save DC from CONSTITUTION — the Rune Knight DC, not Intelligence', () => {
+    // Level 7 → PB +3; CON 16 → +3. 8 + 3 + 3 = 14.
+    const buckets = ae(7, { runes: ['Fire Rune'], rune_items: { 'Fire Rune': 'w1' } });
+    const attack = buckets.action.find((e) => e.name === 'Battleaxe');
+    const fire = attack.attachedFeatures.find((f) => f.name === 'Fire Rune');
+    expect(fire.note).toMatch(/DC 14/);
+  });
+
+  it('does NOT attach the Fire Rune while it is uncarved — the hidden gate runs first', () => {
+    const buckets = ae(7, { runes: ['Fire Rune'], rune_items: {} });
+    const attack = buckets.action.find((e) => e.name === 'Battleaxe');
+    expect((attack.attachedFeatures ?? []).some((f) => f.name === 'Fire Rune')).toBe(false);
+  });
+
+  it('shows a card per carved rune when several are live', () => {
+    const buckets = ae(7, { rune_items: { 'Cloud Rune': 'w1', 'Frost Rune': 'w1' } });
+    expect(channelCards(buckets).map((c) => c.name).sort())
+      .toEqual(['Channel Rune: Cloud', 'Channel Rune: Frost']);
+  });
+
+  it('gives another Fighter subclass no Channel Rune cards', () => {
+    const buckets = buildActionEconomy({
+      charClass: 'Fighter', subclass: 'Champion', level: 7, edition: '5e',
+      characterData: { subclass: 'Champion', runes: ['Cloud Rune'], rune_items: { 'Cloud Rune': 'w1' }, inventory: [AXE] },
+      inventory: [AXE], attacks: [], scores: {}, spellIndex: {},
+    });
+    expect(channelCards(buckets)).toEqual([]);
+  });
+});
+
+describe('combineAttackDamage', () => {
+  it('returns null when nothing adds damage — no total line for a rider that only adds text', () => {
+    expect(combineAttackDamage('1d8 + 3 Piercing', [])).toBeNull();
+    expect(combineAttackDamage('1d8 + 3 Piercing', [{ source: 'X' }])).toBeNull();
+  });
+
+  it('appends a typed term rather than folding it into the weapon die', () => {
+    const t = combineAttackDamage('1d8 + 3 Piercing', [{ dice: '2d6', type: 'fire', source: 'Fire Rune' }]);
+    expect(t.text).toBe('1d8 + 3 Piercing + 2d6 fire');
+  });
+
+  it('keeps damage types separate — they are rolled and resisted separately', () => {
+    const t = combineAttackDamage('1d8 + 3 Piercing', [
+      { dice: '1d6', type: 'Piercing', source: "Giant's Might" },
+      { dice: '2d6', type: 'fire', source: 'Fire Rune' },
+    ]);
+    // 1d8 and 1d6 are both piercing but cannot be summed into one die either.
+    expect(t.text).toBe('1d8 + 3 Piercing + 1d6 Piercing + 2d6 fire');
+  });
+
+  it('labels every term with its source, and the weapon term with none', () => {
+    const t = combineAttackDamage('1d8 + 3 Piercing', [{ dice: '2d6', type: 'fire', source: 'Fire Rune' }]);
+    expect(t.parts).toEqual([
+      { text: '1d8 + 3 Piercing', source: null },
+      { text: '2d6 fire', source: 'Fire Rune' },
+    ]);
+  });
+});
+
+describe('“on a hit” damage totals on the attack card', () => {
+  const PICK = {
+    uid: 'w1', name: 'War pick', category: 'weapons', weapon_type: 'Melee',
+    equipped: true, hand: 'main',
+  };
+
+  const ae = ({ level = 7, active = [], runes = ['Fire Rune'], carved = true } = {}) =>
+    buildActionEconomy({
+      charClass: 'Fighter',
+      subclass: 'Rune Knight',
+      level,
+      edition: '5e',
+      characterData: {
+        subclass: 'Rune Knight',
+        runes,
+        rune_items: carved ? { 'Fire Rune': 'w1' } : {},
+        inventory: [PICK],
+        active_effects: active,
+      },
+      inventory: [PICK],
+      attacks: [{ uid: 'w1', name: 'War pick', toHit: '+5', damage: '1d8 + 3 Piercing', proficient: true }],
+      scores: { strength: 16, constitution: 14 },
+      spellIndex: {},
+    });
+
+  const row = (buckets) => buckets.action.find((e) => e.name === 'War pick');
+  // The data layer hands over the ADDITIONS; the card combines them against the damage it is
+  // currently showing, so the power-attack toggle can't leave a stale total behind.
+  const totalText = (buckets) => {
+    const r = row(buckets);
+    return combineAttackDamage(r.damage, r.damageAdditions || [])?.text;
+  };
+  const fireBlock = (buckets) =>
+    (row(buckets).attachedFeatures ?? []).find((f) => f.name === 'Fire Rune');
+
+  it('adds the rune damage to the weapon damage', () => {
+    expect(totalText(ae())).toBe('1d8 + 3 Piercing + 2d6 fire');
+  });
+
+  it('leaves the printed damage untouched — it must stay true for an ordinary swing', () => {
+    expect(row(ae()).damage).toBe('1d8 + 3 Piercing');
+  });
+
+  it("folds in Giant's Might only while the effect is switched ON", () => {
+    expect(totalText(ae({ active: ['giants_might'] })))
+      .toBe('1d8 + 3 Piercing + 1d6 Piercing + 2d6 fire');
+  });
+
+  it("omits Giant's Might while it is off, even though the character has the feature", () => {
+    expect(totalText(ae({ active: [] }))).toBe('1d8 + 3 Piercing + 2d6 fire');
+  });
+
+  it("scales Giant's Might with level (Great Stature at 10)", () => {
+    expect(totalText(ae({ level: 10, active: ['giants_might'] })))
+      .toBe('1d8 + 3 Piercing + 1d8 Piercing + 2d6 fire');
+  });
+
+  it('names each source so a grown total does not look like a bug', () => {
+    const r = row(ae({ active: ['giants_might'] }));
+    const parts = combineAttackDamage(r.damage, r.damageAdditions).parts;
+    expect(parts.map((p) => p.source)).toEqual([null, "Giant's Might", 'Fire Rune']);
+  });
+
+  it('gives no total when the rune is not carved — nothing adds damage', () => {
+    expect(fireBlock(ae({ carved: false }))).toBeUndefined();
+    expect(totalText(ae({ carved: false }))).toBeUndefined();
+  });
+
+  it('gives no total to an attached feature that adds no damage (Unleash Incarnation)', () => {
+    const buckets = buildActionEconomy({
+      charClass: 'Fighter', subclass: 'Echo Knight', level: 7, edition: '5e',
+      characterData: { subclass: 'Echo Knight', inventory: [PICK] },
+      inventory: [PICK],
+      attacks: [{ uid: 'w1', name: 'War pick', toHit: '+5', damage: '1d8 + 3 Piercing', proficient: true }],
+      scores: { constitution: 14 }, spellIndex: {},
+    });
+    const attack = buckets.action.find((e) => e.name === 'War pick');
+    const f = attack.attachedFeatures.find((x) => x.name === 'Unleash Incarnation');
+    expect(f).toBeTruthy();
+    expect(attack.damageAdditions).toBeUndefined();
+  });
+
+  it('totals Psionic Strike too, folding INT into its die', () => {
+    const buckets = buildActionEconomy({
+      charClass: 'Fighter', subclass: 'Psi Warrior', level: 7, edition: '5e',
+      characterData: { subclass: 'Psi Warrior', inventory: [PICK] },
+      inventory: [PICK],
+      attacks: [{ uid: 'w1', name: 'War pick', toHit: '+5', damage: '1d8 + 3 Piercing', proficient: true }],
+      scores: { intelligence: 16 }, spellIndex: {},
+    });
+    const attack = buckets.action.find((e) => e.name === 'War pick');
+    expect(combineAttackDamage(attack.damage, attack.damageAdditions).text)
+      .toMatch(/^1d8 \+ 3 Piercing \+ .*force$/);
   });
 });

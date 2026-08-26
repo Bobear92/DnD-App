@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { useRestResource } from '@/characters/components/sheets/classSheet/hooks/useRestResource';
+import { FIGHTER_5E as FIGHTER_CONFIG } from '@/characters/components/sheets/classSheet/configs/fighter';
 
 const RESOURCES = [
   { key: 'second_wind_used', label: 'Second Wind (Short Rest)', total: () => 1, recharge: 'short', minLevel: 1 },
@@ -138,5 +139,73 @@ describe('useRestResource', () => {
       });
       expect(rows[0].total).toBe(2);
     });
+  });
+});
+
+describe('Channel Rune rows (Rune Knight)', () => {
+  const AXE = { uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' };
+  const BOW = { uid: 'w2', category: 'weapons', name: 'Longbow', equipped: false };
+
+  const rows = (level, { runes = ['Cloud Rune', 'Fire Rune'], rune_items = {}, ...rest } = {}) =>
+    useRestResource({
+      resources: FIGHTER_CONFIG.restResources,
+      level,
+      data: {
+        subclass: 'Rune Knight', runes, rune_items, inventory: [AXE, BOW], ...rest,
+      },
+      scores: { strength: 16, constitution: 16 },
+    });
+
+  const channel = (r) => r.filter((x) => x.key.startsWith('channel_rune_'));
+
+  it('shows no Channel Rune row while the runes are only known', () => {
+    expect(channel(rows(7))).toEqual([]);
+  });
+
+  it('shows a row once the rune is carved onto an equipped item', () => {
+    const r = channel(rows(7, { rune_items: { 'Cloud Rune': 'w1' } }));
+    expect(r).toHaveLength(1);
+    expect(r[0].key).toBe('channel_rune_cloud_used');
+    expect(r[0].label).toMatch(/Channel Rune: Cloud/);
+  });
+
+  it('hides the row again while the bearing item is unequipped', () => {
+    expect(channel(rows(7, { rune_items: { 'Cloud Rune': 'w2' } }))).toEqual([]);
+  });
+
+  it('recharges on a SHORT rest — the only Rune Knight pool that does', () => {
+    const r = channel(rows(7, { rune_items: { 'Cloud Rune': 'w1' } }))[0];
+    expect(r.recharge).toBe('short');
+    const might = rows(7).find((x) => x.key === 'giants_might_used');
+    expect(might.recharge).toBe('long');
+  });
+
+  it('holds ONE use before Master of Runes', () => {
+    expect(channel(rows(7, { rune_items: { 'Cloud Rune': 'w1' } }))[0].total).toBe(1);
+  });
+
+  it('holds TWO uses from level 15 (Master of Runes)', () => {
+    expect(channel(rows(15, { rune_items: { 'Cloud Rune': 'w1' } }))[0].total).toBe(2);
+  });
+
+  it('tracks each rune independently rather than sharing a pool', () => {
+    const r = channel(rows(15, {
+      rune_items: { 'Cloud Rune': 'w1', 'Fire Rune': 'w1' },
+      channel_rune_cloud_used: 2,
+    }));
+    const cloud = r.find((x) => x.key === 'channel_rune_cloud_used');
+    const fire = r.find((x) => x.key === 'channel_rune_fire_used');
+    expect(cloud.remaining).toBe(0);
+    expect(fire.remaining).toBe(2);
+  });
+
+  it('gives another Fighter subclass no Channel Rune rows', () => {
+    const r = useRestResource({
+      resources: FIGHTER_CONFIG.restResources,
+      level: 7,
+      data: { subclass: 'Champion', runes: ['Cloud Rune'], rune_items: { 'Cloud Rune': 'w1' }, inventory: [AXE] },
+      scores: {},
+    });
+    expect(channel(r)).toEqual([]);
   });
 });

@@ -1428,6 +1428,98 @@ describe('LevelUpWizard', () => {
     });
   });
 
+  // The QA finding this was built for: a Rune Knight leveled to 3 and was never asked to pick
+  // the two runes Rune Carving grants. It is the SECOND subclass-scoped pool, so it also proves
+  // the mechanism takes a new one as pure data — including the option-level minLevel gating
+  // (Hill at 7, Storm at 15) that Eldritch Invocations introduced.
+  describe('level choices — Rune Knight Rune Carving (subclass-scoped pool)', () => {
+    const RUNE_KNIGHT_L6 = {
+      ...FIGHTER_L2, level: 6,
+      character_data: { hp_max: 52, subclass: 'Rune Knight', runes: ['Fire Rune', 'Cloud Rune'] },
+    };
+
+    it('offers two runes at L3 to a Fighter who picks Rune Knight in the same run', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={FIGHTER_L2} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → subclass
+      fireEvent.click(screen.getByText('Rune Knight'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // subclass → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → level-choices
+      expect(screen.getByTestId('level-choice-count-runes')).toHaveTextContent('0/2');
+      expect(screen.getByTestId('wizard-next')).toBeDisabled();
+      // Hill (L7) and Storm (L15) are not on the table yet at level 3.
+      expect(screen.queryByTestId('level-choice-runes-Hill Rune')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('level-choice-runes-Storm Rune')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('level-choice-runes-Fire Rune'));
+      fireEvent.click(screen.getByTestId('level-choice-runes-Cloud Rune'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // level-choices → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(3, expect.objectContaining({
+        subclass: 'Rune Knight',
+        runes: ['Fire Rune', 'Cloud Rune'],
+      })));
+    });
+
+    it('unlocks the Hill rune at L7 and hides the runes already known', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={RUNE_KNIGHT_L6} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → level-choices
+      expect(screen.getByTestId('level-choice-count-runes')).toHaveTextContent('0/1');
+      expect(screen.queryByTestId('level-choice-runes-Fire Rune')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('level-choice-runes-Storm Rune')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('level-choice-runes-Hill Rune'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // level-choices → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(7, expect.objectContaining({
+        runes: ['Fire Rune', 'Cloud Rune', 'Hill Rune'],
+      })));
+    });
+
+    it('lets the player swap one known rune when learning a new one', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={RUNE_KNIGHT_L6} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → level-choices
+      fireEvent.change(screen.getByTestId('level-choice-replace-runes'), { target: { value: 'Cloud Rune' } });
+      expect(screen.getByTestId('level-choice-count-runes')).toHaveTextContent('0/2');
+      fireEvent.click(screen.getByTestId('level-choice-runes-Hill Rune'));
+      fireEvent.click(screen.getByTestId('level-choice-runes-Frost Rune'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // level-choices → confirm
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(7, expect.objectContaining({
+        runes: ['Fire Rune', 'Hill Rune', 'Frost Rune'],
+      })));
+    });
+
+    it('is never offered to another Fighter subclass, and not at a level that grants no rune', () => {
+      const { unmount } = render(
+        <LevelUpWizard
+          character={{ ...RUNE_KNIGHT_L6, character_data: { hp_max: 52, subclass: 'Champion' } }}
+          campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()}
+        />
+      );
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      expect(screen.queryByTestId('level-choice-count-runes')).not.toBeInTheDocument();
+      unmount();
+
+      render(
+        <LevelUpWizard
+          character={{ ...RUNE_KNIGHT_L6, level: 7 }}
+          campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()}
+        />
+      );
+      fireEvent.click(screen.getByText('Take Average'));
+      fireEvent.click(screen.getByTestId('wizard-next')); // hp → features
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → asi/confirm
+      expect(screen.queryByTestId('level-choice-count-runes')).not.toBeInTheDocument();
+    });
+  });
+
   // The Cavalier's Bonus Proficiency is one picker with TWO destinations — picking a skill must
   // write skill_proficiencies, picking a language must write subclass_languages. Getting this
   // wrong would file a language as a bogus skill proficiency.

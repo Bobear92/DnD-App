@@ -290,7 +290,10 @@ describe('registry integrity', () => {
     // The real failure mode of a hand-authored catalog: a misspelled subclass or feature name
     // never matches its feature table, so the row expands to nothing. Driving every entry
     // through its own gates catches that at build time instead of on someone's sheet.
-    for (const entry of DEFENSES) {
+    // Entries with an `applies` predicate depend on character_data this generic sweep cannot
+    // synthesize (the Hill Rune needs a rune carved onto an EQUIPPED item). They get the same
+    // two assertions in their own describe block, which can build that state.
+    for (const entry of DEFENSES.filter((e) => !e.applies)) {
       const edition = entry.editions?.[0] ?? '5e';
       const { alwaysOn, situational } = getDefenses({
         charClass: entry.charClass ?? 'Fighter',
@@ -314,11 +317,77 @@ describe('registry integrity', () => {
       for (const edition of entry.editions ?? ['5e', '5.5e']) {
         const features = SUBCLASS_DATA[entry.charClass]?.[edition]?.[entry.subclass]?.features;
         expect(features, `${entry.charClass}/${entry.subclass} missing in ${edition}`).toBeTruthy();
+        // A row may be named for the THING granted rather than the feature granting it (the
+        // Rune Knight's Hill Rune comes from the "Rune Carving" feature), in which case the
+        // entry names the feature explicitly. Either way it must resolve to a real feature.
+        const featureName = entry.featureName ?? entry.name;
         expect(
-          features.some((f) => f.name === entry.name),
-          `${entry.subclass} (${edition}) has no feature named "${entry.name}"`,
+          features.some((f) => f.name === featureName),
+          `${entry.subclass} (${edition}) has no feature named "${featureName}"`,
         ).toBe(true);
       }
     }
+  });
+});
+
+describe('Hill Rune (Rune Knight) — a defense gated on carved-and-equipped gear', () => {
+  const axe = { uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' };
+  const sheathed = { uid: 'w2', category: 'weapons', name: 'Longbow', equipped: false };
+  const ctx = (rune_items, inventory = [axe, sheathed]) => ({
+    charClass: 'Fighter',
+    subclass: 'Rune Knight',
+    level: 7,
+    edition: '5e',
+    characterData: { subclass: 'Rune Knight', runes: ['Hill Rune'], rune_items, inventory },
+  });
+  const hill = (c) => {
+    const { alwaysOn, situational } = getDefenses(c);
+    return [...alwaysOn, ...situational].find((d) => d.name === 'Hill Rune');
+  };
+
+  it('is absent while the rune is only KNOWN — knowing a rune grants nothing', () => {
+    expect(hill(ctx({}))).toBeUndefined();
+  });
+
+  it('appears once the rune is carved on an equipped item', () => {
+    expect(hill(ctx({ 'Hill Rune': 'w1' }))).toMatchObject({
+      kind: 'resistance',
+      source: 'Rune Knight',
+    });
+  });
+
+  it('is absent while the bearing item is unequipped', () => {
+    expect(hill(ctx({ 'Hill Rune': 'w2' }))).toBeUndefined();
+  });
+
+  it('covers poison', () => {
+    expect(hill(ctx({ 'Hill Rune': 'w1' })).damageTypes).toEqual(['poison']);
+  });
+
+  it('is ALWAYS ON, not situational — the gate already proves the rune is live', () => {
+    const { alwaysOn, situational } = getDefenses(ctx({ 'Hill Rune': 'w1' }));
+    expect(alwaysOn.some((d) => d.name === 'Hill Rune')).toBe(true);
+    expect(situational.some((d) => d.name === 'Hill Rune')).toBe(false);
+  });
+
+  it('carries the rune rules text rather than the "Rune Carving" feature blurb', () => {
+    expect(hill(ctx({ 'Hill Rune': 'w1' })).description).toMatch(/resistance to poison damage/i);
+  });
+
+  it('is absent for another Fighter subclass with the same stored map', () => {
+    expect(hill({ ...ctx({ 'Hill Rune': 'w1' }), subclass: 'Champion' })).toBeUndefined();
+  });
+
+  it('is absent below level 7 — Hill Rune is not available yet', () => {
+    expect(hill({ ...ctx({ 'Hill Rune': 'w1' }), level: 6 })).toBeUndefined();
+  });
+
+  it('leaves other characters’ defenses untouched', () => {
+    const { alwaysOn, situational } = getDefenses({
+      charClass: 'Fighter', level: 5, edition: '5e',
+      characterData: { race_traits: ['Hellish Resistance'] },
+    });
+    expect([...alwaysOn, ...situational].some((d) => d.name === 'Hill Rune')).toBe(false);
+    expect(alwaysOn.some((d) => d.name === 'Hellish Resistance')).toBe(true);
   });
 });

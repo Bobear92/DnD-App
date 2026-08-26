@@ -32,6 +32,10 @@ import {
   isHexWarrior, canBeHexWeapon, hexWeaponUid as storedHexWeaponUid, setHexWeapon, HEX_WARRIOR_NOTE,
 } from '@/characters/components/inventory/weaponBondData';
 import WeaponDesignationPanel from '@/characters/components/inventory/WeaponDesignationPanel';
+import RuneCarvingControl from '@/characters/components/inventory/RuneCarvingControl';
+import {
+  hasRuneCarving, isRuneCarvable, assignRunePatch, clearRunePatch, clearRunesOnItemPatch,
+} from '@/characters/components/inventory/runeCarving';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import { critRange, critRangeLabel } from '@/characters/components/combat/combatBonuses';
 import { getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
@@ -188,7 +192,20 @@ export default function InventoryTab({
     push([...inventory, buildEntry(picker?.category?.id ?? activeId, item, qty)]);
     setPicker(null);
   };
-  const handleRemove = (entry) => push(removeEntry(inventory, entry.uid), entry.equipped && isHandCapable(entry) || (entry.category === 'armor' && entry.equipped));
+  // Rune Carving (Rune Knight): a rune is carved onto a weapon, armor or shield and works only
+  // while that item is equipped. Unlike Weapon Bond / Hex Warrior this is a property OF the
+  // item, so the control lives on the row rather than in a feature panel. See runeCarving.js.
+  const runeCarver = hasRuneCarving({ charClass, subclass, level, edition });
+  const assignRune = (runeName, entry) => onChange?.(assignRunePatch(runeName, entry.uid, characterData));
+  const clearRune = (runeName) => onChange?.(clearRunePatch(runeName, characterData));
+
+  const handleRemove = (entry) => {
+    // A rune carved on a deleted item would be stranded on a uid nothing resolves to — it would
+    // read as "carved" forever while granting nothing and blocking that rune from being re-used.
+    const runePatch = clearRunesOnItemPatch(entry.uid, characterData);
+    if (runePatch) onChange?.(runePatch);
+    push(removeEntry(inventory, entry.uid), entry.equipped && isHandCapable(entry) || (entry.category === 'armor' && entry.equipped));
+  };
   const handleQty = (uid, q) => push(setQuantity(inventory, uid, q));
   const handleAmmoQty = (uid, q) => push(setAmmoQuantity(inventory, uid, q));
   const handleEquip = (uid) => push(toggleEquipped(inventory, uid), true); // body armor only
@@ -601,6 +618,18 @@ export default function InventoryTab({
                           testId={`${f.testId}-${e.uid}`}
                         />
                       ))}
+                    {/* Runes are carved on weapons, armor and shields — the only wearable or
+                        holdable things the inventory models as equippable. */}
+                    {runeCarver && isRuneCarvable(e) && (
+                      <RuneCarvingControl
+                        entry={e}
+                        characterData={characterData}
+                        level={level}
+                        readOnly={readOnly}
+                        onAssign={(runeName) => assignRune(runeName, e)}
+                        onClear={clearRune}
+                      />
+                    )}
                     <div className="text-xs text-muted-foreground truncate">{activeCategory.subtitle(e)}</div>
                     {e.category === 'weapons' && crit && (
                       <div className="text-[11px] text-primary leading-tight font-medium" data-testid={`crit-range-${e.uid}`}>

@@ -36,6 +36,9 @@
 import {
   ARCANE_SHOT_OPTIONS, ARCANE_SHOT_IMPROVE_LEVEL, arcaneShotKnownAtLevel, arcaneShotSaveDcParts,
 } from '@/characters/components/classData/arcaneShotData';
+import {
+  RUNE_OPTIONS, runesKnownAtLevel, runeSaveDcParts, channelRuneUses,
+} from '@/characters/components/classData/runesData';
 
 const lc = (s) => (s || '').toLowerCase();
 const dedup = (arr) => [...new Set((arr || []).filter(Boolean))];
@@ -171,11 +174,38 @@ const ARCANE_ARCHER_SHOT = {
   },
 };
 
+// ── Fighter → Rune Knight: Rune Carving ─────────────────────────────────
+// The second SUBCLASS-scoped pool, and a pure data entry — it needed nothing the mechanism
+// didn't already have: `subclass` (Arcane Shot), option-level `minLevel` (Eldritch
+// Invocations — Hill is 7th-level, Storm 15th), and `derived` for the save DC. Rune Knight
+// is 5e-ONLY; the 2024 PHB ships no Rune Knight, so there is deliberately no 5.5e entry.
+//
+// The DC uses CONSTITUTION, not the Intelligence Arcane Shot uses — a Fighter has no
+// spellcasting ability, so each subclass names its own and the `derived` note says which.
+const RUNE_KNIGHT_RUNES = {
+  key: 'runes',
+  label: 'Runes',
+  subclass: 'Rune Knight',
+  storeField: 'runes',
+  knownAtLevel: runesKnownAtLevel,
+  pool: RUNE_OPTIONS,
+  derived: (level, scores = {}) => {
+    const { dc, pb, mod } = runeSaveDcParts(level, scores.constitution);
+    const uses = channelRuneUses(level);
+    return {
+      label: 'Rune save DC',
+      value: dc,
+      note: `8 + proficiency bonus (${pb}) + Constitution modifier (${mod >= 0 ? `+${mod}` : mod}). `
+        + `You can invoke each rune you know ${uses === 1 ? 'once' : 'twice'} per short or long rest.`,
+    };
+  },
+};
+
 export const LEVEL_CHOICES = {
   Fighter: {
-    '5e': [ARCANE_ARCHER_SHOT],
-    // No 2024 Arcane Archer exists (the 2024 PHB ships Battle Master, Champion, Eldritch
-    // Knight and Psi Warrior only), so there is deliberately no 5.5e entry.
+    '5e': [ARCANE_ARCHER_SHOT, RUNE_KNIGHT_RUNES],
+    // Neither Arcane Archer nor Rune Knight exists in 2024 (the 2024 PHB ships Battle
+    // Master, Champion, Eldritch Knight and Psi Warrior only), so no 5.5e entry.
     '5.5e': [],
   },
   Sorcerer: {

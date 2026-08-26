@@ -12,6 +12,8 @@ import {
 import { ARCANE_SHOT_USES } from '@/characters/components/classData/arcaneShotData';
 import { profBonus } from '@/characters/components/classData/classProgressionTables';
 import { psionicDie, psionicDiceTotal } from '@/characters/components/classData/psiWarriorData';
+import { RUNE_OPTIONS, channelRuneKey, channelRuneUses } from '@/characters/components/classData/runesData';
+import { isRuneActive } from '@/characters/components/inventory/runeCarving';
 import BattleMasterPanel from '@/characters/components/subclass/BattleMasterPanel';
 import WeaponBondPanel from '@/characters/components/subclass/WeaponBondPanel';
 import PsionicEnergyPanel from '@/characters/components/subclass/PsionicEnergyPanel';
@@ -71,6 +73,25 @@ const REST_RESOURCES = [
     subclass: 'Rune Knight',
     description: "Reaction: force an attacker who hit another creature within 60 ft to reroll the d20.",
   },
+  // Channel Rune — one row PER RUNE, generated from RUNE_OPTIONS rather than six near-identical
+  // hand-written rows. RAW recharges each rune independently ("you can't use it again until you
+  // finish a short or long rest" is per rune), so they cannot share a pool. Master of Runes
+  // (L15) doubles every rune's uses, which is why `total` reads the level rather than being 1.
+  //
+  // Each row hides itself unless the rune is CARVED onto an equipped object — knowing a rune
+  // grants nothing, and a tracker for a use you cannot spend is worse than no row (the same
+  // call the Psi Warrior's die-regain row makes). `data` IS character_data, so it carries the
+  // inventory and the rune map the gate needs.
+  ...RUNE_OPTIONS.map((rune) => ({
+    key: channelRuneKey(rune),
+    label: `Channel Rune: ${rune.name.replace(/ Rune$/, '')} (Short Rest)`,
+    total: (level) => channelRuneUses(level),
+    recharge: 'short',
+    minLevel: rune.minLevel ?? 3,
+    subclass: 'Rune Knight',
+    hidden: ({ data, level }) => !isRuneActive(rune.name, { characterData: data, level }),
+    description: rune.channel.description,
+  })),
   // Subclass-gated: only a Cavalier sees these two. Both hold ability-modifier uses (minimum
   // one) rather than a flat count, which is why their totals read the ability scores.
   {

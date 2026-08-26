@@ -56,7 +56,7 @@ describe('getSaveFeatures', () => {
 
 describe('SAVE_FEATURES registry', () => {
   it('every entry resolves to real rules text — no mistyped feature name', () => {
-    for (const entry of SAVE_FEATURES) {
+    for (const entry of SAVE_FEATURES.filter((e) => !e.applies)) {
       for (const edition of entry.editions ?? ['5e', '5.5e']) {
         const found = getSaveFeatures({
           charClass: entry.charClass,
@@ -71,7 +71,7 @@ describe('SAVE_FEATURES registry', () => {
   });
 
   it('every entry mentions saving throws — the panel is only for save features', () => {
-    for (const entry of SAVE_FEATURES) {
+    for (const entry of SAVE_FEATURES.filter((e) => !e.applies)) {
       const edition = (entry.editions ?? ['5e'])[0];
       const found = getSaveFeatures({
         charClass: entry.charClass,
@@ -97,5 +97,51 @@ describe('saveFeatureKey', () => {
   it('is unique per entry in the registry', () => {
     const keys = SAVE_FEATURES.map(saveFeatureKey);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('Hill Rune (Rune Knight) — advantage on saves against being poisoned', () => {
+  const axe = { uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' };
+  const bow = { uid: 'w2', category: 'weapons', name: 'Longbow', equipped: false };
+  const ctx = (rune_items) => ({
+    charClass: 'Fighter',
+    subclass: 'Rune Knight',
+    level: 7,
+    edition: '5e',
+    characterData: { subclass: 'Rune Knight', runes: ['Hill Rune'], rune_items, inventory: [axe, bow] },
+  });
+  const hill = (c) => getSaveFeatures(c).find((f) => f.name === 'Hill Rune');
+
+  it('is absent while the rune is only known', () => {
+    expect(hill(ctx({}))).toBeUndefined();
+  });
+
+  it('appears once the rune is carved onto an equipped item', () => {
+    expect(hill(ctx({ 'Hill Rune': 'w1' }))).toMatchObject({ source: 'Rune Knight' });
+  });
+
+  it('is absent while the bearing item is unequipped', () => {
+    expect(hill(ctx({ 'Hill Rune': 'w2' }))).toBeUndefined();
+  });
+
+  it('carries the rune rules text, which names the poison save', () => {
+    expect(hill(ctx({ 'Hill Rune': 'w1' })).description).toMatch(/against being poisoned/i);
+  });
+
+  // The registry sweeps skip `applies` entries (they cannot build the carved-and-equipped
+  // state), so this entry carries their two assertions itself.
+  it('resolves real rules text that mentions saving throws — the panel is only for save features', () => {
+    const found = hill(ctx({ 'Hill Rune': 'w1' }));
+    expect(found).toBeTruthy();
+    expect(found.description).toMatch(/saving throw/i);
+  });
+
+  it('is absent below level 7', () => {
+    expect(hill({ ...ctx({ 'Hill Rune': 'w1' }), level: 6 })).toBeUndefined();
+  });
+
+  it('does not disturb the Cavalier entry', () => {
+    const cav = getSaveFeatures({ charClass: 'Fighter', subclass: 'Cavalier', level: 3, edition: '5e' });
+    expect(cav.map((f) => f.name)).toEqual(['Born to the Saddle']);
   });
 });

@@ -64,6 +64,9 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
       if (characterData?.subclass === 'Psi Warrior') {
         items.push('Psionic Energy die regain & Telekinetic Movement');
       }
+      // Channel Rune is the only Rune Knight resource that returns on a SHORT rest — both
+      // Giant's Might and Runic Shield are long-rest only.
+      if (characterData?.subclass === 'Rune Knight' && level >= 3) items.push('Channel Rune');
     }
     if (cls === 'Bard' && (is2024 || level >= 5)) items.push('Bardic Inspiration');
     if ((cls === 'Cleric' || cls === 'Paladin') && is2024) items.push('Channel Divinity');
@@ -104,6 +107,8 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
     if (characterData?.subclass === 'Rune Knight') {
       items.push("Giant's Might");
       if (level >= 7) items.push('Runic Shield');
+      // A long rest is also a short one, so Channel Rune comes back as well.
+      if (level >= 3) items.push('Channel Rune');
     }
   }
   else if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');

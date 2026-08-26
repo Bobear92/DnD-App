@@ -881,3 +881,77 @@ describe('InventoryTab — Hex Warrior weapon (Hexblade Warlock)', () => {
     });
   });
 });
+
+describe('Rune Carving on the item cards (Rune Knight)', () => {
+  const runeKnight = (rune_items = {}, inventory = [longsword, chainMail]) => ({
+    subclass: 'Rune Knight',
+    runes: ['Cloud Rune', 'Fire Rune'],
+    rune_items,
+    inventory,
+  });
+
+  const renderRk = (props = {}) => renderTab({
+    inventory: [longsword, chainMail],
+    charClass: 'Fighter',
+    subclass: 'Rune Knight',
+    level: 7,
+    characterData: runeKnight(),
+    ...props,
+  });
+
+  it('offers a rune control on a weapon row', async () => {
+    renderRk();
+    expect(await screen.findByTestId('rune-control-w1')).toBeInTheDocument();
+  });
+
+  it('offers one on armor too — armor and shields can bear a rune', async () => {
+    renderRk();
+    // The armor row lives on the Armor sub-tab.
+    fireEvent.click(screen.getByTestId('inv-category-armor'));
+    expect(await screen.findByTestId('rune-control-arm1')).toBeInTheDocument();
+  });
+
+  it('shows NO rune control for a non-Rune-Knight Fighter', async () => {
+    renderTab({
+      inventory: [longsword],
+      charClass: 'Fighter',
+      subclass: 'Champion',
+      level: 7,
+      characterData: { subclass: 'Champion' },
+    });
+    // Anchor on the row itself — "Longsword" also appears in the hand-assignment <option>s.
+    await screen.findByTestId('inv-row-w1');
+    expect(screen.queryByTestId('rune-control-w1')).not.toBeInTheDocument();
+  });
+
+  it('persists a carve as a rune_items patch', async () => {
+    const onChange = vi.fn();
+    renderRk({ onChange });
+    fireEvent.click(await screen.findByTestId('rune-assign-w1-cloud'));
+    expect(onChange).toHaveBeenCalledWith({ rune_items: { 'Cloud Rune': 'w1' } });
+  });
+
+  it('shows the passive on an equipped bearer and flags an unequipped one', async () => {
+    renderRk({ characterData: runeKnight({ 'Cloud Rune': 'w1' }) });
+    expect(await screen.findByTestId('rune-passive-w1'))
+      .toHaveTextContent(/Advantage on Sleight of Hand/i);
+
+    cleanup();
+    const sheathed = { ...longsword, equipped: false };
+    renderRk({
+      inventory: [sheathed],
+      characterData: runeKnight({ 'Cloud Rune': 'w1' }, [sheathed]),
+    });
+    expect(await screen.findByTestId('rune-passive-w1')).toHaveTextContent(/Inactive/i);
+  });
+
+  // A rune left pointing at a deleted uid would read as carved forever while granting nothing,
+  // and would block that rune from being carved anywhere else.
+  it('clears a rune when its bearing item is deleted', async () => {
+    const onChange = vi.fn();
+    renderRk({ characterData: runeKnight({ 'Cloud Rune': 'w1' }), onChange, isGm: true });
+    await screen.findByTestId('rune-control-w1');
+    fireEvent.click(screen.getByTestId('remove-item-w1'));
+    expect(onChange).toHaveBeenCalledWith({ rune_items: {} });
+  });
+});

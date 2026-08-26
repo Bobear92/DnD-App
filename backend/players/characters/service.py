@@ -799,6 +799,21 @@ def _feat_freecast_used_key(spell_name: str) -> str:
 _DIVINATION_SUBCLASSES = {'School of Divination', 'Diviner'}
 
 
+# Rune Knight Channel Rune keys, one per rune. Each rune recharges INDEPENDENTLY — RAW is
+# "you can't use it again until you finish a short or long rest" per rune — so they cannot share
+# a pool. Mirrors CHANNEL_RUNE_KEYS in frontend runesData.js; the pool SIZE (1, or 2 from Master
+# of Runes at 15th) stays a frontend concern like every other Fighter pool, so this only zeroes
+# the spent counts. Runes the character hasn't carved simply have no stored count to clear.
+_CHANNEL_RUNE_KEYS = [
+    'channel_rune_cloud_used',
+    'channel_rune_fire_used',
+    'channel_rune_frost_used',
+    'channel_rune_stone_used',
+    'channel_rune_hill_used',
+    'channel_rune_storm_used',
+]
+
+
 def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[dict, list]:
     """Return (character_data_patch, human_readable_changes)."""
     cd = char.character_data or {}
@@ -829,6 +844,12 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             if cd.get('subclass') == 'Echo Knight' and level >= 10:
                 patch['shadow_martyr_used'] = 0
                 changes.append('Shadow Martyr recovered')
+            if cd.get('subclass') == 'Rune Knight':
+                # Channel Rune is the only Rune Knight resource that returns on a SHORT rest —
+                # Giant's Might and Runic Shield are long-rest only (see the long branch).
+                for key in _CHANNEL_RUNE_KEYS:
+                    patch[key] = 0
+                changes.append('Channel Rune uses recovered')
             if cd.get('subclass') == 'Psi Warrior':
                 # The Psionic Energy POOL itself is long-rest only. What comes back on a short
                 # rest are the two once-per-rest charges: the bonus action that regains one die,
@@ -947,6 +968,10 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
                 if level >= 7:
                     patch['runic_shield_used'] = 0
                     changes.append('Runic Shield recovered')
+                # A long rest is also a short one, so every Channel Rune use comes back too.
+                for key in _CHANNEL_RUNE_KEYS:
+                    patch[key] = 0
+                changes.append('Channel Rune uses recovered')
             if cd.get('subclass') == 'Eldritch Knight':
                 # Subclass caster: Fighter isn't in _SPELLCASTING_CLASSES, so reset the
                 # EK's spell slots here (same shape as the class-caster reset above).

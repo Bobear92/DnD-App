@@ -35,6 +35,7 @@ import ActionEconomyTab from '@/characters/components/combat/ActionEconomyTab';
 import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
 import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '@/characters/components/feats/featEffects';
 import { computePassiveScores } from '@/characters/components/skills/passiveSkills';
+import { getSkillAdvantageNames, skillAdvantageSourcesFor, skillAdvantageLegend } from '@/characters/components/skills/skillAdvantage';
 import { skillBreakdown, saveBreakdown } from '@/characters/components/skills/skillMath';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
 import SaveFeaturesPanel from '@/characters/components/skills/SaveFeaturesPanel';
@@ -1637,6 +1638,7 @@ export default function CharacterDetail() {
                     subclass={classSection.draft?.subclass ?? character?.character_data?.subclass}
                     level={character.level}
                     edition={edition}
+                    characterData={classSection.draft ?? character?.character_data ?? {}}
                   />
 
                   {/* Skills */}
@@ -2347,7 +2349,11 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
   const ra = remarkableAthlete({ charClass, subclass: classData?.subclass, level, edition, pb });
   const raBonus = ra?.checkBonus ?? 0; // 5e numeric bonus
   const raBonusAbilities = ra?.checkBonusAbilities ?? [];
-  const raAdvSkills = ra?.advantageSkills ?? []; // 2024 advantage (e.g. Athletics)
+  // Skill-check advantage no longer comes from Remarkable Athlete alone — the Rune Knight's
+  // carved runes grant it too — so it is resolved through the shared table rather than read
+  // off `ra`. See skills/skillAdvantage.js.
+  const skillAdvCtx = { charClass, subclass: classData?.subclass, level, edition, characterData: classData };
+  const raAdvSkills = getSkillAdvantageNames(skillAdvCtx);
 
   const hasExpertise = expertiseSkills.length > 0;
   const legendParts = [];
@@ -2357,7 +2363,8 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
   if (raceGranted.length > 0) legendParts.push('Emerald = from race');
   if (featGranted.length > 0) legendParts.push('Blue = from feat');
   if (raBonus > 0) legendParts.push('Teal = ½ prof (Remarkable Athlete)');
-  if (raAdvSkills.length > 0) legendParts.push('Teal = advantage (Remarkable Athlete)');
+  const advLegend = skillAdvantageLegend(skillAdvCtx);
+  if (advLegend) legendParts.push(advLegend);
   // Worn non-proficient armor: disadvantage on every STR/DEX ability check.
   if (nonProfArmorName) legendParts.push(`"dis" = disadvantage (wearing ${nonProfArmorName} without proficiency)`);
   // Bulky armor: disadvantage on Stealth specifically (unless a feat cancels it).
@@ -2397,7 +2404,7 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
         isExpert,
         halfProficiency: raNumeric ? raBonus : 0,
         notes: [
-          raAdvantage && 'Advantage — Remarkable Athlete',
+          raAdvantage && `Advantage — ${skillAdvantageSourcesFor(skill, skillAdvCtx).map((a) => a.source).join(', ')}`,
           nonProfDisadvantage && `Disadvantage — wearing ${nonProfArmorName} without proficiency`,
           stealthDisadvantage && `Disadvantage — ${stealthArmorName} imposes disadvantage on Stealth`,
         ],

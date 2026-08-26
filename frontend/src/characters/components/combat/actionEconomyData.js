@@ -34,6 +34,8 @@ import {
   arcaneShotImproved,
 } from '@/characters/components/classData/arcaneShotData';
 import { psionicDieAndInt, psiSaveDc, bulwarkTargets } from '@/characters/components/classData/psiWarriorData';
+import { RUNE_OPTIONS, channelRuneKey, runeSaveDcParts } from '@/characters/components/classData/runesData';
+import { isRuneActive } from '@/characters/components/inventory/runeCarving';
 import { getBreathWeapon } from '@/characters/components/race/breathWeaponData';
 import { echoArmorClass } from '@/characters/components/companions/companionData';
 import { buildBreakdown } from '@/characters/components/skills/skillMath';
@@ -308,6 +310,25 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
         description: 'When another creature you can see within 60 feet is hit by an attack roll,'
           + ' force the attacker to reroll the d20 and use the new roll.',
       },
+      // Channel Rune — one card per rune, GENERATED from RUNE_OPTIONS rather than six
+      // near-identical hand-written blocks (the duplication tripwire: the cost, tab and rules
+      // text all already live on the rune). Each rune recharges independently, so each carries
+      // its own resourceKey.
+      //
+      // Every card `hidden`s itself unless the rune is CARVED onto an equipped object: knowing a
+      // rune grants nothing, and a Channel Rune card for a rune you cannot invoke is an action
+      // the player cannot take. Unequip the axe and its card leaves the tab.
+      'Rune Carving': RUNE_OPTIONS.map((rune) => ({
+        name: `Channel Rune: ${rune.name.replace(/ Rune$/, '')}`,
+        tab: rune.channel.tab,
+        cost: rune.channel.cost,
+        resourceKey: channelRuneKey(rune),
+        hidden: ({ characterData, level }) => !isRuneActive(rune.name, { characterData, level }),
+        // The Fire Rune rides on a weapon attack, so it attaches to the attack cards instead of
+        // standing alone (see ATTACHED_FEATURES). The others are actions in their own right.
+        ...(rune.key === 'fire' ? { attachedAs: 'Fire Rune' } : {}),
+        description: rune.channel.description,
+      })),
     },
     'Echo Knight': {
       // The echo's AC comes from companionData so this card and the statblock on the Features
@@ -454,6 +475,14 @@ const giantsMightRider = {
   scope: 'all',
   applies: ({ charClass, subclass, level }) =>
     charClass === 'Fighter' && subclass === 'Rune Knight' && (level ?? 1) >= 3,
+  // Counts toward a rider block's "on a hit" total ONLY while the effect is actually running —
+  // the app tracks `active_effects`, so this is the one damage rider it can confirm. While it
+  // is off it stays prose, like every other conditional extra.
+  damage: (row, { level, characterData }) => (
+    isEffectActive(characterData, 'giants_might')
+      ? { dice: mightDie(level), type: weaponDamageType(row?.damage) }
+      : null
+  ),
   text: ({ level, characterData }) => {
     const die = mightDie(level);
     return isEffectActive(characterData, 'giants_might')
@@ -549,9 +578,30 @@ export const ATTACHED_FEATURES = [
     name: 'Psionic Strike',
     scope: 'all',
     resourceKey: 'psionic_energy_used',
+    damage: (_row, { level, scores }) => ({
+      dice: psionicDieAndInt(level, scores?.intelligence ?? 10), type: 'force',
+    }),
     note: (row, { level, scores }) => 'Once per turn when you hit a creature within 30 feet with'
       + ` ${row.name}, spend a Psionic Energy die to deal an extra`
       + ` ${psionicDieAndInt(level, scores?.intelligence ?? 10)} force damage.`,
+  },
+  {
+    // The Fire Rune's Channel Rune fires "when you hit a creature with a weapon attack" — RAW
+    // keys on a weapon attack, not a melee one, so a bow and an unarmed strike both qualify
+    // (scope 'all'). Attached rather than standing alone for the Arcane Shot reason: you reach
+    // for it mid-Attack-action, and the card you are already reading is the one to put it on.
+    // The save DC is Constitution-based, like every other Rune Knight DC.
+    name: 'Fire Rune',
+    scope: 'all',
+    resourceKey: 'channel_rune_fire_used',
+    // Spending the use adds 2d6 FIRE — a different damage type from the weapon's, so it is a
+    // separate term in the total rather than something foldable into the printed damage.
+    damage: () => ({ dice: '2d6', type: 'fire' }),
+    note: (row, { level, scores }) => `When you hit with ${row.name}, the target takes an extra`
+      + ' 2d6 fire damage and must succeed on a Strength saving throw'
+      + ` (DC ${runeSaveDcParts(level, scores?.constitution ?? 10).dc}) or be restrained by fiery`
+      + ' shackles for 1 minute, taking 2d6 fire damage at the start of each of its turns. It'
+      + ' repeats the save at the end of each of its turns, ending the effect on a success.',
   },
   {
     // Fires on a Psionic Strike hit, so it belongs on the same cards rather than on a card of
@@ -927,6 +977,49 @@ function addFlatDamage(damage, amount) {
   const flat = (sign === '-' ? -Number(num) : Number(num) || 0) + amount;
   const flatStr = flat === 0 ? '' : ` ${flat > 0 ? '+' : '-'} ${Math.abs(flat)}`;
   return `${die}${flatStr}${rest}`;
+}
+
+/**
+ * The damage TYPE a weapon attack deals, read off the end of its damage string
+ * ("1d8 + 3 Piercing" → "Piercing"). Used to name the type of a rider that adds damage of the
+ * weapon's own type rather than its own (Giant's Might adds an untyped extra die, which RAW
+ * means weapon damage).
+ */
+function weaponDamageType(damage) {
+  const m = /([A-Za-z]+)\s*$/.exec((damage || '').trim());
+  return m ? m[1] : null;
+}
+
+/**
+ * Combine a weapon's printed damage with the extra damage from riders that are actually in
+ * play, for the "on a hit" total shown INSIDE a rider's own block.
+ *
+ * Why it lives in the rider's block and not in the printed damage: the printed string must stay
+ * true for an ordinary swing. Every addition here is conditional — Fire Rune costs one of a
+ * limited number of uses, Psionic Strike spends a die, Giant's Might is once per turn — and
+ * CLAUDE.md's standing rule is that a conditional bonus baked into the flat string claims
+ * damage the character does not always deal (the reason Sneak Attack and Divine Smite are
+ * still prose, and Great Weapon Master is a toggle).
+ *
+ * Types are never merged: piercing and fire are rolled separately and resisted separately, so
+ * each term keeps its own type. Terms of the same type are still listed separately, because
+ * 1d8 and 1d6 cannot be summed into one die either.
+ *
+ * @param {string} baseDamage  the weapon's printed damage
+ * @param {{dice: string, type?: string, source: string}[]} additions
+ * @returns {{ text: string, parts: {text: string, source: string|null}[] } | null}
+ */
+export function combineAttackDamage(baseDamage, additions = []) {
+  const live = (additions || []).filter((a) => a && a.dice);
+  if (live.length === 0) return null;
+  const parts = [
+    { text: (baseDamage || '').trim(), source: null },
+    ...live.map((a) => ({
+      text: `${a.dice}${a.type ? ` ${a.type}` : ''}`,
+      source: a.source,
+    })),
+  ];
+  return { text: parts.map((p) => p.text).join(' + '), parts };
 }
 
 /**
@@ -1556,6 +1649,12 @@ export function buildActionEconomy({
     // the general path walks a list. Single-entry features are the one-element case.
     for (const d of defs) {
       const dname = d.name || d.displayName || fname;
+      // An entry may hide itself when it would be a no-op for THIS character (the Psi Warrior's
+      // die regain with a full pool, a Channel Rune whose rune isn't carved on anything you are
+      // wearing). Level gating is already handled upstream; this is for state the level can't
+      // express. Checked BEFORE the attachedAs branch below, or an attack-riding feature could
+      // never hide itself — it would attach to every weapon card regardless.
+      if (d.hidden && d.hidden({ characterData, level, scores })) continue;
       // A power that RIDES on a weapon attack belongs on the attack cards themselves — you reach
       // for it mid-attack, and a separate tab entry makes you go looking. See ATTACHED_FEATURES.
       // When no attack matches its scope (a bow-only Echo Knight), it falls through to the
@@ -1573,15 +1672,13 @@ export function buildActionEconomy({
               name: a.name,
               note: a.note(row, { level, scores, characterData }),
               resourceKey: a.resourceKey ?? null,
+              // Resolved here, totalled after the riders land (see the pass below).
+              damageSpec: a.damage ? a.damage(row, { level, scores, characterData }) : null,
             }];
           }
           continue;
         }
       }
-      // An entry may hide itself when it would be a no-op for THIS character (the Psi Warrior's
-      // die regain with a full pool). Level gating is already handled upstream; this is for
-      // state the level can't express.
-      if (d.hidden && d.hidden({ characterData, level, scores })) continue;
       // A `compute` entry derives its own detail/meta from the character, the same way a
       // RACIAL_ACTIONS entry does — Ferocious Charger's save DC scales with level and Strength,
       // so a fixed string would show the wrong number to everyone but one character.
@@ -1654,7 +1751,32 @@ export function buildActionEconomy({
     const text = typeof rider.text === 'function' ? rider.text(riderCtx) : rider.text;
     for (const row of buckets.action.filter((e) => e.source === 'Weapon' && matchesRiderScope(e, rider.scope))) {
       row.riders = [...(row.riders || []), { source: rider.source, text }];
+      // A rider that ADDS damage and is confirmed live contributes a term to the "on a hit"
+      // total shown inside each attached feature's block. Stored on the row rather than applied
+      // here, because the totals are assembled below once every rider has been collected.
+      const dmg = rider.damage ? rider.damage(row, riderCtx) : null;
+      if (dmg?.dice) {
+        row.riderDamages = [...(row.riderDamages || []), { ...dmg, source: rider.source }];
+      }
     }
+  }
+
+  // Every confirmable source of EXTRA damage on this attack, collected onto the row so the card
+  // can show one "on a hit" total under the printed damage. Runs LAST, after ATTACK_RIDERS, so
+  // it can include a rider (Giant's Might) applied after the features are attached.
+  //
+  // The additions are handed over as a LIST rather than a finished string because the displayed
+  // damage is not fixed: the Great Weapon Master / Sharpshooter toggle rewrites it, and a total
+  // baked in here would go stale the moment that is switched on. The card combines them with
+  // whatever damage it is currently showing (see combineAttackDamage).
+  for (const row of buckets.action.filter((e) => e.source === 'Weapon')) {
+    const additions = [
+      ...(row.riderDamages || []),
+      ...(row.attachedFeatures || [])
+        .filter((f) => f.damageSpec)
+        .map((f) => ({ ...f.damageSpec, source: f.name })),
+    ];
+    if (additions.length > 0) row.damageAdditions = additions;
   }
 
   // Racial trait actions. A `compute` entry derives its own detail/meta from the character

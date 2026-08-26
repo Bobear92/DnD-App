@@ -125,3 +125,51 @@ describe('KnownOptionsBlock', () => {
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 });
+
+// The QA case this pool was built for: a Rune Knight who leveled past 3 before Rune Carving
+// existed knows NO runes, so the sheet must offer the owed slots rather than showing an empty
+// list. Same block, no new component — the second subclass pool proves it stayed pool-agnostic.
+describe('KnownOptionsBlock — Rune Knight runes', () => {
+  const runes = (level) => getEarnedLevelChoices('Fighter', '5e', level, 'Rune Knight');
+
+  const renderRunes = (props = {}) =>
+    render(
+      <KnownOptionsBlock
+        choices={runes(props.level ?? 7)}
+        data={props.data ?? {}}
+        onChange={props.onChange ?? vi.fn()}
+        level={props.level ?? 7}
+        readOnly={props.readOnly ?? false}
+        gmEdit={props.gmEdit ?? false}
+        scores={props.scores ?? { constitution: 16 }}
+      />
+    );
+
+  it('offers the owed slots to a Rune Knight who never picked runes', () => {
+    renderRunes({ level: 7 });
+    expect(screen.getByTestId('known-options-runes-count')).toHaveTextContent('0/3');
+    expect(screen.getByTestId('known-options-runes-owed')).toHaveTextContent('Choose 3 more');
+  });
+
+  it('shows the rune save DC from CONSTITUTION and the Channel Rune uses', () => {
+    renderRunes({ level: 7, scores: { constitution: 16 } });
+    // 8 + PB 3 + CON +3 = 14
+    expect(screen.getByTestId('known-options-runes-derived')).toHaveTextContent('14');
+    expect(screen.getByTestId('known-options-runes-derived-note'))
+      .toHaveTextContent(/Constitution modifier \(\+3\).*once per short or long rest/);
+  });
+
+  it('lists the known runes with both halves of their text', () => {
+    renderRunes({ level: 7, data: { runes: ['Frost Rune'] } });
+    expect(screen.getByText('Frost Rune')).toBeInTheDocument();
+    expect(screen.getByText(/Animal Handling checks and Intimidation checks/i)).toBeInTheDocument();
+    expect(screen.getByTestId('known-options-runes-count')).toHaveTextContent('1/3');
+  });
+
+  it('renders nothing for a Rune Knight below level 3', () => {
+    const { container } = render(
+      <KnownOptionsBlock choices={runes(2)} data={{}} level={2} scores={{ constitution: 16 }} />
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+});
