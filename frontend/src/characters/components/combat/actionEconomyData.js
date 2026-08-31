@@ -22,7 +22,7 @@ import { mightDie, sizeAt, isEffectActive } from '@/characters/components/effect
 import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor } from '@/characters/components/inventory/inventoryData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
-import { getFeatActions, getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
+import { getFeatActions, getFeatUnarmedDice, getFeatProficiencyGrants } from '@/characters/components/feats/featEffects';
 import { hasFeat, critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
 import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
 import { bondedWeapons } from '@/characters/components/inventory/weaponBondData';
@@ -324,6 +324,10 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
         cost: rune.channel.cost,
         resourceKey: channelRuneKey(rune),
         hidden: ({ characterData, level }) => !isRuneActive(rune.name, { characterData, level }),
+        // A rune whose Channel Rune RUNS for a while (Frost) names an active effect, so its card
+        // gets the start/End toggle instead of a bare counter — Use spends the charge and
+        // switches the effect on in one patch. The one-shot runes carry no key and are unchanged.
+        ...(rune.channel.activeEffect ? { activeEffect: rune.channel.activeEffect } : {}),
         // The Fire Rune rides on a weapon attack, so it attaches to the attack cards instead of
         // standing alone (see ATTACHED_FEATURES). The others are actions in their own right.
         ...(rune.key === 'fire' ? { attachedAs: 'Fire Rune' } : {}),
@@ -473,24 +477,18 @@ const giantsMightRider = {
   // RAW is "a weapon or an unarmed strike", so every attack card qualifies — including the bare
   // hands of a Rune Knight who dropped their sword.
   scope: 'all',
-  applies: ({ charClass, subclass, level }) =>
-    charClass === 'Fighter' && subclass === 'Rune Knight' && (level ?? 1) >= 3,
-  // Counts toward a rider block's "on a hit" total ONLY while the effect is actually running —
-  // the app tracks `active_effects`, so this is the one damage rider it can confirm. While it
-  // is off it stays prose, like every other conditional extra.
-  damage: (row, { level, characterData }) => (
-    isEffectActive(characterData, 'giants_might')
-      ? { dice: mightDie(level), type: weaponDamageType(row?.damage) }
-      : null
-  ),
-  text: ({ level, characterData }) => {
-    const die = mightDie(level);
-    return isEffectActive(characterData, 'giants_might')
-      ? `Once on each of your turns, one of your attacks with a weapon or an unarmed strike`
-        + ` deals an extra ${die} damage on a hit.`
-      : `While Giant's Might is active, once on each of your turns one of your attacks with a`
-        + ` weapon or an unarmed strike deals an extra ${die} damage on a hit.`;
-  },
+  // Gated on the effect actually RUNNING, not merely being earned. A rider is rules text you
+  // read mid-swing; carrying a paragraph on every attack card for a feature that is switched
+  // off is clutter on the surface a player scans fastest. Switch it on and the block appears
+  // with its die — which is also the moment the damage below becomes real.
+  applies: ({ charClass, subclass, level, characterData }) =>
+    charClass === 'Fighter' && subclass === 'Rune Knight' && (level ?? 1) >= 3
+    && isEffectActive(characterData, 'giants_might'),
+  // The one damage rider the app can confirm: `active_effects` is tracked, and the rider only
+  // exists while it is on, so the term is always real.
+  damage: (row, { level }) => ({ dice: mightDie(level), type: weaponDamageType(row?.damage) }),
+  text: ({ level }) => 'Once on each of your turns, one of your attacks with a weapon or an'
+    + ` unarmed strike deals an extra ${mightDie(level)} damage on a hit.`,
 };
 
 export const ATTACK_RIDERS = [
@@ -594,11 +592,14 @@ export const ATTACHED_FEATURES = [
     name: 'Fire Rune',
     scope: 'all',
     resourceKey: 'channel_rune_fire_used',
-    // Spending the use adds 2d6 FIRE — a different damage type from the weapon's, so it is a
-    // separate term in the total rather than something foldable into the printed damage.
-    damage: () => ({ dice: '2d6', type: 'fire' }),
-    note: (row, { level, scores }) => `When you hit with ${row.name}, the target takes an extra`
-      + ' 2d6 fire damage and must succeed on a Strength saving throw'
+    // Deliberately NO `damage` spec, so the 2d6 fire never joins the card's "on a hit" total.
+    // The fire damage is not a property of the weapon: it only happens on the swing where you
+    // spend a Channel Rune use to summon the shackles, which is a decision made AFTER the hit
+    // and one the app does not track. Adding it to the total claimed damage the character does
+    // not always deal — the standing rule that keeps Sneak Attack and Divine Smite prose. The
+    // whole effect is stated in the note instead, beside the Use control that invokes it.
+    note: (row, { level, scores }) => `When you hit with ${row.name}, you can invoke this rune:`
+      + ' the target takes an extra 2d6 fire damage and must succeed on a Strength saving throw'
       + ` (DC ${runeSaveDcParts(level, scores?.constitution ?? 10).dc}) or be restrained by fiery`
       + ' shackles for 1 minute, taking 2d6 fire damage at the start of each of its turns. It'
       + ' repeats the save at the end of each of its turns, ending the effect on a success.',
@@ -920,6 +921,48 @@ export function twoWeaponFightingWeapons(inventory = [], feats = []) {
 }
 
 /**
+ * Does a feat grant proficiency with improvised weapons (Tavern Brawler)?
+ *
+ * Improvised weapons are the one weapon "proficiency" you can act on while owning nothing: the
+ * feat means you can pick up a chair and swing it, so the attack has to be offered from the FEAT
+ * rather than from an inventory row. Everything else in the Actions tab comes from what you hold.
+ */
+function hasImprovisedProficiency(feats = []) {
+  return getFeatProficiencyGrants(feats).weapons.some((w) => /improvised/i.test(w));
+}
+
+/**
+ * The attack you make with whatever you picked up. RAW an improvised weapon deals 1d4 (unless it
+ * resembles a real weapon, which is the DM's call and not something the sheet can know), so the
+ * damage type is left off the card deliberately — it depends on the object in your hands.
+ */
+function improvisedAttack(scores = {}, level = 1, { freeHand = true } = {}) {
+  const str = abilityMod(scores.strength);
+  return {
+    name: 'Improvised Weapon',
+    // A hand requirement is ANNOTATED, never used to hide the card. Unlike "you own no hand
+    // crossbow", a full hand is a state the player changes on this turn — dropping a shield is
+    // free — so hiding the card answers "can I improvise?" with silence.
+    warning: freeHand ? null
+      : 'No free hand — drop or stow something first to swing an improvised weapon.',
+    toHit: formatSigned(str + profBonus(level)),
+    toHitBreakdown: [
+      { label: 'STR', value: str },
+      { label: 'Proficiency (Tavern Brawler)', value: profBonus(level) },
+    ],
+    damage: `1d4 ${formatSigned(str)}`,
+    damageBreakdown: [
+      { label: 'improvised weapon', value: '1d4' },
+      { label: 'STR', value: str },
+    ],
+    proficient: true,
+    // Flagged so it lands in the melee scope of every rider (Giant's Might, Unwavering Mark)
+    // the way an unarmed strike does — it is a melee weapon attack.
+    improvised: true,
+  };
+}
+
+/**
  * Two or more equipped light melee weapons enable Two-Weapon Fighting. The Dual Wielder
  * feat lifts the "light" requirement, allowing any one-handed (non-two-handed) melee weapons.
  */
@@ -995,11 +1038,15 @@ function weaponDamageType(damage) {
  * play, for the "on a hit" total shown INSIDE a rider's own block.
  *
  * Why it lives in the rider's block and not in the printed damage: the printed string must stay
- * true for an ordinary swing. Every addition here is conditional — Fire Rune costs one of a
- * limited number of uses, Psionic Strike spends a die, Giant's Might is once per turn — and
- * CLAUDE.md's standing rule is that a conditional bonus baked into the flat string claims
- * damage the character does not always deal (the reason Sneak Attack and Divine Smite are
- * still prose, and Great Weapon Master is a toggle).
+ * true for an ordinary swing. Every addition here is still conditional — Psionic Strike spends
+ * a die, Giant's Might is once per turn — and CLAUDE.md's standing rule is that a conditional
+ * bonus baked into the flat string claims damage the character does not always deal (the reason
+ * Sneak Attack and Divine Smite are still prose, and Great Weapon Master is a toggle).
+ *
+ * The line for what may be listed at all: only damage the app can CONFIRM applies on this swing.
+ * The Fire Rune's 2d6 fire deliberately does not appear here — it lands only on the hit where
+ * you choose to spend a Channel Rune use to summon the shackles, a decision made after the roll
+ * and never recorded, so it stays in the feature's note rather than any total.
  *
  * Types are never merged: piercing and fire are rolled separately and resisted separately, so
  * each term keeps its own type. Terms of the same type are still listed separately, because
@@ -1129,6 +1176,15 @@ export function buildActionEconomy({
       ua.warning = `Wearing ${badArmor.name} without proficiency — attack rolls at disadvantage.`;
     }
     weaponRows.push(ua);
+  }
+  // An improvised-weapon attack, offered by the FEAT rather than by an inventory row: Tavern
+  // Brawler means you can pick up a chair, so requiring the character to own a seeded
+  // "Improvised Weapon" item before the card appears asks them to inventory the furniture.
+  // Suppressed when one IS equipped — that item's own row already says it, with its real stats.
+  const equippedImprovisedWeapon = (inventory || []).find((e) => e.equipped && isImprovisedWeapon(e));
+  const handFree = freeHandCount(inventory) > 0;
+  if (hasImprovisedProficiency(feats) && !equippedImprovisedWeapon) {
+    weaponRows.push(improvisedAttack(scores, level, { freeHand: handFree }));
   }
   weaponRows.forEach((atk, i) => {
     const flag = atk.proficient === false ? ' · not proficient' : '';
@@ -1325,46 +1381,61 @@ export function buildActionEconomy({
     });
   }
 
-  // Tavern Brawler (feat) — present the bonus-action grapple as an Action + Bonus combo
-  // (like Crossbow Expert): the feat lets you grapple as a bonus action after you hit with an
-  // Unarmed Strike or an improvised weapon, so the Action half is an equipped Improvised Weapon
-  // if you're wielding one, otherwise your (feat-upgraded) Unarmed Strike. The standalone bonus
-  // grapple feat action is suppressed below in favour of this combo.
+  // Tavern Brawler (feat) — the bonus-action grapple as an Action + Bonus combo (the Crossbow
+  // Expert shape). RAW the grapple follows a hit with EITHER an unarmed strike OR an improvised
+  // weapon, so it is TWO cards, one per opener, rather than one card that picks a winner: the
+  // two attacks have different to-hit and damage, and a single card could only show one of them
+  // while the tab claims to list what you can do. Each is pushed only when its Action half is
+  // actually makeable. The standalone bonus grapple is suppressed below in favour of these.
   const grappleAction = getFeatActions(feats).find(
     (a) => a.source === 'Tavern Brawler' && /grapple/i.test(a.name),
   );
-  const equippedImprovised = (inventory || []).find((e) => e.equipped && isImprovisedWeapon(e));
-  // Only surface the combo when the character can actually make its Action half: an equipped
-  // improvised weapon, or a free hand for an Unarmed Strike. With both hands full and no
-  // improvised weapon, there's nothing to lead the grapple with, so hide it.
-  const canTavernBrawl = grappleAction && (equippedImprovised || freeHandCount(inventory) > 0);
-  if (canTavernBrawl) {
+  if (grappleAction) {
     const attackByUid = new Map(weaponRows.filter((a) => a.uid).map((a) => [a.uid, a]));
     const baseDamage = (w) => `${w.damage || '—'}${w.damage_type ? ` ${w.damage_type}` : ''}`;
-    let actionRow;
-    if (equippedImprovised) {
-      const row = attackByUid.get(equippedImprovised.uid);
-      actionRow = {
-        label: 'Action',
-        name: equippedImprovised.name,
-        toHit: row?.toHit ?? null,
-        damage: row?.damage ?? baseDamage(equippedImprovised),
-        warning: row?.warning ?? null,
-      };
-    } else {
-      const ua = unarmedAttack(scores, level, unarmedDice);
-      actionRow = { label: 'Action', name: ua.name, toHit: ua.toHit, damage: ua.damage };
-    }
-    push('action+bonus', {
-      key: 'tavern-brawler',
-      name: 'Tavern Brawler',
+    const grappleRow = { label: 'Bonus', name: 'Grapple', detail: grappleAction.description };
+    // RAW a grapple is made "using at least one free hand", so with both hands full the BONUS
+    // half is the part that cannot happen — which is why this is a warning on the card rather
+    // than a reason to hide it. The card is how a player finds out what they'd have to drop;
+    // hiding it (the behaviour this replaces) made the feat look unimplemented to a Fighter
+    // holding a weapon and a shield, which is most of them.
+    const grappleWarning = handFree ? null
+      : 'A grapple needs at least one free hand — drop or stow something first.';
+    const combo = (key, opener, actionRow) => push('action+bonus', {
+      key,
+      name: `Tavern Brawler: ${opener}`,
       source: 'Feat',
       cost: 'action + bonus action',
-      subAttacks: [
-        actionRow,
-        { label: 'Bonus', name: 'Grapple', detail: grappleAction.description },
-      ],
-      detail: `Hit with ${equippedImprovised ? equippedImprovised.name : 'an Unarmed Strike'} (Action), then use a bonus action to grapple the target (Tavern Brawler).`,
+      subAttacks: [actionRow, grappleRow],
+      warning: grappleWarning,
+      detail: `Hit with ${actionRow.name} (Action), then use a bonus action to grapple the`
+        + ' target (Tavern Brawler).',
+    });
+
+    // Improvised half: the equipped improvised weapon if you are holding one (its real numbers),
+    // otherwise the generic feat attack.
+    if (equippedImprovisedWeapon) {
+      const row = attackByUid.get(equippedImprovisedWeapon.uid);
+      combo('tavern-brawler-improvised', 'Improvised Weapon', {
+        label: 'Action',
+        name: equippedImprovisedWeapon.name,
+        toHit: row?.toHit ?? null,
+        damage: row?.damage ?? baseDamage(equippedImprovisedWeapon),
+        warning: row?.warning ?? null,
+      });
+    } else if (hasImprovisedProficiency(feats)) {
+      const imp = improvisedAttack(scores, level, { freeHand: handFree });
+      combo('tavern-brawler-improvised', 'Improvised Weapon', {
+        label: 'Action', name: imp.name, toHit: imp.toHit, damage: imp.damage,
+      });
+    }
+
+    // Unarmed half: an unarmed strike is a punch, kick or head-butt, so it needs no free hand —
+    // and the Actions tab already shows an Unarmed Strike card for a character holding a weapon
+    // and a shield. Gating the combo on a free hand contradicted the card sitting beside it.
+    const ua = unarmedAttack(scores, level, unarmedDice);
+    combo('tavern-brawler-unarmed', 'Unarmed Strike', {
+      label: 'Action', name: ua.name, toHit: ua.toHit, damage: ua.damage,
     });
   }
 
@@ -1745,9 +1816,8 @@ export function buildActionEconomy({
   for (const rider of ATTACK_RIDERS) {
     const riderCtx = { charClass, subclass, level, edition, feats, characterData };
     if (!rider.applies(riderCtx)) continue;
-    // `text` may be a FUNCTION of the same context, not just a string: Giant's Might states its
-    // die plainly while the effect is switched on and names the condition while it isn't, and
-    // the die itself scales with level. A static string could only say one of those things.
+    // `text` may be a FUNCTION of the same context, not just a string: Giant's Might's die
+    // scales with level (1d6 → 1d8 → 1d10), which a static string could not state.
     const text = typeof rider.text === 'function' ? rider.text(riderCtx) : rider.text;
     for (const row of buckets.action.filter((e) => e.source === 'Weapon' && matchesRiderScope(e, rider.scope))) {
       row.riders = [...(row.riders || []), { source: rider.source, text }];

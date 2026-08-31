@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { getSaveFeatures, saveFeatureKey, SAVE_FEATURES } from './saveFeatures';
+import {
+  getSaveFeatures, saveFeatureKey, SAVE_FEATURES,
+  saveAdvantageSourcesFor, getSaveAdvantageAbilities,
+} from './saveFeatures';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 
 const CAVALIER = { charClass: 'Fighter', subclass: 'Cavalier', level: 3, edition: '5e' };
@@ -143,5 +146,66 @@ describe('Hill Rune (Rune Knight) — advantage on saves against being poisoned'
   it('does not disturb the Cavalier entry', () => {
     const cav = getSaveFeatures({ charClass: 'Fighter', subclass: 'Cavalier', level: 3, edition: '5e' });
     expect(cav.map((f) => f.name)).toEqual(['Born to the Saddle']);
+  });
+});
+
+// The first entry gated on an ACTIVE EFFECT rather than on what the character permanently has,
+// and the first that names an ability — which is what lets the grid tag the STR row instead of
+// leaving "advantage on Strength saving throws" as prose under it.
+describe("Giant's Might (Rune Knight) — advantage while the effect is running", () => {
+  const ctx = ({ level = 3, active = ['giants_might'], edition = '5e' } = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Rune Knight',
+    level,
+    edition,
+    characterData: { subclass: 'Rune Knight', active_effects: active },
+  });
+  const might = (c) => getSaveFeatures(c).find((f) => f.name === "Giant's Might");
+
+  it('appears while the effect is switched on', () => {
+    expect(might(ctx())).toMatchObject({ source: 'Rune Knight' });
+  });
+
+  it('is absent while it is switched off — an unswitched feature grants nothing', () => {
+    expect(might(ctx({ active: [] }))).toBeUndefined();
+    expect(getSaveAdvantageAbilities(ctx({ active: [] }))).toEqual([]);
+  });
+
+  it('is absent before the feature is earned', () => {
+    expect(might(ctx({ level: 2 }))).toBeUndefined();
+  });
+
+  it('carries the subclass rules text, read out of the feature table', () => {
+    expect(might(ctx()).description).toMatch(/saving throw/i);
+  });
+
+  it('tags Strength saves and no others', () => {
+    expect(getSaveAdvantageAbilities(ctx())).toEqual(['strength']);
+    expect(saveAdvantageSourcesFor('strength', ctx()).map((f) => f.name)).toEqual(["Giant's Might"]);
+    expect(saveAdvantageSourcesFor('dexterity', ctx())).toEqual([]);
+    expect(saveAdvantageSourcesFor('constitution', ctx())).toEqual([]);
+  });
+
+  // Advantage that is scoped by SITUATION and not by ability has nowhere honest to sit on a
+  // save row, so those entries stay panel-only. Hill Rune (against poison) is the check.
+  it('leaves a situational entry untagged, even though it is listed', () => {
+    const hillCtx = {
+      charClass: 'Fighter', subclass: 'Rune Knight', level: 7, edition: '5e',
+      characterData: {
+        subclass: 'Rune Knight',
+        runes: ['Hill Rune'],
+        rune_items: { 'Hill Rune': 'w1' },
+        inventory: [{ uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' }],
+      },
+    };
+    expect(getSaveFeatures(hillCtx).map((f) => f.name)).toContain('Hill Rune');
+    expect(getSaveAdvantageAbilities(hillCtx)).toEqual([]);
+  });
+
+  it('does not reach another subclass carrying the key', () => {
+    expect(getSaveAdvantageAbilities({
+      charClass: 'Fighter', subclass: 'Champion', level: 10, edition: '5e',
+      characterData: { subclass: 'Champion', active_effects: ['giants_might'] },
+    })).toEqual([]);
   });
 });

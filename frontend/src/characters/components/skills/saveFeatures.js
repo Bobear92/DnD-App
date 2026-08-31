@@ -27,6 +27,7 @@ import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatur
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { isRuneActive } from '@/characters/components/inventory/runeCarving';
 import { getRune } from '@/characters/components/classData/runesData';
+import { isEffectActive } from '@/characters/components/effects/activeEffects';
 
 /**
  * @typedef {Object} SaveFeatureEntry
@@ -36,6 +37,11 @@ import { getRune } from '@/characters/components/classData/runesData';
  * @property {number}  minLevel   Level the character gains it.
  * @property {string[]} [editions] Editions it exists in. Omit = both.
  * @property {string} [description] Fallback text when the feature is not in a feature table.
+ * @property {string[]} [advantageAbilities] Abilities whose saves this grants ADVANTAGE on, when
+ *   the feature is that specific. The grid tags those rows; a feature whose advantage is scoped
+ *   by situation rather than by ability (Born to the Saddle — falling off a mount; Hill Rune —
+ *   against poison) deliberately omits it and stays panel-only, because a tag on a save row
+ *   asserts "roll this twice" with no room for the condition that makes it true.
  */
 
 /** @type {SaveFeatureEntry[]} */
@@ -59,6 +65,19 @@ export const SAVE_FEATURES = [
     editions: ['5e'],
     applies: (ctx) => isRuneActive('Hill Rune', ctx),
     description: getRune('Hill Rune')?.passive?.text ?? null,
+  },
+  // Rune Knight, Giant's Might — advantage on Strength saves while the effect is RUNNING. It is
+  // the first entry gated on an active effect rather than on what the character permanently has,
+  // and the first with `advantageAbilities`: RAW names Strength specifically, so the grid can tag
+  // the STR row instead of leaving the advantage as prose the reader applies by hand.
+  {
+    name: "Giant's Might",
+    charClass: 'Fighter',
+    subclass: 'Rune Knight',
+    minLevel: 3,
+    editions: ['5e'],
+    advantageAbilities: ['strength'],
+    applies: ({ characterData }) => isEffectActive(characterData, 'giants_might'),
   },
 ];
 
@@ -111,7 +130,8 @@ function matches(entry, ctx) {
  * The save-affecting features this character actually has, in level order.
  *
  * @param {{ charClass?: string, subclass?: string, level?: number, edition?: string }} ctx
- * @returns {{ key: string, name: string, source: string, level: number, description: string|null }[]}
+ * @returns {{ key: string, name: string, source: string, level: number, description: string|null,
+ *             advantageAbilities: string[] }[]}
  */
 export function getSaveFeatures({
   charClass, subclass, level = 1, edition = '5e', characterData = {},
@@ -124,6 +144,21 @@ export function getSaveFeatures({
       source: sourceLabel(entry),
       level: entry.minLevel,
       description: lookupDescription(entry, edition),
+      advantageAbilities: entry.advantageAbilities ?? [],
     }))
     .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+}
+
+/**
+ * The features granting advantage on ONE ability's saving throws — what the Saving Throws grid
+ * needs to tag a row and name why. Empty for an ability nothing covers, and empty for every
+ * ability when the only live features are situational ones (which carry no `advantageAbilities`).
+ */
+export function saveAdvantageSourcesFor(ability, ctx = {}) {
+  return getSaveFeatures(ctx).filter((f) => f.advantageAbilities.includes(ability));
+}
+
+/** Just the abilities, deduped — the cheap lookup for rendering the 'adv' tag. */
+export function getSaveAdvantageAbilities(ctx = {}) {
+  return [...new Set(getSaveFeatures(ctx).flatMap((f) => f.advantageAbilities))];
 }

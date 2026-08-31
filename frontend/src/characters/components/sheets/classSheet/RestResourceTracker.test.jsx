@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import {
+import RestResourceTracker, {
   RestUseSteppers, RestResourceControl, shortResourceLabel,
 } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 
@@ -176,5 +176,124 @@ describe('shortResourceLabel', () => {
   it('leaves a plain label alone', () => {
     expect(shortResourceLabel('Second Wind')).toBe('Second Wind');
     expect(shortResourceLabel()).toBe('');
+  });
+});
+
+// A resource whose charge belongs to an ACTIVE EFFECT. Found in QA: the Action Economy card
+// spent the charge and switched the effect on in one patch, but the identical row on the sheet's
+// rest tracker was a plain counter — so pressing Use there left `channel_rune_frost_used: 1` with
+// `active_effects: []`: a charge spent, no effect, and none of the +2 the player paid for.
+describe('RestResourceControl — a charge that powers an active effect', () => {
+  const frostRow = {
+    key: 'channel_rune_frost_used',
+    label: 'Channel Rune: Frost (Short Rest)',
+    used: 0,
+    total: 1,
+    remaining: 1,
+    recharge: 'short',
+  };
+  const frostEffect = { key: 'channel_rune_frost', label: 'Channel Rune: Frost', resourceKey: 'channel_rune_frost_used' };
+
+  const renderControl = (props = {}) => {
+    const onChange = vi.fn();
+    render(
+      <RestResourceControl
+        row={frostRow}
+        activeEffect={frostEffect}
+        characterData={{}}
+        onChange={onChange}
+        {...props}
+      />
+    );
+    return onChange;
+  };
+
+  it('spends the charge AND switches the effect on in ONE patch', () => {
+    const onChange = renderControl();
+    fireEvent.click(screen.getByLabelText('Use Channel Rune: Frost (Short Rest)'));
+    fireEvent.click(screen.getByTestId('rest-use-confirm-button'));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith({
+      channel_rune_frost_used: 1,
+      active_effects: ['channel_rune_frost'],
+    });
+  });
+
+  it('keeps any effect already running rather than replacing the list', () => {
+    const onChange = renderControl({ characterData: { active_effects: ['giants_might'] } });
+    fireEvent.click(screen.getByLabelText('Use Channel Rune: Frost (Short Rest)'));
+    fireEvent.click(screen.getByTestId('rest-use-confirm-button'));
+    expect(onChange).toHaveBeenCalledWith({
+      channel_rune_frost_used: 1,
+      active_effects: ['giants_might', 'channel_rune_frost'],
+    });
+  });
+
+  it('says what Use is about to do before the player commits', () => {
+    renderControl();
+    fireEvent.click(screen.getByLabelText('Use Channel Rune: Frost (Short Rest)'));
+    expect(screen.getByText(/switches Channel Rune: Frost on/i)).toBeInTheDocument();
+  });
+
+  it('reads Active now and offers End once it is running', () => {
+    const onChange = renderControl({
+      row: { ...frostRow, used: 1, remaining: 0 },
+      characterData: { active_effects: ['channel_rune_frost'] },
+    });
+    expect(screen.getByTestId('rest-effect-active-channel_rune_frost')).toHaveTextContent('Active now');
+    fireEvent.click(screen.getByTestId('rest-effect-end-channel_rune_frost'));
+    // Ending never refunds the charge.
+    expect(onChange).toHaveBeenCalledWith({ active_effects: [] });
+  });
+
+  it('offers End even with the pool empty — the Use button would be disabled there', () => {
+    renderControl({
+      row: { ...frostRow, used: 1, remaining: 0 },
+      characterData: { active_effects: ['channel_rune_frost'] },
+    });
+    expect(screen.queryByLabelText('Use Channel Rune: Frost (Short Rest)')).not.toBeInTheDocument();
+    expect(screen.getByTestId('rest-effect-end-channel_rune_frost')).toBeEnabled();
+  });
+
+  it('leaves an ordinary resource alone — no effect key, no active_effects in the patch', () => {
+    const onChange = vi.fn();
+    render(
+      <RestResourceControl
+        row={{ key: 'second_wind_used', label: 'Second Wind', used: 0, total: 1, remaining: 1, recharge: 'short' }}
+        onChange={onChange}
+      />
+    );
+    fireEvent.click(screen.getByLabelText('Use Second Wind'));
+    fireEvent.click(screen.getByTestId('rest-use-confirm-button'));
+    expect(onChange).toHaveBeenCalledWith({ second_wind_used: 1 });
+  });
+});
+
+// The tracker derives the effect from the effects table rather than from config data, so no
+// row carrying an effect's charge can be left as a plain counter by omission.
+describe('RestResourceTracker — effect rows are wired automatically', () => {
+  const resources = [
+    { key: 'giants_might_used', label: "Giant's Might", total: () => 3, recharge: 'long', minLevel: 3 },
+    { key: 'second_wind_used', label: 'Second Wind', total: () => 1, recharge: 'short', minLevel: 1 },
+  ];
+
+  it("starts Giant's Might from the tracker row, with no per-row config", () => {
+    const onChange = vi.fn();
+    render(
+      <RestResourceTracker resources={resources} level={10} data={{}} scores={{}} onChange={onChange} />
+    );
+    fireEvent.click(screen.getByLabelText("Use Giant's Might"));
+    fireEvent.click(screen.getByTestId('rest-use-confirm-button'));
+    expect(onChange).toHaveBeenCalledWith({ giants_might_used: 1, active_effects: ['giants_might'] });
+  });
+
+  it('leaves Second Wind a plain counter', () => {
+    const onChange = vi.fn();
+    render(
+      <RestResourceTracker resources={resources} level={10} data={{}} scores={{}} onChange={onChange} />
+    );
+    fireEvent.click(screen.getByLabelText('Use Second Wind'));
+    fireEvent.click(screen.getByTestId('rest-use-confirm-button'));
+    expect(onChange).toHaveBeenCalledWith({ second_wind_used: 1 });
   });
 });

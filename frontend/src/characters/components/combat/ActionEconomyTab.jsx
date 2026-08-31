@@ -358,7 +358,10 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
                 // Unwavering Mark emits one 'Attack' row per melee weapon.
                 key={`${sa.label}-${sa.name}`}
                 className="flex flex-wrap items-baseline gap-x-2 text-xs"
-                data-testid={`ae-twf-${sa.label.toLowerCase().replace(/\s+/g, '-')}`}
+                // Scoped by entry key: several cards in one bucket can carry an 'Action' row
+                // (both Tavern Brawler combos, Crossbow Expert, Charger), and an unscoped id
+                // matches all of them.
+                data-testid={`ae-twf-${sa.label.toLowerCase().replace(/\s+/g, '-')}-${entry.key}`}
               >
                 <span className="w-16 shrink-0 text-muted-foreground">{sa.label}</span>
                 <span className="font-medium">{sa.name}</span>

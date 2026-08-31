@@ -24,6 +24,8 @@
  * than whether it needs a sibling table.
  */
 
+import { isRuneActive } from '@/characters/components/inventory/runeCarving';
+
 /** Sizes, smallest first — so a consumer can compare two of them. */
 export const SIZE_ORDER = ['Tiny', 'Small', 'Medium', 'Large', 'Huge', 'Gargantuan'];
 
@@ -82,17 +84,73 @@ export function sizeAt(level = 1) {
   return (Number(level) || 1) >= 18 ? 'Huge' : 'Large';
 }
 
-export const ACTIVE_EFFECTS = [GIANTS_MIGHT];
+/**
+ * Rune Knight "Channel Rune: Frost" (Fighter, L3, 5e only).
+ *
+ * The SECOND active effect, and the one that showed what the model was missing. Giant's Might
+ * changes what you roll (advantage) and how big you are; Frost changes a NUMBER — "+2 to all
+ * ability checks and saving throws that use Strength or Constitution" for 10 minutes — which no
+ * `grants` field could express, so `checkBonus`/`saveBonus` were added rather than a second
+ * model (the note above says to check `grants` first, and this is that check coming back yes).
+ *
+ * Unlike Giant's Might it is gated on EQUIPMENT as well as level: a rune grants nothing until it
+ * is carved onto an object you wear or hold, so the definition carries the same `applies(ctx)`
+ * escape hatch defenses.js and saveFeatures.js use. Unequip the axe and the effect is no longer
+ * offered — an effect already switched on would keep its key in `active_effects` and simply stop
+ * resolving, which is the honest answer for a rune you are no longer carrying.
+ */
+const CHANNEL_RUNE_FROST = {
+  key: 'channel_rune_frost',
+  label: 'Channel Rune: Frost',
+  charClass: 'Fighter',
+  subclass: 'Rune Knight',
+  edition: '5e',
+  minLevel: 3,
+  resourceKey: 'channel_rune_frost_used',
+  duration: '10 minutes',
+  applies: (ctx) => isRuneActive('Frost Rune', ctx),
+  summary: () => `+${FROST_RUNE_BONUS} to all ability checks and saving throws that use Strength`
+    + ' or Constitution',
+  grants: () => ({
+    // The abilities are named rather than the skills: RAW is "checks that use Strength or
+    // Constitution", so a consumer maps the ability to whatever it displays (Athletics is the
+    // only skill either ability drives; the saves grid shows both).
+    checkBonus: { abilities: ['strength', 'constitution'], amount: FROST_RUNE_BONUS },
+    saveBonus: { abilities: ['strength', 'constitution'], amount: FROST_RUNE_BONUS },
+  }),
+};
+
+/** Frost Rune's Channel Rune bonus. Flat in RAW — it does not scale with level or proficiency. */
+export const FROST_RUNE_BONUS = 2;
+
+export const ACTIVE_EFFECTS = [GIANTS_MIGHT, CHANNEL_RUNE_FROST];
 
 /** The effect definitions this character has earned (whether or not they are switched on). */
-export function getActiveEffectDefs({ charClass, subclass, level = 1, edition = '5e' } = {}) {
+export function getActiveEffectDefs({
+  charClass, subclass, level = 1, edition = '5e', characterData = {},
+} = {}) {
   const ed = normEdition(edition);
   return ACTIVE_EFFECTS.filter((e) => (
     (!e.charClass || e.charClass === charClass)
     && (!e.subclass || e.subclass === subclass)
     && (!e.edition || e.edition === ed)
     && (Number(level) || 1) >= (e.minLevel ?? 1)
+    // Escape hatch for a gate the declarative keys cannot express — a rune effect depends on
+    // whether the rune is carved onto an EQUIPPED item, which is character_data state.
+    && (!e.applies || e.applies({ charClass, subclass, level, edition: ed, characterData }))
   ));
+}
+
+/**
+ * The effect whose CHARGE this resource key spends, if any.
+ *
+ * Exists so a rest-tracker row can discover that it is not an ordinary counter. Matching on the
+ * key alone is enough: the row is already gated by class/subclass/level (and, for a rune, by the
+ * rune being carved on an equipped item), so a config that is showing `channel_rune_frost_used`
+ * belongs to a character who has that effect.
+ */
+export function effectForResourceKey(key) {
+  return ACTIVE_EFFECTS.find((e) => e.resourceKey && e.resourceKey === key) ?? null;
 }
 
 /** The effect keys currently switched on (always an array). */
@@ -120,10 +178,10 @@ export function toggleEffectPatch(characterData, key, on) {
  * are single-source today; revisit the merge rule when a second effect actually collides.
  */
 export function activeEffectGrants({ characterData = {}, charClass, subclass, level = 1, edition = '5e' } = {}) {
-  const on = getActiveEffectDefs({ charClass, subclass, level, edition })
-    .filter((e) => isEffectActive(characterData, e.key));
+  const on = runningEffects({ characterData, charClass, subclass, level, edition });
   const out = {
     size: null, advantageAbilities: [], advantageSaves: [], attackDie: null, reachBonus: 0,
+    checkBonuses: {}, saveBonuses: {},
     sources: on.map((e) => e.label),
   };
   for (const e of on) {
@@ -135,8 +193,86 @@ export function activeEffectGrants({ characterData = {}, charClass, subclass, le
     out.advantageSaves = [...new Set([...out.advantageSaves, ...(g.advantageSaves ?? [])])];
     if (g.attackDie) out.attackDie = g.attackDie;
     out.reachBonus = Math.max(out.reachBonus, g.reachBonus ?? 0);
+    // Numeric bonuses SUM across effects: two differently-named features that both add to a
+    // Strength check do stack in 5e (unlike advantage, which does not), and there is no single
+    // "largest wins" answer to fall back on. Only one such effect exists today.
+    for (const ability of g.checkBonus?.abilities ?? []) {
+      out.checkBonuses[ability] = (out.checkBonuses[ability] ?? 0) + (g.checkBonus.amount ?? 0);
+    }
+    for (const ability of g.saveBonus?.abilities ?? []) {
+      out.saveBonuses[ability] = (out.saveBonuses[ability] ?? 0) + (g.saveBonus.amount ?? 0);
+    }
   }
   return out;
+}
+
+/** The effect definitions this character has earned AND switched on. */
+function runningEffects(ctx) {
+  return getActiveEffectDefs(ctx).filter((e) => isEffectActive(ctx.characterData, e.key));
+}
+
+/**
+ * The running effects that add a flat bonus to one ability's CHECKS or SAVES, as breakdown-ready
+ * terms. Returned per source rather than pre-summed so the sheet's click-to-see-the-math panel
+ * can name what raised the number — a "+2" that appears with nothing to attribute it to reads as
+ * a bug in the ability modifier.
+ *
+ * @returns {{ key: string, label: string, value: number }[]}
+ */
+function bonusParts(field, ability, ctx) {
+  return runningEffects(ctx)
+    .map((e) => ({ e, amount: pickBonus(e.grants(Number(ctx.level) || 1)?.[field], ability) }))
+    .filter(({ amount }) => amount)
+    .map(({ e, amount }) => ({ key: `effect:${e.key}`, label: e.label, value: amount }));
+}
+
+function pickBonus(spec, ability) {
+  return (spec?.abilities ?? []).includes(ability) ? (spec.amount ?? 0) : 0;
+}
+
+/**
+ * The running effects that add a flat bonus, grouped by SOURCE rather than by ability — what a
+ * legend or a summary line needs ("+2 to STR and CON saving throws — Channel Rune: Frost"),
+ * where the per-ability `…Parts` helpers answer "what does THIS row add up to".
+ *
+ * @returns {{ key: string, source: string, amount: number, abilities: string[] }[]}
+ */
+function bonusSources(field, ctx) {
+  return runningEffects(ctx).flatMap((e) => {
+    const spec = e.grants(Number(ctx.level) || 1)?.[field];
+    if (!spec?.amount || (spec.abilities ?? []).length === 0) return [];
+    return [{ key: e.key, source: e.label, amount: spec.amount, abilities: spec.abilities }];
+  });
+}
+
+/** Running effects adding a flat bonus to ability CHECKS, grouped by source. */
+export function activeEffectCheckSources(ctx = {}) {
+  return bonusSources('checkBonus', ctx);
+}
+
+/** Running effects adding a flat bonus to SAVING THROWS, grouped by source. */
+export function activeEffectSaveSources(ctx = {}) {
+  return bonusSources('saveBonus', ctx);
+}
+
+/** The total flat bonus on one ability's checks — the number a row's tag shows. */
+export function activeEffectCheckBonus(ability, ctx = {}) {
+  return activeEffectCheckParts(ability, ctx).reduce((sum, p) => sum + p.value, 0);
+}
+
+/** The total flat bonus on one ability's saving throws. */
+export function activeEffectSaveBonus(ability, ctx = {}) {
+  return activeEffectSaveParts(ability, ctx).reduce((sum, p) => sum + p.value, 0);
+}
+
+/** Flat bonus terms on one ability's CHECKS (and so on the skills that use it). */
+export function activeEffectCheckParts(ability, ctx = {}) {
+  return bonusParts('checkBonus', ability, ctx);
+}
+
+/** Flat bonus terms on one ability's SAVING THROWS. */
+export function activeEffectSaveParts(ability, ctx = {}) {
+  return bonusParts('saveBonus', ability, ctx);
 }
 
 export default ACTIVE_EFFECTS;

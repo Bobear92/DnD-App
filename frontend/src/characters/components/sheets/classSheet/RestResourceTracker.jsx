@@ -17,6 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { useRestResource } from '@/characters/components/sheets/classSheet/hooks/useRestResource';
+import { effectForResourceKey, isEffectActive, toggleEffectPatch } from '@/characters/components/effects/activeEffects';
 
 const rechargeText = (recharge) =>
   recharge === 'short' ? 'a short or long rest' : 'a long rest';
@@ -92,12 +93,23 @@ export function RestUseSteppers({ usedKey, used = 0, total = 0, onChange, readOn
  *     This is the ONE sanctioned exception to the app's rule that a player never restores a
  *     resource: the restore is not the player editing a counter, it is the feature firing, and
  *     it is gated behind this row's own once-per-rest charge.
+ *
+ * `activeEffect` — the row's charge belongs to an ACTIVE EFFECT (Giant's Might, Channel Rune:
+ * Frost), so spending it must also switch the effect ON, in the SAME patch. Found in QA: the
+ * Action Economy card already did this, but the identical row on the sheet's rest tracker was a
+ * plain counter, so pressing Use there left `channel_rune_frost_used: 1` with `active_effects:
+ * []` — a spent charge, no effect, and none of the +2 the player had just paid for. A resource
+ * with two spend points and only one of them starting the effect is exactly the trap the
+ * single-patch rule exists to prevent, so the rule now lives in the shared control instead of
+ * in one of its callers. While the effect runs the control offers **End** instead of Use, and
+ * ending never refunds the charge.
  */
 export function RestResourceControl({
   row, onChange, readOnly = false, isGm = false, showRemaining = true, idPrefix = 'rest',
-  fallbackRow = null, restoresRow = null,
+  fallbackRow = null, restoresRow = null, activeEffect = null, characterData = null,
 }) {
   const [confirm, setConfirm] = useState(false);
+  const effectRunning = !!activeEffect && isEffectActive(characterData || {}, activeEffect.key);
 
   // Which row a Use spends from: this one while it has a use left, otherwise the fallback.
   const usingFallback = row.remaining <= 0 && !!fallbackRow && fallbackRow.remaining > 0;
@@ -109,14 +121,25 @@ export function RestResourceControl({
     const patch = { [spendRow.key]: spendRow.used + 1 };
     // Spend-to-restore: the same save hands a use back to the pool this feature refills.
     if (restoresRow) patch[restoresRow.key] = Math.max(0, restoresRow.used - 1);
+    // Starting the effect and paying for it are ONE event — a charge that went down without the
+    // effect coming on is a use the player paid for and did not get.
+    if (activeEffect) Object.assign(patch, toggleEffectPatch(characterData || {}, activeEffect.key, true));
     onChange?.(patch);
     setConfirm(false);
   };
+
+  // Ending never refunds the charge: you spent it to start the effect.
+  const endEffect = () => onChange?.(toggleEffectPatch(characterData || {}, activeEffect.key, false));
 
   const fallbackName = fallbackRow ? shortResourceLabel(fallbackRow.label) : '';
 
   return (
     <div className="flex items-center gap-2">
+      {effectRunning && (
+        <span className="text-xs font-medium text-indigo-400" data-testid={`${idPrefix}-effect-active-${activeEffect.key}`}>
+          Active now
+        </span>
+      )}
       {showRemaining && (
         <span className="text-xs text-muted-foreground">
           {fallbackRow ? (
@@ -148,17 +171,31 @@ export function RestResourceControl({
               −
             </button>
           )}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-6 px-2 text-xs"
-            disabled={exhausted}
-            onClick={() => setConfirm(true)}
-            aria-label={`Use ${row.label}`}
-          >
-            Use
-          </Button>
+          {effectRunning ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 px-2 text-xs"
+              onClick={endEffect}
+              data-testid={`${idPrefix}-effect-end-${activeEffect.key}`}
+              aria-label={`End ${row.label}`}
+            >
+              End
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 px-2 text-xs"
+              disabled={exhausted}
+              onClick={() => setConfirm(true)}
+              aria-label={`Use ${row.label}`}
+            >
+              Use
+            </Button>
+          )}
         </div>
       )}
 
@@ -167,7 +204,9 @@ export function RestResourceControl({
           <DialogHeader>
             <DialogTitle>Use {row.label}?</DialogTitle>
             <DialogDescription>
-              {restoresRow
+              {activeEffect
+                ? `This spends the use and switches ${shortResourceLabel(row.label)} on. It won't come back until ${rechargeText(row.recharge)}.`
+                : restoresRow
                 ? `This spends the use and returns one ${shortResourceLabel(restoresRow.label)}.`
                 : usingFallback
                   ? `Your free use is spent, so this costs one ${fallbackName}. It won't come back until ${rechargeText(fallbackRow.recharge)}.`
@@ -221,6 +260,10 @@ export default function RestResourceTracker({ resources = [], level = 1, data = 
             row={r}
             fallbackRow={r.fallbackKey ? byKey[r.fallbackKey] ?? null : null}
             restoresRow={r.restoresKey ? byKey[r.restoresKey] ?? null : null}
+            // Derived from the effects table rather than declared per row, so every effect's
+            // tracker row gets this without a config edit — and none can be forgotten.
+            activeEffect={effectForResourceKey(r.key)}
+            characterData={data}
             onChange={onChange}
             readOnly={readOnly}
             isGm={isGm}

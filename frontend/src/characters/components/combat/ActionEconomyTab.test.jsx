@@ -444,8 +444,8 @@ describe('ActionEconomyTab', () => {
     renderTab({ inventory: [light('a', 'Shortsword'), light('b', 'Dagger')] });
     goToTab('action+bonus');
     expect(screen.getByText('Two-Weapon Fighting')).toBeInTheDocument();
-    expect(screen.getByTestId('ae-twf-main-hand')).toHaveTextContent('Shortsword');
-    expect(screen.getByTestId('ae-twf-off-hand')).toHaveTextContent('Dagger');
+    expect(screen.getByTestId('ae-twf-main-hand-twf')).toHaveTextContent('Shortsword');
+    expect(screen.getByTestId('ae-twf-off-hand-twf')).toHaveTextContent('Dagger');
   });
 
   // The bonus half of Telekinetic Master is an ordinary weapon attack, so the combo card has to
@@ -581,19 +581,39 @@ describe('ActionEconomyTab', () => {
     expect(screen.getByTestId('ae-empty')).toBeInTheDocument();
   });
 
-  it('shows the Tavern Brawler grapple combo (Unarmed Strike Action + Grapple Bonus) on Action+Bonus', () => {
-    const tavernBrawler = { id: 14, name: 'Tavern Brawler', effects: [
-      { kind: 'attack_mod', target: 'unarmed', dice: '1d4' },
-      { kind: 'action', name: 'Grapple (Tavern Brawler)', economy: 'bonus', trigger: 'After an unarmed hit', description: 'Grapple the target.' },
-    ] };
-    renderTab({ inventory: [], characterData: { feats: [tavernBrawler] } });
+  // RAW the grapple follows a hit with EITHER opener, so there are two cards, not one that
+  // picks a winner. The improvised half comes from the feat's weapon proficiency — you can pick
+  // up a chair without owning an "Improvised Weapon" inventory row.
+  const TAVERN_BRAWLER_FEAT = { id: 14, name: 'Tavern Brawler', effects: [
+    { kind: 'proficiency', prof_type: 'weapon', items: ['Improvised weapons'] },
+    { kind: 'attack_mod', target: 'unarmed', dice: '1d4' },
+    { kind: 'action', name: 'Grapple (Tavern Brawler)', economy: 'bonus', trigger: 'After an unarmed hit', description: 'Grapple the target.' },
+  ] };
+
+  it('shows both Tavern Brawler grapple combos on Action+Bonus', () => {
+    renderTab({ inventory: [], characterData: { feats: [TAVERN_BRAWLER_FEAT] } });
     goToTab('action+bonus');
-    expect(screen.getByText('Tavern Brawler')).toBeInTheDocument();
-    expect(screen.getByTestId('ae-twf-action')).toHaveTextContent('Unarmed Strike');
-    expect(screen.getByTestId('ae-twf-action')).toHaveTextContent('1d4');
-    const bonus = screen.getByTestId('ae-twf-bonus');
+    expect(screen.getByText('Tavern Brawler: Unarmed Strike')).toBeInTheDocument();
+    expect(screen.getByText('Tavern Brawler: Improvised Weapon')).toBeInTheDocument();
+  });
+
+  it('gives each combo its own opener row and a Grapple bonus row', () => {
+    renderTab({ inventory: [], characterData: { feats: [TAVERN_BRAWLER_FEAT] } });
+    goToTab('action+bonus');
+    const unarmed = screen.getByTestId('ae-twf-action-tavern-brawler-unarmed');
+    expect(unarmed).toHaveTextContent('Unarmed Strike');
+    expect(unarmed).toHaveTextContent('1d4');
+    expect(screen.getByTestId('ae-twf-action-tavern-brawler-improvised'))
+      .toHaveTextContent('Improvised Weapon');
+    const bonus = screen.getByTestId('ae-twf-bonus-tavern-brawler-unarmed');
     expect(bonus).toHaveTextContent('Grapple');
     expect(bonus).toHaveTextContent(/grapple the target/i); // detail-only sub-row renders its detail
+  });
+
+  it('shows the Improvised Weapon attack in the Actions tab', () => {
+    renderTab({ inventory: [], characterData: { feats: [TAVERN_BRAWLER_FEAT] } });
+    goToTab('action');
+    expect(screen.getByText('Improvised Weapon')).toBeInTheDocument();
   });
 
   it('Great Weapon Master power-attack toggle swaps a Heavy melee weapon to −5/+10', () => {
@@ -726,8 +746,8 @@ describe('ActionEconomyTab', () => {
     goToTab('action+bonus');
     expect(screen.getByText('War Magic')).toBeInTheDocument();
     // Sub rows: cast a cantrip (Action) + the equipped weapon (Bonus)
-    expect(screen.getByTestId('ae-twf-action')).toHaveTextContent(/cast a cantrip/i);
-    expect(screen.getByTestId('ae-twf-bonus')).toHaveTextContent('Longsword');
+    expect(screen.getByTestId('ae-twf-action-war-magic')).toHaveTextContent(/cast a cantrip/i);
+    expect(screen.getByTestId('ae-twf-bonus-war-magic')).toHaveTextContent('Longsword');
   });
 
   it('shows the Eldritch Strike note on a weapon entry for an Eldritch Knight at L10', () => {
@@ -794,7 +814,7 @@ describe('ActionEconomyTab — Cavalier Unwavering Mark', () => {
     goToTab('bonus');
     expect(screen.getByText('Marked Target')).toBeInTheDocument();
     // Half Fighter level is already in the number, and advantage is stated on the row.
-    const row = screen.getByTestId('ae-twf-attack');
+    const row = screen.getByTestId(/^ae-twf-attack-/);
     expect(row).toHaveTextContent(/1d8 \+ 6 slashing/i);
     expect(row).toHaveTextContent(/with advantage/i);
   });
@@ -1346,6 +1366,72 @@ describe('ActionEconomyTab — Unleash Incarnation on the melee attack card', ()
       expect(screen.queryByTestId('ae-rest-use-giants_might_used')).not.toBeInTheDocument();
     });
 
+  });
+
+  // The SECOND active effect, and the first that is EQUIPMENT-gated: the card only exists while
+  // the rune is carved onto something equipped, and the toggle rides on that card.
+  describe('Channel Rune: Frost — the second active-effect toggle', () => {
+    const axe = { uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' };
+    const frostKnight = ({ characterData, ...props } = {}) => renderTab({
+      subclass: 'Rune Knight', level: 7,
+      inventory: [axe],
+      characterData: {
+        subclass: 'Rune Knight',
+        runes: ['Frost Rune'],
+        rune_items: { 'Frost Rune': 'w1' },
+        inventory: [axe],
+        ...characterData,
+      },
+      onChange: vi.fn(),
+      ...props,
+    });
+
+    it('renders the toggle on the Frost card rather than a bare Use control', () => {
+      frostKnight();
+      goToTab('bonus');
+      expect(screen.getByTestId('ae-effect-channel_rune_frost-subclass:Channel Rune: Frost'))
+        .toHaveTextContent('Not active');
+      expect(screen.queryByTestId('ae-rest-use-channel_rune_frost_used')).not.toBeInTheDocument();
+    });
+
+    it('spends the rune use AND switches the effect on in ONE patch', () => {
+      const onChange = vi.fn();
+      frostKnight({ onChange });
+      goToTab('bonus');
+      fireEvent.click(screen.getByTestId('ae-effect-start-channel_rune_frost'));
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenCalledWith({
+        active_effects: ['channel_rune_frost'],
+        channel_rune_frost_used: 1,
+      });
+    });
+
+    it('reads Active now and offers End once it is running', () => {
+      const onChange = vi.fn();
+      frostKnight({
+        characterData: { active_effects: ['channel_rune_frost'], channel_rune_frost_used: 1 },
+        onChange,
+      });
+      goToTab('bonus');
+      expect(screen.getByTestId('ae-effect-channel_rune_frost-subclass:Channel Rune: Frost'))
+        .toHaveTextContent('Active now');
+      fireEvent.click(screen.getByTestId('ae-effect-end-channel_rune_frost'));
+      expect(onChange).toHaveBeenCalledWith({ active_effects: [] });
+    });
+
+    it('leaves a one-shot rune (Cloud) with the plain Use control and no toggle', () => {
+      frostKnight({
+        characterData: { runes: ['Cloud Rune'], rune_items: { 'Cloud Rune': 'w1' } },
+      });
+      goToTab('reaction');
+      expect(screen.queryByTestId(/^ae-effect-/)).not.toBeInTheDocument();
+    });
+
+    it('shows no toggle at all while the rune is uncarved — the card is hidden', () => {
+      frostKnight({ characterData: { rune_items: {} } });
+      goToTab('bonus');
+      expect(screen.queryByTestId(/^ae-effect-channel_rune_frost/)).not.toBeInTheDocument();
+    });
     it('shows no toggle for a subclass without an active effect', () => {
       renderTab({ subclass: 'Champion', level: 10, characterData: { subclass: 'Champion' } });
       goToTab('bonus');
@@ -1358,7 +1444,7 @@ describe('ActionEconomyTab — Unleash Incarnation on the melee attack card', ()
 // CARD level under the printed damage, never folded INTO it: the printed string has to stay true
 // for an ordinary swing, and every term in the total is conditional.
 describe('ActionEconomyTab — "on a hit" damage total on the attack card', () => {
-  const runeKnight = (props = {}) => renderTab({
+  const runeKnight = ({ characterData, ...props } = {}) => renderTab({
     charClass: 'Fighter', subclass: 'Rune Knight', level: 7,
     scores: { strength: 16, dexterity: 12, constitution: 14 },
     inventory: [longswordEntry],
@@ -1367,6 +1453,8 @@ describe('ActionEconomyTab — "on a hit" damage total on the attack card', () =
       runes: ['Fire Rune'],
       rune_items: { 'Fire Rune': 'w1' },
       inventory: [longswordEntry],
+      active_effects: ['giants_might'],
+      ...characterData,
     },
     ...props,
   });
@@ -1377,14 +1465,14 @@ describe('ActionEconomyTab — "on a hit" damage total on the attack card', () =
   it('shows the combined damage on the card, under the printed damage', () => {
     runeKnight();
     expect(total()).toHaveTextContent(/On a hit:/);
-    expect(total()).toHaveTextContent(/2d6 fire/);
+    expect(total()).toHaveTextContent(/1d6/);
   });
 
   it('leaves the printed damage alone — it must stay true for an ordinary swing', () => {
     runeKnight();
     const printed = screen.getByTestId(/^ae-damage-weapon:w1/);
     expect(printed).toHaveTextContent('1d8');
-    expect(printed).not.toHaveTextContent(/fire/i);
+    expect(printed).not.toHaveTextContent(/Giant's Might/i);
   });
 
   // The total is what you read mid-swing; the rune's rules paragraph is reference you need once.
@@ -1400,26 +1488,39 @@ describe('ActionEconomyTab — "on a hit" damage total on the attack card', () =
   it('names each source, so a grown total does not read as a bug in the weapon damage', () => {
     runeKnight();
     expect(total()).toHaveTextContent(/\(weapon\)/);
-    expect(total()).toHaveTextContent(/\(Fire Rune\)/);
+    expect(total()).toHaveTextContent(/\(Giant's Might\)/);
   });
 
   it("includes Giant's Might while the effect is switched on", () => {
-    runeKnight({
-      characterData: {
-        subclass: 'Rune Knight',
-        runes: ['Fire Rune'],
-        rune_items: { 'Fire Rune': 'w1' },
-        inventory: [longswordEntry],
-        active_effects: ['giants_might'],
-      },
-    });
+    runeKnight();
     expect(total()).toHaveTextContent(/1d6/);
     expect(total()).toHaveTextContent(/\(Giant's Might\)/);
   });
 
   it("excludes Giant's Might while it is off", () => {
+    runeKnight({ characterData: { active_effects: [] } });
+    expect(screen.queryByTestId(/^ae-damage-total-/)).not.toBeInTheDocument();
+  });
+
+  // The Fire Rune's 2d6 lands only on the swing where you spend a Channel Rune use to summon
+  // the shackles — a choice made after the hit and never recorded — so it must never appear in
+  // a total that reads as "this is what this attack deals".
+  it('never counts the Fire Rune, even carved and equipped on the weapon being shown', () => {
+    runeKnight({ characterData: { active_effects: [] } });
+    expect(screen.getByTestId(/^ae-attached-fire-rune-weapon:w1/)).toBeInTheDocument();
+    expect(screen.queryByTestId(/^ae-damage-total-/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the fire damage out of a total it shares with Giant's Might", () => {
     runeKnight();
-    expect(total()).not.toHaveTextContent(/Giant's Might/);
+    expect(total()).not.toHaveTextContent(/fire/i);
+    expect(total()).not.toHaveTextContent(/Fire Rune/);
+  });
+
+  it('still states the fire damage in the rune block beside its Use control', () => {
+    runeKnight();
+    expect(screen.getByTestId(/^ae-attached-fire-rune-weapon:w1/))
+      .toHaveTextContent(/extra 2d6 fire damage/i);
   });
 
   it('shows no total when nothing adds damage', () => {

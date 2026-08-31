@@ -2509,6 +2509,223 @@ describe('CharacterDetail', () => {
       expect(screen.queryByText(/½ prof \(Remarkable Athlete\)/)).not.toBeInTheDocument();
     });
 
+    // Giant's Might grants advantage on Strength checks AND Strength saves. Found in QA: the
+    // effect was switched on, the banner said so, and the Abilities & Skills panel showed no
+    // change at all — the grant existed in the effect definition and nothing consumed it.
+    it("shows advantage on Athletics and the STR save while Giant's Might is active", async () => {
+      const runeKnight = {
+        ...BASE_CHARACTER,
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          subclass: 'Rune Knight',
+          active_effects: ['giants_might'],
+        },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: runeKnight });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('skill-advantage-Athletics')).toHaveTextContent(/adv/i);
+      expect(screen.getByTestId('save-advantage-strength')).toHaveTextContent(/adv/i);
+      expect(screen.getByText(/Teal = advantage \(Giant's Might\)/)).toBeInTheDocument();
+    });
+
+    it("tags only Strength — the other saves and skills are untouched", async () => {
+      const runeKnight = {
+        ...BASE_CHARACTER,
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          subclass: 'Rune Knight',
+          active_effects: ['giants_might'],
+        },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: runeKnight });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('save-advantage-dexterity')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('save-advantage-constitution')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('skill-advantage-Stealth')).not.toBeInTheDocument();
+    });
+
+    // Channel Rune: Frost is a flat +2, not advantage — so it must move the NUMBER, not add a
+    // tag. BASE_CHARACTER is STR 16 (+3), proficient in Athletics, L5 (PB +3) → 6, and +2 = 8.
+    const frostKnight = (active = true) => ({
+      ...BASE_CHARACTER,
+      character_data: {
+        ...BASE_CHARACTER.character_data,
+        subclass: 'Rune Knight',
+        runes: ['Frost Rune'],
+        rune_items: { 'Frost Rune': 'w1' },
+        inventory: [{ uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' }],
+        active_effects: active ? ['channel_rune_frost'] : [],
+      },
+    });
+
+    it('raises the Athletics bonus by +2 while Channel Rune: Frost is running', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: frostKnight() });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('skill-bonus-Athletics')).toHaveTextContent('+8');
+    });
+
+    it('leaves Athletics at its normal bonus while the effect is off', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: frostKnight(false) });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('skill-bonus-Athletics')).toHaveTextContent('+6');
+    });
+
+    it('raises the Strength and Constitution SAVES, and nothing else', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: frostKnight() });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      // A Fighter is proficient in STR + CON saves (PB +3 at L5):
+      // STR 16 (+3) + 3 + 2 = +8; CON 14 (+2) + 3 + 2 = +7; DEX 12 (+1), unproficient, untouched.
+      expect(screen.getByTestId('save-bonus-strength')).toHaveTextContent('+8');
+      expect(screen.getByTestId('save-bonus-constitution')).toHaveTextContent('+7');
+      expect(screen.getByTestId('save-bonus-dexterity')).toHaveTextContent('+1');
+    });
+
+    // The number moving is not enough on its own: a +7 Athletics with nothing beside it reads as
+    // the sheet's normal total. Each affected row carries the bonus it gained, and each surface
+    // names the effect (the skills legend; a note under the saves grid, which has no legend).
+    // The marker is the COLOUR OF THE TOTAL, never a "+2" beside it. A tag next to the number
+    // read as "+7, and +2 on top of that" — the bonus is already inside the +7.
+    it('colours the raised skill total instead of printing a second number', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: frostKnight() });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      const athletics = screen.getByTestId('skill-bonus-Athletics');
+      expect(athletics).toHaveClass('text-indigo-400');
+      expect(athletics).toHaveTextContent('+8');
+      // Nothing anywhere adds a separate bonus tag next to a total.
+      expect(screen.queryByTestId(/-effect-bonus-/)).not.toBeInTheDocument();
+    });
+
+    it('leaves the untouched skill totals uncoloured', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: frostKnight() });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      // Constitution drives no skill at all, and Stealth is Dexterity.
+      expect(screen.getByTestId('skill-bonus-Stealth')).not.toHaveClass('text-indigo-400');
+      expect(screen.getByTestId('skill-bonus-Perception')).not.toHaveClass('text-indigo-400');
+    });
+
+    it('explains the colour in the skills legend', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: frostKnight() });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByText(/Indigo total = includes Channel Rune: Frost/)).toBeInTheDocument();
+    });
+
+    it('colours the affected save totals and names the effect under the grid', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: frostKnight() });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('save-bonus-strength')).toHaveClass('text-indigo-400');
+      expect(screen.getByTestId('save-bonus-constitution')).toHaveClass('text-indigo-400');
+      expect(screen.getByTestId('save-bonus-dexterity')).not.toHaveClass('text-indigo-400');
+      // Worded as "include", not "+2 to …", so the note can't be read as a further addition.
+      expect(screen.getByTestId('saves-effect-note-channel_rune_frost'))
+        .toHaveTextContent('STR & CON saving throws include +2 from Channel Rune: Frost.');
+    });
+
+    it('shows no colour, legend or note while the effect is switched off', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: frostKnight(false) });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('skill-bonus-Athletics')).not.toHaveClass('text-indigo-400');
+      expect(screen.getByTestId('save-bonus-strength')).not.toHaveClass('text-indigo-400');
+      expect(screen.queryByTestId(/^saves-effect-note-/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Indigo total/)).not.toBeInTheDocument();
+    });
+
+    it('names the effect in the breakdown, so a raised number has a source', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: frostKnight() });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('save-bonus-strength'));
+      expect(screen.getByTestId('save-breakdown-strength')).toHaveTextContent('Channel Rune: Frost');
+    });
+
+    // "Where does the sheet say how far I can see?" — it didn't, anywhere. Every darkvision
+    // source in the app was prose inside a feature description. Wired centrally like the
+    // Defenses card, so a hand-written sheet gets it too.
+    it('shows a Senses card with the range and its source', async () => {
+      const dwarf = {
+        ...BASE_CHARACTER,
+        race: 'Dwarf',
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          subrace: 'Hill Dwarf',
+          race_traits: ['Darkvision'],
+        },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: dwarf });
+      renderDetail();
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('sense-range-darkvision')).toHaveTextContent('60 ft');
+      expect(screen.getByTestId('sense-darkvision')).toHaveTextContent('Hill Dwarf');
+    });
+
+    it("shows the Stone Rune's 120 ft once it is carved on an equipped item", async () => {
+      const runeKnight = {
+        ...BASE_CHARACTER,
+        level: 7,
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          subclass: 'Rune Knight',
+          runes: ['Stone Rune'],
+          rune_items: { 'Stone Rune': 'w1' },
+          inventory: [{ uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' }],
+        },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: runeKnight });
+      renderDetail();
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.getByTestId('sense-range-darkvision')).toHaveTextContent('120 ft');
+      expect(screen.getByTestId('sense-darkvision')).toHaveTextContent('Stone Rune');
+    });
+
+    // Gated like the Defenses card: an empty titled card is worse than no card.
+    it('shows no Senses card at all for a character with ordinary vision', async () => {
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: BASE_CHARACTER });
+      renderDetail();
+      await openStatsSubTab('hp');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('senses')).not.toBeInTheDocument();
+      expect(screen.queryByText('Senses')).not.toBeInTheDocument();
+    });
+
+    it("shows no advantage while Giant's Might is switched off", async () => {
+      const runeKnight = {
+        ...BASE_CHARACTER,
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          subclass: 'Rune Knight',
+          active_effects: [],
+        },
+      };
+      characterService.getCharacterById.mockResolvedValue({ success: true, data: runeKnight });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+      expect(screen.queryByTestId('save-advantage-strength')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('skill-advantage-Athletics')).not.toBeInTheDocument();
+    });
+
     it('does NOT show 2024 Remarkable Athlete advantage for a Champion below level 3', async () => {
       useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player', edition: '5.5e' } });
       const champion2 = {

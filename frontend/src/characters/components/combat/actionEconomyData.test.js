@@ -682,40 +682,77 @@ describe('buildActionEconomy — Fighter', () => {
     const TAVERN_BRAWLER = {
       id: 14, name: 'Tavern Brawler', level: 4,
       effects: [
+        // Mirrors the seeded 2014 feat: proficiency with improvised weapons is what lets the
+        // Actions tab offer an improvised attack to a character who owns no such item.
+        { kind: 'proficiency', prof_type: 'weapon', items: ['Improvised weapons'] },
         { kind: 'attack_mod', target: 'unarmed', dice: '1d4' },
         { kind: 'action', name: 'Grapple (Tavern Brawler)', economy: 'bonus', trigger: 'After an unarmed hit', description: 'Grapple the target.' },
       ],
     };
 
-    it('presents the Tavern Brawler grapple as an Action+Bonus combo, not a standalone bonus', () => {
+    const tb = (ec, opener) => ec['action+bonus'].find((e) => e.name === `Tavern Brawler: ${opener}`);
+
+    // RAW the grapple follows a hit with EITHER an unarmed strike OR an improvised weapon, and
+    // those are two different attacks with different to-hit and damage. One card had to pick a
+    // winner and silently dropped the other opener.
+    it('presents the grapple as TWO Action+Bonus combos, one per opener', () => {
       const args = fighterArgs(5, '5e');
       args.characterData = { feats: [TAVERN_BRAWLER] };
       const ec = buildActionEconomy(args);
-      // No standalone bonus grapple entry — it's folded into the combo.
+      // No standalone bonus grapple entry — it is folded into the combos.
       expect(ec.bonus.find((e) => /grapple/i.test(e.name))).toBeFalsy();
-      const combo = ec['action+bonus'].find((e) => e.name === 'Tavern Brawler');
-      expect(combo).toBeTruthy();
-      expect(combo.source).toBe('Feat');
-      expect(combo.cost).toBe('action + bonus action');
-      // Action row = Unarmed Strike (no improvised weapon equipped); Bonus row = Grapple.
-      const labels = combo.subAttacks.map((s) => s.label);
-      expect(labels).toEqual(['Action', 'Bonus']);
-      expect(combo.subAttacks[0].name).toBe('Unarmed Strike');
-      expect(combo.subAttacks[0].damage).toMatch(/1d4/);
-      expect(combo.subAttacks[1].name).toBe('Grapple');
-      expect(combo.subAttacks[1].detail).toMatch(/grapple/i);
+      expect(tb(ec, 'Unarmed Strike')).toBeTruthy();
+      expect(tb(ec, 'Improvised Weapon')).toBeTruthy();
     });
 
-    it('uses an equipped Improvised Weapon as the Action half of the grapple combo', () => {
+    it('gives each combo its own Action opener and the shared Grapple bonus', () => {
+      const args = fighterArgs(5, '5e');
+      args.characterData = { feats: [TAVERN_BRAWLER] };
+      const ec = buildActionEconomy(args);
+      for (const opener of ['Unarmed Strike', 'Improvised Weapon']) {
+        const combo = tb(ec, opener);
+        expect(combo.source).toBe('Feat');
+        expect(combo.cost).toBe('action + bonus action');
+        expect(combo.subAttacks.map((x) => x.label)).toEqual(['Action', 'Bonus']);
+        expect(combo.subAttacks[0].name).toBe(opener);
+        expect(combo.subAttacks[0].damage).toMatch(/1d4/);
+        expect(combo.subAttacks[1].name).toBe('Grapple');
+        expect(combo.subAttacks[1].detail).toMatch(/grapple/i);
+      }
+    });
+
+    // The feat means you can pick up a chair, so the attack comes from the FEAT — requiring an
+    // "Improvised Weapon" inventory row first would ask the player to inventory the furniture.
+    it('offers an Improvised Weapon attack in the Actions tab, owning no such item', () => {
+      const args = fighterArgs(5, '5e');
+      args.characterData = { feats: [TAVERN_BRAWLER] };
+      const imp = buildActionEconomy(args).action.find((e) => e.name === 'Improvised Weapon');
+      expect(imp).toBeTruthy();
+      expect(imp.source).toBe('Weapon');
+      // STR 16 (+3) + PB 3 = +6 to hit, 1d4 + 3 damage; proficient via the feat.
+      expect(imp.detail).toMatch(/\+6/);
+      expect(imp.detail).toMatch(/1d4/);
+      expect(imp.detail).not.toMatch(/not proficient/);
+    });
+
+    it('offers no improvised attack to a character without the proficiency', () => {
+      const ec = buildActionEconomy(fighterArgs(5, '5e'));
+      expect(ec.action.find((e) => e.name === 'Improvised Weapon')).toBeFalsy();
+    });
+
+    it('uses an EQUIPPED Improvised Weapon instead of the generic one, and does not double it', () => {
       const args = fighterArgs(5, '5e');
       const improvised = {
-        uid: 'iw', name: 'Improvised Weapon', category: 'weapons', equipped: true,
+        uid: 'iw', name: 'Improvised Weapon', category: 'weapons', equipped: true, hand: 'main',
         weapon_category: 'Improvised', weapon_type: 'Melee', damage: '1d4', damage_type: 'bludgeoning',
       };
       args.inventory = [improvised];
       args.attacks = [{ uid: 'iw', name: 'Improvised Weapon', toHit: '+6', damage: '1d4 + 3 bludgeoning', proficient: true }];
       args.characterData = { feats: [TAVERN_BRAWLER] };
-      const combo = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Tavern Brawler');
+      const ec = buildActionEconomy(args);
+      // Exactly one Improvised Weapon card — the item's own, not the item's plus the feat's.
+      expect(ec.action.filter((e) => e.name === 'Improvised Weapon')).toHaveLength(1);
+      const combo = tb(ec, 'Improvised Weapon');
       expect(combo.subAttacks[0].name).toBe('Improvised Weapon');
       expect(combo.subAttacks[0].toHit).toBe('+6');
       expect(combo.subAttacks[1].name).toBe('Grapple');
@@ -735,27 +772,77 @@ describe('buildActionEconomy — Fighter', () => {
       expect([...ec.action, ...ec.bonus].some((e) => e.source === 'Feat')).toBe(false);
     });
 
-    it('hides the Tavern Brawler combo when both hands are full and no improvised weapon is equipped', () => {
+    // Both hands full is a state the player changes on this turn (dropping a shield is free), so
+    // it is ANNOTATED, not used to hide the cards. Hiding them made the feat look unimplemented
+    // to a Fighter holding a weapon and a shield — which is most of them. Found in QA.
+    const bothHandsFull = () => {
       const args = fighterArgs(14, '5e');
       args.inventory = [
         { uid: 'sc', name: 'Scimitar', category: 'weapons', equipped: true, hand: 'main', weapon_type: 'Melee', properties: '["Finesse", "Light"]' },
         { uid: 'hc', name: 'Crossbow, Hand', category: 'weapons', equipped: true, hand: 'off', weapon_type: 'Ranged', properties: '["Light", "Ammunition"]' },
       ];
       args.characterData = { feats: [TAVERN_BRAWLER] };
-      const ec = buildActionEconomy(args);
-      expect(ec['action+bonus'].find((e) => e.name === 'Tavern Brawler')).toBeFalsy();
+      return buildActionEconomy(args);
+    };
+
+    it('still shows both combos with both hands full, warning that the grapple needs one', () => {
+      const ec = bothHandsFull();
+      for (const opener of ['Unarmed Strike', 'Improvised Weapon']) {
+        expect(tb(ec, opener)).toBeTruthy();
+        expect(tb(ec, opener).warning).toMatch(/free hand/i);
+      }
+      // Still never a standalone bonus grapple — the combos own it.
       expect(ec.bonus.find((e) => /grapple/i.test(e.name))).toBeFalsy();
     });
 
-    it('shows the Tavern Brawler combo when a hand is free (Unarmed Strike lead)', () => {
+    it('still offers the improvised attack with both hands full, warning about the hand', () => {
+      const imp = bothHandsFull().action.find((e) => e.name === 'Improvised Weapon');
+      expect(imp).toBeTruthy();
+      expect(imp.warning).toMatch(/free hand/i);
+    });
+
+    it('carries no hand warning at all once a hand is free', () => {
       const args = fighterArgs(14, '5e');
       args.inventory = [
         { uid: 'sc', name: 'Scimitar', category: 'weapons', equipped: true, hand: 'main', weapon_type: 'Melee', properties: '["Finesse", "Light"]' },
       ]; // off hand free
-      args.characterData = { feats: [TAVERN_BRAWLER] };
-      const combo = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Tavern Brawler');
-      expect(combo).toBeTruthy();
-      expect(combo.subAttacks[0].name).toBe('Unarmed Strike');
+      const ec = buildActionEconomy({ ...args, characterData: { feats: [TAVERN_BRAWLER] } });
+      expect(tb(ec, 'Unarmed Strike').warning).toBeNull();
+      expect(ec.action.find((e) => e.name === 'Improvised Weapon').warning).toBeNull();
+    });
+
+    // An unarmed strike is a punch, kick or head-butt — the Actions tab already shows one for a
+    // character holding a weapon and a shield, so the combo must not disagree with that card.
+    it('leads the unarmed combo whatever is in the hands', () => {
+      expect(tb(bothHandsFull(), 'Unarmed Strike').subAttacks[0].name).toBe('Unarmed Strike');
+    });
+
+    it('shows both combos when a hand is free', () => {
+      const args = fighterArgs(14, '5e');
+      args.inventory = [
+        { uid: 'sc', name: 'Scimitar', category: 'weapons', equipped: true, hand: 'main', weapon_type: 'Melee', properties: '["Finesse", "Light"]' },
+      ]; // off hand free
+      const ec = buildActionEconomy({ ...args, characterData: { feats: [TAVERN_BRAWLER] } });
+      expect(tb(ec, 'Unarmed Strike').subAttacks[0].name).toBe('Unarmed Strike');
+      expect(tb(ec, 'Improvised Weapon').subAttacks[0].name).toBe('Improvised Weapon');
+    });
+
+    // The 2024 feat drops the grapple clause entirely, so there is no combo to build — but the
+    // improvised-weapon proficiency, and so its attack card, survives the revision.
+    it('gives the 2024 feat the improvised attack but no combo', () => {
+      const args = fighterArgs(5, '5.5e');
+      args.characterData = {
+        feats: [{
+          id: 14, name: 'Tavern Brawler', level: 4,
+          effects: [
+            { kind: 'proficiency', prof_type: 'weapon', items: ['Improvised weapons'] },
+            { kind: 'attack_mod', target: 'unarmed', dice: '1d4' },
+          ],
+        }],
+      };
+      const ec = buildActionEconomy(args);
+      expect(ec.action.find((e) => e.name === 'Improvised Weapon')).toBeTruthy();
+      expect(ec['action+bonus'].filter((e) => /^Tavern Brawler/.test(e.name))).toEqual([]);
     });
 
     const POLEARM_MASTER = {
@@ -2478,24 +2565,28 @@ describe('buildActionEconomy — Rune Knight (Fighter subclass)', () => {
     const riderOn = (ec, key) => (ec.action.find((e) => e.key === key)?.riders || [])
       .find((r) => r.source === "Giant's Might");
 
-    it('attaches to a weapon attack', () => {
-      expect(riderOn(rk(3), 'weapon:w1:0')).toBeTruthy();
+    const ON = { active_effects: ['giants_might'] };
+
+    it('attaches to a weapon attack while the effect is switched on', () => {
+      expect(riderOn(rk(3, ON), 'weapon:w1:0')).toBeTruthy();
     });
 
-    it('names the condition while the effect is switched OFF', () => {
-      // A bare "+1d6" would be false most of the time — the same reason Sneak Attack and Divine
-      // Smite are riders rather than part of the damage string.
-      expect(riderOn(rk(3), 'weapon:w1:0').text).toMatch(/While Giant's Might is active/);
+    // A rider is rules text you read mid-swing. Carrying Giant's Might's paragraph on every
+    // attack card while it is switched OFF put a feature you are not using on the surface a
+    // player scans fastest, so the block now appears only once the effect is running.
+    it('is absent entirely while the effect is switched off', () => {
+      expect(riderOn(rk(3), 'weapon:w1:0')).toBeUndefined();
+      expect(rk(3).action.find((e) => e.key === 'weapon:w1:0').damageAdditions).toBeUndefined();
     });
 
     it('states the die plainly once the effect is switched ON', () => {
-      const r = riderOn(rk(10, { active_effects: ['giants_might'] }), 'weapon:w1:0');
+      const r = riderOn(rk(10, ON), 'weapon:w1:0');
       expect(r.text).not.toMatch(/While Giant's Might is active/);
       expect(r.text).toMatch(/extra 1d8 damage/);
     });
 
     it('reaches an UNARMED strike too — RAW is "a weapon or an unarmed strike"', () => {
-      const bare = buildActionEconomy(rkArgs(3, {}, '5e', { inventory: [], attacks: [] }));
+      const bare = buildActionEconomy(rkArgs(3, ON, '5e', { inventory: [], attacks: [] }));
       const unarmed = bare.action.find((e) => e.source === 'Weapon');
       expect(unarmed.name).toBe('Unarmed Strike');
       expect((unarmed.riders || []).some((r) => r.source === "Giant's Might")).toBe(true);
@@ -2622,6 +2713,20 @@ describe('buildActionEconomy — Channel Rune (Rune Knight)', () => {
     expect((attack.attachedFeatures ?? []).some((f) => f.name === 'Fire Rune')).toBe(false);
   });
 
+  // Frost's Channel Rune RUNS for 10 minutes and changes numbers the sheet already shows, so
+  // its card has to switch something on — a bare Use counter left the +2 living nowhere.
+  it('makes the Frost card an ACTIVE EFFECT, so it gets the toggle instead of a bare counter', () => {
+    const frost = channelCards(ae(7, { rune_items: { 'Frost Rune': 'w1' } }))[0];
+    expect(frost.name).toBe('Channel Rune: Frost');
+    expect(frost.activeEffect).toBe('channel_rune_frost');
+    expect(frost.resourceKey).toBe('channel_rune_frost_used');
+  });
+
+  it('leaves the one-shot runes without an effect key', () => {
+    const cloud = channelCards(ae(7, { rune_items: { 'Cloud Rune': 'w1' } }))[0];
+    expect(cloud.activeEffect).toBeNull();
+  });
+
   it('shows a card per carved rune when several are live', () => {
     const buckets = ae(7, { rune_items: { 'Cloud Rune': 'w1', 'Frost Rune': 'w1' } });
     expect(channelCards(buckets).map((c) => c.name).sort())
@@ -2645,24 +2750,24 @@ describe('combineAttackDamage', () => {
   });
 
   it('appends a typed term rather than folding it into the weapon die', () => {
-    const t = combineAttackDamage('1d8 + 3 Piercing', [{ dice: '2d6', type: 'fire', source: 'Fire Rune' }]);
-    expect(t.text).toBe('1d8 + 3 Piercing + 2d6 fire');
+    const t = combineAttackDamage('1d8 + 3 Piercing', [{ dice: '1d8', type: 'force', source: 'Psionic Strike' }]);
+    expect(t.text).toBe('1d8 + 3 Piercing + 1d8 force');
   });
 
   it('keeps damage types separate — they are rolled and resisted separately', () => {
     const t = combineAttackDamage('1d8 + 3 Piercing', [
       { dice: '1d6', type: 'Piercing', source: "Giant's Might" },
-      { dice: '2d6', type: 'fire', source: 'Fire Rune' },
+      { dice: '1d8', type: 'force', source: 'Psionic Strike' },
     ]);
     // 1d8 and 1d6 are both piercing but cannot be summed into one die either.
-    expect(t.text).toBe('1d8 + 3 Piercing + 1d6 Piercing + 2d6 fire');
+    expect(t.text).toBe('1d8 + 3 Piercing + 1d6 Piercing + 1d8 force');
   });
 
   it('labels every term with its source, and the weapon term with none', () => {
-    const t = combineAttackDamage('1d8 + 3 Piercing', [{ dice: '2d6', type: 'fire', source: 'Fire Rune' }]);
+    const t = combineAttackDamage('1d8 + 3 Piercing', [{ dice: '1d8', type: 'force', source: 'Psionic Strike' }]);
     expect(t.parts).toEqual([
       { text: '1d8 + 3 Piercing', source: null },
-      { text: '2d6 fire', source: 'Fire Rune' },
+      { text: '1d8 force', source: 'Psionic Strike' },
     ]);
   });
 });
@@ -2702,8 +2807,18 @@ describe('“on a hit” damage totals on the attack card', () => {
   const fireBlock = (buckets) =>
     (row(buckets).attachedFeatures ?? []).find((f) => f.name === 'Fire Rune');
 
-  it('adds the rune damage to the weapon damage', () => {
-    expect(totalText(ae())).toBe('1d8 + 3 Piercing + 2d6 fire');
+  // The Fire Rune's 2d6 is NOT a property of the weapon: it lands only on the swing where you
+  // spend a Channel Rune use to summon the shackles, which is decided after the hit and never
+  // recorded. Totalling it claimed damage the character does not always deal.
+  it("does not add the Fire Rune's 2d6 to the total, even with the rune carved and equipped", () => {
+    expect(fireBlock(ae())).toBeTruthy();
+    expect(row(ae()).damageAdditions).toBeUndefined();
+    expect(totalText(ae())).toBeUndefined();
+  });
+
+  it('still states the fire damage in the rune note, beside the Use control that invokes it', () => {
+    expect(fireBlock(ae()).note).toMatch(/invoke this rune/i);
+    expect(fireBlock(ae()).note).toMatch(/extra 2d6 fire damage/i);
   });
 
   it('leaves the printed damage untouched — it must stay true for an ordinary swing', () => {
@@ -2712,25 +2827,25 @@ describe('“on a hit” damage totals on the attack card', () => {
 
   it("folds in Giant's Might only while the effect is switched ON", () => {
     expect(totalText(ae({ active: ['giants_might'] })))
-      .toBe('1d8 + 3 Piercing + 1d6 Piercing + 2d6 fire');
+      .toBe('1d8 + 3 Piercing + 1d6 Piercing');
   });
 
   it("omits Giant's Might while it is off, even though the character has the feature", () => {
-    expect(totalText(ae({ active: [] }))).toBe('1d8 + 3 Piercing + 2d6 fire');
+    expect(totalText(ae({ active: [] }))).toBeUndefined();
   });
 
   it("scales Giant's Might with level (Great Stature at 10)", () => {
     expect(totalText(ae({ level: 10, active: ['giants_might'] })))
-      .toBe('1d8 + 3 Piercing + 1d8 Piercing + 2d6 fire');
+      .toBe('1d8 + 3 Piercing + 1d8 Piercing');
   });
 
   it('names each source so a grown total does not look like a bug', () => {
     const r = row(ae({ active: ['giants_might'] }));
     const parts = combineAttackDamage(r.damage, r.damageAdditions).parts;
-    expect(parts.map((p) => p.source)).toEqual([null, "Giant's Might", 'Fire Rune']);
+    expect(parts.map((p) => p.source)).toEqual([null, "Giant's Might"]);
   });
 
-  it('gives no total when the rune is not carved — nothing adds damage', () => {
+  it('gives no attached block at all when the rune is not carved', () => {
     expect(fireBlock(ae({ carved: false }))).toBeUndefined();
     expect(totalText(ae({ carved: false }))).toBeUndefined();
   });

@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   ACTIVE_EFFECTS, getActiveEffectDefs, activeEffectKeys, isEffectActive,
   toggleEffectPatch, activeEffectGrants, mightDie, sizeAt,
+  activeEffectCheckParts, activeEffectSaveParts, FROST_RUNE_BONUS,
+  activeEffectCheckSources, activeEffectSaveSources,
+  activeEffectCheckBonus, activeEffectSaveBonus,
 } from '@/characters/components/effects/activeEffects';
 
 const runeKnight = (level, extra = {}) => ({
@@ -121,5 +124,138 @@ describe('activeEffects', () => {
       expect(typeof e.summary).toBe('function');
       expect(e.grants(20)).toBeTruthy();
     }
+  });
+
+  // The SECOND effect, and the one that made `grants` carry a NUMBER. It is also the first
+  // gated on equipment: a rune grants nothing until it is carved onto something you hold.
+  describe('Channel Rune: Frost', () => {
+    const axe = { uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' };
+    const stowed = { uid: 'w2', category: 'weapons', name: 'Longbow', equipped: false };
+    const ctx = ({ carvedOn = 'w1', active = true, level = 3 } = {}) => runeKnight(level, {
+      characterData: {
+        subclass: 'Rune Knight',
+        runes: ['Frost Rune'],
+        rune_items: carvedOn ? { 'Frost Rune': carvedOn } : {},
+        inventory: [axe, stowed],
+        active_effects: active ? ['channel_rune_frost'] : [],
+      },
+    });
+
+    it('is offered once the rune is carved onto an equipped object', () => {
+      expect(getActiveEffectDefs(ctx()).map((e) => e.key)).toContain('channel_rune_frost');
+    });
+
+    it('is not offered while the rune is uncarved', () => {
+      expect(getActiveEffectDefs(ctx({ carvedOn: null })).map((e) => e.key))
+        .not.toContain('channel_rune_frost');
+    });
+
+    it('is not offered while the bearing item is stowed — carving alone grants nothing', () => {
+      expect(getActiveEffectDefs(ctx({ carvedOn: 'w2' })).map((e) => e.key))
+        .not.toContain('channel_rune_frost');
+    });
+
+    it('adds its bonus to Strength and Constitution checks while running', () => {
+      expect(activeEffectCheckParts('strength', ctx()))
+        .toEqual([{ key: 'effect:channel_rune_frost', label: 'Channel Rune: Frost', value: FROST_RUNE_BONUS }]);
+      expect(activeEffectCheckParts('constitution', ctx()).map((p) => p.value))
+        .toEqual([FROST_RUNE_BONUS]);
+    });
+
+    it('adds the same bonus to Strength and Constitution SAVES', () => {
+      expect(activeEffectSaveParts('strength', ctx()).map((p) => p.value)).toEqual([FROST_RUNE_BONUS]);
+      expect(activeEffectSaveParts('constitution', ctx()).map((p) => p.value)).toEqual([FROST_RUNE_BONUS]);
+    });
+
+    it('touches no other ability', () => {
+      for (const ability of ['dexterity', 'intelligence', 'wisdom', 'charisma']) {
+        expect(activeEffectCheckParts(ability, ctx())).toEqual([]);
+        expect(activeEffectSaveParts(ability, ctx())).toEqual([]);
+      }
+    });
+
+    it('adds nothing while it is switched off, though the rune is carved and equipped', () => {
+      expect(activeEffectCheckParts('strength', ctx({ active: false }))).toEqual([]);
+      expect(activeEffectSaveParts('strength', ctx({ active: false }))).toEqual([]);
+    });
+
+    // The key can linger in active_effects after the axe is stowed. The effect simply stops
+    // resolving, which is the honest answer for a rune you are no longer carrying.
+    it('stops resolving when the bearing item is unequipped mid-effect', () => {
+      expect(activeEffectCheckParts('strength', ctx({ carvedOn: 'w2' }))).toEqual([]);
+    });
+
+    it('names itself in the grants sources, alongside another running effect', () => {
+      const both = runeKnight(10, {
+        characterData: {
+          subclass: 'Rune Knight',
+          runes: ['Frost Rune'],
+          rune_items: { 'Frost Rune': 'w1' },
+          inventory: [axe],
+          active_effects: ['giants_might', 'channel_rune_frost'],
+        },
+      });
+      const g = activeEffectGrants(both);
+      expect(g.sources).toEqual(["Giant's Might", 'Channel Rune: Frost']);
+      expect(g.checkBonuses.strength).toBe(FROST_RUNE_BONUS);
+      expect(g.saveBonuses.constitution).toBe(FROST_RUNE_BONUS);
+      // Giant's Might is untouched by the new fields.
+      expect(g.size).toBe('Large');
+    });
+
+    it('leaves the bonus maps empty when nothing grants one', () => {
+      const g = activeEffectGrants(runeKnight(10, {
+        characterData: { active_effects: ['giants_might'] },
+      }));
+      expect(g.checkBonuses).toEqual({});
+      expect(g.saveBonuses).toEqual({});
+    });
+  });
+});
+
+// The grouped-by-source view, for a legend or a summary line — the per-ability `…Parts` helpers
+// answer "what does THIS row add up to", which is a different question.
+describe('bonus sources and totals', () => {
+  const axe = { uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' };
+  const frost = (active = true) => ({
+    charClass: 'Fighter', subclass: 'Rune Knight', level: 7, edition: '5e',
+    characterData: {
+      subclass: 'Rune Knight',
+      runes: ['Frost Rune'],
+      rune_items: { 'Frost Rune': 'w1' },
+      inventory: [axe],
+      active_effects: active ? ['channel_rune_frost'] : [],
+    },
+  });
+
+  it('groups a running effect by source, with the abilities it covers', () => {
+    expect(activeEffectCheckSources(frost())).toEqual([{
+      key: 'channel_rune_frost',
+      source: 'Channel Rune: Frost',
+      amount: FROST_RUNE_BONUS,
+      abilities: ['strength', 'constitution'],
+    }]);
+    expect(activeEffectSaveSources(frost()).map((s) => s.source)).toEqual(['Channel Rune: Frost']);
+  });
+
+  it('lists nothing while the effect is off', () => {
+    expect(activeEffectCheckSources(frost(false))).toEqual([]);
+    expect(activeEffectSaveSources(frost(false))).toEqual([]);
+  });
+
+  it('totals the bonus per ability — the number a row tag shows', () => {
+    expect(activeEffectCheckBonus('strength', frost())).toBe(FROST_RUNE_BONUS);
+    expect(activeEffectSaveBonus('constitution', frost())).toBe(FROST_RUNE_BONUS);
+    expect(activeEffectCheckBonus('dexterity', frost())).toBe(0);
+    expect(activeEffectSaveBonus('strength', frost(false))).toBe(0);
+  });
+
+  it('lists nothing for an effect that grants no flat bonus at all', () => {
+    const mightOnly = {
+      charClass: 'Fighter', subclass: 'Rune Knight', level: 10, edition: '5e',
+      characterData: { subclass: 'Rune Knight', active_effects: ['giants_might'] },
+    };
+    expect(activeEffectCheckSources(mightOnly)).toEqual([]);
+    expect(activeEffectSaveBonus('strength', mightOnly)).toBe(0);
   });
 });

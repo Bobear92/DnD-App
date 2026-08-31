@@ -12,8 +12,9 @@
  * and adding a source is a data row rather than a change to the panel.
  *
  * ── Why sources carry their own predicate ────────────────────────────────────────────────
- * The two sources gate on genuinely different things — Remarkable Athlete on class/subclass/
- * level/edition, a rune on whether it is carved onto an EQUIPPED item — so a purely
+ * The sources gate on genuinely different things — Remarkable Athlete on class/subclass/
+ * level/edition, a rune on whether it is carved onto an EQUIPPED item, an active effect on
+ * whether the player has switched it on — so a purely
  * declarative `{charClass, subclass, minLevel}` match (the saveFeatures shape) could not
  * express the second. Each entry therefore supplies `resolve(ctx)` returning the skills it
  * currently grants. A future source (a race trait, a feat) is still one entry.
@@ -24,6 +25,8 @@
 
 import { remarkableAthlete } from '@/characters/components/combat/combatBonuses';
 import { activeRunes } from '@/characters/components/inventory/runeCarving';
+import { getActiveEffectDefs, isEffectActive } from '@/characters/components/effects/activeEffects';
+import { skillsForAbility } from '@/characters/components/skills/skillMath';
 
 /**
  * @typedef {Object} SkillAdvantageSource
@@ -44,6 +47,23 @@ export const SKILL_ADVANTAGE_SOURCES = [
         source: 'Remarkable Athlete',
       }));
     },
+  },
+  {
+    key: 'active-effects',
+    // An effect the player has switched ON (Giant's Might). Its `advantageAbilities` names an
+    // ABILITY — RAW is "advantage on Strength checks", the whole ability, not one skill — so it
+    // fans out to every skill keyed off that ability. The gate is the effect actually running:
+    // a feature you have not switched on grants nothing, and a tag shown while it is off would
+    // claim advantage the character does not have.
+    resolve: ({ characterData, charClass, subclass, level, edition }) =>
+      getActiveEffectDefs({ charClass, subclass, level, edition })
+        .filter((e) => isEffectActive(characterData, e.key))
+        .flatMap((e) => (e.grants(Number(level) || 1)?.advantageAbilities ?? [])
+          .flatMap((ability) => skillsForAbility(ability).map((skill) => ({
+            skill,
+            source: e.label,
+            note: 'Active now',
+          })))),
   },
   {
     key: 'rune-carving',

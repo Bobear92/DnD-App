@@ -36,10 +36,18 @@ import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
 import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '@/characters/components/feats/featEffects';
 import { computePassiveScores } from '@/characters/components/skills/passiveSkills';
 import { getSkillAdvantageNames, skillAdvantageSourcesFor, skillAdvantageLegend } from '@/characters/components/skills/skillAdvantage';
-import { skillBreakdown, saveBreakdown } from '@/characters/components/skills/skillMath';
+import { skillBreakdown, saveBreakdown, SKILL_MAP, formatBonus } from '@/characters/components/skills/skillMath';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
 import SaveFeaturesPanel from '@/characters/components/skills/SaveFeaturesPanel';
+import { saveAdvantageSourcesFor } from '@/characters/components/skills/saveFeatures';
+import {
+  activeEffectCheckParts, activeEffectSaveParts,
+  activeEffectCheckBonus, activeEffectSaveBonus,
+  activeEffectCheckSources, activeEffectSaveSources,
+} from '@/characters/components/effects/activeEffects';
 import DefensesPanel from '@/characters/components/defenses/DefensesPanel';
+import SensesPanel from '@/characters/components/senses/SensesPanel';
+import { hasSenses } from '@/characters/components/senses/senses';
 import { hasDefenses } from '@/characters/components/defenses/defenses';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { getCasterDescriptor } from '@/characters/components/classData/casterDescriptors';
@@ -49,7 +57,6 @@ import { initiativeBreakdown, initiativeFeatNote } from '@/characters/components
 import { draconicLabel } from '@/characters/components/subclass/draconicData';
 import SpellLevelTabs from '@/characters/components/spells/SpellLevelTabs';
 import { SpellFocusProvider, useSpellFocusController } from '@/characters/components/spells/SpellFocusContext';
-import ActiveEffectsBanner from '@/characters/components/effects/ActiveEffectsBanner';
 import FeatSpellsSection from '@/characters/components/feats/FeatSpellsSection';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 import { getRacialSpellResources } from '@/characters/components/race/racialRestResources';
@@ -97,6 +104,13 @@ const ABILITY_LABELS = [
   { key: 'charisma', label: 'Charisma', abbrev: 'CHA', save: 'cha_save_prof' },
 ];
 
+/** "STR & CON" / "STR, CON & DEX" — the abilities a note applies to, in grid order. */
+function abilityListLabel(abilities = []) {
+  const abbrevs = ABILITY_LABELS.filter((a) => abilities.includes(a.key)).map((a) => a.abbrev);
+  if (abbrevs.length <= 1) return abbrevs[0] ?? '';
+  return `${abbrevs.slice(0, -1).join(', ')} & ${abbrevs[abbrevs.length - 1]}`;
+}
+
 const CLASS_SAVE_PROFS = {
   Barbarian: ['str_save_prof', 'con_save_prof'],
   Bard:      ['dex_save_prof', 'cha_save_prof'],
@@ -112,26 +126,6 @@ const CLASS_SAVE_PROFS = {
   Wizard:    ['int_save_prof', 'wis_save_prof'],
 };
 
-const SKILL_MAP = [
-  { skill: 'Acrobatics', ability: 'dexterity' },
-  { skill: 'Animal Handling', ability: 'wisdom' },
-  { skill: 'Arcana', ability: 'intelligence' },
-  { skill: 'Athletics', ability: 'strength' },
-  { skill: 'Deception', ability: 'charisma' },
-  { skill: 'History', ability: 'intelligence' },
-  { skill: 'Insight', ability: 'wisdom' },
-  { skill: 'Intimidation', ability: 'charisma' },
-  { skill: 'Investigation', ability: 'intelligence' },
-  { skill: 'Medicine', ability: 'wisdom' },
-  { skill: 'Nature', ability: 'intelligence' },
-  { skill: 'Perception', ability: 'wisdom' },
-  { skill: 'Performance', ability: 'charisma' },
-  { skill: 'Persuasion', ability: 'charisma' },
-  { skill: 'Religion', ability: 'intelligence' },
-  { skill: 'Sleight of Hand', ability: 'dexterity' },
-  { skill: 'Stealth', ability: 'dexterity' },
-  { skill: 'Survival', ability: 'wisdom' },
-];
 
 const XP_THRESHOLDS = [0, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000,
   64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
@@ -603,6 +597,17 @@ export default function CharacterDetail() {
   const edition = campaign?.edition || '5e';
   const ClassSheet = (edition === '5.5e' ? CLASS_SHEETS_2024 : CLASS_SHEETS_5E)[character.char_class];
 
+  // Context for the save-affecting features (the panel under the grid AND the per-row advantage
+  // tag). It reads the DRAFT character_data, so switching Giant's Might on updates the grid
+  // without a reload — the same source the skill-advantage tags read.
+  const saveAdvCtx = {
+    charClass: character.char_class,
+    subclass: classSection.draft?.subclass ?? character?.character_data?.subclass,
+    level: identity.draft?.level ?? character.level,
+    edition,
+    characterData: classSection.draft ?? character?.character_data ?? {},
+  };
+
   const raceGrantedCantrips = computeRaceGrantedCantrips(character);
   // Leveled racial spells (Infernal Legacy's Hellish Rebuke, Drow Magic's Faerie Fire …) — each is
   // a once-per-rest use, so it comes from the same table that drives the Racial Features tracker.
@@ -766,22 +771,6 @@ export default function CharacterDetail() {
             onAddXp={handleAddXp}
             onMilestoneLevelUp={handleMilestoneLevelUp}
             onOpenWizard={() => setLevelUpWizardOpen(true)}
-          />
-        )}
-
-        {/* Effects the character has switched ON (Giant's Might). Deliberately ABOVE the tabs:
-            one effect changes numbers on several of them, so "am I transformed right now?" must
-            be answerable from wherever you happen to be looking. Wired centrally rather than
-            through a sheet slot, so hand-written sheets get it too (the Defenses-card shape). */}
-        {character && classSection.draft !== null && (
-          <ActiveEffectsBanner
-            characterData={classSection.draft}
-            charClass={character.char_class}
-            subclass={classSection.draft.subclass}
-            level={identity.draft?.level ?? character.level}
-            edition={edition}
-            onChange={autoSaveClassPatch}
-            readOnly={!showEditable}
           />
         )}
 
@@ -1585,12 +1574,26 @@ export default function CharacterDetail() {
                         const featSaves = getFeatSaveProficiencies(classSection.draft?.feats ?? character.character_data?.feats ?? []);
                         const isProficient = (savingThrows.draft?.[save] ?? false) || featSaves.includes(key);
                         const armorDisadvantage = Boolean(nonProfArmor) && (key === 'strength' || key === 'dexterity');
+                        // A feature can make you roll this save twice without changing its number
+                        // (Giant's Might while it is switched on). Tagged on the row like the skill
+                        // grid's, so the advantage is read off the save itself rather than inferred
+                        // from the feature list below.
+                        const advSources = saveAdvantageSourcesFor(key, saveAdvCtx);
+                        const effectSaveBonus = activeEffectSaveBonus(key, saveAdvCtx);
                         const breakdown = saveBreakdown({
                           ability: key,
                           abilityScore: identity.draft[key],
                           pb,
                           isProficient,
-                          notes: [armorDisadvantage && `Disadvantage — wearing ${nonProfArmor.name} without proficiency`],
+                          // A running effect that adds a flat bonus to this ability's saves
+                          // (Channel Rune: Frost). The displayed number IS breakdown.total, so
+                          // the save goes up the moment the effect is switched on.
+                          extras: activeEffectSaveParts(key, saveAdvCtx),
+                          notes: [
+                            advSources.length > 0
+                              && `Advantage — ${advSources.map((f) => f.name).join(', ')}`,
+                            armorDisadvantage && `Disadvantage — wearing ${nonProfArmor.name} without proficiency`,
+                          ],
                         });
                         return (
                           <div key={key} data-testid={`save-${key}`} className="rounded border px-2 py-1.5 text-sm">
@@ -1608,11 +1611,22 @@ export default function CharacterDetail() {
                                 <div className={cn('h-3.5 w-3.5 rounded-sm border flex-shrink-0', isProficient ? 'bg-primary border-primary' : 'bg-muted border-border')} />
                               )}
                               <span className="flex-1 text-xs">{abbrev}</span>
+                              {advSources.length > 0 && (
+                                <span
+                                  className="text-[9px] font-semibold text-teal-600 uppercase"
+                                  data-testid={`save-advantage-${key}`}
+                                >
+                                  adv
+                                </span>
+                              )}
+                              {/* A running effect is marked by COLOURING THE TOTAL, never by a
+                                  separate "+2" beside it — the bonus is already inside the
+                                  number, and two numbers on one row read as "+7 and +2 more". */}
                               <BreakdownValue
                                 testId={`save-bonus-${key}`}
                                 label={`the ${abbrev} saving throw`}
                                 breakdown={breakdown}
-                                className="font-medium text-xs"
+                                className={cn('font-medium text-xs', effectSaveBonus > 0 && 'text-indigo-400')}
                                 expanded={openStat === `save:${key}`}
                                 onToggle={() => setOpenStat(openStat === `save:${key}` ? null : `save:${key}`)}
                               />
@@ -1624,6 +1638,18 @@ export default function CharacterDetail() {
                         );
                       })}
                     </div>
+                    {/* Names the running effect behind the indigo tags. The saves grid has no
+                        legend of its own, and a bonus a player cannot attribute reads as a bug
+                        in the modifier. */}
+                    {activeEffectSaveSources(saveAdvCtx).map((src) => (
+                      <p
+                        key={src.key}
+                        className="text-[10px] text-indigo-400 mt-1"
+                        data-testid={`saves-effect-note-${src.key}`}
+                      >
+                        {abilityListLabel(src.abilities)} saving throws include {formatBonus(src.amount)} from {src.source}.
+                      </p>
+                    ))}
                     {nonProfArmor && (
                       <p className="text-[10px] text-amber-600 mt-1" data-testid="saves-armor-warning">
                         STR &amp; DEX saving throws at disadvantage — wearing {nonProfArmor.name} without proficiency.
@@ -1815,6 +1841,30 @@ export default function CharacterDetail() {
                 return (
                   <SectionCard title="Defenses" canEdit={false}>
                     <DefensesPanel {...defenseCtx} />
+                  </SectionCard>
+                );
+              })()}
+
+              {/* What the character can see, and how far. Wired CENTRALLY like the Defenses
+                  card (not through a sheet slot), so hand-written sheets get it too. Every
+                  darkvision source in the app — the racial trait, the Drow's Superior
+                  Darkvision, the Rune Knight's Stone Rune — was prose inside a feature
+                  description and reached no surface at all until QA asked where the sheet
+                  states the range. Gated so ordinary vision costs no card. */}
+              {statsSubTab === 'hp' && (() => {
+                const senseCtx = {
+                  characterData: {
+                    ...(character?.character_data ?? {}),
+                    ...(classSection.draft ?? {}),
+                  },
+                  race: identity.draft?.race ?? character.race,
+                  subrace: character?.character_data?.subrace,
+                  level: identity.draft?.level ?? character.level,
+                };
+                if (!hasSenses(senseCtx)) return null;
+                return (
+                  <SectionCard title="Senses" canEdit={false}>
+                    <SensesPanel {...senseCtx} />
                   </SectionCard>
                 );
               })()}
@@ -2365,6 +2415,12 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
   if (raBonus > 0) legendParts.push('Teal = ½ prof (Remarkable Athlete)');
   const advLegend = skillAdvantageLegend(skillAdvCtx);
   if (advLegend) legendParts.push(advLegend);
+  // A running effect that adds a flat bonus to an ability's checks (Channel Rune: Frost). Named
+  // in the legend because the tag is a bare number — the reader has to be able to attribute it.
+  const effectCheckSources = activeEffectCheckSources(skillAdvCtx);
+  if (effectCheckSources.length > 0) {
+    legendParts.push(`Indigo total = includes ${effectCheckSources.map((s) => s.source).join(', ')}`);
+  }
   // Worn non-proficient armor: disadvantage on every STR/DEX ability check.
   if (nonProfArmorName) legendParts.push(`"dis" = disadvantage (wearing ${nonProfArmorName} without proficiency)`);
   // Bulky armor: disadvantage on Stealth specifically (unless a feat cancels it).
@@ -2389,6 +2445,7 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
       ability,
       isProf,
       isExpert,
+      effectBonus: activeEffectCheckBonus(ability, skillAdvCtx),
       isFromBg: bgGranted.includes(skill),
       isFromRace: raceGranted.includes(skill),
       isFromFeat: featGranted.includes(skill),
@@ -2397,6 +2454,10 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
       armorDisadvantage,
       breakdown: skillBreakdown({
         skill,
+        // A running effect that adds a flat bonus to this ability's CHECKS raises every skill
+        // that uses the ability (Channel Rune: Frost → Strength → Athletics). The displayed
+        // bonus IS breakdown.total, so switching the effect on moves the number.
+        extras: activeEffectCheckParts(ability, skillAdvCtx),
         ability,
         abilityScore: identityDraft[ability],
         pb,
@@ -2446,7 +2507,10 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
 // expands the arithmetic. Module scope — a component declared inside another component
 // remounts its subtree on every parent render and would collapse this open row.
 function SkillRow({ row, expanded, onToggle }) {
-  const { skill, isProf, isExpert, isFromBg, isFromRace, isFromFeat, isFromRA, raAdvantage, armorDisadvantage, breakdown } = row;
+  const {
+    skill, isProf, isExpert, isFromBg, isFromRace, isFromFeat, isFromRA,
+    raAdvantage, armorDisadvantage, effectBonus, breakdown,
+  } = row;
 
   return (
     <div className="py-0.5">
@@ -2480,13 +2544,20 @@ function SkillRow({ row, expanded, onToggle }) {
         {armorDisadvantage && (
           <span className="text-[9px] font-semibold text-amber-600 uppercase" data-testid={`skill-armor-dis-${skill}`}>dis</span>
         )}
+        {/* A running effect is marked by COLOURING THE TOTAL rather than adding a "+2" tag
+            beside it: the bonus is already inside the number, and two numbers on one row read
+            as "+7, and +2 on top of that". */}
         <BreakdownValue
           testId={`skill-bonus-${skill}`}
           label={skill}
           breakdown={breakdown}
           expanded={expanded}
           onToggle={onToggle}
-          className={cn('font-medium w-8 text-right', !expanded && 'text-muted-foreground')}
+          className={cn(
+            'font-medium w-8 text-right',
+            !expanded && 'text-muted-foreground',
+            effectBonus > 0 && 'text-indigo-400',
+          )}
         />
       </div>
       {expanded && (

@@ -10,6 +10,38 @@ export const ABILITY_ABBREV = {
   charisma: 'CHA',
 };
 
+/**
+ * Every skill and the ability it keys off. Lives here rather than in the sheet that renders it
+ * because it is not only a rendering order: a feature that grants advantage on an ABILITY's
+ * checks (Giant's Might → Strength) has to know which skills that covers, and a second copy of
+ * this list is how the sheet and that answer would drift.
+ */
+export const SKILL_MAP = [
+  { skill: 'Acrobatics', ability: 'dexterity' },
+  { skill: 'Animal Handling', ability: 'wisdom' },
+  { skill: 'Arcana', ability: 'intelligence' },
+  { skill: 'Athletics', ability: 'strength' },
+  { skill: 'Deception', ability: 'charisma' },
+  { skill: 'History', ability: 'intelligence' },
+  { skill: 'Insight', ability: 'wisdom' },
+  { skill: 'Intimidation', ability: 'charisma' },
+  { skill: 'Investigation', ability: 'intelligence' },
+  { skill: 'Medicine', ability: 'wisdom' },
+  { skill: 'Nature', ability: 'intelligence' },
+  { skill: 'Perception', ability: 'wisdom' },
+  { skill: 'Performance', ability: 'charisma' },
+  { skill: 'Persuasion', ability: 'charisma' },
+  { skill: 'Religion', ability: 'intelligence' },
+  { skill: 'Sleight of Hand', ability: 'dexterity' },
+  { skill: 'Stealth', ability: 'dexterity' },
+  { skill: 'Survival', ability: 'wisdom' },
+];
+
+/** The skills that use a given ability — the skill half of "advantage on Strength checks". */
+export function skillsForAbility(ability) {
+  return SKILL_MAP.filter((s) => s.ability === ability).map((s) => s.skill);
+}
+
 /** A D&D ability modifier: (score − 10) halved, rounded down. */
 export const abilityMod = (score) => Math.floor(((Number(score) || 10) - 10) / 2);
 
@@ -67,11 +99,17 @@ export function skillBreakdown({
   isExpert = false,
   halfProficiency = 0,
   notes = [],
+  extras = [],
 } = {}) {
   const { parts, notes: keptNotes, total } = buildBreakdown({
     parts: [
       abilityPart(ability, abilityScore),
       proficiencyPart({ pb, isProficient, isExpert, halfProficiency }),
+      // Flat terms from anything that is neither the ability nor proficiency — today a running
+      // active effect (Channel Rune: Frost, +2 to Strength/Constitution checks and saves). They
+      // are appended as labelled parts rather than folded into the total, so a raised number
+      // always has a source next to it in the panel.
+      ...extras,
     ],
     notes,
   });
@@ -87,6 +125,8 @@ export function skillBreakdown({
 }
 
 /** A saving throw: identical math to a skill, so it reuses the same builder. */
-export function saveBreakdown({ ability, abilityScore, pb = 0, isProficient = false, notes = [] } = {}) {
-  return skillBreakdown({ ability, abilityScore, pb, isProficient, notes });
+export function saveBreakdown({
+  ability, abilityScore, pb = 0, isProficient = false, notes = [], extras = [],
+} = {}) {
+  return skillBreakdown({ ability, abilityScore, pb, isProficient, notes, extras });
 }

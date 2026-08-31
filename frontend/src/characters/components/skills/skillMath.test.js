@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { abilityMod, formatBonus, skillBreakdown, ABILITY_ABBREV } from './skillMath';
+import {
+  abilityMod, formatBonus, skillBreakdown, saveBreakdown, ABILITY_ABBREV,
+  SKILL_MAP, skillsForAbility,
+} from './skillMath';
 
 describe('abilityMod', () => {
   it('halves score minus 10, rounding down', () => {
@@ -74,5 +77,64 @@ describe('skillBreakdown', () => {
   it('parts always sum to the total', () => {
     const b = skillBreakdown({ ability: 'wisdom', abilityScore: 8, pb: 4, isProficient: true });
     expect(b.parts.reduce((s, p) => s + p.value, 0)).toBe(b.total);
+  });
+});
+
+// `extras` carries flat terms that are neither the ability modifier nor proficiency — today a
+// running active effect (Channel Rune: Frost). They must be labelled parts rather than a silent
+// addition, or a raised number has nothing next to it explaining where it came from.
+describe('extras', () => {
+  const frost = { key: 'effect:channel_rune_frost', label: 'Channel Rune: Frost', value: 2 };
+
+  it('adds an extra term to a skill total and keeps its label', () => {
+    const b = skillBreakdown({
+      skill: 'Athletics', ability: 'strength', abilityScore: 16, pb: 2, isProficient: true,
+      extras: [frost],
+    });
+    expect(b.total).toBe(3 + 2 + 2);
+    expect(b.parts.map((p) => p.label)).toContain('Channel Rune: Frost');
+  });
+
+  it('adds it after proficiency, so the panel reads in the order the math happens', () => {
+    const b = skillBreakdown({
+      skill: 'Athletics', ability: 'strength', abilityScore: 16, pb: 2, isProficient: true,
+      extras: [frost],
+    });
+    expect(b.parts.map((p) => p.key)).toEqual(['ability', 'proficiency', 'effect:channel_rune_frost']);
+  });
+
+  it('applies to a saving throw the same way', () => {
+    const b = saveBreakdown({ ability: 'constitution', abilityScore: 14, pb: 3, isProficient: true, extras: [frost] });
+    expect(b.total).toBe(2 + 3 + 2);
+  });
+
+  it('changes nothing when empty — the default for every other caller', () => {
+    const withOut = skillBreakdown({ skill: 'Athletics', ability: 'strength', abilityScore: 16, pb: 2 });
+    const withEmpty = skillBreakdown({ skill: 'Athletics', ability: 'strength', abilityScore: 16, pb: 2, extras: [] });
+    expect(withEmpty).toEqual(withOut);
+  });
+});
+
+// SKILL_MAP moved here out of CharacterDetail so the sheet's row order and "which skills does
+// this ability drive?" cannot come from two lists.
+describe('SKILL_MAP / skillsForAbility', () => {
+  it('holds all 18 skills', () => {
+    expect(SKILL_MAP).toHaveLength(18);
+  });
+
+  it('gives Strength exactly one skill — which is why an ability bonus is not a skill bonus', () => {
+    expect(skillsForAbility('strength')).toEqual(['Athletics']);
+  });
+
+  it('gives Constitution none at all', () => {
+    expect(skillsForAbility('constitution')).toEqual([]);
+  });
+
+  it('gives Dexterity its three', () => {
+    expect(skillsForAbility('dexterity')).toEqual(['Acrobatics', 'Sleight of Hand', 'Stealth']);
+  });
+
+  it('returns nothing for an ability that does not exist', () => {
+    expect(skillsForAbility('luck')).toEqual([]);
   });
 });

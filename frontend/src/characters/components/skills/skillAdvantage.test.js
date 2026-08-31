@@ -99,3 +99,47 @@ describe('skillAdvantageSourcesFor', () => {
     expect(skillAdvantageSourcesFor('Athletics', ctx)).toEqual([]);
   });
 });
+
+// Giant's Might grants advantage on Strength CHECKS — the whole ability, not a named skill —
+// so the source fans an ability out to every skill keyed off it. Before this, switching the
+// effect on changed the damage die and the size and left Athletics looking untouched.
+describe("active effects (Rune Knight Giant's Might)", () => {
+  const runeKnight = ({ level = 3, active = ['giants_might'], edition = '5e' } = {}) => ({
+    charClass: 'Fighter',
+    subclass: 'Rune Knight',
+    level,
+    edition,
+    characterData: { subclass: 'Rune Knight', active_effects: active },
+  });
+
+  it('grants advantage on the Strength skill while the effect is switched on', () => {
+    expect(getSkillAdvantageNames(runeKnight())).toEqual(['Athletics']);
+  });
+
+  it('grants nothing while the effect is switched off, though the feature is earned', () => {
+    expect(getSkillAdvantageNames(runeKnight({ active: [] }))).toEqual([]);
+    expect(skillAdvantageLegend(runeKnight({ active: [] }))).toBeNull();
+  });
+
+  it('grants nothing before the feature is earned, even with the key set', () => {
+    expect(getSkillAdvantageNames(runeKnight({ level: 2 }))).toEqual([]);
+  });
+
+  it('names the effect as the source, so the tag says what it came from', () => {
+    expect(skillAdvantageSourcesFor('Athletics', runeKnight()).map((a) => a.source))
+      .toEqual(["Giant's Might"]);
+    expect(skillAdvantageLegend(runeKnight())).toBe("Teal = advantage (Giant's Might)");
+  });
+
+  it('leaves skills of other abilities alone', () => {
+    expect(skillAdvantageSourcesFor('Stealth', runeKnight())).toEqual([]);
+    expect(skillAdvantageSourcesFor('Perception', runeKnight())).toEqual([]);
+  });
+
+  it('does not reach another subclass that happens to carry the key', () => {
+    expect(getSkillAdvantageNames({
+      charClass: 'Fighter', subclass: 'Champion', level: 10, edition: '5e',
+      characterData: { subclass: 'Champion', active_effects: ['giants_might'] },
+    })).toEqual([]);
+  });
+});

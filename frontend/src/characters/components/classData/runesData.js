@@ -85,6 +85,10 @@ export const RUNE_OPTIONS = [
     channel: {
       cost: 'bonus action',
       tab: 'bonus',
+      // The only Channel Rune that RUNS for a while and changes numbers the sheet already shows,
+      // so it is an ACTIVE EFFECT rather than a one-shot: invoking it has to switch something on
+      // or the +2 lives nowhere. The effect definition (and the +2 itself) is in activeEffects.js.
+      activeEffect: 'channel_rune_frost',
       description: 'For 10 minutes you gain a +2 bonus to all ability checks and saving throws that'
         + ' use Strength or Constitution.',
     },
@@ -95,9 +99,10 @@ export const RUNE_OPTIONS = [
     key: 'stone',
     passive: {
       skills: ['Insight'],
-      // Darkvision has no model anywhere in the app (race traits carry it as prose too), so the
-      // range stays a note rather than half-wiring a vision system for one rune.
-      note: 'Darkvision out to 120 feet.',
+      // Claimed by senses.js, which is where every darkvision source now lands — the racial
+      // trait, the Drow's Superior Darkvision and this. It was prose here until QA asked the
+      // obvious question ("where does the sheet say how far I see?") and the answer was nowhere.
+      vision: { sense: 'Darkvision', rangeFt: 120 },
       text: 'Advantage on Insight checks, and darkvision out to 120 feet.',
     },
     channel: {
