@@ -486,7 +486,11 @@ const giantsMightRider = {
     && isEffectActive(characterData, 'giants_might'),
   // The one damage rider the app can confirm: `active_effects` is tracked, and the rider only
   // exists while it is on, so the term is always real.
-  damage: (row, { level }) => ({ dice: mightDie(level), type: weaponDamageType(row?.damage) }),
+  // Folded into the card's printed damage (the effect is switched ON, so it is confirmed),
+  // but it is still once per turn while that number is per-attack — so the breakdown says so.
+  damage: (row, { level }) => ({
+    dice: mightDie(level), type: weaponDamageType(row?.damage), when: 'once per turn',
+  }),
   text: ({ level }) => 'Once on each of your turns, one of your attacks with a weapon or an'
     + ` unarmed strike deals an extra ${mightDie(level)} damage on a hit.`,
 };
@@ -576,9 +580,10 @@ export const ATTACHED_FEATURES = [
     name: 'Psionic Strike',
     scope: 'all',
     resourceKey: 'psionic_energy_used',
-    damage: (_row, { level, scores }) => ({
-      dice: psionicDieAndInt(level, scores?.intelligence ?? 10), type: 'force',
-    }),
+    // Deliberately NO `damage` spec, for the Fire Rune's reason: the force damage costs a
+    // Psionic Energy die, spent on the hit itself, so folding it into the card's printed damage
+    // would claim damage the character deals only when they choose to pay for it. The full
+    // number is in the note below, beside the Use control that spends the die.
     note: (row, { level, scores }) => 'Once per turn when you hit a creature within 30 feet with'
       + ` ${row.name}, spend a Psionic Energy die to deal an extra`
       + ` ${psionicDieAndInt(level, scores?.intelligence ?? 10)} force damage.`,
@@ -1034,39 +1039,69 @@ function weaponDamageType(damage) {
 }
 
 /**
- * Combine a weapon's printed damage with the extra damage from riders that are actually in
- * play, for the "on a hit" total shown INSIDE a rider's own block.
+ * The damage this weapon attack deals RIGHT NOW: its printed damage with every currently-active
+ * addition folded in, and the matching breakdown terms appended.
  *
- * Why it lives in the rider's block and not in the printed damage: the printed string must stay
- * true for an ordinary swing. Every addition here is still conditional — Psionic Strike spends
- * a die, Giant's Might is once per turn — and CLAUDE.md's standing rule is that a conditional
- * bonus baked into the flat string claims damage the character does not always deal (the reason
- * Sneak Attack and Divine Smite are still prose, and Great Weapon Master is a toggle).
+ * ONE damage value per attack, with the math behind it a click away — the same contract the
+ * to-hit number already has. The card used to print the plain swing and a second "on a hit"
+ * total under it, which read as two separate damage rolls (QA: "I don't understand the doubled
+ * damage") because both lines began with the same string and neither said which one to use.
  *
- * The line for what may be listed at all: only damage the app can CONFIRM applies on this swing.
- * The Fire Rune's 2d6 fire deliberately does not appear here — it lands only on the hit where
- * you choose to spend a Channel Rune use to summon the shackles, a decision made after the roll
- * and never recorded, so it stays in the feature's note rather than any total.
+ * What may be folded in: only damage the app can CONFIRM lands on this swing. That means an
+ * effect the player has switched ON (Giant's Might), not one they may choose to pay for after
+ * the hit — the Fire Rune's 2d6 needs a Channel Rune use spent to summon the shackles, and
+ * Psionic Strike needs a Psionic Energy die, both decided after the roll and never recorded.
+ * Those stay in their own block's note, beside the Use control that invokes them, so the number
+ * is still on the card without the headline claiming it. That is the standing rule which keeps
+ * Sneak Attack and Divine Smite prose, narrowed rather than lifted: what changed is that an
+ * active effect is now a thing the app knows about.
  *
- * Types are never merged: piercing and fire are rolled separately and resisted separately, so
- * each term keeps its own type. Terms of the same type are still listed separately, because
- * 1d8 and 1d6 cannot be summed into one die either.
+ * Every term still names its source in the breakdown — a total that grew because an effect is
+ * running would otherwise read as a bug in the weapon damage — plus its `when`, since a folded-in
+ * addition can still be once-per-turn while the printed number is per-attack.
  *
- * @param {string} baseDamage  the weapon's printed damage
- * @param {{dice: string, type?: string, source: string}[]} additions
- * @returns {{ text: string, parts: {text: string, source: string|null}[] } | null}
+ * Types are never merged: piercing and fire are rolled and resisted separately, so an addition
+ * of a different type keeps its own term ("1d8 + 4 Piercing + 1d8 force"). An addition of the
+ * WEAPON's type (or an untyped one, which RAW means weapon damage) joins the dice group instead
+ * of repeating the type word — "1d8 + 1d6 + 4 Piercing" is one roll, where
+ * "1d8 + 4 Piercing + 1d6 Piercing" reads as two. The dice are still separate terms: 1d8 and
+ * 1d6 cannot be summed into one die.
+ *
+ * @param {{damage: string, damageBreakdown?: {label: string, value: string|number}[]}} view
+ *        the attack as currently displayed (so the Great Weapon Master / Sharpshooter toggle is
+ *        already applied — folding against the stored damage would go stale the moment it is on)
+ * @param {{dice: string, type?: string, source: string, when?: string}[]} additions
+ * @returns {{damage: string, damageBreakdown: {label: string, value: string|number}[]}}
  */
-export function combineAttackDamage(baseDamage, additions = []) {
+export function applyDamageAdditions({ damage, damageBreakdown } = {}, additions = []) {
+  // An attack row carries an explicit `null` breakdown when it has none, so this normalises
+  // rather than relying on a destructuring default (which only fires for `undefined`).
+  const base = damageBreakdown || [];
   const live = (additions || []).filter((a) => a && a.dice);
-  if (live.length === 0) return null;
-  const parts = [
-    { text: (baseDamage || '').trim(), source: null },
-    ...live.map((a) => ({
-      text: `${a.dice}${a.type ? ` ${a.type}` : ''}`,
-      source: a.source,
-    })),
-  ];
-  return { text: parts.map((p) => p.text).join(' + '), parts };
+  if (live.length === 0) return { damage, damageBreakdown };
+  const baseType = weaponDamageType(damage);
+  // Untyped means the weapon's own type (Giant's Might adds "an extra 1d6 damage", i.e. weapon
+  // damage), so it joins the dice group rather than standing alone.
+  const isWeaponType = (a) => !a.type || (!!baseType && a.type.toLowerCase() === baseType.toLowerCase());
+  // Split the printed damage at its leading die so same-type dice land beside it, ahead of the
+  // flat modifier and the type word: "1d8" + " + 4 Piercing" → "1d8 + 1d6 + 4 Piercing".
+  const m = /^(\S+)(.*)$/.exec(String(damage ?? '').trim());
+  let text = m
+    ? `${m[1]}${live.filter(isWeaponType).map((a) => ` + ${a.dice}`).join('')}${m[2]}`
+    : damage;
+  for (const a of live.filter((a) => !isWeaponType(a))) {
+    text += ` + ${a.dice}${a.type ? ` ${a.type}` : ''}`;
+  }
+  return {
+    damage: text,
+    damageBreakdown: [
+      ...base,
+      ...live.map((a) => ({
+        label: `${a.source}${a.when ? ` — ${a.when}` : ''}`,
+        value: `${a.dice}${a.type ? ` ${a.type}` : ''}`,
+      })),
+    ],
+  };
 }
 
 /**
@@ -1832,13 +1867,13 @@ export function buildActionEconomy({
   }
 
   // Every confirmable source of EXTRA damage on this attack, collected onto the row so the card
-  // can show one "on a hit" total under the printed damage. Runs LAST, after ATTACK_RIDERS, so
-  // it can include a rider (Giant's Might) applied after the features are attached.
+  // can show ONE damage number with the math a click behind it. Runs LAST, after ATTACK_RIDERS,
+  // so it can include a rider (Giant's Might) applied after the features are attached.
   //
   // The additions are handed over as a LIST rather than a finished string because the displayed
   // damage is not fixed: the Great Weapon Master / Sharpshooter toggle rewrites it, and a total
-  // baked in here would go stale the moment that is switched on. The card combines them with
-  // whatever damage it is currently showing (see combineAttackDamage).
+  // baked in here would go stale the moment that is switched on. The card folds them into
+  // whatever damage it is currently showing (see applyDamageAdditions).
   for (const row of buckets.action.filter((e) => e.source === 'Weapon')) {
     const additions = [
       ...(row.riderDamages || []),

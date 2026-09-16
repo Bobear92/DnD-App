@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyCastingTime, characterSpellNames, attacksPerAction, canTwoWeaponFight,
   normalizeFeatureName, featuresKnownAtLevel, buildActionEconomy, powerAttackVariant,
-  subclassFeaturesKnownAtLevel, combineAttackDamage,
+  subclassFeaturesKnownAtLevel, applyDamageAdditions,
 } from '@/characters/components/combat/actionEconomyData';
 
 describe('classifyCastingTime', () => {
@@ -2743,36 +2743,67 @@ describe('buildActionEconomy — Channel Rune (Rune Knight)', () => {
   });
 });
 
-describe('combineAttackDamage', () => {
-  it('returns null when nothing adds damage — no total line for a rider that only adds text', () => {
-    expect(combineAttackDamage('1d8 + 3 Piercing', [])).toBeNull();
-    expect(combineAttackDamage('1d8 + 3 Piercing', [{ source: 'X' }])).toBeNull();
+describe('applyDamageAdditions', () => {
+  const BASE = {
+    damage: '1d8 + 3 Piercing',
+    damageBreakdown: [{ label: 'weapon die', value: '1d8' }, { label: 'STR', value: 3 }],
+  };
+
+  it('is a no-op when nothing adds damage', () => {
+    expect(applyDamageAdditions(BASE, [])).toEqual(BASE);
+    expect(applyDamageAdditions(BASE, [{ source: 'X' }])).toEqual(BASE);
   });
 
-  it('appends a typed term rather than folding it into the weapon die', () => {
-    const t = combineAttackDamage('1d8 + 3 Piercing', [{ dice: '1d8', type: 'force', source: 'Psionic Strike' }]);
-    expect(t.text).toBe('1d8 + 3 Piercing + 1d8 force');
+  // "1d8 + 3 Piercing + 1d6 Piercing" reads as two damage rolls; this is one.
+  it("joins an addition of the weapon's own type to the dice, not after the type word", () => {
+    const r = applyDamageAdditions(BASE, [{ dice: '1d6', type: 'Piercing', source: "Giant's Might" }]);
+    expect(r.damage).toBe('1d8 + 1d6 + 3 Piercing');
   });
 
-  it('keeps damage types separate — they are rolled and resisted separately', () => {
-    const t = combineAttackDamage('1d8 + 3 Piercing', [
+  it('treats an untyped addition as weapon damage, which is what RAW means', () => {
+    const r = applyDamageAdditions(BASE, [{ dice: '1d6', source: "Giant's Might" }]);
+    expect(r.damage).toBe('1d8 + 1d6 + 3 Piercing');
+  });
+
+  it('keeps a different damage type as its own term — types are rolled and resisted separately', () => {
+    const r = applyDamageAdditions(BASE, [{ dice: '1d8', type: 'force', source: 'Psionic Strike' }]);
+    expect(r.damage).toBe('1d8 + 3 Piercing + 1d8 force');
+  });
+
+  it('handles both at once, each in its right place', () => {
+    const r = applyDamageAdditions(BASE, [
       { dice: '1d6', type: 'Piercing', source: "Giant's Might" },
       { dice: '1d8', type: 'force', source: 'Psionic Strike' },
     ]);
-    // 1d8 and 1d6 are both piercing but cannot be summed into one die either.
-    expect(t.text).toBe('1d8 + 3 Piercing + 1d6 Piercing + 1d8 force');
+    expect(r.damage).toBe('1d8 + 1d6 + 3 Piercing + 1d8 force');
   });
 
-  it('labels every term with its source, and the weapon term with none', () => {
-    const t = combineAttackDamage('1d8 + 3 Piercing', [{ dice: '1d8', type: 'force', source: 'Psionic Strike' }]);
-    expect(t.parts).toEqual([
-      { text: '1d8 + 3 Piercing', source: null },
-      { text: '1d8 force', source: 'Psionic Strike' },
+  // A base with no die at all: an unarmed strike is "4 bludgeoning".
+  it('adds to a flat-damage attack without inventing a die for it', () => {
+    const r = applyDamageAdditions({ damage: '4 bludgeoning', damageBreakdown: [] },
+      [{ dice: '1d6', source: "Giant's Might" }]);
+    expect(r.damage).toBe('4 + 1d6 bludgeoning');
+  });
+
+  // A number that grew because an effect is running must not read as a bug in the weapon damage.
+  it('appends a breakdown term naming the source, after the weapon terms', () => {
+    const r = applyDamageAdditions(BASE, [{ dice: '1d6', type: 'Piercing', source: "Giant's Might" }]);
+    expect(r.damageBreakdown).toEqual([
+      { label: 'weapon die', value: '1d8' },
+      { label: 'STR', value: 3 },
+      { label: "Giant's Might", value: '1d6 Piercing' },
     ]);
+  });
+
+  // The printed number is per-attack; a folded-in addition can still be once per turn.
+  it('states the condition in the breakdown when the addition carries one', () => {
+    const r = applyDamageAdditions(BASE,
+      [{ dice: '1d6', type: 'Piercing', source: "Giant's Might", when: 'once per turn' }]);
+    expect(r.damageBreakdown.at(-1).label).toBe("Giant's Might — once per turn");
   });
 });
 
-describe('“on a hit” damage totals on the attack card', () => {
+describe('extra damage folded into an attack card’s damage', () => {
   const PICK = {
     uid: 'w1', name: 'War pick', category: 'weapons', weapon_type: 'Melee',
     equipped: true, hand: 'main',
@@ -2798,22 +2829,22 @@ describe('“on a hit” damage totals on the attack card', () => {
     });
 
   const row = (buckets) => buckets.action.find((e) => e.name === 'War pick');
-  // The data layer hands over the ADDITIONS; the card combines them against the damage it is
-  // currently showing, so the power-attack toggle can't leave a stale total behind.
-  const totalText = (buckets) => {
+  // The data layer hands over the ADDITIONS; the card folds them into the damage it is currently
+  // showing, so the power-attack toggle can't leave a stale number behind.
+  const shownDamage = (buckets) => {
     const r = row(buckets);
-    return combineAttackDamage(r.damage, r.damageAdditions || [])?.text;
+    return applyDamageAdditions(r, r.damageAdditions || []).damage;
   };
   const fireBlock = (buckets) =>
     (row(buckets).attachedFeatures ?? []).find((f) => f.name === 'Fire Rune');
 
   // The Fire Rune's 2d6 is NOT a property of the weapon: it lands only on the swing where you
   // spend a Channel Rune use to summon the shackles, which is decided after the hit and never
-  // recorded. Totalling it claimed damage the character does not always deal.
-  it("does not add the Fire Rune's 2d6 to the total, even with the rune carved and equipped", () => {
+  // recorded. Folding it in claimed damage the character does not always deal.
+  it("does not add the Fire Rune's 2d6, even with the rune carved and equipped", () => {
     expect(fireBlock(ae())).toBeTruthy();
     expect(row(ae()).damageAdditions).toBeUndefined();
-    expect(totalText(ae())).toBeUndefined();
+    expect(shownDamage(ae())).toBe('1d8 + 3 Piercing');
   });
 
   it('still states the fire damage in the rune note, beside the Use control that invokes it', () => {
@@ -2821,36 +2852,34 @@ describe('“on a hit” damage totals on the attack card', () => {
     expect(fireBlock(ae()).note).toMatch(/extra 2d6 fire damage/i);
   });
 
-  it('leaves the printed damage untouched — it must stay true for an ordinary swing', () => {
+  it('leaves the stored damage untouched, so the fold happens once at the card', () => {
     expect(row(ae()).damage).toBe('1d8 + 3 Piercing');
   });
 
   it("folds in Giant's Might only while the effect is switched ON", () => {
-    expect(totalText(ae({ active: ['giants_might'] })))
-      .toBe('1d8 + 3 Piercing + 1d6 Piercing');
+    expect(shownDamage(ae({ active: ['giants_might'] }))).toBe('1d8 + 1d6 + 3 Piercing');
   });
 
   it("omits Giant's Might while it is off, even though the character has the feature", () => {
-    expect(totalText(ae({ active: [] }))).toBeUndefined();
+    expect(shownDamage(ae({ active: [] }))).toBe('1d8 + 3 Piercing');
   });
 
   it("scales Giant's Might with level (Great Stature at 10)", () => {
-    expect(totalText(ae({ level: 10, active: ['giants_might'] })))
-      .toBe('1d8 + 3 Piercing + 1d8 Piercing');
+    expect(shownDamage(ae({ level: 10, active: ['giants_might'] }))).toBe('1d8 + 1d8 + 3 Piercing');
   });
 
-  it('names each source so a grown total does not look like a bug', () => {
+  it('names the source and its condition in the breakdown, not just the number', () => {
     const r = row(ae({ active: ['giants_might'] }));
-    const parts = combineAttackDamage(r.damage, r.damageAdditions).parts;
-    expect(parts.map((p) => p.source)).toEqual([null, "Giant's Might"]);
+    expect(applyDamageAdditions(r, r.damageAdditions).damageBreakdown.at(-1))
+      .toEqual({ label: "Giant's Might — once per turn", value: '1d6 Piercing' });
   });
 
   it('gives no attached block at all when the rune is not carved', () => {
     expect(fireBlock(ae({ carved: false }))).toBeUndefined();
-    expect(totalText(ae({ carved: false }))).toBeUndefined();
+    expect(shownDamage(ae({ carved: false }))).toBe('1d8 + 3 Piercing');
   });
 
-  it('gives no total to an attached feature that adds no damage (Unleash Incarnation)', () => {
+  it('adds nothing for an attached feature that deals no extra damage (Unleash Incarnation)', () => {
     const buckets = buildActionEconomy({
       charClass: 'Fighter', subclass: 'Echo Knight', level: 7, edition: '5e',
       characterData: { subclass: 'Echo Knight', inventory: [PICK] },
@@ -2864,7 +2893,9 @@ describe('“on a hit” damage totals on the attack card', () => {
     expect(attack.damageAdditions).toBeUndefined();
   });
 
-  it('totals Psionic Strike too, folding INT into its die', () => {
+  // Psionic Strike costs a Psionic Energy die spent on the hit itself — a choice made after the
+  // roll, like the Fire Rune's — so it must not inflate the number printed on every swing.
+  it('leaves Psionic Strike out of the damage and keeps it in the note that spends the die', () => {
     const buckets = buildActionEconomy({
       charClass: 'Fighter', subclass: 'Psi Warrior', level: 7, edition: '5e',
       characterData: { subclass: 'Psi Warrior', inventory: [PICK] },
@@ -2873,7 +2904,9 @@ describe('“on a hit” damage totals on the attack card', () => {
       scores: { intelligence: 16 }, spellIndex: {},
     });
     const attack = buckets.action.find((e) => e.name === 'War pick');
-    expect(combineAttackDamage(attack.damage, attack.damageAdditions).text)
-      .toMatch(/^1d8 \+ 3 Piercing \+ .*force$/);
+    expect(attack.damageAdditions).toBeUndefined();
+    const strike = attack.attachedFeatures.find((f) => f.name === 'Psionic Strike');
+    expect(strike.note).toMatch(/force damage/);
+    expect(strike.note).toMatch(/spend a Psionic Energy die/i);
   });
 });

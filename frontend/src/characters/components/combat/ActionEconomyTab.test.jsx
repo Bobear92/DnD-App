@@ -1440,10 +1440,11 @@ describe('ActionEconomyTab — Unleash Incarnation on the melee attack card', ()
   });
 });
 
-// "Calculate the total damage" — the arithmetic a player would otherwise do mid-turn. It sits at
-// CARD level under the printed damage, never folded INTO it: the printed string has to stay true
-// for an ordinary swing, and every term in the total is conditional.
-describe('ActionEconomyTab — "on a hit" damage total on the attack card', () => {
+// "Calculate the total damage" — the arithmetic a player would otherwise do mid-turn. ONE damage
+// value per attack, with the math a click behind it, exactly like the to-hit number. A second
+// "on a hit" line under the printed damage read as two separate damage rolls (QA: "I don't
+// understand the doubled damage"), because both began with the same string.
+describe('ActionEconomyTab — extra damage folded into the attack card’s damage', () => {
   const runeKnight = ({ characterData, ...props } = {}) => renderTab({
     charClass: 'Fighter', subclass: 'Rune Knight', level: 7,
     scores: { strength: 16, dexterity: 12, constitution: 14 },
@@ -1460,61 +1461,49 @@ describe('ActionEconomyTab — "on a hit" damage total on the attack card', () =
   });
 
   // The weapon entry key carries an index suffix (weapon:w1:0), so match on the prefix.
-  const total = () => screen.getByTestId(/^ae-damage-total-weapon:w1/);
+  const damage = () => screen.getByTestId(/^ae-damage-weapon:w1/);
 
-  it('shows the combined damage on the card, under the printed damage', () => {
+  it('shows one damage value, with the extra die folded into it', () => {
     runeKnight();
-    expect(total()).toHaveTextContent(/On a hit:/);
-    expect(total()).toHaveTextContent(/1d6/);
+    expect(damage()).toHaveTextContent(/1d8 \+ 1d6/);
   });
 
-  it('leaves the printed damage alone — it must stay true for an ordinary swing', () => {
+  it('shows no second damage line beside it', () => {
     runeKnight();
-    const printed = screen.getByTestId(/^ae-damage-weapon:w1/);
-    expect(printed).toHaveTextContent('1d8');
-    expect(printed).not.toHaveTextContent(/Giant's Might/i);
-  });
-
-  // The total is what you read mid-swing; the rune's rules paragraph is reference you need once.
-  // If a later edit pushes the number back down into the rider block, this fails.
-  it('puts the total at the top of the card, ABOVE the Fire Rune block', () => {
-    runeKnight();
-    const totalEl = total();
-    const block = screen.getByTestId(/^ae-attached-fire-rune-weapon:w1/);
-    expect(totalEl.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-  });
-
-  it('names each source, so a grown total does not read as a bug in the weapon damage', () => {
-    runeKnight();
-    expect(total()).toHaveTextContent(/\(weapon\)/);
-    expect(total()).toHaveTextContent(/\(Giant's Might\)/);
-  });
-
-  it("includes Giant's Might while the effect is switched on", () => {
-    runeKnight();
-    expect(total()).toHaveTextContent(/1d6/);
-    expect(total()).toHaveTextContent(/\(Giant's Might\)/);
-  });
-
-  it("excludes Giant's Might while it is off", () => {
-    runeKnight({ characterData: { active_effects: [] } });
     expect(screen.queryByTestId(/^ae-damage-total-/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/On a hit:/)).not.toBeInTheDocument();
   });
 
-  // The Fire Rune's 2d6 lands only on the swing where you spend a Channel Rune use to summon
-  // the shackles — a choice made after the hit and never recorded — so it must never appear in
-  // a total that reads as "this is what this attack deals".
+  // A number that grew because an effect is running would otherwise read as a bug in the weapon
+  // damage — so the source, and the fact that it is once per turn, are a click away.
+  it("names Giant's Might in the breakdown behind the number", () => {
+    runeKnight();
+    expect(screen.queryByTestId(/^ae-damage-breakdown-weapon:w1/)).not.toBeInTheDocument();
+    fireEvent.click(damage());
+    const bd = screen.getByTestId(/^ae-damage-breakdown-weapon:w1/);
+    expect(bd).toHaveTextContent(/1d6/);
+    expect(bd).toHaveTextContent(/Giant's Might/);
+    expect(bd).toHaveTextContent(/once per turn/);
+  });
+
+  it("drops back to the plain damage while Giant's Might is off", () => {
+    runeKnight({ characterData: { active_effects: [] } });
+    expect(damage()).not.toHaveTextContent(/1d6/);
+  });
+
+  // The Fire Rune's 2d6 lands only on the swing where you spend a Channel Rune use to summon the
+  // shackles — a choice made after the hit and never recorded — so it must never inflate a number
+  // that reads as "this is what this attack deals".
   it('never counts the Fire Rune, even carved and equipped on the weapon being shown', () => {
     runeKnight({ characterData: { active_effects: [] } });
     expect(screen.getByTestId(/^ae-attached-fire-rune-weapon:w1/)).toBeInTheDocument();
-    expect(screen.queryByTestId(/^ae-damage-total-/)).not.toBeInTheDocument();
+    expect(damage()).not.toHaveTextContent(/1d6|2d6/);
   });
 
-  it("keeps the fire damage out of a total it shares with Giant's Might", () => {
+  it("keeps the fire damage out of a number it would share with Giant's Might", () => {
     runeKnight();
-    expect(total()).not.toHaveTextContent(/fire/i);
-    expect(total()).not.toHaveTextContent(/Fire Rune/);
+    expect(damage()).not.toHaveTextContent(/fire/i);
+    expect(damage()).not.toHaveTextContent(/2d6/);
   });
 
   it('still states the fire damage in the rune block beside its Use control', () => {
@@ -1523,7 +1512,7 @@ describe('ActionEconomyTab — "on a hit" damage total on the attack card', () =
       .toHaveTextContent(/extra 2d6 fire damage/i);
   });
 
-  it('shows no total when nothing adds damage', () => {
+  it('leaves the damage alone when nothing adds any', () => {
     renderTab({
       charClass: 'Fighter', subclass: 'Echo Knight', level: 5,
       scores: { strength: 16, constitution: 16 },
@@ -1531,5 +1520,6 @@ describe('ActionEconomyTab — "on a hit" damage total on the attack card', () =
       characterData: { subclass: 'Echo Knight' },
     });
     expect(screen.queryByTestId(/^ae-damage-total-/)).not.toBeInTheDocument();
+    expect(screen.getByTestId(/^ae-damage-weapon:w1/)).not.toHaveTextContent(/1d6/);
   });
 });

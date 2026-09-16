@@ -18,7 +18,7 @@ import MagicAttackBadge from '@/characters/components/inventory/MagicAttackBadge
 import WeaponRangeBadge from '@/characters/components/inventory/WeaponRangeBadge';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import {
-  buildActionEconomy, castableSpells, combineAttackDamage, TABS, TAB_LABELS, SOURCE_ORDER,
+  buildActionEconomy, castableSpells, applyDamageAdditions, TABS, TAB_LABELS, SOURCE_ORDER,
 } from '@/characters/components/combat/actionEconomyData';
 import { getClassConfig } from '@/characters/components/sheets/classSheet/configs';
 import { useRestResource } from '@/characters/components/sheets/classSheet/hooks/useRestResource';
@@ -294,11 +294,12 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
   const [powerOn, setPowerOn] = useState(false);
   // A feature-imposed save DC expands into its arithmetic on click (Ferocious Charger).
   const [dcOpen, setDcOpen] = useState(false);
-  const view = powerOn && entry.powerAttack ? entry.powerAttack : entry;
-  // The conditional extras this attack can add on a hit (Fire Rune, Psionic Strike, an active
-  // Giant's Might), totalled against the damage CURRENTLY displayed so the power-attack toggle
-  // is reflected rather than ignored. Null when nothing adds damage.
-  const damageTotal = combineAttackDamage(view.damage, entry.damageAdditions || []);
+  const shown = powerOn && entry.powerAttack ? entry.powerAttack : entry;
+  // ONE damage value: the printed damage with every currently-active addition folded in (an
+  // active Giant's Might), and each addition appended to the breakdown behind the number. Folded
+  // against the damage CURRENTLY displayed, so the power-attack toggle is reflected rather than
+  // ignored. A no-op when nothing adds damage.
+  const view = { ...shown, ...applyDamageAdditions(shown, entry.damageAdditions || []) };
   // An attached feature block (Arcane Shot on a bow) owns the resource control itself, inside
   // the block — so the Use button reads as belonging to that feature, not to the attack.
   const attached = entry.arcaneShot ? resource : null;
@@ -434,28 +435,6 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
           </p>
         ) : (
           entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>
-        )}
-        {/* Everything this attack can add on a hit, totalled under the printed damage rather
-            than folded INTO it: the printed string must stay true for an ordinary swing, and
-            every term here is conditional (Fire Rune spends one of a limited number of uses,
-            Psionic Strike spends a die, Giant's Might is once per turn). That is the same rule
-            that keeps Sneak Attack and Divine Smite as prose. Combined against `view.damage`,
-            not the stored damage, so it follows the Great Weapon Master / Sharpshooter toggle
-            instead of going stale when that is switched on. Each term names its source — a
-            total that grew because an effect is running would otherwise read as a bug in the
-            weapon damage. */}
-        {damageTotal && (
-          <div className="mt-1" data-testid={`ae-damage-total-${entry.key}`}>
-            <p className="text-xs font-medium">
-              <span className="text-muted-foreground">On a hit: </span>
-              <span className="text-foreground">{damageTotal.text}</span>
-            </p>
-            <p className="text-[10px] text-muted-foreground/80 leading-tight mt-0.5">
-              {damageTotal.parts
-                .map((p) => (p.source ? `${p.text} (${p.source})` : `${p.text} (weapon)`))
-                .join(' · ')}
-            </p>
-          </div>
         )}
         {/* The distance band, directly under the numbers it qualifies. Separate from the spacing
             note below, which is a different rule about a different distance (an enemy within
