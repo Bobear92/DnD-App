@@ -6,6 +6,7 @@ import {
   activeEffectCheckSources, activeEffectSaveSources,
   activeEffectCheckBonus, activeEffectSaveBonus,
 } from '@/characters/components/effects/activeEffects';
+import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 
 const runeKnight = (level, extra = {}) => ({
   charClass: 'Fighter', subclass: 'Rune Knight', level, edition: '5e', ...extra,
@@ -257,5 +258,40 @@ describe('bonus sources and totals', () => {
     };
     expect(activeEffectCheckSources(mightOnly)).toEqual([]);
     expect(activeEffectSaveBonus('strength', mightOnly)).toBe(0);
+  });
+});
+
+// The stored feature text is what the sheet SHOWS (the Features tab, and every panel that reads
+// rules text back out of SUBCLASS_DATA). It had invented a grapple clause that the feature does
+// not have, and a player reading it concluded the baseline was lower than it is — they can't
+// grapple a Large creature without the rune — which is wrong: grappling is governed by SIZE, and
+// a Medium character already reaches Large. These guard the correction.
+describe("Rune Knight feature text — the grapple clause that isn't in the feature", () => {
+  const feature = (name) => SUBCLASS_DATA.Fighter['5e']['Rune Knight']
+    .features.find((f) => f.name === name).description;
+
+  it("Giant's Might does not claim to grant grappling", () => {
+    expect(feature("Giant's Might")).not.toMatch(/grapple/i);
+  });
+
+  it("Giant's Might states what it really does — become Large, with the size left to do the rest", () => {
+    const t = feature("Giant's Might");
+    expect(t).toMatch(/Large size/);
+    expect(t).toMatch(/1d6/);
+  });
+
+  // RAW is Strength saving throws, not saving throws generally — which is what `grants` returns,
+  // so the text saying otherwise contradicted the tags the sheet draws from it.
+  it("Giant's Might scopes the advantage to Strength saves, matching what it grants", () => {
+    expect(feature("Giant's Might")).toMatch(/Strength checks and Strength saving throws/);
+    expect(activeEffectGrants(runeKnight(3, { characterData: { active_effects: ['giants_might'] } })).advantageSaves)
+      .toEqual(['strength']);
+  });
+
+  it('Runic Juggernaut states its real second clause, the reach increase', () => {
+    const t = feature('Runic Juggernaut');
+    expect(t).not.toMatch(/grapple/i);
+    expect(t).toMatch(/reach increases by 5 feet/);
+    expect(t).toMatch(/Huge size/);
   });
 });

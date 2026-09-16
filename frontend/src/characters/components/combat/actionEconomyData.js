@@ -19,7 +19,8 @@
  * is authored — expand CLASS_FEATURE_ACTIONS_* class-by-class.
  */
 import { mightDie, sizeAt, isEffectActive } from '@/characters/components/effects/activeEffects';
-import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor } from '@/characters/components/inventory/inventoryData';
+import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor, creatureSize } from '@/characters/components/inventory/inventoryData';
+import { specialAttackEntries } from '@/characters/components/combat/specialAttacksData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { getFeatActions, getFeatUnarmedDice, getFeatProficiencyGrants } from '@/characters/components/feats/featEffects';
@@ -1979,6 +1980,17 @@ export function buildActionEconomy({
   (is2024 ? UNIVERSAL_ACTIONS_2024 : UNIVERSAL_ACTIONS_5E).forEach((a) => {
     push('action', { key: `universal:${a.name}`, name: a.name, source: 'Universal', cost: 'action', detail: a.description });
   });
+  // Grapple and Shove ride in the same menu but are NOT actions of their own in either edition —
+  // each replaces one attack of the Attack action — so they carry their own cost badge instead of
+  // being filed as plain actions, which would teach the wrong economy (with Extra Attack you can
+  // grapple AND still swing). Their size line is computed from `creatureSize` WITH the active-effect
+  // context, which is what moves a Rune Knight's ceiling from Large to Huge while Giant's Might runs
+  // without this code knowing the rune exists. It is also the only place the app prints the
+  // character's size — the gap left open when the active-effects banner was removed.
+  const bodySize = creatureSize(characterData, race, { charClass, subclass, level, edition });
+  for (const e of specialAttackEntries({ size: bodySize, edition, handFree })) {
+    push('action', { ...e, source: 'Universal' });
+  }
   (is2024 ? UNIVERSAL_REACTIONS_2024 : UNIVERSAL_REACTIONS_5E).forEach((r) => {
     push('reaction', { key: `universal:${r.name}`, name: r.name, source: 'Universal', cost: 'reaction', detail: r.description });
   });

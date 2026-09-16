@@ -493,6 +493,26 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
               : `Use ${entry.powerAttack.source} (${entry.powerAttack.offer})`}
           </button>
         )}
+        {/* A rule that depends on the character rather than the weapon — today the size limit on a
+            Grapple or Shove. It states the character's own size first, because the limit follows
+            from it: a Rune Knight who switches on Giant's Might watches this line move from
+            "Medium — up to Large" to "Large — up to Huge" with no mention of the rune. */}
+        {entry.sizeNote && (
+          <p className="text-[11px] text-muted-foreground leading-tight mt-0.5" data-testid={`ae-size-${entry.key}`}>
+            {entry.sizeNote}
+          </p>
+        )}
+        {/* A link to the mechanics page that explains this entry in full, for entries whose rules
+            are more than a card can hold. Generic: the entry names its own slug and label. */}
+        {entry.mechanicsSlug && (
+          <p className="text-[11px] leading-tight mt-0.5">
+            <Link
+              to={`/campaigns/${campaignId}/encyclopedia/mechanics/${entry.mechanicsSlug}`}
+              className="text-primary hover:underline"
+              data-testid={`mechanics-learn-more-${entry.key}`}
+            >{entry.mechanicsLabel || 'Learn more'}</Link>
+          </p>
+        )}
         {entry.warning && (
           <p className="text-[11px] text-amber-600 leading-tight mt-0.5" data-testid={`ae-warning-${entry.key}`}>⚠ {entry.warning}</p>
         )}
@@ -903,7 +923,9 @@ export default function ActionEconomyTab({
               />
               {isOpen('universal') && (
                 <div className="space-y-2 opacity-80">
-                  {universal.map((e) => <ItemRow key={e.key} entry={e} />)}
+                  {/* These entries are static text, so they need none of the mutation props — but
+                      Grapple and Shove link out to the mechanics page, which needs the campaign. */}
+                  {universal.map((e) => <ItemRow key={e.key} entry={e} campaignId={campaignId} />)}
                 </div>
               )}
             </div>

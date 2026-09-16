@@ -1523,3 +1523,97 @@ describe('ActionEconomyTab — extra damage folded into the attack card’s dama
     expect(screen.getByTestId(/^ae-damage-weapon:w1/)).not.toHaveTextContent(/1d6/);
   });
 });
+
+// Grapple and Shove ride in the universal menu but are not actions of their own — each replaces one
+// attack of the Attack action. The size line is the only per-character number on them, and it is
+// what makes a running Giant's Might visible: the sheet prints the character's size nowhere else.
+describe('ActionEconomyTab — Grapple & Shove', () => {
+  const fighter = ({ characterData, ...props } = {}) => renderTab({
+    charClass: 'Fighter', subclass: 'Rune Knight', level: 7,
+    scores: { strength: 16, dexterity: 12, constitution: 14 },
+    inventory: [longswordEntry],
+    characterData: { subclass: 'Rune Knight', inventory: [longswordEntry], ...characterData },
+    ...props,
+  });
+
+  const grapple = () => screen.getByTestId('ae-size-universal:Grapple');
+  const shove = () => screen.getByTestId('ae-size-universal:Shove');
+
+  it('lists both in the Actions bucket', () => {
+    fighter();
+    expect(screen.getByText('Grapple')).toBeInTheDocument();
+    expect(screen.getByText('Shove')).toBeInTheDocument();
+  });
+
+  // Badging them "action" would say you must choose between grappling and swinging.
+  it('badges the cost as replacing one attack, not as an action', () => {
+    fighter();
+    expect(screen.getAllByText(/replaces one attack/i).length).toBe(2);
+  });
+
+  it('states the size limit for a Medium character on each card, with its own verb', () => {
+    fighter();
+    expect(grapple()).toHaveTextContent('You are Medium — you can grapple a creature up to Large.');
+    expect(shove()).toHaveTextContent('You are Medium — you can shove a creature up to Large.');
+  });
+
+  // The point of computing the line rather than printing a constant.
+  it("raises the limit to Huge while Giant's Might is running", () => {
+    fighter({ characterData: { active_effects: ['giants_might'] } });
+    expect(grapple()).toHaveTextContent('You are Large — you can grapple a creature up to Huge.');
+    expect(shove()).toHaveTextContent('You are Large — you can shove a creature up to Huge.');
+  });
+
+  it('names the size, never the feature that changed it', () => {
+    fighter({ characterData: { active_effects: ['giants_might'] } });
+    expect(grapple()).not.toHaveTextContent(/Giant/i);
+  });
+
+  // Runic Juggernaut makes the effect grow you to Huge instead.
+  it('raises it again to Gargantuan for a Runic Juggernaut', () => {
+    renderTab({
+      charClass: 'Fighter', subclass: 'Rune Knight', level: 18,
+      scores: { strength: 20, constitution: 16 },
+      inventory: [longswordEntry],
+      characterData: { subclass: 'Rune Knight', inventory: [longswordEntry], active_effects: ['giants_might'] },
+    });
+    expect(grapple()).toHaveTextContent('You are Huge — you can grapple a creature up to Gargantuan.');
+  });
+
+  it('links each card to the special-attacks mechanics page', () => {
+    fighter();
+    expect(screen.getByTestId('mechanics-learn-more-universal:Grapple'))
+      .toHaveAttribute('href', '/campaigns/1/encyclopedia/mechanics/special-attacks');
+    expect(screen.getByTestId('mechanics-learn-more-universal:Shove'))
+      .toHaveAttribute('href', '/campaigns/1/encyclopedia/mechanics/special-attacks');
+  });
+
+  // RAW a grapple needs a free hand; a 2014 shove does not. The warning is on the card rather than
+  // a reason to hide it — the card is how a player learns what they would have to drop.
+  it('warns about a full grip on Grapple only, in 5e', () => {
+    const mainHand = { ...longswordEntry, hand: 'main' };
+    const offHand = {
+      uid: 'sh1', category: 'armor', equipped: true, hand: 'off',
+      name: 'Shield', armor_type: 'Shield', armor_class: '2',
+    };
+    fighter({ inventory: [mainHand, offHand], characterData: { inventory: [mainHand, offHand] } });
+    expect(screen.getByTestId('ae-warning-universal:Grapple')).toHaveTextContent(/free hand/i);
+    expect(screen.queryByTestId('ae-warning-universal:Shove')).not.toBeInTheDocument();
+  });
+
+  it('shows no warning while a hand is free', () => {
+    fighter();
+    expect(screen.queryByTestId('ae-warning-universal:Grapple')).not.toBeInTheDocument();
+  });
+
+  it('describes the 2024 versions as an Unarmed Strike option', () => {
+    renderTab({
+      charClass: 'Fighter', level: 5, edition: '5.5e',
+      scores: { strength: 16 },
+      inventory: [longswordEntry],
+      characterData: { inventory: [longswordEntry] },
+    });
+    // Both cards say it — Grapple and Shove are two options on the same strike.
+    expect(screen.getAllByText(/An option of an Unarmed Strike/)).toHaveLength(2);
+  });
+});

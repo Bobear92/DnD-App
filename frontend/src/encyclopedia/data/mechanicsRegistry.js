@@ -21,6 +21,7 @@ export const MECHANICS = [
   { slug: 'loading', title: 'Loading', blurb: 'Why a crossbow fires only once per turn, and how Crossbow Expert changes it.', available: true },
   { slug: 'object-interaction', title: 'Drawing & Stowing Weapons', blurb: 'Your one free object interaction per turn, why swapping weapons costs a moment, and how Dual Wielder helps.', available: true },
   { slug: 'spacing', title: 'Spacing', blurb: 'The 5-foot rule: melee reach, opportunity attacks, and disadvantage on ranged & spell attacks in melee.', available: true },
+  { slug: 'special-attacks', title: 'Special Melee Attacks', blurb: 'Grappling and shoving — what they cost, how the size limit works, and when to use them.', available: true },
   { slug: 'magical-attacks', title: 'Magical Attacks & Resistance', blurb: 'Resistance to nonmagical damage, and the three ways an attack becomes magical.', available: true },
   { slug: 'damage-mitigation', title: 'Taking Damage', blurb: 'Resistance, vulnerability, immunity, flat damage reduction, and how temporary hit points soak a hit.', available: true },
   // Roadmap — planned pages (render as muted "Coming soon" cards until built).

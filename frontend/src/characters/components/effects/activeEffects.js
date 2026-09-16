@@ -34,10 +34,14 @@ const normEdition = (edition) => (edition === '5.5e' || edition === '2024' ? '5.
 /**
  * Rune Knight "Giant's Might" (Fighter, L3, 5e only — there is no 2024 Rune Knight).
  *
- * RAW, and NOT what the stored feature blurb says: the blurb claims you "can grapple Large
- * creatures", which is not in the feature at all (size is what governs grappling), and
- * Runic Juggernaut's real second clause — +5 ft of reach while Huge — is missing from it.
- * The numbers here follow the rulebook; see the feature-text corrections shipped alongside.
+ * The stored feature text used to claim you "can grapple Large creatures" — which is not in the
+ * feature at all. Grappling is governed by SIZE ("no more than one size larger than you"), so a
+ * Medium character can already grapple a Large one; what this feature does is make you Large, so
+ * the ceiling moves to Huge. The blurb therefore granted nothing while implying the baseline was
+ * lower than it is, and a player reading it concluded exactly that (QA). Runic Juggernaut's blurb
+ * had likewise replaced its real second clause — +5 ft of reach while Huge — with the same
+ * invented grapple line. Both are now corrected in subclassData/fighter.js; the grapple ceiling
+ * is computed from `size` below and shown on the Action Economy Grapple/Shove cards.
  */
 const GIANTS_MIGHT = {
   key: 'giants_might',

@@ -33,6 +33,7 @@ import HitDicePage from './encyclopedia/pages/HitDicePage';
 import LoadingPage from './encyclopedia/pages/LoadingPage';
 import ObjectInteractionPage from './encyclopedia/pages/ObjectInteractionPage';
 import SpacingPage from './encyclopedia/pages/SpacingPage';
+import SpecialAttacksPage from './encyclopedia/pages/SpecialAttacksPage';
 import MagicalAttacksPage from './encyclopedia/pages/MagicalAttacksPage';
 import DamageMitigationPage from './encyclopedia/pages/DamageMitigationPage';
 import MainLayout from './shared/components/layout/MainLayout';
@@ -73,6 +74,7 @@ function App() {
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/loading" element={<ProtectedRoute><MainLayout><LoadingPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/object-interaction" element={<ProtectedRoute><MainLayout><ObjectInteractionPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/spacing" element={<ProtectedRoute><MainLayout><SpacingPage /></MainLayout></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/special-attacks" element={<ProtectedRoute><MainLayout><SpecialAttacksPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/magical-attacks" element={<ProtectedRoute><MainLayout><MagicalAttacksPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/mechanics/damage-mitigation" element={<ProtectedRoute><MainLayout><DamageMitigationPage /></MainLayout></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/encyclopedia/spells/:spellId" element={<ProtectedRoute><MainLayout><SpellEditPage /></MainLayout></ProtectedRoute>} />
