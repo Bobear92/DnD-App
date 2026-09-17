@@ -84,9 +84,13 @@ export function getByCategory(inventory = [], categoryId) {
   return (inventory || []).filter((e) => e.category === categoryId);
 }
 
+// Categories whose entries are individual items, never stacks. Armor (incl. shields) joined
+// weapons: you wear one suit and hold one shield, and a carved rune names ONE object by uid.
+const INDIVIDUAL_ITEM_CATEGORIES = new Set(['weapons', 'armor']);
+
 /**
- * Weapons are tracked as individual items, never stacked — so "equip" is unambiguous
- * (this exact weapon) rather than "some of N". Splits any weapon entry with quantity > 1
+ * Weapons and armor are tracked as individual items, never stacked — so "equip" is unambiguous
+ * (this exact item) rather than "some of N". Splits any such entry with quantity > 1
  * into that many quantity-1 entries. Deterministic uids (`uid`, `uid-2`, `uid-3`, …) and
  * idempotent, so it's safe to run on every render and on already-split inventories.
  * Only the first split copy inherits the `equipped` flag.
@@ -95,7 +99,7 @@ export function normalizeWeapons(inventory = []) {
   const out = [];
   for (const e of inventory || []) {
     const qty = Math.max(1, Math.floor(Number(e.quantity) || 1));
-    if (e.category !== 'weapons' || qty <= 1) { out.push(e); continue; }
+    if (!INDIVIDUAL_ITEM_CATEGORIES.has(e.category) || qty <= 1) { out.push(e); continue; }
     for (let i = 0; i < qty; i++) {
       out.push({
         ...e,

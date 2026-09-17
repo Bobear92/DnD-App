@@ -391,3 +391,39 @@ describe('Hill Rune (Rune Knight) — a defense gated on carved-and-equipped gea
     expect(alwaysOn.some((d) => d.name === 'Hellish Resistance')).toBe(true);
   });
 });
+
+// Channel Rune: Hill is an ACTIVE EFFECT — its resistance appears on the Defenses card exactly
+// while the player has it switched on (QA: the Use button used to spend a charge and do nothing).
+describe('Channel Rune: Hill — resistance from a running effect', () => {
+  const axe = { uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' };
+  const ctx = (active_effects, rune_items = { 'Hill Rune': 'w1' }) => ({
+    charClass: 'Fighter', subclass: 'Rune Knight', level: 7, edition: '5e',
+    characterData: {
+      subclass: 'Rune Knight', runes: ['Hill Rune'], rune_items, inventory: [axe], active_effects,
+    },
+  });
+  const channel = (c) => getDefenses(c).alwaysOn.find((d) => d.name === 'Channel Rune: Hill');
+
+  it('lists bludgeoning, piercing and slashing resistance while the effect runs', () => {
+    expect(channel(ctx(['channel_rune_hill']))).toMatchObject({
+      kind: 'resistance',
+      damageTypes: ['bludgeoning', 'piercing', 'slashing'],
+      typeLabel: 'Bludgeoning / Piercing / Slashing',
+      condition: null,
+    });
+  });
+
+  it('is absent while the effect is off, and the passive poison row stays', () => {
+    const { alwaysOn, situational } = getDefenses(ctx([]));
+    expect([...alwaysOn, ...situational].some((d) => d.name === 'Channel Rune: Hill')).toBe(false);
+    expect(alwaysOn.some((d) => d.name === 'Hill Rune')).toBe(true);
+  });
+
+  it('stops resolving when the rune is no longer carved, even if left switched on', () => {
+    expect(channel(ctx(['channel_rune_hill'], {}))).toBeUndefined();
+  });
+
+  it('names its duration in the rules text', () => {
+    expect(channel(ctx(['channel_rune_hill'])).description).toMatch(/1 minute/);
+  });
+});

@@ -81,6 +81,7 @@ def create_character(character_data: CharacterCreate, user_id: int, db: Session)
         wisdom=character_data.wisdom,
         charisma=character_data.charisma,
         character_data=character_data.character_data,
+        appearance=character_data.appearance,
         notes=character_data.notes,
         backstory=character_data.backstory,
         personal_notes=character_data.personal_notes,

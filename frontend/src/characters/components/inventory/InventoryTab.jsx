@@ -642,8 +642,9 @@ export default function InventoryTab({
                     {showAmmo && renderWeaponAmmo(e)}
                   </div>
 
-                  {/* Quantity — hidden for weapons (each weapon is an individual item) */}
-                  {e.category !== 'weapons' && (
+                  {/* Quantity — hidden for weapons and armor/shields: each is an individual item
+                      with its own card (added one at a time), and you can only wear or hold one. */}
+                  {e.category !== 'weapons' && e.category !== 'armor' && (
                     <div className="flex items-center gap-1 shrink-0">
                       {!readOnly && (
                         <button className="h-6 w-6 rounded border hover:bg-muted disabled:opacity-40"

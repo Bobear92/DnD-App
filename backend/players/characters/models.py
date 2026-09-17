@@ -45,6 +45,12 @@ class Character(Base):
     # Narrative (new fields)
     backstory = Column(Text, nullable=True)
     personal_notes = Column(Text, nullable=True)  # owner + GM only
+    # Physical description — free-text, display-only, visible to every campaign member like
+    # `backstory`. A single JSONB blob rather than ~20 nullable String columns (the shape NPCs
+    # use): nothing computes from any of it, and the field list is meant to GROW as players ask
+    # for more ways to describe a character, which would otherwise be a migration each time.
+    # Deliberately NOT folded into `character_data`, which is class-specific MECHANICAL state.
+    appearance = Column(JSONB, nullable=True)
     image_path = Column(String(500), nullable=True)
     theme_music_url = Column(String(500), nullable=True)
 

@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/select';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import MusicPlayer from '../../shared/components/MusicPlayer';
+import AppearanceCard from '../components/appearance/AppearanceCard';
+import { cleanAppearance } from '../components/appearance/appearanceData';
 import characterService, { mapCharacterImageUrl } from '../characterService';
 import TraitBadgeList from '@/characters/components/race/TraitBadge';
 import { getRaceGrantedSkillsFromTraits } from '@/characters/components/race/raceProficienciesData';
@@ -201,6 +203,7 @@ export default function CharacterDetail() {
   const [gmEdit, setGmEdit] = useState(false); // GM Edit toggle: unlocks permanent choices (Epic 1)
   const [featuresSubTab, setFeaturesSubTab] = useState('class'); // 'class' | 'feats'
   const [statsSubTab, setStatsSubTab] = useState('identity'); // 'identity' | 'abilities' | 'hp'
+  const [narrativeSubTab, setNarrativeSubTab] = useState('appearance'); // 'appearance' | 'backstory' | 'notes'
   // Which derived number has its arithmetic expanded: 'initiative' | `save:${ability}` |
   // `passive:${key}`. One at a time. (Skills keep their own equivalent state in SkillsDisplay.)
   const [openStat, setOpenStat] = useState(null);
@@ -250,6 +253,9 @@ export default function CharacterDetail() {
   const [savingNpc, setSavingNpc] = useState(false);
 
   const identity = useSection(null);
+  // Physical description (characters.appearance JSONB). Its own section rather than part of
+  // `identity`, so a half-written description never rides along with an ability-score save.
+  const appearance = useSection({});
   const classSection = useSection(null);
   const savingThrows = useSection(null);
   const gmNotes = useSection('');
@@ -300,6 +306,7 @@ export default function CharacterDetail() {
       savingThrows.commit(storedProfs);
       gmNotes.commit(c.gm_notes ?? '');
       backstory.commit(c.backstory ?? '');
+      appearance.commit(c.appearance ?? {});
       publicNotes.commit(c.notes ?? '');
       personalNotes.commit(c.personal_notes ?? '');
       narrativeMeta.commit({ theme_music_url: c.theme_music_url ?? '' });
@@ -377,6 +384,16 @@ export default function CharacterDetail() {
   const saveGmNotes = async () => {
     await saveSection({ gm_notes: gmNotes.draft }, () => gmNotes.commit(gmNotes.draft));
   };
+
+  const saveAppearance = async () => {
+    // Empty strings are stripped before the write, so an untouched field never persists as ""
+    // and the read view's "has anything been written?" test stays honest.
+    const cleaned = cleanAppearance(appearance.draft);
+    await saveSection({ appearance: cleaned }, (updated) => appearance.commit(updated.appearance ?? {}));
+  };
+
+  const setAppearanceField = (key, value) =>
+    appearance.setDraft({ ...appearance.draft, [key]: value });
 
   const saveBackstory = async () => {
     await saveSection({ backstory: backstory.draft }, (updated) => backstory.commit(updated.backstory ?? ''));
@@ -814,6 +831,38 @@ export default function CharacterDetail() {
             {/* ── Tab 0: Narrative ── */}
             <TabsContent value="narrative" className="space-y-4">
 
+              {/* Appearance / Backstory / Notes sub-tab toggle (same pattern as the Stats tab). */}
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant={narrativeSubTab === 'appearance' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setNarrativeSubTab('appearance')}
+                  data-testid="narrative-subtab-appearance"
+                >
+                  Appearance
+                </Button>
+                <Button
+                  type="button"
+                  variant={narrativeSubTab === 'backstory' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setNarrativeSubTab('backstory')}
+                  data-testid="narrative-subtab-backstory"
+                >
+                  Backstory
+                </Button>
+                <Button
+                  type="button"
+                  variant={narrativeSubTab === 'notes' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setNarrativeSubTab('notes')}
+                  data-testid="narrative-subtab-notes"
+                >
+                  Notes
+                </Button>
+              </div>
+
+              {narrativeSubTab === 'appearance' && (<>
               {/* Portrait */}
               <div className="rounded-lg border bg-card p-4">
                 <h2 className="font-semibold text-sm mb-3">Character Portrait</h2>
@@ -939,6 +988,28 @@ export default function CharacterDetail() {
                 </div>
               </SectionCard>
 
+              {/* Appearance */}
+              <SectionCard
+                title="Appearance"
+                subtitle="Visible to everyone in the campaign"
+                isDirty={appearance.isDirty}
+                onSave={saveAppearance}
+                onReset={appearance.reset}
+                canEdit={showEditable}
+              >
+                <AppearanceCard
+                  appearance={appearance.draft}
+                  onChange={setAppearanceField}
+                  canEdit={showEditable}
+                  charClass={character.char_class}
+                  subclass={character.character_data?.subclass}
+                  level={character.level}
+                  edition={campaign?.edition}
+                />
+              </SectionCard>
+              </>)}
+
+              {narrativeSubTab === 'backstory' && (<>
               {/* Backstory */}
               <SectionCard
                 title="Backstory"
@@ -974,83 +1045,6 @@ export default function CharacterDetail() {
                   <p className="text-muted-foreground text-sm">No backstory written yet.</p>
                 )}
               </SectionCard>
-
-              {/* Public Notes */}
-              <SectionCard
-                title="Public Notes"
-                isDirty={publicNotes.isDirty}
-                onSave={savePublicNotes}
-                onReset={publicNotes.reset}
-                canEdit={showEditable}
-                subtitle="Visible to all campaign members"
-                extraHeader={showEditable && (
-                  <button
-                    type="button"
-                    onClick={() => setPublicNotesPreview(v => !v)}
-                    className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border"
-                  >
-                    {publicNotesPreview ? 'Write' : 'Preview'}
-                  </button>
-                )}
-              >
-                {showEditable && !publicNotesPreview ? (
-                  <Textarea
-                    value={publicNotes.draft}
-                    onChange={e => publicNotes.setDraft(e.target.value)}
-                    placeholder="Notes visible to all players in the campaign…"
-                    rows={5}
-                    className="text-sm resize-y"
-                  />
-                ) : (publicNotes.draft || !showEditable) ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-                    {publicNotes.draft
-                      ? <ReactMarkdown>{publicNotes.draft}</ReactMarkdown>
-                      : <p className="text-muted-foreground">No public notes.</p>}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No public notes.</p>
-                )}
-              </SectionCard>
-
-              {/* Personal Notes — owner + GM only */}
-              {showPersonalNotes && (
-                <SectionCard
-                  title="Personal Notes"
-                  isDirty={personalNotes.isDirty}
-                  onSave={savePersonalNotes}
-                  onReset={personalNotes.reset}
-                  canEdit={isOwner}
-                  variant="personal"
-                  subtitle="Visible only to you and the GM"
-                  extraHeader={isOwner && (
-                    <button
-                      type="button"
-                      onClick={() => setPersonalNotesPreview(v => !v)}
-                      className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border"
-                    >
-                      {personalNotesPreview ? 'Write' : 'Preview'}
-                    </button>
-                  )}
-                >
-                  {isOwner && !personalNotesPreview ? (
-                    <Textarea
-                      value={personalNotes.draft}
-                      onChange={e => personalNotes.setDraft(e.target.value)}
-                      placeholder="Private notes — only you and the GM can see these…"
-                      rows={5}
-                      className="text-sm resize-y"
-                    />
-                  ) : (personalNotes.draft || !isOwner) ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-                      {personalNotes.draft
-                        ? <ReactMarkdown>{personalNotes.draft}</ReactMarkdown>
-                        : <p className="text-muted-foreground">No personal notes.</p>}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground text-sm">No personal notes.</p>
-                  )}
-                </SectionCard>
-              )}
 
               {/* Related NPCs */}
               <div className="rounded-lg border bg-card">
@@ -1260,6 +1254,85 @@ export default function CharacterDetail() {
                   )}
                 </div>
               </div>
+              </>)}
+
+              {narrativeSubTab === 'notes' && (<>
+              {/* Public Notes */}
+              <SectionCard
+                title="Public Notes"
+                isDirty={publicNotes.isDirty}
+                onSave={savePublicNotes}
+                onReset={publicNotes.reset}
+                canEdit={showEditable}
+                subtitle="Visible to all campaign members"
+                extraHeader={showEditable && (
+                  <button
+                    type="button"
+                    onClick={() => setPublicNotesPreview(v => !v)}
+                    className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border"
+                  >
+                    {publicNotesPreview ? 'Write' : 'Preview'}
+                  </button>
+                )}
+              >
+                {showEditable && !publicNotesPreview ? (
+                  <Textarea
+                    value={publicNotes.draft}
+                    onChange={e => publicNotes.setDraft(e.target.value)}
+                    placeholder="Notes visible to all players in the campaign…"
+                    rows={5}
+                    className="text-sm resize-y"
+                  />
+                ) : (publicNotes.draft || !showEditable) ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+                    {publicNotes.draft
+                      ? <ReactMarkdown>{publicNotes.draft}</ReactMarkdown>
+                      : <p className="text-muted-foreground">No public notes.</p>}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No public notes.</p>
+                )}
+              </SectionCard>
+
+              {/* Personal Notes — owner + GM only */}
+              {showPersonalNotes && (
+                <SectionCard
+                  title="Personal Notes"
+                  isDirty={personalNotes.isDirty}
+                  onSave={savePersonalNotes}
+                  onReset={personalNotes.reset}
+                  canEdit={isOwner}
+                  variant="personal"
+                  subtitle="Visible only to you and the GM"
+                  extraHeader={isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => setPersonalNotesPreview(v => !v)}
+                      className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border"
+                    >
+                      {personalNotesPreview ? 'Write' : 'Preview'}
+                    </button>
+                  )}
+                >
+                  {isOwner && !personalNotesPreview ? (
+                    <Textarea
+                      value={personalNotes.draft}
+                      onChange={e => personalNotes.setDraft(e.target.value)}
+                      placeholder="Private notes — only you and the GM can see these…"
+                      rows={5}
+                      className="text-sm resize-y"
+                    />
+                  ) : (personalNotes.draft || !isOwner) ? (
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+                      {personalNotes.draft
+                        ? <ReactMarkdown>{personalNotes.draft}</ReactMarkdown>
+                        : <p className="text-muted-foreground">No personal notes.</p>}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No personal notes.</p>
+                  )}
+                </SectionCard>
+              )}
 
               {/* GM Notes — inside narrative tab */}
               {isGm && !displayAsPlayer && (
@@ -1279,6 +1352,7 @@ export default function CharacterDetail() {
                   />
                 </SectionCard>
               )}
+              </>)}
             </TabsContent>
 
             {/* ── Tab 1: Stats ── */}

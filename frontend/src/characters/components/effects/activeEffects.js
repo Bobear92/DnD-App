@@ -127,7 +127,54 @@ const CHANNEL_RUNE_FROST = {
 /** Frost Rune's Channel Rune bonus. Flat in RAW — it does not scale with level or proficiency. */
 export const FROST_RUNE_BONUS = 2;
 
-export const ACTIVE_EFFECTS = [GIANTS_MIGHT, CHANNEL_RUNE_FROST];
+/**
+ * Rune Knight "Channel Rune: Hill" (Fighter, L7 — Hill Rune's own minimum — 5e only).
+ *
+ * One minute of resistance to bludgeoning, piercing and slashing damage. It was a bare Use counter
+ * until QA: spending the charge changed nothing on the sheet, so the resistance the player just
+ * paid for lived nowhere. The rule that came out of it applies to every "Channel" feature — it
+ * gets an active status, and while active it DOES something on the sheet. Here that is the
+ * `resistances` grant, read by defenses.js onto the Defenses card.
+ */
+const CHANNEL_RUNE_HILL = {
+  key: 'channel_rune_hill',
+  label: 'Channel Rune: Hill',
+  charClass: 'Fighter',
+  subclass: 'Rune Knight',
+  edition: '5e',
+  minLevel: 7,
+  resourceKey: 'channel_rune_hill_used',
+  duration: '1 minute',
+  applies: (ctx) => isRuneActive('Hill Rune', ctx),
+  summary: () => 'Resistance to bludgeoning, piercing and slashing damage',
+  grants: () => ({ resistances: ['bludgeoning', 'piercing', 'slashing'] }),
+};
+
+/**
+ * Rune Knight "Channel Rune: Storm" (Fighter, L15, 5e only) — the prophetic state.
+ *
+ * It changes no number the sheet prints: what it does is hand you a NEW REACTION for its duration
+ * (give a roll made within 60 ft advantage or disadvantage). So its `grants` is empty and the thing
+ * it does is the "Prophetic State" reaction card in actionEconomyData.js, which exists only while
+ * this effect runs. That card is its consumer — a state with no reader would be a toggle that
+ * pretends to do something.
+ */
+const CHANNEL_RUNE_STORM = {
+  key: 'channel_rune_storm',
+  label: 'Channel Rune: Storm',
+  charClass: 'Fighter',
+  subclass: 'Rune Knight',
+  edition: '5e',
+  minLevel: 15,
+  resourceKey: 'channel_rune_storm_used',
+  duration: '1 minute, or until you are incapacitated',
+  applies: (ctx) => isRuneActive('Storm Rune', ctx),
+  summary: () => 'Prophetic state: use your reaction to give a roll within 60 feet advantage'
+    + ' or disadvantage',
+  grants: () => ({}),
+};
+
+export const ACTIVE_EFFECTS = [GIANTS_MIGHT, CHANNEL_RUNE_FROST, CHANNEL_RUNE_HILL, CHANNEL_RUNE_STORM];
 
 /** The effect definitions this character has earned (whether or not they are switched on). */
 export function getActiveEffectDefs({
@@ -185,7 +232,7 @@ export function activeEffectGrants({ characterData = {}, charClass, subclass, le
   const on = runningEffects({ characterData, charClass, subclass, level, edition });
   const out = {
     size: null, advantageAbilities: [], advantageSaves: [], attackDie: null, reachBonus: 0,
-    checkBonuses: {}, saveBonuses: {},
+    checkBonuses: {}, saveBonuses: {}, resistances: [],
     sources: on.map((e) => e.label),
   };
   for (const e of on) {
@@ -197,6 +244,8 @@ export function activeEffectGrants({ characterData = {}, charClass, subclass, le
     out.advantageSaves = [...new Set([...out.advantageSaves, ...(g.advantageSaves ?? [])])];
     if (g.attackDie) out.attackDie = g.attackDie;
     out.reachBonus = Math.max(out.reachBonus, g.reachBonus ?? 0);
+    // Resistance is a boolean per damage type — two sources of it are still half damage.
+    out.resistances = [...new Set([...out.resistances, ...(g.resistances ?? [])])];
     // Numeric bonuses SUM across effects: two differently-named features that both add to a
     // Strength check do stack in 5e (unlike advantage, which does not), and there is no single
     // "largest wins" answer to fall back on. Only one such effect exists today.
@@ -213,6 +262,24 @@ export function activeEffectGrants({ characterData = {}, charClass, subclass, le
 /** The effect definitions this character has earned AND switched on. */
 function runningEffects(ctx) {
   return getActiveEffectDefs(ctx).filter((e) => isEffectActive(ctx.characterData, e.key));
+}
+
+/**
+ * The running effects that grant damage resistance, one row per SOURCE — what the Defenses card
+ * lists, so each resistance names the effect that is providing it right now.
+ *
+ * @returns {{ key: string, label: string, subclass: string|null, damageTypes: string[], summary: string }[]}
+ */
+export function activeEffectResistances(ctx = {}) {
+  const level = Number(ctx.level) || 1;
+  return runningEffects(ctx).flatMap((e) => {
+    const types = e.grants(level)?.resistances ?? [];
+    if (types.length === 0) return [];
+    return [{
+      key: e.key, label: e.label, subclass: e.subclass ?? null, damageTypes: types,
+      summary: e.summary(level), duration: e.duration ?? null,
+    }];
+  });
 }
 
 /**

@@ -4,8 +4,9 @@ import {
   toggleEffectPatch, activeEffectGrants, mightDie, sizeAt,
   activeEffectCheckParts, activeEffectSaveParts, FROST_RUNE_BONUS,
   activeEffectCheckSources, activeEffectSaveSources,
-  activeEffectCheckBonus, activeEffectSaveBonus,
+  activeEffectCheckBonus, activeEffectSaveBonus, activeEffectResistances,
 } from '@/characters/components/effects/activeEffects';
+import { RUNE_OPTIONS, channelRuneKey } from '@/characters/components/classData/runesData';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 
 const runeKnight = (level, extra = {}) => ({
@@ -293,5 +294,59 @@ describe("Rune Knight feature text — the grapple clause that isn't in the feat
     expect(t).not.toMatch(/grapple/i);
     expect(t).toMatch(/reach increases by 5 feet/);
     expect(t).toMatch(/Huge size/);
+  });
+
+  // "Channel" features get an active status, and while active they DO something (QA on the Hill
+  // Rune: its Use button spent a charge and changed nothing). These pin the rule for the runes.
+  describe('Channel Rune: Hill and Storm', () => {
+    const axe = { uid: 'w1', category: 'weapons', name: 'Battleaxe', equipped: true, hand: 'main' };
+    const ctx = ({ rune, effect, active = true, level = 15, carved = true } = {}) => runeKnight(level, {
+      characterData: {
+        subclass: 'Rune Knight',
+        runes: [rune],
+        rune_items: carved ? { [rune]: 'w1' } : {},
+        inventory: [axe],
+        active_effects: active ? [effect] : [],
+      },
+    });
+    const hill = (o = {}) => ctx({ rune: 'Hill Rune', effect: 'channel_rune_hill', ...o });
+    const storm = (o = {}) => ctx({ rune: 'Storm Rune', effect: 'channel_rune_storm', ...o });
+    const keys = (c) => getActiveEffectDefs(c).map((e) => e.key);
+
+    it('offers Hill once the rune is carved and equipped, from level 7', () => {
+      expect(keys(hill({ level: 7 }))).toContain('channel_rune_hill');
+      expect(keys(hill({ level: 6 }))).not.toContain('channel_rune_hill');
+      expect(keys(hill({ carved: false }))).not.toContain('channel_rune_hill');
+    });
+
+    it('grants bludgeoning, piercing and slashing resistance while Hill runs', () => {
+      expect(activeEffectGrants(hill()).resistances).toEqual(['bludgeoning', 'piercing', 'slashing']);
+      expect(activeEffectResistances(hill())).toEqual([expect.objectContaining({
+        key: 'channel_rune_hill', label: 'Channel Rune: Hill',
+        damageTypes: ['bludgeoning', 'piercing', 'slashing'],
+      })]);
+    });
+
+    it('grants no resistance while Hill is switched off', () => {
+      expect(activeEffectGrants(hill({ active: false })).resistances).toEqual([]);
+      expect(activeEffectResistances(hill({ active: false }))).toEqual([]);
+    });
+
+    it('offers Storm only from level 15', () => {
+      expect(keys(storm())).toContain('channel_rune_storm');
+      expect(keys(storm({ level: 14 }))).not.toContain('channel_rune_storm');
+    });
+
+    // Every rune that names an effect must name a REAL one spending that rune's own charge, or
+    // the card's toggle would switch on a key nothing resolves.
+    it('every rune channel effect exists and spends that rune\u2019s own charge', () => {
+      const withEffect = RUNE_OPTIONS.filter((r) => r.channel.activeEffect);
+      expect(withEffect.map((r) => r.key).sort()).toEqual(['frost', 'hill', 'storm']);
+      for (const rune of withEffect) {
+        const def = ACTIVE_EFFECTS.find((e) => e.key === rune.channel.activeEffect);
+        expect(def).toBeTruthy();
+        expect(def.resourceKey).toBe(channelRuneKey(rune));
+      }
+    });
   });
 });

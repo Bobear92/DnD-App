@@ -46,6 +46,7 @@ import { hasRaceTrait } from '@/characters/components/race/raceCombatNotes';
 import { getFeatDamageReductions } from '@/characters/components/feats/featEffects';
 import { isRuneActive } from '@/characters/components/inventory/runeCarving';
 import { getRune } from '@/characters/components/classData/runesData';
+import { activeEffectResistances } from '@/characters/components/effects/activeEffects';
 
 /** The three things a defense can do to incoming damage. */
 export const DEFENSE_KINDS = ['resistance', 'immunity', 'reduction'];
@@ -616,7 +617,24 @@ export function getDefenses({
     description: null,
   }));
 
-  const all = [...fromTable, ...fromFeats]
+  // Resistance from an effect the player has switched ON (Channel Rune: Hill). It is listed as
+  // ALWAYS ON rather than situational: the row exists only while the effect runs, so while it is
+  // on the card it is simply true. The effect's name and duration say why it is there.
+  const fromEffects = activeEffectResistances({ charClass, subclass, level, edition, characterData })
+    .map((r) => ({
+      key: `effect-${r.key}`,
+      name: r.label,
+      source: r.subclass ? `${r.subclass} · active` : 'Active effect',
+      kind: 'resistance',
+      damageTypes: r.damageTypes,
+      typeLabel: formatDamageTypes(r.damageTypes),
+      valueLabel: formatDefenseValue('resistance'),
+      qualifier: null,
+      condition: null,
+      description: r.duration ? `${r.summary} for ${r.duration}. Ends when you end the effect.` : r.summary,
+    }));
+
+  const all = [...fromTable, ...fromFeats, ...fromEffects]
     .sort((a, b) => a.typeLabel.localeCompare(b.typeLabel) || a.name.localeCompare(b.name));
 
   return {

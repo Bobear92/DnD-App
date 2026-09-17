@@ -21,6 +21,7 @@ class CharacterCreate(BaseModel):
     charisma: int = 10
 
     character_data: Dict[str, Any] = {}
+    appearance: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
     backstory: Optional[str] = None
     personal_notes: Optional[str] = None
@@ -46,6 +47,7 @@ class CharacterUpdate(BaseModel):
     charisma: Optional[int] = None
 
     character_data: Optional[Dict[str, Any]] = None
+    appearance: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
     backstory: Optional[str] = None
     personal_notes: Optional[str] = None
@@ -88,6 +90,7 @@ class CharacterResponse(BaseModel):
     gm_notes: Optional[str]
     backstory: Optional[str]
     personal_notes: Optional[str]
+    appearance: Optional[Dict[str, Any]] = None
     image_path: Optional[str]
     theme_music_url: Optional[str]
 

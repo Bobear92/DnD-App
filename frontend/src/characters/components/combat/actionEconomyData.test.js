@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyCastingTime, characterSpellNames, attacksPerAction, canTwoWeaponFight,
   normalizeFeatureName, featuresKnownAtLevel, buildActionEconomy, powerAttackVariant,
-  subclassFeaturesKnownAtLevel, applyDamageAdditions,
+  subclassFeaturesKnownAtLevel, applyDamageAdditions, isAttackActionBonus,
 } from '@/characters/components/combat/actionEconomyData';
 
 describe('classifyCastingTime', () => {
@@ -859,11 +859,74 @@ describe('buildActionEconomy — Fighter', () => {
       expect(buildActionEconomy(args).bonus.find((e) => /polearm/i.test(e.name))).toBeFalsy();
     });
 
-    it('shows the Polearm Master bonus attack when a polearm is equipped', () => {
+    // "When you take the Attack action with a glaive…, you can use a bonus action" is an
+    // Action + Bonus combo: the butt-end attack only exists on a turn you attacked with the polearm.
+    it('shows Polearm Master as an Action + Bonus combo opened by the polearm, not a lone bonus action', () => {
       const args = fighterArgs(14, '5e');
       args.inventory = [{ uid: 'gl', name: 'Glaive', category: 'weapons', equipped: true, hand: 'both', weapon_type: 'Melee', properties: '["Heavy", "Two-Handed", "Reach"]' }];
+      args.attacks = [{ uid: 'gl', name: 'Glaive', toHit: '+8', damage: '1d10 + 5 slashing', proficient: true }];
       args.characterData = { feats: [POLEARM_MASTER] };
-      expect(buildActionEconomy(args).bonus.find((e) => /polearm/i.test(e.name))).toBeTruthy();
+      const ec = buildActionEconomy(args);
+      expect(ec.bonus.find((e) => /polearm/i.test(e.name))).toBeFalsy();
+      const combo = ec['action+bonus'].find((e) => e.name === 'Polearm Master');
+      expect(combo.cost).toBe('action + bonus action');
+      expect(combo.subAttacks.map((r) => [r.label, r.name])).toEqual([
+        ['Action', 'Glaive'], ['Bonus', 'Polearm Butt'],
+      ]);
+      expect(combo.subAttacks[0]).toMatchObject({ toHit: '+8', damage: '1d10 + 5 slashing' });
+    });
+
+    it('opens the 2024 Polearm Master combo only with that edition\'s weapons (Heavy + Reach)', () => {
+      const PM_2024 = { ...POLEARM_MASTER, effects: [{ ...POLEARM_MASTER.effects[0], trigger: 'When you Attack with a glaive, halberd, quarterstaff, or spear' }] };
+      const args = fighterArgs(14, '5.5e');
+      args.inventory = [{ uid: 'pk', name: 'Pike', category: 'weapons', equipped: true, hand: 'both', weapon_type: 'Melee', properties: 'Heavy, Reach, Two-Handed' }];
+      args.attacks = [{ uid: 'pk', name: 'Pike', toHit: '+8', damage: '1d10 + 5 piercing', proficient: true }];
+      args.characterData = { feats: [PM_2024] };
+      const combo = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Polearm Master');
+      expect(combo.subAttacks[0].name).toBe('Pike');
+    });
+
+    const SHIELD_MASTER = {
+      id: 40, name: 'Shield Master', level: 4,
+      effects: [
+        { kind: 'action', name: 'Shield Shove (Bonus)', economy: 'bonus', trigger: 'When you take the Attack action', description: 'Use a bonus action to shove a creature within 5 ft with your shield.' },
+        { kind: 'note', text: "Add your shield's AC to DEX saves vs single-target effects." },
+      ],
+    };
+    const LONGSWORD = { uid: 'w1', name: 'Longsword', category: 'weapons', equipped: true, hand: 'main', weapon_type: 'Melee', properties: 'Versatile' };
+    const SHIELD = { uid: 'sh', name: 'Shield', category: 'armor', armor_type: 'Shield', equipped: true, hand: 'off' };
+
+    it('shows Shield Master as an Action + Bonus combo — attack, then shove with the shield', () => {
+      const args = fighterArgs(14, '5e');
+      args.inventory = [LONGSWORD, SHIELD];
+      args.characterData = { feats: [SHIELD_MASTER] };
+      const ec = buildActionEconomy(args);
+      expect(ec.bonus.find((e) => /shield/i.test(e.name))).toBeFalsy();
+      const combo = ec['action+bonus'].find((e) => e.name === 'Shield Master');
+      expect(combo).toMatchObject({ source: 'Feat', cost: 'action + bonus action', warning: null });
+      expect(combo.subAttacks.map((r) => [r.label, r.name])).toEqual([
+        ['Action', 'Longsword'], ['Bonus', 'Shield Shove'],
+      ]);
+    });
+
+    // "…you can use your reaction to take no damage…" — a reaction the feat grants gets a card in
+    // the Reactions tab (QA: it was a prose note, so the tab showed nothing).
+    it('files the Shield Master Interpose Shield reaction in the Reactions tab', () => {
+      const withReaction = { ...SHIELD_MASTER, effects: [...SHIELD_MASTER.effects, { kind: 'action', name: 'Interpose Shield', economy: 'reaction', trigger: 'When an effect lets you make a Dexterity saving throw to take only half damage, while wielding a shield', description: 'If you succeed on the save, take no damage instead of half.' }] };
+      const args = fighterArgs(14, '5e');
+      args.inventory = [LONGSWORD, SHIELD];
+      args.characterData = { feats: [withReaction] };
+      const card = buildActionEconomy(args).reaction.find((e) => e.name === 'Interpose Shield');
+      expect(card).toMatchObject({ source: 'Feat', cost: 'reaction' });
+      expect(card.detail).toMatch(/take no damage/);
+    });
+
+    it('keeps the Shield Master card without a shield, with a warning rather than hiding it', () => {
+      const args = fighterArgs(14, '5e');
+      args.inventory = [LONGSWORD];
+      args.characterData = { feats: [SHIELD_MASTER] };
+      const combo = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Shield Master');
+      expect(combo.warning).toMatch(/shield in hand/i);
     });
 
     const DEFENSIVE_DUELIST = {
@@ -2722,6 +2785,41 @@ describe('buildActionEconomy — Channel Rune (Rune Knight)', () => {
     expect(frost.resourceKey).toBe('channel_rune_frost_used');
   });
 
+  // Every "Channel" feature that lasts gets an active status (QA: Hill's card was a bare counter
+  // whose Use changed nothing).
+  it('makes the Hill card an ACTIVE EFFECT', () => {
+    const hill = channelCards(ae(7, { runes: ['Hill Rune'], rune_items: { 'Hill Rune': 'w1' } }))[0];
+    expect(hill.name).toBe('Channel Rune: Hill');
+    expect(hill.activeEffect).toBe('channel_rune_hill');
+    expect(hill.resourceKey).toBe('channel_rune_hill_used');
+  });
+
+  describe('Channel Rune: Storm — the prophetic state', () => {
+    const storm = (active) => buildActionEconomy({
+      charClass: 'Fighter', subclass: 'Rune Knight', level: 15, edition: '5e',
+      characterData: {
+        subclass: 'Rune Knight', runes: ['Storm Rune'], rune_items: { 'Storm Rune': 'w1' },
+        inventory: [AXE], active_effects: active ? ['channel_rune_storm'] : [],
+      },
+      inventory: [AXE], attacks: [], scores: { strength: 16, constitution: 16 }, spellIndex: {},
+    });
+    const prophetic = (b) => b.reaction.find((e) => e.name === 'Prophetic State');
+
+    it('makes the Storm card an ACTIVE EFFECT', () => {
+      const card = channelCards(storm(false)).find((c) => c.name === 'Channel Rune: Storm');
+      expect(card.activeEffect).toBe('channel_rune_storm');
+    });
+
+    it('adds the Prophetic State reaction while the state is active, which is what the state does', () => {
+      expect(prophetic(storm(true))).toMatchObject({ cost: 'reaction' });
+      expect(prophetic(storm(true)).detail).toMatch(/advantage or disadvantage/);
+    });
+
+    it('has no Prophetic State reaction while the state is off', () => {
+      expect(prophetic(storm(false))).toBeUndefined();
+    });
+  });
+
   it('leaves the one-shot runes without an effect key', () => {
     const cloud = channelCards(ae(7, { rune_items: { 'Cloud Rune': 'w1' } }))[0];
     expect(cloud.activeEffect).toBeNull();
@@ -2908,5 +3006,100 @@ describe('extra damage folded into an attack card’s damage', () => {
     const strike = attack.attachedFeatures.find((f) => f.name === 'Psionic Strike');
     expect(strike.note).toMatch(/force damage/);
     expect(strike.note).toMatch(/spend a Psionic Energy die/i);
+  });
+});
+
+// The rule QA kept re-discovering: "If you take the Attack action, you can use a bonus action …"
+// is an Action + Bonus combo. Recognised from the text so a new feature needs no code.
+describe('isAttackActionBonus', () => {
+  it('recognises the 2014 and 2024 phrasings of an Attack-action bonus', () => {
+    expect(isAttackActionBonus({ economy: 'bonus', trigger: 'When you take the Attack action' })).toBe(true);
+    expect(isAttackActionBonus({ economy: 'bonus', trigger: 'When you Attack with a glaive' })).toBe(true);
+    expect(isAttackActionBonus({ economy: 'bonus', description: 'If you take the Attack action on your turn, you can use a bonus action to shove.' })).toBe(true);
+  });
+
+  it('ignores bonus actions with another trigger, and non-bonus economies', () => {
+    expect(isAttackActionBonus({ economy: 'bonus', trigger: 'When you score a critical hit with a melee weapon' })).toBe(false);
+    expect(isAttackActionBonus({ economy: 'reaction', trigger: 'When you take the Attack action' })).toBe(false);
+  });
+});
+
+// GUARD: a curated class/subclass entry whose rules text says "take the Attack action … bonus
+// action" must not be filed as a lone Bonus Action — that pairing is an Action + Bonus combo
+// (the bonus half only exists on a turn you took the Attack action). Feats are routed
+// automatically by isAttackActionBonus; curated entries are authored by hand, so this catches
+// them at authoring time instead of in QA.
+describe('guard: Attack-action bonus actions are never authored as lone bonus actions', () => {
+  const flatten = (map, path = []) => Object.entries(map ?? {}).flatMap(([k, v]) => {
+    if (Array.isArray(v)) return v.map((e, i) => ({ path: [...path, k, e.name ?? i].join(' › '), e }));
+    if (v && typeof v === 'object' && 'tab' in v) return [{ path: [...path, k].join(' › '), e: v }];
+    return v && typeof v === 'object' ? flatten(v, [...path, k]) : [];
+  });
+
+  it('holds for every curated class and subclass action entry', async () => {
+    const mod = await import('@/characters/components/combat/actionEconomyData');
+    const entries = [
+      ...flatten(mod.CLASS_FEATURE_ACTIONS_5E), ...flatten(mod.CLASS_FEATURE_ACTIONS_2024),
+      ...flatten(mod.SUBCLASS_FEATURE_ACTIONS_5E), ...flatten(mod.SUBCLASS_FEATURE_ACTIONS_2024),
+    ];
+    expect(entries.length).toBeGreaterThan(0);
+    const offenders = entries
+      .filter(({ e }) => e.tab === 'bonus' && isAttackActionBonus({ economy: 'bonus', description: e.description }))
+      .map(({ path }) => path);
+    expect(offenders).toEqual([]);
+  });
+
+  it('would catch one (self-test, so the guard cannot silently stop detecting)', () => {
+    expect(isAttackActionBonus({
+      economy: 'bonus',
+      description: 'If you take the Attack action, you can make one additional attack as a bonus action.',
+    })).toBe(true);
+  });
+});
+
+// GUARD: a curated class/subclass feature whose rules text says "you can use your reaction …" must
+// have a card in the Reactions tab. Checked for every class/subclass that HAS a curated action map
+// (the classes the tab covers) — a class not wired yet is a known gap, not a silent miss.
+describe('guard: features that grant a reaction have a Reactions-tab card', () => {
+  const REACTION_TEXT = /\b(use|take|spend) (your|a|its) reaction\b|\bas a reaction\b|\breaction to\b/i;
+  const tabsOf = (e) => (Array.isArray(e) ? e : e ? [e] : []).map((x) => x.tab);
+
+  it('holds for every mapped class and subclass, in both editions', async () => {
+    const mod = await import('@/characters/components/combat/actionEconomyData');
+    const { SUBCLASS_DATA } = await import('@/characters/components/classData/subclassData');
+    const { CLASS_FEATURES_5E } = await import('@/characters/components/classData/classFeatures5e');
+    const { CLASS_FEATURES_2024 } = await import('@/characters/components/classData/classFeatures2024');
+    const offenders = [];
+    let checked = 0;
+    for (const [ed, subMaps, classMaps, table] of [
+      ['5e', mod.SUBCLASS_FEATURE_ACTIONS_5E, mod.CLASS_FEATURE_ACTIONS_5E, CLASS_FEATURES_5E],
+      ['5.5e', mod.SUBCLASS_FEATURE_ACTIONS_2024, mod.CLASS_FEATURE_ACTIONS_2024, CLASS_FEATURES_2024],
+    ]) {
+      for (const [klass, subs] of Object.entries(subMaps)) {
+        for (const [sub, map] of Object.entries(subs)) {
+          for (const f of SUBCLASS_DATA[klass]?.[ed]?.[sub]?.features ?? []) {
+            if (!REACTION_TEXT.test(f.description)) continue;
+            checked += 1;
+            if (!tabsOf(map[f.name]).includes('reaction')) offenders.push(`${ed} ${sub} › ${f.name}`);
+          }
+        }
+      }
+      for (const [klass, map] of Object.entries(classMaps)) {
+        for (const features of Object.values(table[klass] ?? {})) {
+          for (const f of features) {
+            if (!REACTION_TEXT.test(f.description)) continue;
+            checked += 1;
+            if (!tabsOf(map[f.name]).includes('reaction')) offenders.push(`${ed} ${klass} › ${f.name}`);
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+    expect(offenders).toEqual([]);
+  });
+
+  it('would catch one (self-test)', () => {
+    expect(REACTION_TEXT.test('you can use your reaction to impose disadvantage')).toBe(true);
+    expect(REACTION_TEXT.test('you gain a +1 bonus to AC')).toBe(false);
   });
 });

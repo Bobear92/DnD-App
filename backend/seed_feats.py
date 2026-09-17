@@ -14,6 +14,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from shared.database import SessionLocal
 from players.feats.models import Feat
+from players.characters.models import Character
+# Registered so the characters table can resolve its foreign keys when this runs standalone.
+from auth.models import User  # noqa: F401
+from gm.campaigns.models import Campaign, CampaignMember  # noqa: F401
 from shared.enums import OwnerType
 
 
@@ -249,7 +253,10 @@ FEAT_EFFECTS_5E = {
         _action("Shield Shove (Bonus)", "bonus",
                 "When you take the Attack action",
                 "Use a bonus action to shove a creature within 5 ft with your shield."),
-        _note("Add your shield's AC to DEX saves vs single-target effects; take no damage on a successful DEX save."),
+        _action("Interpose Shield", "reaction",
+                "When an effect lets you make a Dexterity saving throw to take only half damage, while wielding a shield",
+                "If you succeed on the save, take no damage instead of half. You can't do this while incapacitated."),
+        _note("Add your shield's AC bonus to Dexterity saves against effects that target only you."),
     ],
     "Skilled": [
         {"kind": "proficiency", "prof_type": "skill_or_tool", "count": 3, "label": "3 skills or tools"},
@@ -400,7 +407,9 @@ FEAT_EFFECTS_2024 = {
         _abil("strength"),
         _action("Shield Shove (Bonus)", "bonus", "When you wield a shield and take the Attack action",
                 "Use a bonus action to shove a creature within 5 ft."),
-        _note("Add your shield's AC to DEX saves vs single-target effects; take no damage on a successful DEX save.")],
+        _action("Interpose Shield", "reaction",
+                "When an effect lets you make a Dexterity saving throw to take only half damage, while holding a shield",
+                "If you succeed on the save, take no damage instead of half.")],
     "Skill Expert": [
         _abil_choice(_ALL_ABILITIES),
         {"kind": "proficiency", "prof_type": "skill", "count": 1, "label": "1 skill"},
@@ -454,10 +463,17 @@ FEAT_EFFECTS_2024 = {
     # ── Epic Boon feats (level 19+; ability scores can exceed 20 — left as notes) ──
     "Boon of Combat Prowess": [_note("Increase one ability score by 1 (max 30). When you miss a creature you can see, you can choose to hit instead (once per turn).")],
     "Boon of Dimensional Travel": [_note("Increase one ability score by 1 (max 30). After the Attack or Magic action, teleport up to 30 ft.")],
-    "Boon of Energy Resistance": [_note("Increase one ability score by 1 (max 30). Resistance to two damage types; reaction to gain resistance to one instance.")],
+    "Boon of Energy Resistance": [
+        _note("Increase one ability score by 1 (max 30). Resistance to two damage types you choose from acid, cold, fire, lightning, necrotic, poison, psychic, radiant or thunder (change them on a long rest)."),
+        _action("Energy Redirection", "reaction",
+                "When you take damage of one of your chosen resistance types",
+                "Direct damage of that type at a creature you can see within 60 ft (not behind total cover): it makes a Dexterity save (DC 8 + CON modifier + proficiency bonus) or takes 2d12 + your CON modifier.")],
     "Boon of Fate": [_note("Increase one ability score by 1 (max 30). Roll a Fate die (d10) to add/subtract on a nearby creature's d20 Test, once per rest.")],
     "Boon of Irresistible Offense": [_note("Increase Strength or Dexterity by 1 (max 30). Your B/P/S damage ignores resistance; a natural 20 adds extra damage equal to the score.")],
-    "Boon of Recovery": [_note("Increase one ability score by 1 (max 30). React to roll half your Hit Dice and regain that many HP; drop to 1 instead of 0.")],
+    "Boon of Recovery": [
+        _note("Increase one ability score by 1 (max 30). Last Stand: when you would drop to 0 HP (and aren't killed outright), drop to 1 HP instead and regain HP equal to half your HP maximum; once per long rest."),
+        _action("Recover Vitality", "bonus", "Pool of ten d10s, regained on a long rest",
+                "Expend dice from the pool (up to half your level each time), roll them, and regain that many hit points.")],
     "Boon of Skill": [_note("Increase one ability score by 1 (max 30). Proficiency in all skills; Expertise in two.")],
     "Boon of Spell Recall": [_note("Increase your spellcasting ability by 1 (max 30). Cast a 1st–4th-level spell without a slot once per turn.")],
     "Boon of the Night Spirit": [_note("Increase one ability score by 1 (max 30). In Dim Light/Darkness gain resistance to all but force/radiant/psychic; Hide as a Bonus Action; meld into shadow.")],
@@ -565,7 +581,7 @@ FEATS_2024 = [
     # Crossbow Expert. The "+proficiency bonus to damage" that used to be written here is
     # Great Weapon Master's Heavy Weapon Master benefit, not Sharpshooter's.
     ("Sharpshooter", "General feat. Increase Dexterity by 1. Your ranged weapon attacks ignore half cover and three-quarters cover, being within 5 feet of an enemy doesn't impose disadvantage on your ranged attack rolls, and your ranged weapons' normal range increases by 30 feet.", "Level 4+, Dexterity 13+", False),
-    ("Shield Master", "General feat. Increase Strength by 1. While wielding a shield you can shove as a bonus action, add the shield's AC to Dexterity saves against single-target effects, and avoid damage on a successful Dexterity save.", "Level 4+, Strength 13+", False),
+    ("Shield Master", "General feat. Increase Strength by 1. While holding a shield, when you take the Attack action you can use a bonus action to shove a creature within 5 feet, and when an effect lets you make a Dexterity saving throw for half damage you can use your reaction to take no damage on a success (Interpose Shield).", "Level 4+, Strength 13+", False),
     ("Skill Expert", "General feat. Increase one ability score by 1, gain proficiency in one skill, and gain Expertise in one skill you're proficient with.", "Level 4+", False),
     ("Skulker", "General feat. Increase Dexterity by 1. You can Hide as a bonus action while lightly obscured, missing a ranged attack doesn't reveal you, and you gain Blindsight 10 feet in darkness against creatures within range.", "Level 4+, Dexterity 13+", False),
     ("Slasher", "General feat. Increase Strength or Dexterity by 1. Once per turn dealing slashing damage reduces the target's speed by 10 feet, and a slashing crit gives the target disadvantage on attacks until your next turn.", "Level 4+", False),
@@ -588,10 +604,10 @@ FEATS_2024 = [
     # Epic Boon feats (level 19+)
     ("Boon of Combat Prowess", "Epic Boon feat. Increase one ability score by 1 (max 30). When you miss with an attack against a creature you can see, you can choose to hit instead, once on each of your turns.", "Level 19+", False),
     ("Boon of Dimensional Travel", "Epic Boon feat. Increase one ability score by 1 (max 30). Immediately after taking the Attack or Magic action you can teleport up to 30 feet to an unoccupied space you can see.", "Level 19+", False),
-    ("Boon of Energy Resistance", "Epic Boon feat. Increase one ability score by 1 (max 30). You gain resistance to two damage types of your choice, and can use a reaction to gain resistance to one instance of one of those types.", "Level 19+", False),
+    ("Boon of Energy Resistance", "Epic Boon feat. Increase one ability score by 1 (max 30). You gain resistance to two damage types of your choice (acid, cold, fire, lightning, necrotic, poison, psychic, radiant or thunder), changeable on a long rest. When you take damage of one of those types, you can use your reaction to direct damage of that type at a creature you can see within 60 feet: it must succeed on a Dexterity saving throw (DC 8 + your Constitution modifier + proficiency bonus) or take 2d12 + your Constitution modifier damage.", "Level 19+", False),
     ("Boon of Fate", "Epic Boon feat. Increase one ability score by 1 (max 30). When a creature within 60 feet makes a d20 Test, you can roll a Fate die (d10) and add or subtract it, once per short or long rest.", "Level 19+", False),
     ("Boon of Irresistible Offense", "Epic Boon feat. Increase Strength or Dexterity by 1 (max 30). Your bludgeoning, piercing, and slashing damage ignores resistance, and a natural 20 on an attack adds extra damage equal to the ability score.", "Level 19+", False),
-    ("Boon of Recovery", "Epic Boon feat. Increase one ability score by 1 (max 30). When you take damage you can use a reaction to roll half your Hit Dice and regain that many hit points; if reduced to 0 you can instead drop to 1.", "Level 19+", False),
+    ("Boon of Recovery", "Epic Boon feat. Increase one ability score by 1 (max 30). Last Stand: when you would be reduced to 0 hit points and aren't killed outright, you drop to 1 instead and regain hit points equal to half your hit point maximum (once per long rest). Recover Vitality: you have a pool of ten d10s; as a bonus action you can expend dice from it (up to half your level), roll them, and regain that many hit points. The pool refills on a long rest.", "Level 19+", False),
     ("Boon of Skill", "Epic Boon feat. Increase one ability score by 1 (max 30). You gain proficiency in all skills and gain Expertise in two skills of your choice.", "Level 19+", False),
     ("Boon of Spell Recall", "Epic Boon feat. Increase your spellcasting ability by 1 (max 30). You can cast your 1st- through 4th-level spells without expending spell slots once per turn, but only one such spell per turn.", "Level 19+, spellcasting", False),
     ("Boon of the Night Spirit", "Epic Boon feat. Increase one ability score by 1 (max 30). While in Dim Light or Darkness you gain resistance to all damage except force, radiant, and psychic, can Hide as a bonus action, and meld into shadow.", "Level 19+", False),
@@ -652,12 +668,46 @@ def _seed_list(db, feats, edition, source, effects_map=None):
     print(f"  {edition}: created {created}, updated {updated} (effects), skipped {skipped}")
 
 
+def sync_character_feat_snapshots(db):
+    """Refresh the `effects` copied onto each character's feats from the feats table.
+
+    A feat's structured effects are SNAPSHOTTED onto `character_data.feats[i]` when the character
+    takes it, so mechanizing a feat later (a /feat-effects pass, a missed reaction) never reached a
+    character who already had it — they had to remove and re-add the feat, losing their picks. Only
+    `effects` is replaced: the player's `choices` (spells, skills, ability) and everything else on
+    the instance are left alone, since effects are pure catalogue data re-derivable from the row.
+    Matched on the feat id the snapshot stored. Idempotent; returns the number of characters changed.
+    """
+    effects_by_id = {f.id: f.effects for f in db.query(Feat).all()}
+    changed = 0
+    for character in db.query(Character).all():
+        data = character.character_data or {}
+        feats = data.get("feats") or []
+        dirty = False
+        new_feats = []
+        for inst in feats:
+            if isinstance(inst, dict) and inst.get("id") in effects_by_id:
+                current = effects_by_id[inst["id"]]
+                if current is not None and inst.get("effects") != current:
+                    inst = {**inst, "effects": current}
+                    dirty = True
+            new_feats.append(inst)
+        if dirty:
+            # Reassign a new dict so SQLAlchemy sees the JSONB change.
+            character.character_data = {**data, "feats": new_feats}
+            changed += 1
+    db.commit()
+    return changed
+
+
 def seed_feats():
     db = SessionLocal()
     try:
         print("Seeding feats...")
         _seed_list(db, FEATS_5E, "5e", "PHB 2014", FEAT_EFFECTS_5E)
         _seed_list(db, FEATS_2024, "5.5e", "PHB 2024", FEAT_EFFECTS_2024)
+        synced = sync_character_feat_snapshots(db)
+        print(f"  refreshed feat effects on {synced} character(s)")
         print("Done.")
     finally:
         db.close()

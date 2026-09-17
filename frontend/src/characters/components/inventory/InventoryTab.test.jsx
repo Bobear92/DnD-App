@@ -478,6 +478,17 @@ describe('InventoryTab', () => {
     expect(row.querySelector('[aria-label="Increase quantity"]')).toBeNull();
   });
 
+  it('does not show a quantity stepper for armor or shields (individual items)', () => {
+    const plate = { uid: 'a1', category: 'armor', name: 'Plate Armor', armor_type: 'Heavy', armor_class: 18, quantity: 1 };
+    const shield = { uid: 's1', category: 'armor', name: 'Shield', armor_type: 'Shield', armor_class: 2, quantity: 1 };
+    renderTab({ inventory: [plate, shield] });
+    fireEvent.click(screen.getByTestId('inv-category-armor'));
+    for (const uid of ['a1', 's1']) {
+      expect(screen.queryByTestId(`qty-${uid}`)).not.toBeInTheDocument();
+      expect(screen.getByTestId(`inv-row-${uid}`).querySelector('[aria-label="Increase quantity"]')).toBeNull();
+    }
+  });
+
   it('splits a stacked weapon into individual, separately-holdable rows', () => {
     const handaxes = { uid: 'h1', category: 'weapons', name: 'Handaxe', weapon_category: 'Simple', weapon_type: 'Melee', damage: '1d6', quantity: 2 };
     renderTab({ inventory: [handaxes] });

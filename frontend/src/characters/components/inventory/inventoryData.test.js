@@ -37,6 +37,19 @@ describe('normalizeWeapons', () => {
     expect(inv.find((e) => e.uid === 'g1').quantity).toBe(20); // ammo still stacks
   });
 
+  // Armor and shields are individual items too: each gets its own card, and a rune carved onto
+  // one names that object by uid, which a ×2 stack could not express.
+  it('splits stacked armor and shields into individual entries', () => {
+    const inv = normalizeWeapons([
+      armor({ uid: 'a1', name: 'Chain Mail', quantity: 2, equipped: true }),
+      armor({ uid: 's1', name: 'Shield', armor_type: 'Shield', quantity: 2 }),
+    ]);
+    expect(inv.map((e) => e.uid)).toEqual(['a1', 'a1-2', 's1', 's1-2']);
+    expect(inv.every((e) => e.quantity === 1)).toBe(true);
+    expect(inv[0].equipped).toBe(true);
+    expect(inv[1].equipped).toBe(false);
+  });
+
   it('is idempotent (re-running on split inventory is a no-op)', () => {
     const once = normalizeWeapons([weapon({ uid: 'h1', name: 'Handaxe', quantity: 3 })]);
     const twice = normalizeWeapons(once);

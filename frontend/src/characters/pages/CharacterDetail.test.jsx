@@ -123,6 +123,11 @@ async function openStatsSubTab(tab) {
   fireEvent.click(await screen.findByTestId(`stats-subtab-${tab}`));
 }
 
+// The Narrative tab is split into Appearance / Backstory / Notes sub-tabs (default: appearance).
+async function openNarrativeSubTab(tab) {
+  fireEvent.click(await screen.findByTestId(`narrative-subtab-${tab}`));
+}
+
 describe('CharacterDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -359,11 +364,13 @@ describe('CharacterDetail', () => {
 
     it('GM sees GM Notes section', async () => {
       renderDetail();
+      await openNarrativeSubTab('notes');
       await waitFor(() => expect(screen.getByText('GM Notes')).toBeInTheDocument());
     });
 
     it('GM notes textarea contains stored value', async () => {
       renderDetail();
+      await openNarrativeSubTab('notes');
       await waitFor(() => expect(screen.getByDisplayValue('Secret GM info')).toBeInTheDocument());
     });
 
@@ -374,6 +381,7 @@ describe('CharacterDetail', () => {
 
     it('switching to player view hides GM Notes', async () => {
       renderDetail();
+      await openNarrativeSubTab('notes');
       await waitFor(() => expect(screen.getByText('GM Notes')).toBeInTheDocument());
       fireEvent.click(screen.getByText('Player View'));
       await waitFor(() => expect(screen.queryByText('GM Notes')).not.toBeInTheDocument());
@@ -407,6 +415,7 @@ describe('CharacterDetail', () => {
         data: { ...BASE_CHARACTER, gm_notes: 'Updated notes' },
       });
       renderDetail();
+      await openNarrativeSubTab('notes');
       await waitFor(() => expect(screen.getByDisplayValue('Secret GM info')).toBeInTheDocument());
 
       fireEvent.change(screen.getByDisplayValue('Secret GM info'), {
@@ -1920,6 +1929,7 @@ describe('CharacterDetail', () => {
   describe('Narrative tab — Personal Notes visibility', () => {
     it('character owner sees Personal Notes section', async () => {
       renderDetail(); // user id=2 matches BASE_CHARACTER.user_id=2
+      await openNarrativeSubTab('notes');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText('Personal Notes')).toBeInTheDocument();
     });
@@ -1932,6 +1942,7 @@ describe('CharacterDetail', () => {
         data: { ...BASE_CHARACTER, gm_notes: null },
       });
       renderDetail();
+      await openNarrativeSubTab('notes');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByText('Personal Notes')).toBeInTheDocument();
     });
@@ -1944,26 +1955,30 @@ describe('CharacterDetail', () => {
         data: { ...BASE_CHARACTER, user_id: 2, is_visible_to_players: true },
       });
       renderDetail();
+      await openNarrativeSubTab('notes');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByText('Personal Notes')).not.toBeInTheDocument();
     });
 
-    it('shows Backstory and Public Notes section headings', async () => {
+    it('shows Backstory and Public Notes section headings on their sub-tabs', async () => {
       renderDetail();
-      await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
-      expect(screen.getByText('Backstory')).toBeInTheDocument();
-      expect(screen.getByText('Public Notes')).toBeInTheDocument();
+      await openNarrativeSubTab('backstory');
+      expect(await screen.findByRole('heading', { name: 'Backstory' })).toBeInTheDocument();
+      await openNarrativeSubTab('notes');
+      expect(await screen.findByRole('heading', { name: 'Public Notes' })).toBeInTheDocument();
     });
   });
 
   describe('Related NPCs card', () => {
     it('shows empty state when no NPCs are linked', async () => {
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('No NPCs linked to this character yet.')).toBeInTheDocument());
     });
 
     it('shows add NPC toggle button for character owner', async () => {
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByTestId('npcs-toggle')).toBeInTheDocument();
     });
@@ -1976,6 +1991,7 @@ describe('CharacterDetail', () => {
         data: { ...BASE_CHARACTER, user_id: 2, is_visible_to_players: true },
       });
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByTestId('npcs-toggle')).not.toBeInTheDocument();
     });
@@ -1986,6 +2002,7 @@ describe('CharacterDetail', () => {
         data: [{ id: 10, npc_id: 5, npc_name: 'Elara', npc_race: 'Elf', npc_occupation: 'Wizard', npc_image_path: null, relationship_description: 'Childhood mentor' }],
       });
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('Elara')).toBeInTheDocument());
       expect(screen.getByText('Childhood mentor')).toBeInTheDocument();
     });
@@ -1996,6 +2013,7 @@ describe('CharacterDetail', () => {
         data: { id: 11, npc_id: 6, npc_name: 'Gordan', npc_race: 'Human', npc_occupation: 'Blacksmith', npc_image_path: null, relationship_description: '' },
       });
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByTestId('npcs-toggle')).toBeInTheDocument());
 
       fireEvent.click(screen.getByTestId('npcs-toggle'));
@@ -2017,6 +2035,7 @@ describe('CharacterDetail', () => {
       });
       characterService.removeCharacterNpc.mockResolvedValue({ success: true });
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('Elara')).toBeInTheDocument());
 
       fireEvent.click(screen.getByTestId('unlink-npc-10'));
@@ -2030,11 +2049,13 @@ describe('CharacterDetail', () => {
   describe('Timeline Events card', () => {
     it('shows empty state when no events are linked', async () => {
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('No timeline events linked to this character.')).toBeInTheDocument());
     });
 
     it('shows add event toggle button for character owner', async () => {
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.getByTestId('timeline-events-toggle')).toBeInTheDocument();
     });
@@ -2047,6 +2068,7 @@ describe('CharacterDetail', () => {
         data: { ...BASE_CHARACTER, user_id: 2, is_visible_to_players: true },
       });
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
       expect(screen.queryByTestId('timeline-events-toggle')).not.toBeInTheDocument();
     });
@@ -2057,6 +2079,7 @@ describe('CharacterDetail', () => {
         data: [{ id: 20, event_id: 3, event_title: 'Born in Millhaven', era_dates: [], link_description: null }],
       });
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('Born in Millhaven')).toBeInTheDocument());
     });
 
@@ -2066,6 +2089,7 @@ describe('CharacterDetail', () => {
         data: [{ id: 20, event_id: 3, event_title: 'Ancient event', era_dates: [], link_description: null }],
       });
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('Ancient event')).toBeInTheDocument());
       expect(screen.getByText('Unknown date')).toBeInTheDocument();
     });
@@ -2076,6 +2100,7 @@ describe('CharacterDetail', () => {
         data: { id: 21, event_id: 4, event_title: 'Joined the guild', era_dates: [], link_description: null },
       });
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByTestId('timeline-events-toggle')).toBeInTheDocument());
 
       fireEvent.click(screen.getByTestId('timeline-events-toggle'));
@@ -2097,6 +2122,7 @@ describe('CharacterDetail', () => {
       });
       characterService.removeTimelineEvent.mockResolvedValue({ success: true });
       renderDetail();
+      await openNarrativeSubTab('backstory');
       await waitFor(() => expect(screen.getByText('Born in Millhaven')).toBeInTheDocument());
 
       fireEvent.click(screen.getByTestId('unlink-event-20'));
@@ -3375,5 +3401,125 @@ describe('CharacterDetail', () => {
       await screen.findByTestId('save-strength');
       expect(screen.queryByTestId('save-features')).not.toBeInTheDocument();
     });
+  });
+});
+
+// The Narrative tab is split into three sub-tabs so the column isn't one long scroll:
+// Appearance (portrait, theme music, description), Backstory (backstory, related NPCs,
+// timeline events) and Notes (public, personal, GM notes).
+describe('CharacterDetail — Narrative sub-tabs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm' } });
+    useAuth.mockReturnValue({ user: { id: 1, username: 'gm' } });
+    characterService.getCharacterById.mockResolvedValue({ success: true, data: { ...BASE_CHARACTER, gm_notes: 'x' } });
+    characterService.getTimelineEvents.mockResolvedValue({ success: true, data: [] });
+    characterService.getCharacterNpcs.mockResolvedValue({ success: true, data: [] });
+  });
+
+  it('defaults to Appearance, holding the portrait, theme music and description only', async () => {
+    renderDetail();
+    expect(await screen.findByRole('heading', { name: 'Appearance' })).toBeInTheDocument();
+    expect(screen.getByText('Character Portrait')).toBeInTheDocument();
+    expect(screen.getByText('Theme Music')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Backstory' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Related NPCs')).not.toBeInTheDocument();
+    expect(screen.queryByText('GM Notes')).not.toBeInTheDocument();
+  });
+
+  it('Backstory holds the backstory, related NPCs and timeline events only', async () => {
+    renderDetail();
+    await openNarrativeSubTab('backstory');
+    expect(await screen.findByRole('heading', { name: 'Backstory' })).toBeInTheDocument();
+    expect(screen.getByText('Related NPCs')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Timeline Events' })).toBeInTheDocument();
+    expect(screen.queryByText('Character Portrait')).not.toBeInTheDocument();
+    expect(screen.queryByText('Public Notes')).not.toBeInTheDocument();
+    expect(screen.queryByText('GM Notes')).not.toBeInTheDocument();
+  });
+
+  it('Notes holds the public, personal and GM notes only', async () => {
+    renderDetail();
+    await openNarrativeSubTab('notes');
+    expect(await screen.findByText('Public Notes')).toBeInTheDocument();
+    expect(screen.getByText('Personal Notes')).toBeInTheDocument();
+    expect(screen.getByText('GM Notes')).toBeInTheDocument();
+    expect(screen.queryByText('Character Portrait')).not.toBeInTheDocument();
+    expect(screen.queryByText('Related NPCs')).not.toBeInTheDocument();
+  });
+});
+
+// Physical description, in the Narrative tab. NPCs have had these fields since that module was
+// built and player characters had NONE of them, so the sheet could say nothing about what its own
+// character looked like. It is display-only text: nothing here may feed a computed number.
+describe('CharacterDetail — Appearance (Narrative tab)', () => {
+  beforeEach(() => {
+    characterService.getCharacterById.mockResolvedValue({ success: true, data: BASE_CHARACTER });
+  });
+
+  it('renders the Appearance section on the Narrative tab, which is the default tab', async () => {
+    renderDetail();
+    expect(await screen.findByRole('heading', { name: 'Appearance' })).toBeInTheDocument();
+  });
+
+  it('gives the owner the full field catalog to fill in', async () => {
+    renderDetail();
+    expect(await screen.findByTestId('appearance-input-height')).toBeInTheDocument();
+    expect(screen.getByTestId('appearance-input-eyes')).toBeInTheDocument();
+    expect(screen.getByTestId('appearance-input-distinctiveFeatures')).toBeInTheDocument();
+  });
+
+  it('shows the stored description', async () => {
+    characterService.getCharacterById.mockResolvedValue({
+      success: true,
+      data: { ...BASE_CHARACTER, appearance: { eyes: 'pale grey', height: `6'2"` } },
+    });
+    renderDetail();
+    await waitFor(() => expect(screen.getByTestId('appearance-input-eyes')).toHaveValue('pale grey'));
+  });
+
+  // Empty fields are stripped, so an untouched box never persists as "".
+  it('saves only the fields that were actually written', async () => {
+    characterService.updateCharacter.mockResolvedValue({
+      success: true,
+      data: { ...BASE_CHARACTER, appearance: { eyes: 'amber' } },
+    });
+    renderDetail();
+    fireEvent.change(await screen.findByTestId('appearance-input-eyes'), {
+      target: { value: 'amber' },
+    });
+
+    const card = screen.getByRole('heading', { name: 'Appearance' }).closest('div').parentElement.parentElement;
+    fireEvent.click(within(card).getByText('Save'));
+
+    await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalledWith(
+      '1', expect.objectContaining({ appearance: { eyes: 'amber' } })
+    ));
+  });
+
+  // It is what the other characters can see just by looking — unlike personal notes or GM notes.
+  it('tells the reader the description is public to the campaign', async () => {
+    renderDetail();
+    expect(await screen.findByText(/Visible to everyone in the campaign/i)).toBeInTheDocument();
+  });
+
+  // The feature that prompted the whole section: Great Stature adds 3d4 inches of height.
+  it("notes Great Stature beside height for a Rune Knight, and for nobody else", async () => {
+    characterService.getCharacterById.mockResolvedValue({
+      success: true,
+      data: {
+        ...BASE_CHARACTER, level: 10,
+        character_data: { ...BASE_CHARACTER.character_data, subclass: 'Rune Knight' },
+      },
+    });
+    renderDetail();
+    expect(await screen.findByTestId('appearance-note-height-great-stature'))
+      .toHaveTextContent(/3d4/);
+  });
+
+  it('shows no feature note for an ordinary Fighter', async () => {
+    renderDetail();
+    await screen.findByTestId('appearance-input-height');
+    expect(screen.queryByTestId('appearance-note-height-great-stature')).not.toBeInTheDocument();
   });
 });

@@ -19,7 +19,7 @@
  * is authored — expand CLASS_FEATURE_ACTIONS_* class-by-class.
  */
 import { mightDie, sizeAt, isEffectActive } from '@/characters/components/effects/activeEffects';
-import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor, creatureSize } from '@/characters/components/inventory/inventoryData';
+import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor, creatureSize, isShieldEntry } from '@/characters/components/inventory/inventoryData';
 import { specialAttackEntries } from '@/characters/components/combat/specialAttacksData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
@@ -333,7 +333,20 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
         // standing alone (see ATTACHED_FEATURES). The others are actions in their own right.
         ...(rune.key === 'fire' ? { attachedAs: 'Fire Rune' } : {}),
         description: rune.channel.description,
-      })),
+      })).concat([{
+        // What Channel Rune: Storm's prophetic state DOES: while it runs you have this reaction.
+        // It exists only while the effect is switched on — a card for a reaction you can't take
+        // is noise, and its appearing is how the player sees the state is live. It spends your
+        // normal reaction, so no `extraReaction`. Uses are unlimited for the duration.
+        name: 'Prophetic State',
+        tab: 'reaction',
+        cost: 'reaction',
+        hidden: ({ characterData, level }) => !isRuneActive('Storm Rune', { characterData, level })
+          || !isEffectActive(characterData, 'channel_rune_storm'),
+        description: 'While your prophetic state lasts: when you or another creature you can see'
+          + ' within 60 feet makes an attack roll, a saving throw, or an ability check, give that'
+          + ' roll advantage or disadvantage.',
+      }]),
     },
     'Echo Knight': {
       // The echo's AC comes from companionData so this card and the statblock on the Features
@@ -910,6 +923,43 @@ const isFinesseWeapon = (e) =>
 /** Is any equipped weapon a match for the predicate? */
 const hasEquipped = (inventory, predicate) =>
   (inventory || []).some((e) => e.equipped && predicate(e));
+
+/**
+ * "If you take the Attack action, you can use a bonus action to …" — the rules text that means an
+ * ACTION + BONUS combo, never a lone bonus action. The bonus half only exists on a turn whose
+ * action was the Attack action, so a card filed under Bonus Actions (with nothing naming the
+ * action that enables it) is not something a player can act on. QA kept finding these one at a
+ * time (Shield Master, Polearm Master), so a feat `action` effect whose economy is 'bonus' and
+ * whose trigger/description matches this is routed to the combo bucket automatically — a new
+ * feat written this way needs no code. 2024 phrases it "when you Attack with …".
+ */
+export const ATTACK_ACTION_TRIGGER = /\battack action\b|\byou attack with\b|^attack with\b/i;
+
+/** True when a bonus-action feature is triggered by taking the Attack action. */
+export const isAttackActionBonus = ({ economy, trigger, description } = {}) =>
+  economy === 'bonus'
+  && (ATTACK_ACTION_TRIGGER.test(trigger || '') || ATTACK_ACTION_TRIGGER.test(description || ''));
+
+/**
+ * Per-feat gates for the Attack-action combos, for what the trigger text alone can't express.
+ *   opener(item, edition)  which weapon's attacks can be the ACTION half (default: any attack)
+ *   hideWithoutOpener      omit the card when no opener is held (the bonus attack IS that weapon)
+ *   needs(inventory)       an item the BONUS half needs; when absent the card stays, with `warning`
+ *                          — the Tavern Brawler lesson: hiding a feat's card makes it look unbuilt.
+ */
+const ATTACK_ACTION_COMBO_GATES = {
+  'Polearm Master': {
+    // RAW lists differ by edition: 5e glaive/halberd/quarterstaff/spear; 2024 quarterstaff, spear,
+    // or any Heavy + Reach weapon — which is exactly the reach predicate's 2024 list.
+    opener: (item, edition) => (edition === '5.5e' || edition === '2024'
+      ? isPolearmReachWeapon(edition)(item) : isPolearm(item)),
+    hideWithoutOpener: true,
+  },
+  'Shield Master': {
+    needs: (inventory) => hasEquipped(inventory, isShieldEntry),
+    warning: 'Shoving with your shield needs a shield in hand.',
+  },
+};
 
 /**
  * The equipped weapons that qualify for Two-Weapon Fighting — light melee weapons, or
@@ -1910,9 +1960,41 @@ export function buildActionEconomy({
     if (hasCrossbowExpert && a.source === 'Crossbow Expert') continue;
     // Tavern Brawler's grapple is shown as the Action+Bonus combo above, never as a standalone bonus.
     if (a.source === 'Tavern Brawler' && /grapple/i.test(a.name)) continue;
-    // Polearm Master's bonus attack requires a qualifying polearm (glaive/halberd/quarterstaff/spear)
-    // in hand — hide it when none is equipped.
-    if (a.source === 'Polearm Master' && !hasEquipped(inventory, isPolearm)) continue;
+    // "If you take the Attack action, you can use a bonus action …" → an Action + Bonus combo.
+    // The Action half is one row per attack you could open with (clickable numbers, like Marked
+    // Target), the Bonus half is the feat's own action. See ATTACK_ACTION_TRIGGER.
+    if (isAttackActionBonus(a)) {
+      const gate = ATTACK_ACTION_COMBO_GATES[a.source] ?? {};
+      const itemByUid = new Map((inventory || []).filter((e) => e.uid).map((e) => [e.uid, e]));
+      const openers = buckets.action.filter((e) => e.source === 'Weapon' && (!gate.opener
+        || (e.weaponUid && itemByUid.has(e.weaponUid) && gate.opener(itemByUid.get(e.weaponUid), edition))));
+      if (gate.hideWithoutOpener && openers.length === 0) continue;
+      const missing = gate.needs && !gate.needs(inventory);
+      push('action+bonus', {
+        key: `feat-attack-combo:${a.key}`,
+        name: a.source,
+        source: 'Feat',
+        cost: 'action + bonus action',
+        warning: missing ? gate.warning : null,
+        detail: [a.trigger, a.description].filter(Boolean).join(' — '),
+        subAttacks: [
+          ...openers.map((row) => ({
+            label: 'Action',
+            name: row.name,
+            toHit: row.toHit,
+            toHitBreakdown: row.toHitBreakdown || null,
+            damage: row.damage,
+            damageBreakdown: row.damageBreakdown || null,
+            warning: row.warning || null,
+          })),
+          ...(openers.length === 0
+            ? [{ label: 'Action', name: 'Attack action', detail: 'Take the Attack action — equip a weapon, or make an unarmed strike.' }]
+            : []),
+          { label: 'Bonus', name: a.name.replace(/\s*\((bonus[^)]*)\)\s*$/i, ''), detail: a.description },
+        ],
+      });
+      continue;
+    }
     // Great Weapon Master's crit/kill bonus attack needs a melee weapon in hand (its trigger).
     // Shown BOTH as this standalone Bonus entry and as a reminder note on the melee weapon.
     if (a.source === 'Great Weapon Master' && !hasEquipped(inventory, isMelee)) continue;

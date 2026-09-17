@@ -85,9 +85,9 @@ export const RUNE_OPTIONS = [
     channel: {
       cost: 'bonus action',
       tab: 'bonus',
-      // The only Channel Rune that RUNS for a while and changes numbers the sheet already shows,
-      // so it is an ACTIVE EFFECT rather than a one-shot: invoking it has to switch something on
-      // or the +2 lives nowhere. The effect definition (and the +2 itself) is in activeEffects.js.
+      // A Channel Rune that RUNS for a while and changes numbers the sheet already shows, so it
+      // is an ACTIVE EFFECT rather than a one-shot: invoking it has to switch something on or the
+      // +2 lives nowhere (Hill and Storm follow the same rule). The effect definition (and the +2 itself) is in activeEffects.js.
       activeEffect: 'channel_rune_frost',
       description: 'For 10 minutes you gain a +2 bonus to all ability checks and saving throws that'
         + ' use Strength or Constitution.',
@@ -127,6 +127,9 @@ export const RUNE_OPTIONS = [
     channel: {
       cost: 'bonus action',
       tab: 'bonus',
+      // A Channel Rune that RUNS for a while, so it is an active effect: Use switches it on and
+      // the resistance appears on the Defenses card until it is ended (activeEffects.js).
+      activeEffect: 'channel_rune_hill',
       description: 'For 1 minute you gain resistance to bludgeoning, piercing, and slashing damage.',
     },
     description: 'Passive: you have advantage on saving throws against being poisoned, and you have resistance to poison damage. Channel Rune (bonus action): for 1 minute you gain resistance to bludgeoning, piercing, and slashing damage.',
@@ -145,6 +148,9 @@ export const RUNE_OPTIONS = [
     channel: {
       cost: 'bonus action',
       tab: 'bonus',
+      // The prophetic state is an active effect; while it runs the Reactions tab gains the
+      // "Prophetic State" card, which is the thing the state lets you do.
+      activeEffect: 'channel_rune_storm',
       description: 'You enter a prophetic state for 1 minute or until you are incapacitated. Until it'
         + ' ends, when you or another creature you can see within 60 feet makes an attack roll, saving'
         + ' throw, or ability check, you can use your reaction to give that roll advantage or'

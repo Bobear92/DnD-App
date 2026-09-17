@@ -2239,3 +2239,128 @@ class TestInitiativeRest:
     def test_options_handles_an_empty_id_list(self, client):
         h_gm, _, campaign_id = self._setup(client)
         assert self._options(client, campaign_id, [], h_gm).json() == []
+
+
+class TestCharacterAppearance:
+    """The character's physical description (characters.appearance JSONB).
+
+    NPCs have had age/gender/height/weight/appearance since that module was built and player
+    characters had none of it, so a GM could describe a tavern keeper but not the party's own
+    fighter. The column is free-text and display-only: nothing computes from it, and it is
+    visible to every campaign member like `backstory`.
+    """
+
+    APPEARANCE = {
+        "height": "6'2\"",
+        "eyes": "pale grey",
+        "hairColor": "black",
+        "markings": "A burn across the left forearm.",
+    }
+
+    def test_defaults_to_null_for_a_character_that_never_set_one(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        cid = make_character(client, h_gm, campaign_id)
+
+        resp = client.get(f"/api/characters/{cid}", headers=h_gm)
+        assert resp.status_code == 200
+        assert resp.json()["appearance"] is None
+
+    def test_can_be_set_at_creation(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+
+        resp = client.post(
+            "/api/characters",
+            json={**CHAR_PAYLOAD, "campaign_id": campaign_id, "appearance": self.APPEARANCE},
+            headers=h_gm,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["appearance"] == self.APPEARANCE
+
+    def test_owner_can_write_and_read_it_back(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_player, uid = make_user(client, 2)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid)
+        cid = make_character(client, h_player, campaign_id)
+
+        resp = client.put(
+            f"/api/characters/{cid}", json={"appearance": self.APPEARANCE}, headers=h_player
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["appearance"] == self.APPEARANCE
+        assert client.get(f"/api/characters/{cid}", headers=h_player).json()["appearance"] == self.APPEARANCE
+
+    def test_gm_can_write_it_too(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_player, uid = make_user(client, 2)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid)
+        cid = make_character(client, h_player, campaign_id)
+
+        resp = client.put(
+            f"/api/characters/{cid}", json={"appearance": {"eyes": "amber"}}, headers=h_gm
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["appearance"] == {"eyes": "amber"}
+
+    def test_a_replacing_write_drops_the_keys_it_omits(self, client):
+        """The frontend sends the whole cleaned object, so a cleared field really clears."""
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        cid = make_character(client, h_gm, campaign_id)
+
+        client.put(f"/api/characters/{cid}", json={"appearance": self.APPEARANCE}, headers=h_gm)
+        resp = client.put(
+            f"/api/characters/{cid}", json={"appearance": {"eyes": "amber"}}, headers=h_gm
+        )
+        assert resp.json()["appearance"] == {"eyes": "amber"}
+
+    def test_an_update_that_omits_it_leaves_it_alone(self, client):
+        """Saving any other section must not wipe a description."""
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        cid = make_character(client, h_gm, campaign_id)
+
+        client.put(f"/api/characters/{cid}", json={"appearance": self.APPEARANCE}, headers=h_gm)
+        resp = client.put(f"/api/characters/{cid}", json={"backstory": "Born in a storm."}, headers=h_gm)
+        assert resp.status_code == 200
+        assert resp.json()["appearance"] == self.APPEARANCE
+
+    def test_accepts_an_arbitrary_field_set(self, client):
+        """The catalog lives in the frontend and is meant to grow; the column must not pin it."""
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        cid = make_character(client, h_gm, campaign_id)
+
+        blob = {"distinctiveFeatures": "Ram's horns, one broken.", "scent": "woodsmoke"}
+        resp = client.put(f"/api/characters/{cid}", json={"appearance": blob}, headers=h_gm)
+        assert resp.status_code == 200
+        assert resp.json()["appearance"] == blob
+
+    def test_can_be_cleared(self, client):
+        h_gm, _ = make_user(client, 1)
+        campaign_id = make_campaign(client, h_gm)
+        cid = make_character(client, h_gm, campaign_id)
+
+        client.put(f"/api/characters/{cid}", json={"appearance": self.APPEARANCE}, headers=h_gm)
+        resp = client.put(f"/api/characters/{cid}", json={"appearance": {}}, headers=h_gm)
+        assert resp.json()["appearance"] == {}
+
+    def test_another_player_in_the_campaign_can_read_it(self, client):
+        """Unlike gm_notes/personal_notes, a description is public to the party — it is what the
+        other characters can see just by looking."""
+        h_gm, _ = make_user(client, 1)
+        h_owner, uid_owner = make_user(client, 2)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid_owner)
+        cid = make_character(client, h_owner, campaign_id)
+        client.put(f"/api/characters/{cid}", json={"appearance": self.APPEARANCE}, headers=h_owner)
+        client.patch(f"/api/characters/{cid}/visibility", json={"is_visible": True}, headers=h_gm)
+
+        h_other, uid_other = make_user(client, 3)
+        invite_player(client, h_gm, campaign_id, uid_other)
+        resp = client.get(f"/api/characters/{cid}", headers=h_other)
+        assert resp.status_code == 200
+        assert resp.json()["appearance"] == self.APPEARANCE
