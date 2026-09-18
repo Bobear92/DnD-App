@@ -81,6 +81,19 @@ ongoing work this skill covers.
    `XxxSheet.jsx` files.
 5. If a known caster (Bard/Sorcerer/Warlock), confirm the `LevelUpWizard` New-Spells step still works.
 
+## Prose-only needs sign-off (HARD RULE — user)
+A migration or a new class inevitably leaves class features as plain description text. **That is a
+decision to show the user, not one to make silently.** Before reporting the class done, list every
+feature you left as prose — one line each: **`level › feature` — what it would take, and the MISSING
+MODEL that stops it** (no concentration/duration state, no target, no distance, no tool-check number…).
+"Flavor" is not a reason; if you can't name the missing model, it is probably mechanizable.
+
+Mark each as genuinely un-modelable or merely **deferred**, and let the user decide.
+`npm run report:class-coverage` prints the same worklist per class — but note it under-counts (it loads
+only pure-data sources, so anything wired in a `.jsx` config reads as prose-only, and `defenses.js` isn't
+a recognised source at all). Read it as a prompt, not as the list. Same rule as `/subclass-features`
+Phase 1.5 and `/feat-effects`.
+
 ## Workflow C — brand-new class
 Same as B steps 2–4 but also seed `backend/seed_classes.py`, `classFeatures*.js`, `classChoicesData.js`,
 and `classProgressionTables.js`, and add it to `SUPPORTED_CLASSES_*` + the page sheet maps.

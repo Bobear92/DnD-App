@@ -48,10 +48,48 @@ Each effect is `{ kind, …, label? }`. `label` is the chip text in the Feats su
 
 ## Authoring decision tree (per feat)
 1. Read the feat's `description` in `seed_feats.py`.
-2. For each mechanical clause: does it map to a **supported** kind? → author it.
-3. Maps to a kind that **needs a consumer**? → author the effect AND build the consumer (below) in the same change — never ship a chip that silently does nothing.
-4. Purely descriptive / not yet modelable? → `note`.
-5. Half-feat (grants a +1 ability *and* a benefit)? → an `ability_score` or `ability_choice` **plus** the benefit effects.
+2. **Cut the description into clauses before mapping anything.** A clause is anything carrying its own
+   **cost** (action / bonus action / **reaction** / "in place of one attack"), **duration**, **trigger**,
+   **charge** ("once per long rest"), or **number** the sheet already prints. Most feats are several
+   mechanics under one name, and a feat mapped as a single clause loses all but one of them — this is how
+   Shield Master's Interpose Shield shipped as a prose `note` when its text plainly grants a reaction, and
+   how Sentinel's opportunity-attack clauses sat display-only while the Reactions tab showed stock text.
+   **Two costs = two effects = two surfaces.** `"…you can use your reaction…"` is ALWAYS a `reaction`
+   action effect, never a `note`; `"If you take the Attack action … bonus action"` is ALWAYS an
+   Action+Bonus combo (`isAttackActionBonus` routes it). Both are guarded in `test_feat_seed_data.py`.
+3. **A feat that grants PICKS is a container — audit one clause per option, not one for the feat.**
+   Magic Initiate's spells, Martial Adept's maneuvers, Weapon Master's weapons, Ritual Caster's book: the
+   rules the player reads live in the *option list*, not the feat's paragraph, and the option can carry a
+   cost the feat never mentions (a picked spell may be a **reaction** — that's how a Tiefling's Hellish
+   Rebuke went missing from the Reactions tab). Open the pool the pick draws from. Same rule as
+   `/subclass-features` Phase 1.3a: when a feature is a container, look one level below.
+4. For each remaining clause: does it map to a **supported** kind? → author it.
+5. Maps to a kind that **needs a consumer**? → author the effect AND build the consumer (below) in the same change — never ship a chip that silently does nothing.
+6. Purely descriptive / not yet modelable? → `note`. Use this only for a clause with nothing to attach it
+   to — never for one that states a cost. **Every `note` you author needs the user's sign-off before the
+   pass is called complete (HARD RULE — user): see "Prose-only needs sign-off" below.**
+7. Half-feat (grants a +1 ability *and* a benefit)? → an `ability_score` or `ability_choice` **plus** the benefit effects.
+
+## Prose-only needs sign-off (HARD RULE — user)
+**`note` is not a status you may assign on your own.** Before reporting a pass complete, collect every
+clause you left as a `note` into one short list and **show it to the user**. Never bury it in a summary.
+
+`note` is the escape hatch that hides missed mechanics, and it has: Shield Master's Interpose Shield
+shipped as a note when its text plainly grants a reaction; Sentinel's and Polearm Master's opportunity-
+attack clauses were notes while the Reactions tab showed the unmodified stock rule. Both were found in
+QA by the user, not by the authoring pass.
+
+One line each: **`feat › clause` — what it would take, and why it isn't built now.** The *why* must name
+the **missing model**, not assert difficulty:
+- no model exists for it — no distance-to-target (cover clauses), no surprise state, no concentration or
+  duration, no computed tool-check number, no mount entity
+- it lands only on the TARGET, not on the character — nothing on this sheet changes
+- it needs a choice the app never persists
+
+"It's flavor" / "it's narrative" / "can't be computed" with nothing named is **not** a reason. If you
+can't name the missing model, the clause is probably mechanizable and you just haven't found the surface.
+Mark each as genuinely un-modelable or merely **deferred**, and let the user decide — `report_feat_effects.py`
+already prints the prose-only list per edition, so this is the same worklist, surfaced at authoring time.
 
 ## Workflow A — mechanize feats (data)
 1. Add entries to `FEAT_EFFECTS_5E` in `seed_feats.py`.

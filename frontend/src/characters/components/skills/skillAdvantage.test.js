@@ -80,6 +80,47 @@ describe('Rune Carving', () => {
     expect(getSkillAdvantageNames(ctx)).toEqual([]);
   });
 
+  // Storm is the rune where the passive and the active halves are easiest to conflate, because it
+  // is the only one that HAS both: the Arcana advantage is a passive of the carving, while the
+  // prophetic state is a bonus action you spend a Channel Rune use on. They are independent, and
+  // the direction that matters is this one — the advantage does NOT wait on the state. A reader
+  // who ties them together concludes a Storm Rune Knight has no Arcana advantage until they burn
+  // a charge, which is a worse sheet than no sheet.
+  describe('Storm Rune — the passive half does not wait on the active half', () => {
+    const storm = (active) => ({
+      charClass: 'Fighter',
+      subclass: 'Rune Knight',
+      level: 15,
+      edition: '5e',
+      characterData: {
+        subclass: 'Rune Knight',
+        runes: ['Storm Rune'],
+        rune_items: { 'Storm Rune': 'w1' },
+        inventory: [axe],
+        active_effects: active ? ['channel_rune_storm'] : [],
+      },
+    });
+
+    it('grants Arcana advantage while the prophetic state is OFF', () => {
+      expect(getSkillAdvantageNames(storm(false))).toEqual(['Arcana']);
+      expect(skillAdvantageSourcesFor('Arcana', storm(false)).map((a) => a.source))
+        .toEqual(['Storm Rune']);
+    });
+
+    it('grants exactly the same with the prophetic state ON — the state adds a reaction, not a skill', () => {
+      expect(getSkillAdvantageNames(storm(true))).toEqual(['Arcana']);
+    });
+
+    it('grants nothing once the bearing item is unequipped, state or no state', () => {
+      const stow = (ctx) => ({
+        ...ctx,
+        characterData: { ...ctx.characterData, inventory: [{ ...axe, equipped: false, hand: null }] },
+      });
+      expect(getSkillAdvantageNames(stow(storm(false)))).toEqual([]);
+      expect(getSkillAdvantageNames(stow(storm(true)))).toEqual([]);
+    });
+  });
+
   it('lists both sources in the legend when a rune and a subclass feature are both live', () => {
     const ctx = {
       charClass: 'Fighter', subclass: 'Champion', level: 3, edition: '5.5e',

@@ -4,6 +4,9 @@ import {
   normalizeFeatureName, featuresKnownAtLevel, buildActionEconomy, powerAttackVariant,
   subclassFeaturesKnownAtLevel, applyDamageAdditions, isAttackActionBonus,
 } from '@/characters/components/combat/actionEconomyData';
+import { RUNE_OPTIONS } from '@/characters/components/classData/runesData';
+import { ARCANE_SHOT_OPTIONS } from '@/characters/components/classData/arcaneShotData';
+import { getManeuvers } from '@/characters/components/classData/maneuversData';
 
 describe('classifyCastingTime', () => {
   it('buckets by casting time (bonus before action)', () => {
@@ -3061,7 +3064,9 @@ describe('guard: Attack-action bonus actions are never authored as lone bonus ac
 // have a card in the Reactions tab. Checked for every class/subclass that HAS a curated action map
 // (the classes the tab covers) — a class not wired yet is a known gap, not a silent miss.
 describe('guard: features that grant a reaction have a Reactions-tab card', () => {
-  const REACTION_TEXT = /\b(use|take|spend) (your|a|its) reaction\b|\bas a reaction\b|\breaction to\b/i;
+  // "your"/"a", never "its": a feature that hands an ALLY a reaction (Commander's Strike) is not
+  // a card on this character's sheet — the same scope line the option-pool guard below draws.
+  const REACTION_TEXT = /\b(use|take|spend) (your|a) reaction\b|\bas a reaction\b|\byour reaction to\b/i;
   const tabsOf = (e) => (Array.isArray(e) ? e : e ? [e] : []).map((x) => x.tab);
 
   it('holds for every mapped class and subclass, in both editions', async () => {
@@ -3101,5 +3106,180 @@ describe('guard: features that grant a reaction have a Reactions-tab card', () =
   it('would catch one (self-test)', () => {
     expect(REACTION_TEXT.test('you can use your reaction to impose disadvantage')).toBe(true);
     expect(REACTION_TEXT.test('you gain a +1 bonus to AC')).toBe(false);
+    expect(REACTION_TEXT.test('That creature can use its reaction to move up to half its speed')).toBe(false);
+  });
+});
+
+// GUARD (the sibling of the one above, for OPTION POOLS). A subclass's real rules text does not
+// always live in SUBCLASS_DATA. Rune Carving's feature blurb says only that each rune "grants a
+// passive benefit while carved, plus a Channel Rune effect" — the per-rune text lives in
+// runesData, and three of the six runes spend a REACTION. The guard above reads feature
+// descriptions, so it scans none of that: the Cloud/Stone reaction cards and Storm's Prophetic
+// State were built correctly by hand, but nothing would have failed had they not been. Found in
+// QA by a player reading the rune list, not by the suite.
+//
+// This guard is BEHAVIORAL rather than textual. For each pool option whose text gives the
+// CHARACTER a reaction, it builds the action economy for a character who actually HOLDS that
+// option — fully in play: carved onto equipped gear, with any active effect the option names
+// switched on — and asserts a card lands in the reaction bucket.
+//
+// A pool not yet wired into the tab is a known gap, not a licence to skip: its options are named
+// in PENDING, and the assertion is an EQUALITY. So wiring one up and forgetting to delete its
+// line fails exactly as loudly as adding a new option with no card.
+describe('guard: option-pool choices that grant a reaction have a Reactions-tab card', () => {
+  // "…you can use your reaction…" / "…you can take a Reaction…" — YOURS. Deliberately excludes
+  // "its Reaction": Commander's Strike and Maneuvering Attack spend an ALLY's reaction, which is
+  // nothing this character can do on their turn and so is not a card on this sheet (the same line
+  // defenses.js draws for defenses granted only to others).
+  //
+  // The parenthetical is here because a pool states its cost in TWO ways and the guard must read
+  // the one the PLAYER reads. A rune's prose opens "Channel Rune (reaction, when you …)"; the
+  // sentence never says "use your reaction", because the cost is structured data on the option.
+  // Scanning only the mechanical half skipped Cloud and Stone entirely — the first draft of this
+  // guard passed with Cloud's card deliberately broken, which is the same blind spot one level in.
+  const OWN_REACTION = /\b(use|take|spend) (your|a) reaction\b|\bas a reaction\b|\(reaction[,)]/i;
+
+  const AXE = {
+    uid: 'w1', name: 'Battleaxe', category: 'weapons', weapon_type: 'Melee',
+    equipped: true, hand: 'main',
+  };
+  const BOW = {
+    uid: 'b1', name: 'Longbow', category: 'weapons', weapon_type: 'Ranged',
+    equipped: true, hand: 'both',
+  };
+  const ATTACK = { uid: 'w1', name: 'Battleaxe', toHit: '+7', damage: '1d8 + 4 slashing', proficient: true };
+  const SHOT = { uid: 'b1', name: 'Longbow', toHit: '+7', damage: '1d8 + 4 piercing', proficient: true };
+
+  // Options the tab does not cover YET. Each line is a gap with a reason, not a waiver.
+  const PENDING = [
+    // Battle Master maneuvers are stored (character_data.maneuvers) but no maneuver reaches the
+    // action economy in either edition — the standing "wire chosen options into the action
+    // economy" gap. Parry and Riposte are the two that cost your reaction.
+    '5e Maneuvers › Parry',
+    '5e Maneuvers › Riposte',
+    '5.5e Maneuvers › Parry',
+    '5.5e Maneuvers › Riposte',
+  ];
+
+  const POOLS = [
+    {
+      pool: 'Rune Carving',
+      edition: '5e',
+      // Level 15 so Hill and Storm are legal picks — the guard is about the card, not the gate.
+      // `text` is the prose the player reads (both halves, cost included) — that is what has to
+      // promise a reaction. `cardText` is the half a card could restate, so the passive half's
+      // vocabulary never counts against the match.
+      options: () => RUNE_OPTIONS.map((r) => ({
+        name: r.name, text: r.description, cardText: r.channel.description, rune: r,
+      })),
+      // `option` is null for the BASELINE build — the same character holding none of the pool.
+      build: (option) => buildActionEconomy({
+        charClass: 'Fighter', subclass: 'Rune Knight', level: 15, edition: '5e',
+        characterData: {
+          subclass: 'Rune Knight',
+          runes: option ? [option.rune.name] : [],
+          rune_items: option ? { [option.rune.name]: 'w1' } : {},
+          inventory: [AXE],
+          // A channel that RUNS is switched ON, or the reaction its state grants (Storm's
+          // Prophetic State) could not exist yet and the guard would read a real card as missing.
+          active_effects: option?.rune.channel.activeEffect ? [option.rune.channel.activeEffect] : [],
+        },
+        inventory: [AXE],
+        attacks: [ATTACK],
+        scores: { strength: 16, constitution: 16 },
+        spellIndex: {},
+      }),
+    },
+    {
+      pool: 'Arcane Shot',
+      edition: '5e',
+      options: () => ARCANE_SHOT_OPTIONS.map((o) => ({ name: o.name, text: o.description })),
+      build: (option) => buildActionEconomy({
+        charClass: 'Fighter', subclass: 'Arcane Archer', level: 15, edition: '5e',
+        characterData: {
+          subclass: 'Arcane Archer',
+          arcane_shot_options: option ? [option.name] : [],
+          inventory: [BOW],
+        },
+        inventory: [BOW],
+        attacks: [SHOT],
+        scores: { dexterity: 18, intelligence: 16 },
+        spellIndex: {},
+      }),
+    },
+    ...['5e', '5.5e'].map((edition) => ({
+      pool: 'Maneuvers',
+      edition,
+      options: () => getManeuvers(edition).map((m) => ({ name: m.name, text: m.description })),
+      build: (option) => buildActionEconomy({
+        charClass: 'Fighter', subclass: 'Battle Master', level: 15, edition,
+        characterData: {
+          subclass: 'Battle Master',
+          maneuvers: option ? [option.name] : [],
+          inventory: [AXE],
+        },
+        inventory: [AXE],
+        attacks: [ATTACK],
+        scores: { strength: 18 },
+        spellIndex: {},
+      }),
+    })),
+  ];
+
+  it('holds for every option pool, with the unwired ones named rather than skipped', () => {
+    const textOf = (entries) => (entries ?? [])
+      .map((e) => `${e.name ?? ''} ${e.detail ?? ''} ${e.description ?? ''}`)
+      .join(' ')
+      .toLowerCase();
+    const longWords = (s) => s
+      .split(/\s+/)
+      .map((w) => w.toLowerCase().replace(/[^a-z]/g, ''))
+      .filter((w) => w.length > 6);
+
+    const offenders = [];
+    let checked = 0;
+    for (const { pool, edition, options, build } of POOLS) {
+      // What this character's Reactions tab says holding NONE of the pool: the universal
+      // Opportunity Attack, plus whatever the subclass grants outright (Runic Shield). Words
+      // from that text are not evidence of anything — "creature", "reaction" and "attacker"
+      // appear in nearly every reaction card, and matching on them let the stock Opportunity
+      // Attack stand in for a missing Riposte. Only words the option does NOT share with the
+      // baseline can tell its card apart from the ones already there.
+      const baseline = new Set(longWords(textOf(build(null).reaction)));
+
+      for (const option of options()) {
+        if (!OWN_REACTION.test(option.text)) continue;
+        checked += 1;
+        const reactions = build(option).reaction ?? [];
+        if (!reactions.length) { offenders.push(`${edition} ${pool} › ${option.name}`); continue; }
+        // The card need not be NAMED after the option (a rune's is "Channel Rune: Cloud", and
+        // Storm's is the "Prophetic State" its channel turns on), so match on the rules text the
+        // option owns rather than on its name — a MAJORITY of its distinctive words, in ONE card.
+        // A majority rather than all of them, because a card legitimately restates only the part
+        // it performs: Prophetic State drops "incapacitated", which belongs to the channel's
+        // duration clause and not to the reaction itself.
+        const words = [...new Set(longWords(option.cardText ?? option.text))]
+          .filter((w) => !baseline.has(w))
+          .slice(0, 4);
+        const need = Math.max(1, Math.ceil(words.length / 2));
+        const hit = reactions.some((e) => {
+          const text = `${e.name ?? ''} ${e.detail ?? ''} ${e.description ?? ''}`.toLowerCase();
+          return words.filter((w) => text.includes(w)).length >= need;
+        });
+        if (!hit) offenders.push(`${edition} ${pool} › ${option.name}`);
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+    expect(offenders.sort()).toEqual([...PENDING].sort());
+  });
+
+  it("recognises YOUR reaction and ignores an ALLY's (self-test)", () => {
+    expect(OWN_REACTION.test('you can use your reaction and expend one superiority die')).toBe(true);
+    expect(OWN_REACTION.test('you can take a Reaction and expend one superiority die')).toBe(true);
+    expect(OWN_REACTION.test('That creature can immediately use its reaction to make one attack')).toBe(false);
+    expect(OWN_REACTION.test('the target takes an extra 2d6 fire damage')).toBe(false);
+    // The parenthetical cost, which is how a rune states it — and the form the first draft missed.
+    expect(OWN_REACTION.test('Channel Rune (reaction, when you are hit by an attack roll)')).toBe(true);
+    expect(OWN_REACTION.test('Channel Rune (bonus action): for 10 minutes you gain +2')).toBe(false);
   });
 });
