@@ -31,7 +31,8 @@ def _prereq(text):
 # need a not-yet-built consumer (resource pools, proficiency-CHOICE grants, speed) are kept
 # as `note` so no chip is shown that does nothing (upgrade them when the consumer ships).
 # Consumers live now: stat_mod (initiative, passive_perception), ability_score,
-# ability_choice, action, attack_mod, damage_reduction (the Defenses panel), note.
+# ability_choice, action, attack_mod, damage_reduction (the Defenses panel),
+# save_mod + save_advantage (the Features Affecting Saves panel), note.
 def _abil(ability, amount=1):
     return {"kind": "ability_score", "ability": ability, "amount": amount,
             "label": f"+{amount} {ability.capitalize()}"}
@@ -59,6 +60,53 @@ def _damage_reduction(amount, damage_types, condition, nonmagical_only=False, la
         "condition": condition,
         "nonmagical_only": nonmagical_only,
         "label": label or f"−{amt} {'/'.join(t[:1].upper() for t in damage_types)}",
+    }
+
+def _save_mod(abilities, amount, condition, situation, label=None):
+    """A bonus to the character's OWN saving throws that applies only SOMETIMES.
+
+    `amount` is an int, the 'pb' sentinel, or 'shield_ac' (the AC bonus of the equipped
+    shield). `condition` is a machine-readable EQUIPMENT gate the consumer evaluates
+    ('shield'), the same split `ac_mod`/`damage_reduction` use — this file has no
+    inventory. `situation` is the half NO model can evaluate ("against effects that
+    target only you"). The consumer DOES fold the number into the printed saving throw,
+    which makes that total a best case - too high against a fireball - so every surface
+    showing it must also show `situation` and the feat name. Author a `situation` on every
+    save_mod for that reason: one without it would silently claim an unconditional bonus.
+    """
+    abbrev = {"strength": "STR", "dexterity": "DEX", "constitution": "CON",
+              "intelligence": "INT", "wisdom": "WIS", "charisma": "CHA"}
+    amt = {"pb": "proficiency", "shield_ac": "shield AC"}.get(amount, f"+{amount}")
+    return {
+        "kind": "save_mod",
+        "abilities": list(abilities),
+        "amount": amount,
+        "condition": condition,
+        "situation": situation,
+        "label": label or f"{amt} to {'/'.join(abbrev.get(a, a) for a in abilities)} saves",
+    }
+
+def _save_advantage(abilities, situation=None, label=None):
+    """ADVANTAGE on the character's own saving throws, listed under the Saving Throws grid.
+
+    The sibling of `_save_mod`: that one is a number, this one changes what you ROLL, so
+    there is nothing to add to a total.
+
+    `abilities` is the abilities it covers, or [] when RAW names no ability ("saving throws
+    against traps" — any of the six). `situation` is the condition, and its presence is
+    LOAD-BEARING: a clause scoped by situation must stay panel-only, because an "adv" tag
+    on a save row asserts "roll this twice" with no room for the condition that makes it
+    true. Omit `situation` only for advantage that is genuinely unconditional, which then
+    tags the named ability's row. See SAVE_FEATURES' advantageAbilities, same rule.
+    """
+    abbrev = {"strength": "STR", "dexterity": "DEX", "constitution": "CON",
+              "intelligence": "INT", "wisdom": "WIS", "charisma": "CHA"}
+    scope = "/".join(abbrev.get(a, a) for a in abilities) if abilities else "some"
+    return {
+        "kind": "save_advantage",
+        "abilities": list(abilities),
+        "situation": situation,
+        "label": label or f"adv. on {scope} saves",
     }
 
 def _action(name, economy, trigger, description):
@@ -136,7 +184,13 @@ FEAT_EFFECTS_5E = {
         _note("Two-weapon fighting with non-light weapons; draw/stow two one-handed weapons at once."),
     ],
     "Dungeon Delver": [
-        _note("Advantage to find secret doors and on saves vs traps; resistance to trap damage; search for traps at normal travel pace."),
+        # RAW names no ability — "saving throws made to avoid or resist traps" can be any
+        # of the six — so `abilities` is empty rather than guessing Dexterity.
+        _save_advantage([], "to avoid or resist traps"),
+        # The rest stays prose on purpose: the app has no trap entity to hang the secret-door
+        # advantage on, "trap damage" is not a damage type the Defenses card can express,
+        # and travel pace is not modelled at all.
+        _note("Advantage to find secret doors; resistance to trap damage; search for traps at normal travel pace."),
     ],
     "Durable": [
         _abil("constitution"),
@@ -188,7 +242,10 @@ FEAT_EFFECTS_5E = {
         _action("Mage Slayer Strike", "reaction",
                 "When a creature within 5 ft of you casts a spell",
                 "Make a melee weapon attack against that creature."),
-        _note("Impose disadvantage on concentration saves you cause; advantage on saves vs spells cast by creatures within 5 ft."),
+        _save_advantage([], "against spells cast by creatures within 5 feet of you"),
+        # The other half is an enemy's save, not yours — it belongs wherever that effect
+        # fires, never in a panel about your own saving throws.
+        _note("Impose disadvantage on concentration saves you cause."),
     ],
     "Magic Initiate": [
         _spell_grant("class", cantrips=2, leveled=[{"level": 1, "count": 1}],
@@ -256,7 +313,12 @@ FEAT_EFFECTS_5E = {
         _action("Interpose Shield", "reaction",
                 "When an effect lets you make a Dexterity saving throw to take only half damage, while wielding a shield",
                 "If you succeed on the save, take no damage instead of half. You can't do this while incapacitated."),
-        _note("Add your shield's AC bonus to Dexterity saves against effects that target only you."),
+        # Not a note: the number is real (+2 for a shield) and the app knows whether one is
+        # equipped. What it cannot know is whether the effect targets only you, which the
+        # consumer handles by stating the restriction wherever it shows the total. The 2024
+        # feat deliberately has no counterpart — that edition dropped the clause.
+        _save_mod(["dexterity"], "shield_ac", "shield",
+                  "against effects that target only you"),
     ],
     "Skilled": [
         {"kind": "proficiency", "prof_type": "skill_or_tool", "count": 3, "label": "3 skills or tools"},
@@ -276,7 +338,8 @@ FEAT_EFFECTS_5E = {
         _action("War Caster Spell (Reaction)", "reaction",
                 "When a creature provokes an opportunity attack from you",
                 "Cast a single-target spell with a casting time of 1 action at it instead of making a weapon attack."),
-        _note("Advantage on concentration saves; perform somatic components while holding weapons or a shield."),
+        _save_advantage(["constitution"], "to maintain concentration"),
+        _note("Perform somatic components while holding weapons or a shield."),
     ],
     "Weapon Master": [
         _abil_choice(["strength", "dexterity"]),
@@ -440,7 +503,8 @@ FEAT_EFFECTS_2024 = {
         _abil_choice(["intelligence", "wisdom", "charisma"]),
         _action("War Caster Spell (Reaction)", "reaction", "When a creature provokes an opportunity attack from you",
                 "Cast a single-target spell at it instead of making a weapon attack."),
-        _note("Advantage on concentration saves; perform somatic components while holding weapons or a shield.")],
+        _save_advantage(["constitution"], "to maintain concentration"),
+        _note("Perform somatic components while holding weapons or a shield.")],
 
     # ── Fighting Style feats (no ASI; mostly passive combat riders) ──
     "Archery": [_note("+2 bonus to attack rolls with ranged weapons.")],

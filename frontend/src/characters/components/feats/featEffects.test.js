@@ -6,7 +6,7 @@ import {
   getSpellGrantSpecs, getFeatGrantedSpells, featFreeCastUsedKey, featGrantRedundant,
   featAbilityChoiceOptions, abilityChoiceGrantsSave,
   getManeuverGrantSpec, maneuverGrantComplete, getFeatManeuvers,
-  martialAdeptDieCount, martialAdeptManeuverCount,
+  martialAdeptDieCount, martialAdeptManeuverCount, getFeatSaveMods, getFeatSaveAdvantages,
 } from '@/characters/components/feats/featEffects';
 
 const MARTIAL_ADEPT = {
@@ -310,5 +310,75 @@ describe('featEffects resolver', () => {
     expect(res).toEqual([
       { key: 'martial_adept_superiority', usedKey: 'martial_adept_superiority_used', label: 'Superiority Die (d6)', total: 1, recharge: 'short', source: 'Martial Adept' },
     ]);
+  });
+});
+
+describe('getFeatSaveMods', () => {
+  const SHIELD_MASTER = {
+    id: 9, name: 'Shield Master',
+    effects: [
+      { kind: 'save_mod', abilities: ['dexterity'], amount: 'shield_ac', condition: 'shield',
+        situation: 'against effects that target only you' },
+      { kind: 'note', text: 'unrelated' },
+    ],
+  };
+
+  // Returned RAW: this module is pure, so neither the equipment gate nor the amount
+  // sentinel is resolved here. Resolving them needs inventory, which lives in the consumer.
+  it('returns the effect unevaluated, with its gates intact', () => {
+    expect(getFeatSaveMods([SHIELD_MASTER])).toEqual([{
+      source: 'Shield Master',
+      abilities: ['dexterity'],
+      amount: 'shield_ac',
+      condition: 'shield',
+      situation: 'against effects that target only you',
+    }]);
+  });
+
+  it('is empty for feats with no save_mod', () => {
+    expect(getFeatSaveMods([MARTIAL_ADEPT])).toEqual([]);
+    expect(getFeatSaveMods([])).toEqual([]);
+  });
+});
+
+describe('getFeatSaveAdvantages', () => {
+  const WAR_CASTER = {
+    id: 20, name: 'War Caster',
+    effects: [{ kind: 'save_advantage', abilities: ['constitution'], situation: 'to maintain concentration' }],
+  };
+  const DUNGEON_DELVER = {
+    id: 21, name: 'Dungeon Delver',
+    effects: [{ kind: 'save_advantage', abilities: [], situation: 'to avoid or resist traps' }],
+  };
+
+  it('returns the abilities and the situation', () => {
+    expect(getFeatSaveAdvantages([WAR_CASTER])).toEqual([{
+      source: 'War Caster',
+      abilities: ['constitution'],
+      situation: 'to maintain concentration',
+      advantageAbilities: [],
+    }]);
+  });
+
+  // The rule the kind exists to encode: a situation-scoped advantage tags NO save row.
+  // Tagging CON here would tell a player to roll every Constitution save twice, when the
+  // advantage only ever applies to concentration.
+  it('never tags a save row when the advantage is scoped by a situation', () => {
+    expect(getFeatSaveAdvantages([WAR_CASTER])[0].advantageAbilities).toEqual([]);
+    expect(getFeatSaveAdvantages([DUNGEON_DELVER])[0].advantageAbilities).toEqual([]);
+  });
+
+  it('tags the named abilities when the advantage is unconditional', () => {
+    const unconditional = { id: 22, name: 'Hypothetical', effects: [{ kind: 'save_advantage', abilities: ['wisdom'] }] };
+    expect(getFeatSaveAdvantages([unconditional])[0].advantageAbilities).toEqual(['wisdom']);
+  });
+
+  // RAW names no ability for traps, so an empty list is the correct answer, not a gap.
+  it('keeps an empty ability list rather than guessing one', () => {
+    expect(getFeatSaveAdvantages([DUNGEON_DELVER])[0].abilities).toEqual([]);
+  });
+
+  it('is empty for feats with no save_advantage', () => {
+    expect(getFeatSaveAdvantages([MARTIAL_ADEPT])).toEqual([]);
   });
 });

@@ -41,7 +41,7 @@ import { getSkillAdvantageNames, skillAdvantageSourcesFor, skillAdvantageLegend 
 import { skillBreakdown, saveBreakdown, SKILL_MAP, formatBonus } from '@/characters/components/skills/skillMath';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
 import SaveFeaturesPanel from '@/characters/components/skills/SaveFeaturesPanel';
-import { saveAdvantageSourcesFor } from '@/characters/components/skills/saveFeatures';
+import { saveAdvantageSourcesFor, conditionalSaveBonuses } from '@/characters/components/skills/saveFeatures';
 import {
   activeEffectCheckParts, activeEffectSaveParts,
   activeEffectCheckBonus, activeEffectSaveBonus,
@@ -623,6 +623,15 @@ export default function CharacterDetail() {
     level: identity.draft?.level ?? character.level,
     edition,
     characterData: classSection.draft ?? character?.character_data ?? {},
+  };
+
+  // Context for feat save bonuses that apply only SOMETIMES (Shield Master). Separate from
+  // saveAdvCtx because it needs EQUIPMENT: the bonus is real only while the shield is held,
+  // so stowing it takes the line away.
+  const conditionalSaveCtx = {
+    feats: (classSection.draft ?? character.character_data)?.feats ?? [],
+    inventory: (classSection.draft ?? character.character_data)?.inventory ?? [],
+    pb,
   };
 
   const raceGrantedCantrips = computeRaceGrantedCantrips(character);
@@ -1654,6 +1663,11 @@ export default function CharacterDetail() {
                         // from the feature list below.
                         const advSources = saveAdvantageSourcesFor(key, saveAdvCtx);
                         const effectSaveBonus = activeEffectSaveBonus(key, saveAdvCtx);
+                        // A bonus that applies only in a situation the app can't detect
+                        // (Shield Master — "targets only you"). It IS summed into the number,
+                        // so the total is a best case; the restriction and its source ride
+                        // along in the breakdown term and the note under the grid.
+                        const condBonuses = conditionalSaveBonuses(key, conditionalSaveCtx);
                         const breakdown = saveBreakdown({
                           ability: key,
                           abilityScore: identity.draft[key],
@@ -1662,7 +1676,10 @@ export default function CharacterDetail() {
                           // A running effect that adds a flat bonus to this ability's saves
                           // (Channel Rune: Frost). The displayed number IS breakdown.total, so
                           // the save goes up the moment the effect is switched on.
-                          extras: activeEffectSaveParts(key, saveAdvCtx),
+                          extras: [
+                            ...activeEffectSaveParts(key, saveAdvCtx),
+                            ...condBonuses.map((b) => b.part),
+                          ],
                           notes: [
                             advSources.length > 0
                               && `Advantage — ${advSources.map((f) => f.name).join(', ')}`,
@@ -1693,14 +1710,16 @@ export default function CharacterDetail() {
                                   adv
                                 </span>
                               )}
-                              {/* A running effect is marked by COLOURING THE TOTAL, never by a
-                                  separate "+2" beside it — the bonus is already inside the
-                                  number, and two numbers on one row read as "+7 and +2 more". */}
+                              {/* Anything folded into this total — a running effect, or a
+                                  feat bonus that applies only sometimes — is marked by
+                                  COLOURING THE TOTAL, never by a separate "+2" beside it:
+                                  the bonus is already inside the number, and two numbers on
+                                  one row read as "+7 and +2 more". The note below says what. */}
                               <BreakdownValue
                                 testId={`save-bonus-${key}`}
                                 label={`the ${abbrev} saving throw`}
                                 breakdown={breakdown}
-                                className={cn('font-medium text-xs', effectSaveBonus > 0 && 'text-indigo-400')}
+                                className={cn('font-medium text-xs', (effectSaveBonus > 0 || condBonuses.length > 0) && 'text-indigo-400')}
                                 expanded={openStat === `save:${key}`}
                                 onToggle={() => setOpenStat(openStat === `save:${key}` ? null : `save:${key}`)}
                               />
@@ -1724,6 +1743,20 @@ export default function CharacterDetail() {
                         {abilityListLabel(src.abilities)} saving throws include {formatBonus(src.amount)} from {src.source}.
                       </p>
                     ))}
+                    {/* Feat bonuses folded into the totals above. This note is not optional
+                        decoration: the bonus applies only in a situation the app cannot
+                        detect, so the number is a best case and the sentence is the only
+                        thing that says so. Same inclusion wording as the effect note above. */}
+                    {ABILITY_LABELS.flatMap(({ key, abbrev }) =>
+                      conditionalSaveBonuses(key, conditionalSaveCtx).map((b) => (
+                        <p
+                          key={`${key}-${b.key}`}
+                          className="text-[10px] text-indigo-400 mt-1"
+                          data-testid={`saves-conditional-note-${b.key}`}
+                        >
+                          {abbrev} saving throws {b.text}.
+                        </p>
+                      )))}
                     {nonProfArmor && (
                       <p className="text-[10px] text-amber-600 mt-1" data-testid="saves-armor-warning">
                         STR &amp; DEX saving throws at disadvantage — wearing {nonProfArmor.name} without proficiency.

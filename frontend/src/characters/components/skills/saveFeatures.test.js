@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   getSaveFeatures, saveFeatureKey, SAVE_FEATURES,
-  saveAdvantageSourcesFor, getSaveAdvantageAbilities,
+  saveAdvantageSourcesFor, getSaveAdvantageAbilities, conditionalSaveBonuses, saveAdvantageText,
 } from './saveFeatures';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 
@@ -207,5 +207,141 @@ describe("Giant's Might (Rune Knight) — advantage while the effect is running"
       charClass: 'Fighter', subclass: 'Champion', level: 10, edition: '5e',
       characterData: { subclass: 'Champion', active_effects: ['giants_might'] },
     })).toEqual([]);
+  });
+});
+
+// 2014 Shield Master's middle clause: "+ your shield's AC bonus to Dexterity saves against
+// effects that target only you". It shipped as a display-only note and did nothing (QA).
+describe('conditionalSaveBonuses — Shield Master', () => {
+  const SHIELD_MASTER = {
+    id: 1,
+    name: 'Shield Master',
+    effects: [{
+      kind: 'save_mod',
+      abilities: ['dexterity'],
+      amount: 'shield_ac',
+      condition: 'shield',
+      situation: 'against effects that target only you',
+    }],
+  };
+  const SHIELD = { uid: 's1', category: 'armor', armor_type: 'Shield', name: 'Shield', equipped: true };
+  const held = (extra = {}) => ({ feats: [SHIELD_MASTER], inventory: [SHIELD], ...extra });
+
+  it('resolves the shield AC bonus to a real number while a shield is equipped', () => {
+    const [bonus] = conditionalSaveBonuses('dexterity', held());
+    expect(bonus.amount).toBe(2);
+    expect(bonus.source).toBe('Shield Master');
+    expect(bonus.situation).toBe('against effects that target only you');
+  });
+
+  // The whole point of the equipment gate: stow the shield and the bonus is gone. Without
+  // this the sheet would promise +2 to a character holding a greatsword.
+  it('goes away when no shield is equipped', () => {
+    expect(conditionalSaveBonuses('dexterity', held({ inventory: [] }))).toEqual([]);
+    expect(conditionalSaveBonuses('dexterity', held({
+      inventory: [{ ...SHIELD, equipped: false }],
+    }))).toEqual([]);
+  });
+
+  it('applies to Dexterity saves only', () => {
+    expect(conditionalSaveBonuses('strength', held())).toEqual([]);
+    expect(conditionalSaveBonuses('wisdom', held())).toEqual([]);
+  });
+
+  it('is nothing for a character without the feat', () => {
+    expect(conditionalSaveBonuses('dexterity', { feats: [], inventory: [SHIELD] })).toEqual([]);
+  });
+
+  // The bonus is summed into the printed save, so the number is a best case. Both strings
+  // the resolver hands out must therefore carry the restriction AND the feat — a surface
+  // that showed the number without them would be stating a bonus the character may not have.
+  it('builds a breakdown term whose label carries the restriction and the source', () => {
+    const [bonus] = conditionalSaveBonuses('dexterity', held());
+    expect(bonus.part).toEqual({
+      key: 'feat-shield-master',
+      label: 'Shield Master (only against effects that target only you)',
+      value: 2,
+    });
+  });
+
+  it('words the grid note as inclusion, with the restriction attached', () => {
+    const [bonus] = conditionalSaveBonuses('dexterity', held());
+    // "include" not "+2 to …": the bonus is already inside the total it sits under.
+    expect(bonus.text).toBe(
+      'include +2 from Shield Master — but only against effects that target only you',
+    );
+  });
+
+  // An unknown gate must never be treated as met — a future condition nobody taught this
+  // module about should show nothing rather than an unconditional bonus.
+  it('ignores a condition it does not understand', () => {
+    const odd = { ...SHIELD_MASTER, effects: [{ ...SHIELD_MASTER.effects[0], condition: 'riding_a_dragon' }] };
+    expect(conditionalSaveBonuses('dexterity', { feats: [odd], inventory: [SHIELD] })).toEqual([]);
+  });
+});
+
+// Feats granting advantage on your OWN saves had no route to the panel at all — the registry
+// has no feat key and there was no effect kind, so War Caster's concentration advantage lived
+// only in the Feats tab, several clicks from the saves it changes.
+describe('getSaveFeatures — feat save advantages', () => {
+  const WAR_CASTER = {
+    id: 20, name: 'War Caster',
+    effects: [{ kind: 'save_advantage', abilities: ['constitution'], situation: 'to maintain concentration' }],
+  };
+  const CAVALIER_WITH_FEAT = {
+    charClass: 'Fighter', subclass: 'Cavalier', level: 3, edition: '5e',
+    characterData: { subclass: 'Cavalier', feats: [WAR_CASTER] },
+  };
+
+  it('lists the feat alongside class features, labelled as a Feat', () => {
+    const found = getSaveFeatures(CAVALIER_WITH_FEAT);
+    const warCaster = found.find((f) => f.name === 'War Caster');
+    expect(warCaster).toBeTruthy();
+    expect(warCaster.source).toBe('Feat');
+  });
+
+  // Class features are ordered by the level you gained them; a feat has no level in that
+  // sense, so it is appended rather than sorted into the middle of that list.
+  it('appends feats after the class features', () => {
+    const names = getSaveFeatures(CAVALIER_WITH_FEAT).map((f) => f.name);
+    expect(names).toEqual(['Born to the Saddle', 'War Caster']);
+  });
+
+  // The snapshot on character_data.feats carries no description, so the panel builds the
+  // sentence from the same fields the mechanic uses — it cannot drift from them.
+  it('builds the description from the effect', () => {
+    const warCaster = getSaveFeatures(CAVALIER_WITH_FEAT).find((f) => f.name === 'War Caster');
+    expect(warCaster.description)
+      .toBe('Advantage on Constitution saving throws to maintain concentration.');
+  });
+
+  it('tags no save row for a situation-scoped feat advantage', () => {
+    expect(getSaveAdvantageAbilities(CAVALIER_WITH_FEAT)).toEqual([]);
+    expect(saveAdvantageSourcesFor('constitution', CAVALIER_WITH_FEAT)).toEqual([]);
+  });
+
+  it('gives a character with no such feat nothing extra', () => {
+    const names = getSaveFeatures({
+      charClass: 'Fighter', subclass: 'Cavalier', level: 3, edition: '5e',
+      characterData: { subclass: 'Cavalier', feats: [] },
+    }).map((f) => f.name);
+    expect(names).toEqual(['Born to the Saddle']);
+  });
+});
+
+describe('saveAdvantageText', () => {
+  it('names the abilities and the situation', () => {
+    expect(saveAdvantageText({ abilities: ['constitution'], situation: 'to maintain concentration' }))
+      .toBe('Advantage on Constitution saving throws to maintain concentration.');
+  });
+
+  // No ability named means ALL of them, so the sentence must not name one.
+  it('says plain "saving throws" when RAW names no ability', () => {
+    expect(saveAdvantageText({ abilities: [], situation: 'to avoid or resist traps' }))
+      .toBe('Advantage on saving throws to avoid or resist traps.');
+  });
+
+  it('reads correctly with no situation at all', () => {
+    expect(saveAdvantageText({ abilities: ['wisdom'] })).toBe('Advantage on Wisdom saving throws.');
   });
 });

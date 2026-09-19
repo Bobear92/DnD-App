@@ -12,9 +12,11 @@
 //   { kind: 'action',         name, economy, description, trigger }  an Action Economy entry
 //   { kind: 'spell_grant',    source_kind, cantrips, leveled, fixed, free_cast, ability }  grants spells (Magic Initiate)
 //   { kind: 'maneuver_grant', count, die }                     player picks N Battle Master maneuvers + a die (Martial Adept)
+//   { kind: 'save_mod',      abilities, amount, condition, situation }  a SOMETIMES-applicable save bonus (Shield Master)
+//   { kind: 'save_advantage', abilities, situation }             ADVANTAGE on your own saves (War Caster)
 //   { kind: 'note',           text }                           display-only rider (explicitly not a mechanic)
 
-export const FEAT_EFFECT_KINDS = ['stat_mod', 'ability_score', 'ability_choice', 'attack_mod', 'action', 'spell_grant', 'maneuver_grant', 'damage_reduction', 'note'];
+export const FEAT_EFFECT_KINDS = ['stat_mod', 'ability_score', 'ability_choice', 'attack_mod', 'action', 'spell_grant', 'maneuver_grant', 'damage_reduction', 'save_mod', 'save_advantage', 'note'];
 
 /** All effect objects across a character's feats (each feat instance may carry a snapshot). */
 export function allFeatEffects(feats = []) {
@@ -61,6 +63,60 @@ export function getFeatDamageReductions(feats = [], { pb } = {}) {
     }))
     // A PB-scaled reduction resolves to 0 when no pb is supplied; showing "−0" would be a lie.
     .filter((e) => e.amount > 0);
+}
+
+/**
+ * Conditional bonuses to the character's OWN saving throws (2014 Shield Master's "+ your
+ * shield's AC bonus to Dexterity saves against effects that target only you").
+ *
+ * Returned RAW, with both gates unevaluated — this module is pure and has no equipment
+ * context, the same split `getFeatAcMods` and `getFeatDamageReductions` use. The consumer
+ * resolves `condition` (is a shield actually equipped?) and the `amount` sentinel.
+ *
+ * `situation` is the gate NOTHING can evaluate — the app has no target model, so it never
+ * knows whether an effect targets only you. That is why a save_mod is stated BESIDE the
+ * saving throw and never added into it: a +2 folded into the printed DEX save would be
+ * wrong for every fireball.
+ */
+export function getFeatSaveMods(feats = []) {
+  return allFeatEffects(feats)
+    .filter((e) => e.kind === 'save_mod')
+    .map((e) => ({
+      source: e._featName,
+      abilities: e.abilities ?? [],
+      amount: e.amount,
+      condition: e.condition ?? null,
+      situation: e.situation ?? null,
+    }));
+}
+
+/**
+ * Feats granting ADVANTAGE on the character's own saving throws (War Caster's concentration
+ * saves, Mage Slayer's saves against nearby casters, Dungeon Delver's against traps).
+ *
+ * The sibling of `getFeatSaveMods`: that one is a number to add, this one changes what you
+ * roll, so there is nothing to sum and nothing to gate on equipment.
+ *
+ * `abilities` may legitimately be EMPTY — RAW often names no ability ("saving throws made
+ * to avoid or resist traps" is any of the six), and guessing one would narrow the feat.
+ *
+ * `advantageAbilities` encodes the panel's standing rule rather than leaving it to each
+ * caller: advantage scoped by a SITUATION tags no save row, because an "adv" tag asserts
+ * "roll this twice" with no room for the condition. Only unconditional advantage tags.
+ */
+export function getFeatSaveAdvantages(feats = []) {
+  return allFeatEffects(feats)
+    .filter((e) => e.kind === 'save_advantage')
+    .map((e) => {
+      const abilities = e.abilities ?? [];
+      const situation = e.situation ?? null;
+      return {
+        source: e._featName,
+        abilities,
+        situation,
+        advantageAbilities: situation ? [] : abilities,
+      };
+    });
 }
 
 /**

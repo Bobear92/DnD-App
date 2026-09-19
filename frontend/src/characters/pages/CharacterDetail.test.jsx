@@ -2664,6 +2664,116 @@ describe('CharacterDetail', () => {
         .toHaveTextContent('STR & CON saving throws include +2 from Channel Rune: Frost.');
     });
 
+    // War Caster's concentration advantage reached no save surface at all — feats had no
+    // route into the Features Affecting Saves panel.
+    it('lists a feat save advantage in the Features Affecting Saves panel', async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          character_data: {
+            ...BASE_CHARACTER.character_data,
+            feats: [{
+              id: 20, name: 'War Caster',
+              effects: [{
+                kind: 'save_advantage', abilities: ['constitution'],
+                situation: 'to maintain concentration',
+              }],
+            }],
+          },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      const row = await screen.findByTestId('save-feature-feat-war-caster');
+      expect(row).toHaveTextContent('War Caster');
+      fireEvent.click(row);
+      expect(screen.getByTestId('save-feature-feat-war-caster-desc'))
+        .toHaveTextContent('Advantage on Constitution saving throws to maintain concentration.');
+      // Scoped by a situation, so the CON row itself is NOT tagged: the advantage applies
+      // only to concentration saves, not to every Constitution save.
+      expect(screen.queryByTestId('save-advantage-constitution')).toBeNull();
+    });
+
+    // 2014 Shield Master's "+ your shield's AC bonus to Dexterity saves against effects that
+    // target only you" shipped as a display-only note and reached no surface at all (QA).
+    describe('Shield Master — a save bonus that applies only sometimes', () => {
+      const SHIELD = {
+        uid: 's1', category: 'armor', armor_type: 'Shield', name: 'Shield',
+        armor_class: 2, equipped: true,
+      };
+      const shieldMaster = (inventory = [SHIELD]) => ({
+        ...BASE_CHARACTER,
+        character_data: {
+          ...BASE_CHARACTER.character_data,
+          inventory,
+          feats: [{
+            id: 1, name: 'Shield Master',
+            effects: [{
+              kind: 'save_mod', abilities: ['dexterity'], amount: 'shield_ac',
+              condition: 'shield', situation: 'against effects that target only you',
+            }],
+          }],
+        },
+      });
+
+      it('folds the +2 into the printed Dexterity save', async () => {
+        characterService.getCharacterById.mockResolvedValue({ success: true, data: shieldMaster() });
+        renderDetail();
+        await openStatsSubTab('abilities');
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+        // DEX 12, unproficient -> +1, plus the shield's +2 = +3.
+        expect(screen.getByTestId('save-bonus-dexterity')).toHaveTextContent('+3');
+        // Coloured, because in this grid a coloured total means "includes something named
+        // below" — without it a +3 on a DEX 12 character reads as a bug in the modifier.
+        expect(screen.getByTestId('save-bonus-dexterity')).toHaveClass('text-indigo-400');
+        // Dexterity only — nothing else is coloured or raised.
+        expect(screen.getByTestId('save-bonus-wisdom')).not.toHaveClass('text-indigo-400');
+      });
+
+      // The number is now a BEST CASE — it is wrong against a fireball, which targets more
+      // than you. The note is the only thing that says so, so it is not optional decoration.
+      it('names the feat and the restriction under the grid', async () => {
+        characterService.getCharacterById.mockResolvedValue({ success: true, data: shieldMaster() });
+        renderDetail();
+        await openStatsSubTab('abilities');
+        const note = await screen.findByTestId('saves-conditional-note-shield-master-dexterity');
+        expect(note).toHaveTextContent('DEX saving throws include +2 from Shield Master');
+        expect(note).toHaveTextContent('only against effects that target only you');
+      });
+
+      // A player asking "why is this +3?" opens the breakdown, so the restriction has to be
+      // on the term itself — a bare "Shield Master +2" there answers the wrong question.
+      it('carries the restriction into the save breakdown', async () => {
+        characterService.getCharacterById.mockResolvedValue({ success: true, data: shieldMaster() });
+        renderDetail();
+        await openStatsSubTab('abilities');
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+        fireEvent.click(screen.getByTestId('save-bonus-dexterity'));
+        expect(await screen.findByTestId('save-breakdown-dexterity'))
+          .toHaveTextContent('Shield Master (only against effects that target only you)');
+      });
+
+      it('disappears when the shield is not equipped', async () => {
+        characterService.getCharacterById.mockResolvedValue({
+          success: true, data: shieldMaster([{ ...SHIELD, equipped: false }]),
+        });
+        renderDetail();
+        await openStatsSubTab('abilities');
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+        expect(screen.queryByTestId('saves-conditional-note-shield-master-dexterity')).toBeNull();
+        // And the number falls back with it — a stale +3 would be the worst of both.
+        expect(screen.getByTestId('save-bonus-dexterity')).toHaveTextContent('+1');
+      });
+
+      it('shows nothing for a character without the feat', async () => {
+        renderDetail();
+        await openStatsSubTab('abilities');
+        await waitFor(() => expect(screen.getByText('Aldric')).toBeInTheDocument());
+        expect(screen.queryByTestId('saves-conditional-note-shield-master-dexterity')).toBeNull();
+      });
+    });
+
     it('shows no colour, legend or note while the effect is switched off', async () => {
       characterService.getCharacterById.mockResolvedValue({ success: true, data: frostKnight(false) });
       renderDetail();

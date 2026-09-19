@@ -37,6 +37,52 @@ describe('SaveFeaturesPanel', () => {
     expect(screen.getByTestId(BORN)).toHaveTextContent('Cavalier');
   });
 
+  // A feat's save clause had no route to this panel at all before — the registry has no
+  // feat key — so War Caster's concentration advantage lived only in the Feats tab.
+  describe('feat-sourced entries', () => {
+    const WAR_CASTER = {
+      id: 20, name: 'War Caster',
+      effects: [{ kind: 'save_advantage', abilities: ['constitution'], situation: 'to maintain concentration' }],
+    };
+    const WC = 'save-feature-feat-war-caster';
+
+    it('lists a feat by name, labelled as a Feat', () => {
+      render(<SaveFeaturesPanel {...CAVALIER} characterData={{ feats: [WAR_CASTER] }} />);
+      expect(screen.getByTestId(WC)).toHaveTextContent('War Caster');
+      expect(screen.getByTestId(WC)).toHaveTextContent('Feat');
+    });
+
+    it('expands to the rules text built from the effect', () => {
+      render(<SaveFeaturesPanel {...CAVALIER} characterData={{ feats: [WAR_CASTER] }} />);
+      fireEvent.click(screen.getByTestId(WC));
+      expect(screen.getByTestId(`${WC}-desc`))
+        .toHaveTextContent('Advantage on Constitution saving throws to maintain concentration.');
+    });
+
+    // The panel exists for characters with no save-affecting class feature too — a Champion
+    // with War Caster must still get one, or the feat is as buried as it was before.
+    it('renders for a character whose ONLY save feature is a feat', () => {
+      render(
+        <SaveFeaturesPanel
+          charClass="Fighter" subclass="Champion" level={20} edition="5e"
+          characterData={{ feats: [WAR_CASTER] }}
+        />,
+      );
+      expect(screen.getByTestId('save-features')).toBeInTheDocument();
+      expect(screen.getByTestId(WC)).toHaveTextContent('War Caster');
+    });
+
+    it('ignores a feat with no save clause', () => {
+      render(
+        <SaveFeaturesPanel
+          charClass="Fighter" subclass="Champion" level={20} edition="5e"
+          characterData={{ feats: [{ id: 1, name: 'Alert', effects: [{ kind: 'stat_mod', stat: 'initiative', amount: 5 }] }] }}
+        />,
+      );
+      expect(screen.queryByTestId('save-features')).toBeNull();
+    });
+  });
+
   it('renders nothing when the character has no save features', () => {
     const { container } = render(<SaveFeaturesPanel charClass="Fighter" subclass="Champion" level={20} edition="5e" />);
     expect(container).toBeEmptyDOMElement();

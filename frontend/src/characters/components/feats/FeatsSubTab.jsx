@@ -52,6 +52,11 @@ function effectChipLabel(e, feat) {
         : (e.label || `${e.count || 0} maneuvers`);
     case 'expertise': return e.label || `Expertise ×${e.count || 1}`;
     case 'ac_mod': return e.label || (e.amount ? `+${e.amount} AC` : 'AC');
+    // A save bonus that applies only sometimes (Shield Master). The chip is the MECHANIC's
+    // name only — the number depends on equipment and the situation is a sentence, both of
+    // which the Saving Throws grid states in full. A chip that tried would misstate one.
+    case 'save_mod': return e.label || `${(e.abilities || []).map((a) => ABILITY_LABEL[a] || a).join(' / ')} saves`;
+    case 'save_advantage': return e.label || `adv. on ${(e.abilities || []).map((a) => ABILITY_LABEL[a] || a).join(' / ') || 'some'} saves`;
     default: return null; // note
   }
 }

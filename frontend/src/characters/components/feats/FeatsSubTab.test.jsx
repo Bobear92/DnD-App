@@ -219,6 +219,36 @@ describe('FeatsSubTab', () => {
     expect(screen.queryByTestId('feat-resource-martial_adept_superiority')).not.toBeInTheDocument();
   });
 
+  // A save_mod used to fall through to no chip at all, so the one mechanized clause on the
+  // card was the only one with nothing to show for it.
+  it('chips a save_mod so the mechanized clause is visible on the feat row', async () => {
+    featService.getFeats.mockResolvedValue([]);
+    const shieldMaster = {
+      id: 30, name: 'Shield Master',
+      effects: [{
+        kind: 'save_mod', abilities: ['dexterity'], amount: 'shield_ac', condition: 'shield',
+        situation: 'against effects that target only you', label: 'shield AC to DEX saves',
+      }],
+    };
+    render(<FeatsSubTab feats={[shieldMaster]} campaignId={1} edition="5e" characterData={{}} />);
+    const chips = await screen.findByTestId('feat-effects-Shield Master');
+    expect(chips).toHaveTextContent('shield AC to DEX saves');
+  });
+
+  it('chips a save_advantage', async () => {
+    featService.getFeats.mockResolvedValue([]);
+    const warCaster = {
+      id: 31, name: 'War Caster',
+      effects: [{
+        kind: 'save_advantage', abilities: ['constitution'],
+        situation: 'to maintain concentration', label: 'adv. on CON saves',
+      }],
+    };
+    render(<FeatsSubTab feats={[warCaster]} campaignId={1} edition="5e" characterData={{}} />);
+    const chips = await screen.findByTestId('feat-effects-War Caster');
+    expect(chips).toHaveTextContent('adv. on CON saves');
+  });
+
   it('shows the chosen maneuvers as the feat-row effect chip', async () => {
     featService.getFeats.mockResolvedValue([]);
     render(<FeatsSubTab feats={[MARTIAL_ADEPT_INSTANCE]} campaignId={1} edition="5e" characterData={{}} />);

@@ -28,6 +28,8 @@ import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeat
 import { isRuneActive } from '@/characters/components/inventory/runeCarving';
 import { getRune } from '@/characters/components/classData/runesData';
 import { isEffectActive } from '@/characters/components/effects/activeEffects';
+import { equippedShield } from '@/characters/components/inventory/inventoryData';
+import { getFeatSaveMods, getFeatSaveAdvantages } from '@/characters/components/feats/featEffects';
 
 /**
  * @typedef {Object} SaveFeatureEntry
@@ -136,7 +138,7 @@ function matches(entry, ctx) {
 export function getSaveFeatures({
   charClass, subclass, level = 1, edition = '5e', characterData = {},
 } = {}) {
-  return SAVE_FEATURES
+  const classFeatures = SAVE_FEATURES
     .filter((entry) => matches(entry, { charClass, subclass, level, edition, characterData }))
     .map((entry) => ({
       key: saveFeatureKey(entry),
@@ -147,6 +149,41 @@ export function getSaveFeatures({
       advantageAbilities: entry.advantageAbilities ?? [],
     }))
     .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+
+  // Feats come through their structured effects, not through SAVE_FEATURES, so a feat keeps
+  // ONE mechanization route. They are appended rather than merged into the sort: the class
+  // list is ordered by the level you gained it, and a feat has no level in that sense.
+  return [...classFeatures, ...featSaveFeatures(characterData?.feats)];
+}
+
+/** The feat half of the panel's list, built from `save_advantage` effects. */
+function featSaveFeatures(feats = []) {
+  return getFeatSaveAdvantages(feats)
+    .map((f) => ({
+      key: `feat-${f.source}`.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      name: f.source,
+      source: 'Feat',
+      level: 0,
+      // Built from the effect, NOT from the feat's compendium description: the snapshot on
+      // character_data.feats carries no description at all, and a sentence assembled from
+      // the same fields the mechanic uses cannot drift from it.
+      description: saveAdvantageText(f),
+      advantageAbilities: f.advantageAbilities,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** "Advantage on Constitution saving throws to maintain concentration." */
+export function saveAdvantageText({ abilities = [], situation = null } = {}) {
+  const ABILITY_NAME = {
+    strength: 'Strength', dexterity: 'Dexterity', constitution: 'Constitution',
+    intelligence: 'Intelligence', wisdom: 'Wisdom', charisma: 'Charisma',
+  };
+  // No ability named is not a gap to fill in — RAW means any of the six.
+  const scope = abilities.length
+    ? `${abilities.map((a) => ABILITY_NAME[a] ?? a).join(' and ')} saving throws`
+    : 'saving throws';
+  return `Advantage on ${scope}${situation ? ` ${situation}` : ''}.`;
 }
 
 /**
@@ -161,4 +198,76 @@ export function saveAdvantageSourcesFor(ability, ctx = {}) {
 /** Just the abilities, deduped — the cheap lookup for rendering the 'adv' tag. */
 export function getSaveAdvantageAbilities(ctx = {}) {
   return [...new Set(getSaveFeatures(ctx).flatMap((f) => f.advantageAbilities))];
+}
+
+// ─── Conditional save bonuses (feats) ────────────────────────────────────────────
+//
+// A NUMBER that applies to a save only sometimes — today just 2014 Shield Master's
+// "add your shield's AC bonus to Dexterity saves against effects that target only you".
+//
+// Feats keep ONE mechanization route, so this reads the structured `save_mod` effect
+// rather than getting an entry in SAVE_FEATURES above. What this function adds is the
+// half featEffects.js cannot do: evaluating the EQUIPMENT gate and resolving the amount.
+//
+// The result IS summed into the printed saving throw (user's call), which makes the number
+// a best case: the app has no target model, so it cannot tell whether an effect targets only
+// you, and the total therefore reads high against a fireball. That is exactly why every
+// surface showing it must carry BOTH halves of the caveat — the restriction AND the feat it
+// comes from. The resolver builds those strings so no surface can show the number without
+// them: `part` for the breakdown, `text` for the note under the grid.
+
+/** A shield's AC bonus. Flat +2: magic shields aren't equippable as armor yet. */
+const SHIELD_AC_BONUS = 2;
+
+/** True when the feat's equipment gate is currently met. */
+function conditionMet(condition, inventory) {
+  if (!condition) return true;
+  if (condition === 'shield') return !!equippedShield(inventory);
+  return false; // an unknown gate is never silently treated as met
+}
+
+function resolveSaveAmount(amount, { pb = 0 } = {}) {
+  if (amount === 'pb') return Number(pb) || 0;
+  if (amount === 'shield_ac') return SHIELD_AC_BONUS;
+  return Number(amount) || 0;
+}
+
+/**
+ * The situational save bonuses currently in force for one ability.
+ *
+ * @returns {{ key, source, amount, situation, text, part }[]} — empty unless the character
+ *   has such a feat AND its equipment gate is met right now, so stowing the shield removes
+ *   both the bonus and the note. `part` is a breakdown term (it sums into the save's total);
+ *   `text` is the inclusion-worded sentence shown under the grid.
+ */
+export function conditionalSaveBonuses(ability, { feats = [], inventory = [], pb = 0 } = {}) {
+  return getFeatSaveMods(feats)
+    .filter((m) => m.abilities.includes(ability) && conditionMet(m.condition, inventory))
+    .map((m) => {
+      const amount = resolveSaveAmount(m.amount, { pb });
+      return {
+        key: `${m.source}-${ability}`.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        source: m.source,
+        amount,
+        situation: m.situation,
+        // The breakdown term. Its label carries the restriction, because the breakdown is
+        // where a player goes to ask "why is this +3?" — a bare "Shield Master +2" there
+        // would answer the wrong question.
+        part: {
+          key: `feat-${m.source}`.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          label: `${m.source} (only ${m.situation})`,
+          value: amount,
+        },
+        // Worded as INCLUSION, matching the active-effect note beneath the same grid: the
+        // bonus is already inside the number above, and "+2 to DEX saves" next to a total
+        // that already contains it reads as a second, further bonus.
+        text: `include ${formatSaveBonus(amount)} from ${m.source} — but only ${m.situation}`,
+      };
+    })
+    .filter((m) => m.amount > 0);
+}
+
+/** "+2" with a real minus sign, matching the rest of the sheet's signed numbers. */
+function formatSaveBonus(n) {
+  return n >= 0 ? `+${n}` : `−${Math.abs(n)}`;
 }
