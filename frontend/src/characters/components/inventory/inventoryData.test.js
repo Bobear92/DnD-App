@@ -1,3 +1,4 @@
+import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import { describe, it, expect } from 'vitest';
 import {
   buildEntry, addEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons,
@@ -423,6 +424,15 @@ describe('fighting styles fold into attack/AC math', () => {
     expect(computeArmorClass({ inventory: inv, scores: { dexterity: 14 }, styles: ['Defense'] }).value).toBe(14);
     // No armor → no Defense bonus.
     expect(computeArmorClass({ inventory: [], scores: { dexterity: 14 }, charClass: 'Fighter', styles: ['Defense'] }).value).toBe(12);
+  });
+
+  // The 2024 Defense FEAT now reaches AC through the style route alone (it used to be an ac_mod).
+  // Carrying both would put +2 on the sheet; this is the guard against re-adding the ac_mod.
+  it('the 2024 Defense feat adds +1 AC exactly once, through the style route', () => {
+    const inv = [armor({ equipped: true, name: 'Leather', armor_type: 'light', armor_class: 11 })];
+    const characterData = { feats: [{ name: 'Defense', effects: [{ kind: 'fighting_style', style: 'Defense' }] }] };
+    const styles = gatherFightingStyles(characterData);
+    expect(computeArmorClass({ inventory: inv, scores: { dexterity: 14 }, feats: characterData.feats, styles }).value).toBe(14);
   });
 });
 

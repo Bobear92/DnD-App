@@ -51,6 +51,7 @@ function effectChipLabel(e, feat) {
         ? feat.choices.maneuvers.join(', ')
         : (e.label || `${e.count || 0} maneuvers`);
     case 'expertise': return e.label || `Expertise ×${e.count || 1}`;
+    case 'fighting_style': return e.label || e.style;
     case 'ac_mod': return e.label || (e.amount ? `+${e.amount} AC` : 'AC');
     // A save bonus that applies only sometimes (Shield Master). The chip is the MECHANIC's
     // name only — the number depends on equipment and the situation is a sentence, both of

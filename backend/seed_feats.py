@@ -41,8 +41,23 @@ def _abil_choice(abilities, amount=1):
     label = f"+{amount} " + " or ".join(a.capitalize() for a in abilities)
     return {"kind": "ability_choice", "abilities": abilities, "amount": amount, "label": label}
 
-def _note(text):
-    return {"kind": "note", "text": text}
+def _note(text, surfaced=None, unmodelable=None):
+    """A rules clause kept as text. Every note has exactly one of three statuses, which
+    report_feat_effects.py turns into the worklist:
+
+      pending      (neither tag) - NOT built yet. This is the worklist; it is what the coverage
+                   gate counts, so adding one without building it fails CI.
+      surfaced=    the clause IS on the sheet, built by a frontend table/card keyed on the feat
+                   name - the note only restates it. The value says WHERE, so the claim is checkable.
+      unmodelable= the USER has signed off that no model exists for it. The value names the
+                   missing model. Never set this on your own (CLAUDE.md "Prose-only needs sign-off").
+    """
+    note = {"kind": "note", "text": text}
+    if surfaced:
+        note["surfaced"] = surfaced
+    if unmodelable:
+        note["unmodelable"] = unmodelable
+    return note
 
 def _damage_reduction(amount, damage_types, condition, nonmagical_only=False, label=None):
     """Flat damage SUBTRACTION — not resistance (which halves).
@@ -109,6 +124,14 @@ def _save_advantage(abilities, situation=None, label=None):
         "label": label or f"adv. on {scope} saves",
     }
 
+def _fighting_style(style, label):
+    """A 2024 Fighting Style FEAT. Routed through the frontend's fightingStyles.js — the same math a
+    class-granted style (character_data.fighting_style) uses — so a style has ONE mechanization
+    route whichever way it was acquired. Author it only for styles fightingStyles.js actually
+    computes; a style with no math there would be counted as mechanized while doing nothing."""
+    return {"kind": "fighting_style", "style": style, "label": label}
+
+
 def _action(name, economy, trigger, description):
     return {"kind": "action", "name": name, "economy": economy, "trigger": trigger, "description": description}
 
@@ -163,16 +186,19 @@ FEAT_EFFECTS_5E = {
     ],
     "Athlete": [
         _abil_choice(["strength", "dexterity"]),
-        _note("Stand from prone with only 5 ft of movement; climbing costs no extra movement; running jump after moving 5 ft."),
+        _note("Running jump after moving only 5 ft.", surfaced="Jump card (Stats > HP & Movement)"),
+        _note("Stand from prone with only 5 ft of movement; climbing costs no extra movement."),
     ],
     "Charger": [
-        _note("After you take the Dash action, use a bonus action to make one melee weapon attack or to shove a creature. If you moved 10 ft straight toward the target first, the attack deals +5 damage or the shove pushes it up to 10 ft."),
+        _note("After you take the Dash action, use a bonus action to make one melee weapon attack or to shove a creature. If you moved 10 ft straight toward the target first, the attack deals +5 damage or the shove pushes it up to 10 ft.",
+              surfaced="Charger Action + Bonus combo card (Action Economy)"),
     ],
     "Crossbow Expert": [
         _action("Hand Crossbow (Bonus Attack)", "bonus",
                 "After you make a one-handed attack",
                 "Make an attack with a hand crossbow you're holding as a bonus action."),
-        _note("Ignore the loading property of proficient crossbows; no disadvantage on ranged attacks within 5 ft of an enemy."),
+        _note("Ignore the loading property of proficient crossbows; no disadvantage on ranged attacks within 5 ft of an enemy.",
+              surfaced="loading note + the 'no disadvantage within 5 ft' line on the crossbow's attack card"),
     ],
     "Defensive Duelist": [
         _action("Defensive Parry", "reaction",
@@ -181,7 +207,8 @@ FEAT_EFFECTS_5E = {
     ],
     "Dual Wielder": [
         {"kind": "ac_mod", "amount": 1, "condition": "two_melee_weapons", "label": "+1 AC (dual-wielding)"},
-        _note("Two-weapon fighting with non-light weapons; draw/stow two one-handed weapons at once."),
+        _note("Two-weapon fighting with non-light weapons.", surfaced="Two-Weapon Fighting combo card accepts non-light weapons"),
+        _note("Draw or stow two one-handed weapons at once."),
     ],
     "Dungeon Delver": [
         # RAW names no ability — "saving throws made to avoid or resist traps" can be any
@@ -194,19 +221,28 @@ FEAT_EFFECTS_5E = {
     ],
     "Durable": [
         _abil("constitution"),
-        _note("When you roll Hit Dice to regain HP, the minimum regained equals twice your CON modifier."),
+        _note("When you roll Hit Dice to regain HP, the minimum regained equals twice your CON modifier.",
+              surfaced="Hit Dice tracker minimum (durableHitDieMin)"),
     ],
     "Elemental Adept": [
         _note("Choose acid/cold/fire/lightning/thunder: your spells ignore resistance to it and treat 1s on its damage dice as 2s. Repeatable."),
     ],
     "Grappler": [
-        _note("Advantage on attack rolls against a creature you're grappling; can use your action to pin a grappled creature."),
+        # The restrain costs your whole ACTION, so it is its own Actions card, named apart from
+        # the frontend-built "Grapple Attack" card (the advantage clause: your attacks vs. the grappled
+        # creature, each listed with advantage).
+        _action("Pin: Restrain", "action", "While you're grappling a creature",
+                "Make another grapple check. If you succeed, you and the creature are both "
+                "Restrained until the grapple ends."),
+        _note("Advantage on attack rolls against a creature you're grappling.",
+              surfaced="Grapple Attack card (Action Economy)"),
     ],
     "Great Weapon Master": [
         _action("Cleave (Bonus Attack)", "bonus",
                 "When you score a critical hit or reduce a creature to 0 HP with a melee weapon",
                 "Make one melee weapon attack as a bonus action."),
-        _note("Before a melee attack with a heavy weapon you're proficient with, take -5 to the attack roll for +10 damage."),
+        _note("Before a melee attack with a heavy weapon you're proficient with, take -5 to the attack roll for +10 damage.",
+              surfaced="power-attack toggle on Heavy melee attack cards"),
     ],
     "Heavily Armored": [
         _abil("strength"),
@@ -236,7 +272,8 @@ FEAT_EFFECTS_5E = {
     ],
     "Lucky": [
         {"kind": "resource", "key": "luck_points", "label": "Luck Points", "total": 3, "recharge": "long"},
-        _note("Spend a luck point to roll an extra d20 on an attack, check, or save you make, or on an attack roll against you."),
+        _note("Spend a luck point to roll an extra d20 on an attack, check, or save you make, or on an attack roll against you.",
+              surfaced="Luck Points tracker (Feats sub-tab)"),
     ],
     "Mage Slayer": [
         _action("Mage Slayer Strike", "reaction",
@@ -250,16 +287,18 @@ FEAT_EFFECTS_5E = {
     "Magic Initiate": [
         _spell_grant("class", cantrips=2, leveled=[{"level": 1, "count": 1}],
                      free_cast="long_rest", ability="class", label="Magic Initiate"),
-        _note("The 1st-level spell is castable once per long rest for free (or with a spell slot). Repeatable for a different class."),
+        _note("The 1st-level spell is castable once per long rest for free (or with a spell slot). Repeatable for a different class.",
+              surfaced="free-cast tracker (Spells tab > Feats); repeatable via feats.repeatable"),
     ],
     "Martial Adept": [
         {"kind": "maneuver_grant", "count": 2, "die": "d6", "label": "2 maneuvers"},
         {"kind": "resource", "key": "martial_adept_superiority", "label": "Superiority Die (d6)", "total": 1, "recharge": "short"},
-        _note("If you're already a Battle Master, you instead gain one additional superiority die and add these maneuvers to your known list."),
+        _note("If you're already a Battle Master, you instead gain one additional superiority die and add these maneuvers to your known list.",
+              surfaced="folded into the Battle Master superiority pool (BattleMasterPanel)"),
     ],
     "Medium Armor Master": [
         {"kind": "ac_mod", "condition": "medium_armor_dex_cap", "dex_cap": 3, "label": "+3 DEX cap (medium armor)"},
-        _note("Medium armor doesn't impose disadvantage on Stealth."),
+        _note("Medium armor doesn't impose disadvantage on Stealth.", surfaced="Stealth note on the medium armor row"),
     ],
     "Mobile": [
         {"kind": "stat_mod", "stat": "speed", "amount": 10, "label": "+10 speed"},
@@ -282,17 +321,20 @@ FEAT_EFFECTS_5E = {
         _action("Polearm Butt (Bonus Attack)", "bonus",
                 "When you take the Attack action with a glaive, halberd, quarterstaff, or spear",
                 "Make a bonus-action attack with the weapon's opposite end (1d4 bludgeoning)."),
-        _note("Creatures provoke an opportunity attack when they enter your reach."),
+        _note("Creatures provoke an opportunity attack when they enter your reach.",
+              surfaced="rider on the Opportunity Attack card (polearm-gated)"),
     ],
     "Resilient": [
         _abil_choice(_ALL_ABILITIES),
         {"kind": "proficiency", "prof_type": "saving_throw", "from_ability_choice": True},
-        _note("Gain saving-throw proficiency in the chosen ability. Repeatable for a different ability."),
+        _note("Gain saving-throw proficiency in the chosen ability. Repeatable for a different ability.",
+              surfaced="saving throw proficiency (Saves grid); repeatable via feats.repeatable"),
     ],
     "Ritual Caster": [
         _spell_grant("class", leveled=[{"level": 1, "count": 2, "ritual": True}],
                      free_cast=None, ability="class", label="Ritual Caster"),
-        _note("Cast these as rituals only (10 minutes longer, no spell slot). You can add more ritual spells you find to the book."),
+        _note("Cast these as rituals only (10 minutes longer, no spell slot). You can add more ritual spells you find to the book.",
+              surfaced="editable ritual book (Spells tab > Feats)"),
     ],
     "Savage Attacker": [
         _note("Once per turn, reroll a melee weapon's damage dice and use either total."),
@@ -301,10 +343,13 @@ FEAT_EFFECTS_5E = {
         _action("Sentinel Strike", "reaction",
                 "When a creature within 5 ft attacks a target other than you",
                 "Make a melee weapon attack against the attacking creature."),
-        _note("Your opportunity-attack hits reduce the target's speed to 0; creatures provoke even when they Disengage."),
+        _note("Your opportunity-attack hits reduce the target's speed to 0; creatures provoke even when they Disengage.",
+              surfaced="rider on the Opportunity Attack card"),
     ],
     "Sharpshooter": [
-        _note("Long range imposes no disadvantage; ignore half and three-quarters cover; -5 to hit for +10 damage with a proficient ranged weapon."),
+        _note("Long range imposes no disadvantage; -5 to hit for +10 damage with a proficient ranged weapon.",
+              surfaced="range band + power-attack toggle on ranged attack cards"),
+        _note("Ignore half and three-quarters cover."),
     ],
     "Shield Master": [
         _action("Shield Shove (Bonus)", "bonus",
@@ -322,17 +367,17 @@ FEAT_EFFECTS_5E = {
     ],
     "Skilled": [
         {"kind": "proficiency", "prof_type": "skill_or_tool", "count": 3, "label": "3 skills or tools"},
-        _note("Repeatable for three more skills or tools."),
+        _note("Repeatable for three more skills or tools.", surfaced="feats.repeatable"),
     ],
     "Skulker": [
         _note("Hide when lightly obscured; missing a ranged attack doesn't reveal you; dim light doesn't impose disadvantage on sight Perception."),
     ],
     "Spell Sniper": [
         _spell_grant("class", cantrips=1, ability="class", label="Spell Sniper"),
-        _note("Double the range of attack-roll spells; spell attacks ignore half and three-quarters cover. Choose a cantrip that requires an attack roll."),
+        _note("Double the range of attack-roll spells; spell attacks ignore half and three-quarters cover."),
     ],
     "Tough": [
-        _note("Your hit point maximum increases by 2 per level (applied automatically on the sheet)."),
+        _note("Your hit point maximum increases by 2 per level.", surfaced="Max HP (combatBonuses.hasToughFeat)"),
     ],
     "War Caster": [
         _action("War Caster Spell (Reaction)", "reaction",
@@ -367,54 +412,69 @@ FEAT_EFFECTS_2024 = {
     ],
     "Lucky": [
         {"kind": "resource", "key": "luck_points", "total": "pb", "recharge": "long", "label": "Luck Points"},
-        _note("Spend a Luck Point for Advantage on a d20 Test, or to impose Disadvantage on an attack roll against you."),
+        _note("Spend a Luck Point for Advantage on a d20 Test, or to impose Disadvantage on an attack roll against you.",
+              surfaced="Luck Points tracker (Feats sub-tab)"),
     ],
     "Magic Initiate": [
         _spell_grant("group", cantrips=2, leveled=[{"level": 1, "count": 1}],
                      free_cast="long_rest", ability="choice", label="Magic Initiate"),
-        _note("Choose Arcane, Divine, or Primal and a spellcasting ability. The 1st-level spell is castable once per long rest for free (or with a slot). Repeatable."),
+        _note("Choose Arcane, Divine, or Primal and a spellcasting ability. The 1st-level spell is castable once per long rest for free (or with a slot). Repeatable.",
+              surfaced="spell-grant picker + free-cast tracker (Spells tab > Feats)"),
     ],
     "Musician": [_note("Proficiency with three Musical Instruments; after a rest, grant Heroic Inspiration to allies who hear you (up to your proficiency bonus).")],
     "Savage Attacker": [_note("Once per turn, roll a weapon's damage dice twice and use either roll.")],
     "Skilled": [
         {"kind": "proficiency", "prof_type": "skill_or_tool", "count": 3, "label": "3 skills or tools"},
-        _note("Repeatable for three more skills or tools."),
+        _note("Repeatable for three more skills or tools.", surfaced="feats.repeatable"),
     ],
     "Tavern Brawler": [
         {"kind": "proficiency", "prof_type": "weapon", "items": ["Improvised weapons"]},
         {"kind": "attack_mod", "target": "unarmed", "dice": "1d4", "label": "Unarmed strike deals 1d4"},
         _note("Reroll a 1 on the unarmed die; push a target 5 ft with an Unarmed Strike."),
     ],
-    "Tough": [_note("Your hit point maximum increases by 2 per level (applied automatically on the sheet).")],
+    "Tough": [_note("Your hit point maximum increases by 2 per level.", surfaced="Max HP (combatBonuses.hasToughFeat)")],
 
     # ── General feats (level 4+; half-feats) ──
-    "Ability Score Improvement": [_note("Increase one ability score by 2, or two by 1 each (max 20). Repeatable. Use the Ability Score step at level-up.")],
+    "Ability Score Improvement": [_note("Increase one ability score by 2, or two by 1 each (max 20). Repeatable.",
+                                        surfaced="Ability Score step in the level-up wizard")],
     "Actor": [_abil("charisma"), _note("Advantage on Deception/Performance to impersonate; mimic speech and sounds you've heard.")],
-    "Athlete": [_abil_choice(["strength", "dexterity"]), _note("Stand from prone with 5 ft; climb without extra cost; running jump after moving 5 ft.")],
-    "Charger": [_abil_choice(["strength", "dexterity"]), _note("When you take the Dash action, your Speed increases by 10 ft for that action. Once per turn, if you move at least 10 ft straight toward a target immediately before hitting it with a melee attack, deal +1d8 damage or push it up to 10 ft away.")],
+    "Athlete": [_abil_choice(["strength", "dexterity"]), _note("Running jump after moving only 5 ft.", surfaced="Jump card (Stats > HP & Movement)"),
+                _note("Stand from prone with 5 ft; climb without extra cost.")],
+    "Charger": [_abil_choice(["strength", "dexterity"]), _note("When you take the Dash action, your Speed increases by 10 ft for that action. Once per turn, if you move at least 10 ft straight toward a target immediately before hitting it with a melee attack, deal +1d8 damage or push it up to 10 ft away.",
+                                                                surfaced="Charge card (Action Economy)")],
     "Chef": [_abil_choice(["constitution", "wisdom"]), _note("Cook's utensils proficiency; cook food on a short rest to heal allies; bake treats granting temporary hit points.")],
-    "Crossbow Expert": [_abil("dexterity"), _note("Ignore the Loading property of crossbows; no disadvantage on ranged attacks within 5 ft; fire a hand crossbow as part of the Attack action's extra attack.")],
+    "Crossbow Expert": [_abil("dexterity"), _note("Ignore the Loading property of crossbows; no disadvantage on ranged attacks within 5 ft.",
+                              surfaced="loading note + the 'no disadvantage within 5 ft' line on the crossbow's attack card"),
+                        _note("Fire a hand crossbow as part of the Attack action's extra attack.")],
     "Crusher": [_abil_choice(["strength", "constitution"]), _note("Once per turn, move a creature 5 ft when you deal bludgeoning damage; a bludgeoning crit gives attackers advantage against it.")],
     "Defensive Duelist": [
         _abil("dexterity"),
         _action("Defensive Parry", "reaction", "When hit by a melee attack while wielding a Finesse weapon",
                 "Add your proficiency bonus to your AC against that attack."),
     ],
-    "Dual Wielder": [_abil_choice(["strength", "dexterity"]), {"kind": "ac_mod", "amount": 1, "condition": "two_melee_weapons", "label": "+1 AC (dual-wielding)"}, _note("Two-weapon fighting with non-Light weapons; draw/stow two weapons at once.")],
-    "Durable": [_abil("constitution"), _note("Spend Hit Dice to heal during any rest; regain at least twice your CON modifier when you roll Hit Dice.")],
+    "Dual Wielder": [_abil_choice(["strength", "dexterity"]), {"kind": "ac_mod", "amount": 1, "condition": "two_melee_weapons", "label": "+1 AC (dual-wielding)"}, _note("Two-weapon fighting with non-Light weapons.", surfaced="Two-Weapon Fighting combo card accepts non-Light weapons"),
+                     _note("Draw or stow two weapons at once.")],
+    "Durable": [_abil("constitution"), _note("Regain at least twice your CON modifier when you roll Hit Dice.", surfaced="Hit Dice tracker minimum (durableHitDieMin)"),
+                _note("Spend Hit Dice to heal during any rest.")],
     "Elemental Adept": [_abil_choice(["intelligence", "wisdom", "charisma"]), _note("Choose a damage type: your spells ignore resistance to it and treat 1s on its damage dice as 2s. Repeatable.")],
     "Fey Touched": [
         _abil_choice(["intelligence", "wisdom", "charisma"]),
         _spell_grant("school", leveled=[{"level": 1, "count": 1, "school": ["Divination", "Enchantment"]}],
                      fixed=[{"name": "Misty Step", "level": 2}], free_cast="long_rest", ability="none", label="Fey Touched"),
-        _note("Misty Step and the chosen spell are each castable once per long rest for free, or with a spell slot."),
+        _note("Misty Step and the chosen spell are each castable once per long rest for free, or with a spell slot.",
+              surfaced="free-cast trackers (Spells tab > Feats)"),
     ],
-    "Grappler": [_abil_choice(["strength", "dexterity"]), _note("Advantage on attacks vs creatures you're Grappling; move a grappled creature with you; a free Unarmed Strike to grapple after an attack.")],
+    # Punch and Grab + Fast Wrestler ride on the Grapple card (frontend ENTRY_RIDERS); Attack
+    # Advantage is the frontend-built "Grapple Attack" card.
+    "Grappler": [_abil_choice(["strength", "dexterity"]), _note("Advantage on attacks vs creatures you're Grappling.", surfaced="Grapple Attack card (Action Economy)"),
+                 _note("An Unarmed Strike hit can both damage and grapple once per turn; no extra movement to drag a creature your size or smaller.",
+                       surfaced="Grappler rider on the Grapple card, naming your size")],
     "Great Weapon Master": [
         _abil("strength"),
         _action("Cleave (Bonus Attack)", "bonus", "When you score a crit or drop a creature to 0 HP with a melee weapon",
                 "Make one melee weapon attack as a bonus action."),
-        _note("Add your proficiency bonus to a Heavy weapon's damage when you take the Attack action."),
+        _note("Add your proficiency bonus to a Heavy weapon's damage when you take the Attack action.",
+              surfaced="Heavy Weapon Master toggle on Heavy melee attack cards"),
     ],
     "Heavily Armored": [_abil_choice(["strength", "constitution"]), {"kind": "proficiency", "prof_type": "armor", "items": ["Heavy"]}],
     # 2024 scales with PB and applies to ALL B/P/S — the 2014 "nonmagical" clause is gone.
@@ -432,7 +492,7 @@ FEAT_EFFECTS_2024 = {
                 "Make a melee weapon attack against it."),
         _note("Impose disadvantage on concentration saves you cause.")],
     "Martial Weapon Training": [_abil_choice(["strength", "dexterity"]), {"kind": "proficiency", "prof_type": "weapon", "items": ["Martial weapons"]}],
-    "Medium Armor Master": [_abil_choice(["strength", "dexterity"]), {"kind": "ac_mod", "condition": "medium_armor_dex_cap", "dex_cap": 3, "label": "+3 DEX cap (medium armor)"}, _note("Medium armor doesn't impose disadvantage on Stealth.")],
+    "Medium Armor Master": [_abil_choice(["strength", "dexterity"]), {"kind": "ac_mod", "condition": "medium_armor_dex_cap", "dex_cap": 3, "label": "+3 DEX cap (medium armor)"}, _note("Medium armor doesn't impose disadvantage on Stealth.", surfaced="Stealth note on the medium armor row")],
     "Mobile": [_abil_choice(["strength", "dexterity"]), {"kind": "stat_mod", "stat": "speed", "amount": 10, "label": "+10 speed"}, _note("Dashing ignores difficult terrain; a melee attack denies that creature's opportunity attacks against you this turn.")],
     "Moderately Armored": [_abil_choice(["strength", "dexterity"]), {"kind": "proficiency", "prof_type": "armor", "items": ["Medium", "Shields"]}],
     "Mounted Combatant": [_abil_choice(["strength", "dexterity", "wisdom"]), _note("Advantage vs creatures smaller than your mount; redirect attacks from mount to you; mount avoids damage on DEX saves.")],
@@ -443,29 +503,36 @@ FEAT_EFFECTS_2024 = {
         _abil_choice(["strength", "dexterity"]),
         _action("Polearm Butt (Bonus Attack)", "bonus", "When you Attack with a glaive, halberd, quarterstaff, or spear",
                 "Make a bonus-action attack with the opposite end (1d4 bludgeoning)."),
-        _note("Creatures provoke an opportunity attack when they enter your reach.")],
-    "Resilient": [_abil_choice(_ALL_ABILITIES), {"kind": "proficiency", "prof_type": "saving_throw", "from_ability_choice": True}, _note("Gain saving-throw proficiency in the chosen ability. Repeatable.")],
+        _note("Creatures provoke an opportunity attack when they enter your reach.",
+              surfaced="rider on the Opportunity Attack card (polearm-gated)")],
+    "Resilient": [_abil_choice(_ALL_ABILITIES), {"kind": "proficiency", "prof_type": "saving_throw", "from_ability_choice": True}, _note("Gain saving-throw proficiency in the chosen ability. Repeatable.",
+                   surfaced="saving throw proficiency (Saves grid); repeatable via feats.repeatable")],
     "Ritual Caster": [
         _abil_choice(["intelligence", "wisdom", "charisma"]),
         _spell_grant("class", leveled=[{"level": 1, "count": 2, "ritual": True}],
                      free_cast=None, ability="none", label="Ritual Caster"),
-        _note("Cast these as rituals only (10 minutes longer, no spell slot). You can add more ritual spells you find to the book."),
+        _note("Cast these as rituals only (10 minutes longer, no spell slot). You can add more ritual spells you find to the book.",
+              surfaced="editable ritual book (Spells tab > Feats)"),
     ],
     "Sentinel": [
         _abil_choice(["strength", "dexterity"]),
         _action("Sentinel Strike", "reaction", "When a creature within 5 ft attacks a target other than you",
                 "Make a melee weapon attack against the attacker."),
-        _note("Opportunity-attack hits reduce speed to 0; creatures provoke even when they Disengage.")],
+        _note("Opportunity-attack hits reduce speed to 0; creatures provoke even when they Disengage.",
+              surfaced="rider on the Opportunity Attack card")],
     "Shadow Touched": [
         _abil_choice(["intelligence", "wisdom", "charisma"]),
         _spell_grant("school", leveled=[{"level": 1, "count": 1, "school": ["Illusion", "Necromancy"]}],
                      fixed=[{"name": "Invisibility", "level": 2}], free_cast="long_rest", ability="none", label="Shadow Touched"),
-        _note("Invisibility and the chosen spell are each castable once per long rest for free, or with a spell slot."),
+        _note("Invisibility and the chosen spell are each castable once per long rest for free, or with a spell slot.",
+              surfaced="free-cast trackers (Spells tab > Feats)"),
     ],
     # Bypass Cover stays a note (no distance-to-target model to attach cover to). Firing in
     # Melee and Long Shot are both mechanized on the attack card — the spacing note and the
     # range band respectively — the same hardcoded route the 5e Sharpshooter clauses take.
-    "Sharpshooter": [_abil("dexterity"), _note("Ignore half and three-quarters cover; no disadvantage firing within 5 ft of an enemy; ranged weapons' normal range increases by 30 ft.")],
+    "Sharpshooter": [_abil("dexterity"), _note("No disadvantage firing within 5 ft of an enemy; ranged weapons' normal range increases by 30 ft.",
+                           surfaced="the 'no disadvantage within 5 ft' line + range band on ranged attack cards"),
+                     _note("Ignore half and three-quarters cover.")],
     "Shield Master": [
         _abil("strength"),
         _action("Shield Shove (Bonus)", "bonus", "When you wield a shield and take the Attack action",
@@ -484,7 +551,7 @@ FEAT_EFFECTS_2024 = {
         _abil_choice(["intelligence", "wisdom", "charisma"]),
         # ability='none': the +1 above already sets the casting ability, so the picker doesn't re-ask.
         _spell_grant("group", cantrips=1, ability="none", label="Spell Sniper"),
-        _note("Spell attacks ignore half and three-quarters cover. Choose a cantrip that requires an attack roll, cast with the ability you increased."),
+        _note("Spell attacks ignore half and three-quarters cover."),
     ],
     "Telekinetic": [
         _abil_choice(["intelligence", "wisdom", "charisma"]),
@@ -507,10 +574,11 @@ FEAT_EFFECTS_2024 = {
         _note("Perform somatic components while holding weapons or a shield.")],
 
     # ── Fighting Style feats (no ASI; mostly passive combat riders) ──
-    "Archery": [_note("+2 bonus to attack rolls with ranged weapons.")],
+    "Archery": [_fighting_style("Archery", "+2 ranged attack rolls")],
     "Blind Fighting": [_note("Blindsight 10 ft — see anything not behind total cover even while blinded or in darkness.")],
-    "Defense": [{"kind": "ac_mod", "amount": 1, "condition": "armor", "label": "+1 AC (in armor)"}],
-    "Dueling": [_note("+2 bonus to damage rolls with a one-handed melee weapon when wielding no other weapon.")],
+    # Was an `ac_mod`; now the style route alone, or the +1 would count twice once feats feed it.
+    "Defense": [_fighting_style("Defense", "+1 AC (in armor)")],
+    "Dueling": [_fighting_style("Dueling", "+2 damage (one-handed melee)")],
     "Great Weapon Fighting": [_note("Treat a 1 or 2 on a two-handed melee weapon's damage die as a 3.")],
     "Interception": [
         _action("Interception", "reaction", "When a creature you can see hits another within 5 ft of you",
@@ -518,8 +586,9 @@ FEAT_EFFECTS_2024 = {
     "Protection": [
         _action("Protection", "reaction", "When a creature you can see attacks a target other than you within 5 ft (you're wielding a shield)",
                 "Impose disadvantage on the attack roll.")],
-    "Thrown Weapon Fighting": [_note("Draw a thrown weapon as part of the attack; +2 to damage rolls with thrown weapons.")],
-    "Two-Weapon Fighting": [_note("Add your ability modifier to the damage of the second attack when two-weapon fighting.")],
+    "Thrown Weapon Fighting": [_fighting_style("Thrown Weapon Fighting", "+2 damage (thrown)"),
+                               _note("Draw a thrown weapon as part of the attack.")],
+    "Two-Weapon Fighting": [_fighting_style("Two-Weapon Fighting", "Ability mod on off-hand damage")],
     "Unarmed Fighting": [
         {"kind": "attack_mod", "target": "unarmed", "dice": "1d6", "label": "Unarmed strike deals 1d6"},
         _note("1d8 with no weapon or shield; deal 1d4 to a creature you're grappling at the start of your turns.")],
@@ -558,7 +627,7 @@ FEATS_5E = [
     ("Dungeon Delver", "You gain advantage on Perception and Investigation checks to detect secret doors, advantage on saves against traps, resistance to trap damage, and you can search for traps at a normal pace while traveling.", None, False),
     ("Durable", "You gain a +1 increase to Constitution, and when you roll Hit Dice to regain hit points, the minimum number you regain equals twice your Constitution modifier (minimum of 2).", None, False),
     ("Elemental Adept", "Choose one damage type: acid, cold, fire, lightning, or thunder. Spells you cast ignore resistance to that damage type, and when you roll damage of that type you treat any 1 on a damage die as a 2. You can take this feat multiple times for a different damage type.", "The ability to cast at least one spell", True),
-    ("Grappler", "You have advantage on attack rolls against a creature you're grappling, and you can use your action to try to pin a creature grappled by you, restraining both of you until the grapple ends.", "Strength 13 or higher", False),
+    ("Grappler", "You have advantage on attack rolls against a creature you're grappling. You can use your action to try to pin a creature grappled by you: make another grapple check, and if you succeed, you and the creature are both restrained until the grapple ends.", "Strength 13 or higher", False),
     ("Great Weapon Master", "On your turn, when you score a critical hit with a melee weapon or reduce a creature to 0 hit points with one, you can make one melee attack as a bonus action. Before a melee attack with a heavy weapon you're proficient with, you can take a -5 penalty to the attack roll for +10 damage.", None, False),
     ("Heavily Armored", "You gain a +1 increase to Strength and proficiency with heavy armor.", "Proficiency with medium armor", False),
     ("Heavy Armor Master", "You gain a +1 increase to Strength, and while wearing heavy armor, bludgeoning, piercing, and slashing damage from nonmagical attacks is reduced by 3.", "Proficiency with heavy armor", False),
@@ -618,7 +687,7 @@ FEATS_2024 = [
     ("Durable", "General feat. Increase Constitution by 1. You can spend Hit Dice to heal during any rest, and when you roll Hit Dice you regain a minimum equal to twice your Constitution modifier.", "Level 4+", False),
     ("Elemental Adept", "General feat. Increase Intelligence, Wisdom, or Charisma by 1. Choose acid, cold, fire, lightning, or thunder: your spells ignore resistance to it and treat damage-die 1s as 2s. Repeatable.", "Level 4+, spellcasting or pact magic", True),
     ("Fey Touched", "General feat. Increase Intelligence, Wisdom, or Charisma by 1. You learn Misty Step and one 1st-level divination or enchantment spell, castable once per long rest for free or with slots.", "Level 4+", False),
-    ("Grappler", "General feat. Increase Strength or Dexterity by 1. You have advantage on attacks against creatures you're Grappling, can move a grappled creature with you without extra cost, and can use a free Unarmed Strike to grapple after an attack.", "Level 4+, Strength or Dexterity 13+", False),
+    ("Grappler", "General feat. Increase Strength or Dexterity by 1. Punch and Grab: when you hit a creature with an Unarmed Strike as part of the Attack action on your turn, you can use both the Damage and the Grapple option (once per turn). Attack Advantage: you have advantage on attack rolls against any creature Grappled by you. Fast Wrestler: you don't have to spend extra movement to move a creature Grappled by you if the creature is your size or smaller.", "Level 4+, Strength or Dexterity 13+", False),
     ("Great Weapon Master", "General feat. Increase Strength by 1. On a crit or reducing a creature to 0 HP with a melee weapon you can make a bonus-action attack, and you can add your proficiency bonus to a Heavy weapon's damage when you take the Attack action.", "Level 4+, Strength 13+", False),
     ("Heavily Armored", "General feat. Increase Strength or Constitution by 1, and gain training (proficiency) with Heavy armor.", "Level 4+, Medium armor training", False),
     ("Heavy Armor Master", "General feat. Increase Strength or Constitution by 1. While wearing Heavy armor, bludgeoning, piercing, and slashing damage you take is reduced by an amount equal to your proficiency bonus.", "Level 4+, Heavy armor training", False),

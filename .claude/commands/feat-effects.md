@@ -8,8 +8,8 @@ just a description card. Argument: a feat (or batch of feats) to mechanize, or a
 support. This is the recurring authoring procedure — 5e feats now, 2024 feats + GM homebrew later.
 
 **Status:** 5e Alert + Tavern Brawler are fully wired (vertical slice). The rest are prose-only —
-run `python report_feat_effects.py` (in `backend/`, venv active) for the current mechanized-vs-prose
-worklist (5e 26/41, 2024 48/73). Both editions are authored (`FEAT_EFFECTS_5E` / `FEAT_EFFECTS_2024`)
+run `python report_feat_effects.py` (in `backend/`, venv active) for the CLAUSE-level worklist — every
+pending `note`, per edition (currently 5e 23/41 feats complete + 18 clauses pending, 2024 29/73 + 44). Both editions are authored (`FEAT_EFFECTS_5E` / `FEAT_EFFECTS_2024`)
 per their own rules — **don't copy 2014 effects to 2024** (Alert, Observant, Origin-feat ASIs differ).
 
 ## Where things live
@@ -24,7 +24,13 @@ per their own rules — **don't copy 2014 effects to 2024** (Alert, Observant, O
 - **Snapshot at acquisition** — `LevelUpWizard.jsx` and `CharacterCreate.jsx` (Variant Human) copy the
   picked feat's `effects` (and any choice) onto `character_data.feats[i]` so consumers resolve
   synchronously (inventory-snapshot pattern). Shape: `{id, name, level, effects?, choices?}`.
-- **Coverage tool** `backend/report_feat_effects.py` — per-edition mechanized vs prose-only.
+- **Coverage tool** `backend/report_feat_effects.py` — CLAUSE-level. Every `note` is **pending** (no tag),
+  **`surfaced="<where>"`** (built on the sheet by a frontend table/card; the note only restates it) or
+  **`unmodelable="<missing model>"`** (USER sign-off only). A feat is complete only with no pending clause.
+  `--check` fails CI if complete feats drop OR pending clauses rise — so a new text-only note is a build
+  failure, not a quiet coverage number. When a clause gets built frontend-side (a rider, a card, a number),
+  tag its note `surfaced=` naming where, then `--write-baseline`. A note restating something already
+  built is `surfaced`; SPLIT a note whose clauses are half built, so the pending half stays visible.
 
 ## Effect-kind taxonomy + consumer status
 Each effect is `{ kind, …, label? }`. `label` is the chip text in the Feats sub-tab (auto-derived if omitted).
@@ -35,6 +41,7 @@ Each effect is `{ kind, …, label? }`. `label` is the chip text in the Feats su
 | `ac_mod` | `{amount?, condition:'armor'\|'two_melee_weapons'\|'medium_armor_dex_cap', dex_cap?}` | `getFeatAcMods` → evaluated in `computeArmorClass` | **wired**. Conditional AC: Defense (+1 in armor), Dual Wielder (+1 with two melee weapons), Medium Armor Master (medium DEX cap → `dex_cap`). |
 | `save_mod` | `{abilities:[...], amount, condition:'shield', situation}` | `getFeatSaveMods` → `conditionalSaveBonuses(ability, {feats, inventory, pb})` in `skills/saveFeatures.js` | **wired**. A save bonus that applies only SOMETIMES — 2014 Shield Master's "+ your shield's AC bonus to Dexterity saves against effects that target only you". `amount` may be an int or the `'pb'`/`'shield_ac'` sentinel; `condition` is the EQUIPMENT gate the resolver evaluates; `situation` is the half nothing can evaluate. **IS summed into the printed save**, which makes that total a best case — so the resolver also hands out the strings that say so (`part.label` for the breakdown, `text` for the note under the grid) and the raised total is coloured. **Always author a `situation`**: one without it silently claims an unconditional bonus. Reach for this instead of a `note` whenever a feat's clause is a real NUMBER with a condition the app can check. |
 | `save_advantage` | `{abilities:[...], situation?}` | `getFeatSaveAdvantages` → merged into `getSaveFeatures` → the **Features Affecting Saves** panel | **wired**. ADVANTAGE on your OWN saves (War Caster, Mage Slayer 5e, Dungeon Delver). `abilities: []` is correct when RAW names none ("saving throws to avoid or resist traps"). **`situation` is load-bearing**: with one, the entry is panel-only; without one, the named abilities get an `adv` tag on their save rows. Never tag a situation-scoped advantage — it tells the player to roll every save of that ability twice. A clause about an ENEMY's save (Mage Slayer's concentration disadvantage) is NOT this kind — it belongs where that effect fires. |
+| `fighting_style` | `{style, label}` | `getFeatFightingStyles` → merged into `fightingStyles.gatherFightingStyles` (alongside the class pick + additional styles, de-duped) | **wired**. The 2024 Fighting Style FEATS — Archery, Defense, Dueling, Thrown Weapon Fighting, Two-Weapon Fighting — reach the SAME attack/AC math a class-granted style uses (before this a 2024 Archery feat gave no +2). Author it **only** for a style `fightingStyles.js` actually computes; one with no math there (Great Weapon Fighting, Blind Fighting) would count as mechanized while doing nothing. Defense's old `ac_mod` was REMOVED when it moved here — carrying both double-counts the +1. |
 | `ability_score` | `{ability, amount}` | folded into level-up score updates | **wired** (LevelUpWizard). Variant-Human-creation path: TODO. |
 | `ability_choice` | `{abilities:[...], amount}` | acquisition chooser → score | **wired in LevelUpWizard** (`feat-ability-{stat}`). Variant Human creation: TODO. |
 | `attack_mod` | `{target:'unarmed', dice}` | `getFeatUnarmedDice` → Action Economy unarmed row | **unarmed wired**. Weapon to-hit/damage riders now have a consumer in `inventoryData` `computeAttack`/`getAttacks` (`styles` arg, used today by the fighting-style helper `combat/fightingStyles.js` — Archery/Dueling/Thrown/Defense); a feat weapon bonus would plug in the same way. |
@@ -91,7 +98,8 @@ the **missing model**, not assert difficulty:
 "It's flavor" / "it's narrative" / "can't be computed" with nothing named is **not** a reason. If you
 can't name the missing model, the clause is probably mechanizable and you just haven't found the surface.
 Mark each as genuinely un-modelable or merely **deferred**, and let the user decide — `report_feat_effects.py`
-already prints the prose-only list per edition, so this is the same worklist, surfaced at authoring time.
+already prints every pending clause per edition, so this is the same worklist, surfaced at authoring time.
+Only once the user signs off does a clause get `unmodelable="<missing model>"`; until then it stays pending.
 
 ## Workflow A — mechanize feats (data)
 1. Add entries to `FEAT_EFFECTS_5E` in `seed_feats.py`.

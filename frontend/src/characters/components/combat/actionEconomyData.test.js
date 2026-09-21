@@ -599,6 +599,26 @@ describe('buildActionEconomy — Fighter', () => {
     expect(twf.subAttacks[1].damage).toBe('1d4 + 3 piercing');
   });
 
+  // The style used to be read from `fighting_style` alone, missing a 2024 Fighting Style feat
+  // and a Champion's Additional Fighting Style.
+  it.each([
+    ['a 2024 Fighting Style feat', { feats: [{ name: 'Two-Weapon Fighting', effects: [{ kind: 'fighting_style', style: 'Two-Weapon Fighting' }] }] }],
+    ["a Champion's additional style", { additional_fighting_styles: ['Two-Weapon Fighting'] }],
+  ])('off-hand keeps the ability modifier when the style comes from %s', (_label, extra) => {
+    const args = fighterArgs(5, '5e');
+    args.characterData = { ...args.characterData, ...extra };
+    args.inventory = [
+      { uid: 'a', name: 'Shortsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Light"]', damage: '1d6', damage_type: 'piercing' },
+      { uid: 'b', name: 'Dagger', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Light"]', damage: '1d4', damage_type: 'piercing' },
+    ];
+    args.attacks = [
+      { uid: 'a', name: 'Shortsword', toHit: '+6', damage: '1d6 + 3 piercing', proficient: true },
+      { uid: 'b', name: 'Dagger', toHit: '+6', damage: '1d4 + 3 piercing', proficient: true },
+    ];
+    const twf = buildActionEconomy(args)['action+bonus'].find((e) => e.name === 'Two-Weapon Fighting');
+    expect(twf.subAttacks[1].damage).toBe('1d4 + 3 piercing');
+  });
+
   it('adds Two-Weapon Fighting with two non-light one-handed weapons when the character has Dual Wielder', () => {
     const args = fighterArgs(5, '5e');
     args.characterData = {
@@ -3281,5 +3301,93 @@ describe('guard: option-pool choices that grant a reaction have a Reactions-tab 
     // The parenthetical cost, which is how a rune states it — and the form the first draft missed.
     expect(OWN_REACTION.test('Channel Rune (reaction, when you are hit by an attack roll)')).toBe(true);
     expect(OWN_REACTION.test('Channel Rune (bonus action): for 10 minutes you gain +2')).toBe(false);
+  });
+});
+
+describe('buildActionEconomy — Grappler (both editions)', () => {
+  // The feat as each edition stores it: 2014 authors the restrain as an Action effect; 2024 is a
+  // half-feat. The Grapple Attack card (advantage vs. the grappled creature) is built from the feat NAME,
+  // so it appears in both.
+  const GRAPPLER_5E = {
+    id: 40, name: 'Grappler', level: 4,
+    effects: [
+      {
+        kind: 'action', name: 'Pin: Restrain', economy: 'action',
+        trigger: "While you're grappling a creature",
+        description: 'Make another grapple check. If you succeed, you and the creature are both Restrained until the grapple ends.',
+      },
+      { kind: 'note', text: "Advantage on attack rolls against a creature you're grappling." },
+    ],
+  };
+  const GRAPPLER_2024 = {
+    id: 41, name: 'Grappler', level: 4,
+    effects: [{ kind: 'ability_choice', abilities: ['strength', 'dexterity'], amount: 1 }],
+    choices: { ability: 'strength' },
+  };
+  const args = (extra = {}) => ({
+    charClass: 'Fighter', subclass: 'Champion', level: 5, edition: '5e',
+    characterData: {}, inventory: [],
+    attacks: [
+      { uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true, melee: true },
+      { uid: 'w2', name: 'Longbow', toHit: '+3', damage: '1d8 + 1 piercing', proficient: true, melee: false },
+    ],
+    scores: { strength: 16, dexterity: 12 },
+    spellIndex: {},
+    ...extra,
+  });
+  const pinCard = (ae) => ae.action.find((e) => e.key === 'feat:grappler-attack');
+  const grappleCard = (ae) => ae.action.find((e) => e.key === 'universal:Grapple');
+
+  it('builds a Grapple Attack card in both editions, from the feat, usable only while grappling', () => {
+    for (const [edition, feat] of [['5e', GRAPPLER_5E], ['5.5e', GRAPPLER_2024]]) {
+      const pin = pinCard(buildActionEconomy(args({ edition, characterData: { feats: [feat] } })));
+      expect(pin, edition).toBeTruthy();
+      expect(pin.name).toBe('Grapple Attack');
+      expect(pin.origin).toBe('Grappler feat');
+      expect(pin.requirement).toMatch(/only while you're grappling a creature/i);
+    }
+  });
+
+  it("lists every attack you have — melee and ranged — with that attack's own numbers, with advantage", () => {
+    const pin = pinCard(buildActionEconomy(args({ characterData: { feats: [GRAPPLER_5E] } })));
+    expect(pin.subAttacks.map((r) => r.name)).toEqual(['Longsword', 'Longbow']);
+    expect(pin.subAttacks[0]).toMatchObject({ toHit: '+5', damage: '1d8 + 3 slashing', note: 'with advantage' });
+    expect(pin.subAttacks[1]).toMatchObject({ toHit: '+3', damage: '1d8 + 1 piercing', note: 'with advantage' });
+  });
+
+  it('no longer hangs a Grappler line on every attack card — the Grapple Attack card replaces it', () => {
+    const ae = buildActionEconomy(args({ characterData: { feats: [GRAPPLER_5E] } }));
+    const weapons = ae.action.filter((e) => e.source === 'Weapon');
+    expect(weapons.some((c) => (c.riders || []).some((r) => r.source === 'Grappler'))).toBe(false);
+  });
+
+  it('keeps the 2014 restrain as its own card — it costs the whole action', () => {
+    const ae = buildActionEconomy(args({ characterData: { feats: [GRAPPLER_5E] } }));
+    const restrain = ae.action.find((e) => e.name === 'Pin: Restrain');
+    expect(restrain).toBeTruthy();
+    expect(restrain.source).toBe('Feat');
+    expect(restrain.detail).toMatch(/Restrained/);
+  });
+
+  it('adds Punch and Grab + Fast Wrestler to the 2024 Grapple card, naming your size', () => {
+    const card = grappleCard(buildActionEconomy(args({ edition: '5.5e', characterData: { feats: [GRAPPLER_2024] } })));
+    const rider = card.riders.find((r) => r.source === 'Grappler');
+    expect(rider.text).toMatch(/Punch and Grab/);
+    expect(rider.text).toMatch(/both the Damage and the Grapple option/i);
+    expect(rider.text).toMatch(/Fast Wrestler/);
+    expect(rider.text).toMatch(/Medium or smaller/);
+    expect(rider.text).not.toMatch(/advantage/i);
+  });
+
+  it('does not put the 2024 clauses on a 2014 Grapple card', () => {
+    const card = grappleCard(buildActionEconomy(args({ characterData: { feats: [GRAPPLER_5E] } })));
+    expect((card.riders || []).some((r) => r.source === 'Grappler')).toBe(false);
+  });
+
+  it('adds nothing at all without the feat', () => {
+    const ae = buildActionEconomy(args());
+    expect(pinCard(ae)).toBeUndefined();
+    expect(grappleCard(ae).riders ?? []).toHaveLength(0);
+    expect(ae.action.find((e) => e.name === 'Pin: Restrain')).toBeUndefined();
   });
 });

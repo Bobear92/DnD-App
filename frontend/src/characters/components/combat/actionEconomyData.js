@@ -20,6 +20,7 @@
  */
 import { mightDie, sizeAt, isEffectActive } from '@/characters/components/effects/activeEffects';
 import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor, creatureSize, isShieldEntry } from '@/characters/components/inventory/inventoryData';
+import { hasFightingStyle } from '@/characters/components/combat/fightingStyles';
 import { specialAttackEntries } from '@/characters/components/combat/specialAttacksData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
@@ -694,6 +695,21 @@ export const ENTRY_RIDERS = [
       hasFeat(feats, 'Polearm Master') && hasEquipped(inventory, isPolearmReachWeapon(edition)),
     text: "While you're wielding your polearm, creatures also provoke your opportunity attacks"
       + ' when they enter your reach, not only when they leave it.',
+  },
+  // 2024 Grappler's other two clauses both change what a GRAPPLE does, so they ride on the
+  // Grapple card (in 2024 a grapple IS an Unarmed Strike option, which is why Punch and Grab
+  // lives here rather than on an unarmed-strike card that an armed character never sees).
+  // Fast Wrestler's size threshold is the character's OWN size, so the text is a function of it
+  // — a Rune Knight running Giant's Might drags Large creatures for free. Its advantage clause is
+  // the Grapple Attack card (shared with 2014); 2014's pin-to-restrain is the feat's own Action card.
+  {
+    source: 'Grappler',
+    entryKey: 'universal:Grapple',
+    applies: ({ feats, edition }) => hasFeat(feats, 'Grappler') && (edition === '5.5e' || edition === '2024'),
+    text: ({ size = 'Medium' }) => 'Punch and Grab: once per turn, when you hit with an Unarmed'
+      + ' Strike as part of the Attack action, you can use BOTH the Damage and the Grapple option.'
+      + ' Fast Wrestler: dragging a creature you have grappled costs no extra movement if it is'
+      + ` ${size} or smaller.`,
   },
   {
     source: 'Sentinel',
@@ -1376,7 +1392,9 @@ export function buildActionEconomy({
   const twfWeapons = twoWeaponFightingWeapons(inventory, feats);
   if (twfWeapons.length >= 2) {
     const dualWielder = hasFeat(feats, 'Dual Wielder');
-    const twfStyle = (characterData.fighting_style || '') === 'Two-Weapon Fighting';
+    // Any source of the style counts — a Champion's additional style or a 2024 feat, not only the
+    // class pick (the old check read `fighting_style` alone and missed both).
+    const twfStyle = hasFightingStyle(characterData, 'Two-Weapon Fighting');
     const attackByUid = new Map(weaponRows.filter((a) => a.uid).map((a) => [a.uid, a]));
     const baseDamage = (w) => `${w.damage || '—'}${w.damage_type ? ` ${w.damage_type}` : ''}`;
     const [main, off] = twfWeapons;
@@ -1935,6 +1953,40 @@ export function buildActionEconomy({
     if (additions.length > 0) row.damageAdditions = additions;
   }
 
+  // Grappler (both editions): "advantage on attack rolls against a creature you're grappling".
+  // A CARD rather than a line on every attack card (the user's call — a rider is text you apply
+  // by hand; a card is the attack you actually make). One row per attack you have, carrying that
+  // attack's real to-hit and damage, with any confirmed extra damage (Giant's Might) folded in so
+  // the row matches the weapon's own card. The app has no grappled-target state, so "only while
+  // grappling" is a stated REQUIREMENT on the card, not a filter. Filed under Actions because
+  // these are attacks of the Attack action. The 2014 pin-to-restrain is a separate card (the
+  // feat's "Pin: Restrain" action effect) because it costs the whole action.
+  if (hasFeat(feats, 'Grappler')) {
+    const rows = buckets.action.filter((e) => e.source === 'Weapon');
+    if (rows.length > 0) {
+      push('action', {
+        key: 'feat:grappler-attack',
+        name: 'Grapple Attack',
+        source: 'Feat',
+        origin: 'Grappler feat',
+        cost: 'Attack action',
+        requirement: "Only while you're grappling a creature",
+        detail: 'Attack the creature you are grappling with advantage.',
+        subAttacks: rows.map((row) => {
+          const folded = applyDamageAdditions(row, row.damageAdditions || []);
+          return {
+            label: 'Attack',
+            name: row.name,
+            toHit: row.toHit,
+            damage: folded.damage,
+            damageBreakdown: folded.damageBreakdown,
+            note: 'with advantage',
+          };
+        }),
+      });
+    }
+  }
+
   // Racial trait actions. A `compute` entry derives its own detail/meta from the character
   // (level, ability scores, stored racial choices) instead of showing a fixed string.
   for (const trait of characterData.race_traits || []) {
@@ -2089,10 +2141,13 @@ export function buildActionEconomy({
   // clauses are a rider.
   const allEntries = Object.values(buckets).flat();
   for (const rider of ENTRY_RIDERS) {
-    if (!rider.applies({ charClass, subclass, level, edition, feats, characterData, inventory })) continue;
+    const entryCtx = { charClass, subclass, level, edition, feats, characterData, inventory, size: bodySize };
+    if (!rider.applies(entryCtx)) continue;
     const target = allEntries.find((e) => e.key === rider.entryKey);
     if (!target) continue;
-    target.riders = [...(target.riders || []), { source: rider.source, text: rider.text }];
+    // `text` may be a function of the context (Grappler's Fast Wrestler names your own size).
+    const text = typeof rider.text === 'function' ? rider.text(entryCtx) : rider.text;
+    target.riders = [...(target.riders || []), { source: rider.source, text }];
   }
 
   return { ...buckets, attacksPerAction: attacksPerAction(charClass, level) };

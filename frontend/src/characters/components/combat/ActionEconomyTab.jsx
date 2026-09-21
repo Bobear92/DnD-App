@@ -345,11 +345,26 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
             <span className="font-medium text-sm">{entry.name}</span>
           )}
           <Badge variant="outline" className="text-[10px] uppercase tracking-wide shrink-0">{entry.cost}</Badge>
+          {/* Where the card comes from, when that isn't obvious from the group it sits in — a
+              feat-granted attack (Grappler's Pin) otherwise reads like one of your weapons. */}
+          {entry.origin && (
+            <Badge variant="secondary" className="text-[10px] shrink-0" data-testid={`ae-origin-${entry.key}`}>
+              {entry.origin}
+            </Badge>
+          )}
           {/* This weapon's attacks overcome resistance/immunity to nonmagical damage. The SOURCE
               is named because it's what tells the player when the tag stops applying; clicking
               the tag reveals the rule text. */}
           <MagicAttackBadge magical={entry.magical} testId={`ae-magical-${entry.key}`} campaignId={campaignId} />
         </div>
+        {/* A condition the card is only usable under, which the app can't check for itself (it
+            has no grappled-target state). Stated up top, before the numbers, so the rows are
+            never read as always available. */}
+        {entry.requirement && (
+          <p className="text-[11px] font-medium text-amber-600 leading-tight mt-0.5" data-testid={`ae-requirement-${entry.key}`}>
+            {entry.requirement}
+          </p>
+        )}
         {/* Per-weapon attack rows (e.g. Two-Weapon Fighting main hand / off hand). */}
         {entry.subAttacks && entry.subAttacks.length > 0 && (
           <div className="mt-1 space-y-0.5">

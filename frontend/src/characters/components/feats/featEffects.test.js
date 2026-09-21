@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   allFeatEffects, getFeatStatMods, getFeatStatModSources, getFeatActions,
   getFeatUnarmedDice, featAbilityChoices, featFixedAbilityScores, isMechanized,
-  getFeatResources, getFeatProficiencyGrants, getFeatSaveProficiencies, getFeatAcMods,
+  getFeatResources, getFeatProficiencyGrants, getFeatSaveProficiencies, getFeatAcMods, getFeatFightingStyles,
   getSpellGrantSpecs, getFeatGrantedSpells, featFreeCastUsedKey, featGrantRedundant,
   featAbilityChoiceOptions, abilityChoiceGrantsSave,
   getManeuverGrantSpec, maneuverGrantComplete, getFeatManeuvers,
@@ -196,6 +196,19 @@ describe('featEffects resolver', () => {
     // explicit ability + no-choice-yet
     expect(getFeatSaveProficiencies([{ name: 'X', effects: [{ kind: 'proficiency', prof_type: 'saving_throw', ability: 'wisdom' }] }])).toEqual(['wisdom']);
     expect(getFeatSaveProficiencies([{ name: 'Y', effects: [{ kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true }] }])).toEqual([]);
+  });
+
+  it('getFeatFightingStyles returns the style names granted by Fighting Style feats', () => {
+    const feats = [
+      { name: 'Archery', effects: [{ kind: 'fighting_style', style: 'Archery', label: '+2 ranged attack rolls' }] },
+      { name: 'Alert', effects: [{ kind: 'stat_mod', stat: 'initiative', amount: 5 }] },
+    ];
+    expect(getFeatFightingStyles(feats)).toEqual(['Archery']);
+    expect(getFeatFightingStyles([])).toEqual([]);
+  });
+
+  it('counts a fighting_style effect as mechanized', () => {
+    expect(isMechanized({ name: 'Archery', effects: [{ kind: 'fighting_style', style: 'Archery' }] })).toBe(true);
   });
 
   it('getFeatAcMods returns conditional AC effects', () => {

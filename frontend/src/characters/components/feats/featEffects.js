@@ -130,6 +130,17 @@ export function getFeatAcMods(feats = []) {
     .map((e) => ({ amount: Number(e.amount) || 0, condition: e.condition, dexCap: Number(e.dex_cap) || 0, source: e._featName }));
 }
 
+/**
+ * Fighting styles granted by 2024 Fighting Style FEATS (Archery, Defense, Dueling, …). Returned as
+ * style NAMES so fightingStyles.gatherFightingStyles can merge them with a class-granted style:
+ * one route to the attack/AC math however the style was acquired.
+ */
+export function getFeatFightingStyles(feats = []) {
+  return allFeatEffects(feats)
+    .filter((e) => e.kind === 'fighting_style' && e.style)
+    .map((e) => e.style);
+}
+
 /** Action Economy entries contributed by feats (e.g. Tavern Brawler's bonus-action grapple). */
 export function getFeatActions(feats = []) {
   return allFeatEffects(feats)

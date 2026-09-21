@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import AppearanceCard from './AppearanceCard';
+import { APPEARANCE_FIELDS } from './appearanceData';
 
 const FILLED = {
   height: `6'2"`,
@@ -20,6 +21,14 @@ describe('AppearanceCard — read view', () => {
     render(<AppearanceCard appearance={FILLED} canEdit={false} />);
     expect(screen.getByTestId('appearance-value-eyes')).toHaveTextContent('pale grey');
     expect(screen.getByTestId('appearance-value-height')).toHaveTextContent(`6'2"`);
+  });
+
+  it('shows EVERY field in the read view once it is filled in', () => {
+    const all = Object.fromEntries(APPEARANCE_FIELDS.map((f) => [f.key, `read ${f.key}`]));
+    render(<AppearanceCard appearance={all} canEdit={false} />);
+    for (const f of APPEARANCE_FIELDS) {
+      expect(screen.getByTestId(`appearance-value-${f.key}`), f.key).toHaveTextContent(`read ${f.key}`);
+    }
   });
 
   // A reader wants the description, not a form with holes in it.
@@ -57,6 +66,19 @@ describe('AppearanceCard — edit view', () => {
     render(<AppearanceCard appearance={{}} canEdit onChange={onChange} />);
     fireEvent.change(screen.getByTestId('appearance-input-eyes'), { target: { value: 'amber' } });
     expect(onChange).toHaveBeenCalledWith('eyes', 'amber');
+  });
+
+  // Looped over the catalog so a new field is covered automatically.
+  it('reports an edit to EVERY field under its own key', () => {
+    const onChange = vi.fn();
+    render(<AppearanceCard appearance={{}} canEdit onChange={onChange} />);
+    for (const f of APPEARANCE_FIELDS) {
+      fireEvent.change(screen.getByTestId(`appearance-input-${f.key}`), {
+        target: { value: `typed ${f.key}` },
+      });
+      expect(onChange, f.key).toHaveBeenLastCalledWith(f.key, `typed ${f.key}`);
+    }
+    expect(onChange).toHaveBeenCalledTimes(APPEARANCE_FIELDS.length);
   });
 
   it('shows the values already stored', () => {

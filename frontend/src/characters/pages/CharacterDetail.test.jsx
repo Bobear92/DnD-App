@@ -6,6 +6,7 @@ import characterService from '../characterService';
 import settingsService from '../../settings/settingsService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
+import { APPEARANCE_FIELDS } from '../components/appearance/appearanceData';
 
 vi.mock('../characterService', () => ({
   default: {
@@ -3605,6 +3606,45 @@ describe('CharacterDetail — Appearance (Narrative tab)', () => {
     await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalledWith(
       '1', expect.objectContaining({ appearance: { eyes: 'amber' } })
     ));
+  });
+
+  // Driven off the catalog itself, so a field added to appearanceData later is covered with no
+  // test edit — and a field whose input is wired to the wrong key (or not wired at all) fails here.
+  it('saves EVERY field in the catalog through the Save button', async () => {
+    const expected = Object.fromEntries(
+      APPEARANCE_FIELDS.map((f) => [f.key, `value for ${f.key}`]),
+    );
+    characterService.updateCharacter.mockResolvedValue({
+      success: true, data: { ...BASE_CHARACTER, appearance: expected },
+    });
+    renderDetail();
+    await screen.findByTestId('appearance-input-eyes');
+    for (const f of APPEARANCE_FIELDS) {
+      fireEvent.change(screen.getByTestId(`appearance-input-${f.key}`), {
+        target: { value: expected[f.key] },
+      });
+    }
+
+    const card = screen.getByRole('heading', { name: 'Appearance' }).closest('div').parentElement.parentElement;
+    fireEvent.click(within(card).getByText('Save'));
+
+    await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalled());
+    const [, payload] = characterService.updateCharacter.mock.calls.at(-1);
+    expect(payload.appearance).toEqual(expected);
+  });
+
+  it('shows EVERY stored field back in its input after a reload', async () => {
+    const stored = Object.fromEntries(
+      APPEARANCE_FIELDS.map((f) => [f.key, `stored ${f.key}`]),
+    );
+    characterService.getCharacterById.mockResolvedValue({
+      success: true, data: { ...BASE_CHARACTER, appearance: stored },
+    });
+    renderDetail();
+    await waitFor(() => expect(screen.getByTestId('appearance-input-eyes')).toHaveValue('stored eyes'));
+    for (const f of APPEARANCE_FIELDS) {
+      expect(screen.getByTestId(`appearance-input-${f.key}`), f.key).toHaveValue(stored[f.key]);
+    }
   });
 
   // It is what the other characters can see just by looking — unlike personal notes or GM notes.

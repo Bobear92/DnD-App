@@ -36,7 +36,7 @@ function Section({ title, children }) {
 // Page-local presentation data: the in-app feats & features that change grappling or shoving.
 // Each maps to a real feat in seed_feats.py or a real feature in the class/subclass tables.
 const MODIFIERS_5E = [
-  { name: 'Grappler', kind: 'Feat', effect: "You have advantage on attack rolls against a creature you're grappling, and you can use your action to pin a grappled creature — restraining both of you until the grapple ends." },
+  { name: 'Grappler', kind: 'Feat', effect: "You have advantage on attack rolls against a creature you're grappling, and you can use your action to pin one — another grapple check that, on a success, restrains both of you until the grapple ends. Your sheet shows both as cards: Grapple Attack (your attacks against the grappled creature, each with advantage) and Pin: Restrain." },
   { name: 'Shield Master', kind: 'Feat', effect: 'When you take the Attack action you can shove a creature within 5 feet as a bonus action with your shield — a shove that costs you no attack at all. Your sheet lists it as its own bonus-action card.' },
   { name: 'Tavern Brawler', kind: 'Feat', effect: 'When you hit with an unarmed strike or an improvised weapon, you can grapple as a bonus action. Your sheet lists this as two Action + Bonus cards, one per opener.' },
   { name: "Giant's Might (Rune Knight)", kind: 'Subclass feature', effect: 'You become Large, which raises the size limit by one step — from Large to Huge. The Grapple and Shove cards update themselves the moment you switch the effect on.' },
@@ -46,7 +46,7 @@ const MODIFIERS_5E = [
 ];
 
 const MODIFIERS_2024 = [
-  { name: 'Grappler', kind: 'Feat', effect: "You have advantage on attack rolls against a creature you're grappling, you can move a grappled creature with you at no extra cost, and after hitting with an attack you can make a free Unarmed Strike to grapple." },
+  { name: 'Grappler', kind: 'Feat', effect: "When an Unarmed Strike hits as part of the Attack action you can use both the Damage and the Grapple option, once per turn. You have advantage on attack rolls against a creature you're grappling (your sheet's Grapple Attack card lists each attack with advantage), and dragging one your size or smaller costs no extra movement." },
   { name: 'Shield Master', kind: 'Feat', effect: 'While wielding a shield and taking the Attack action, you can shove a creature within 5 feet as a bonus action.' },
   { name: 'Tavern Brawler', kind: 'Feat', effect: 'Your Unarmed Strikes hit harder, and the feat gives you extra ways to reach for a grapple in the middle of the Attack action.' },
   { name: 'Crusher', kind: 'Feat', effect: 'Not a shove, but the nearest thing to one: once per turn when you deal bludgeoning damage you can move the target 5 feet — no check, no attack spent.' },

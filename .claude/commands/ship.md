@@ -51,8 +51,9 @@ The feat-effects gate reads the seeded dev DB, so it isn't a pytest test — run
 cd backend && source venv/Scripts/activate && python report_feat_effects.py --check
 ```
 
-Exit 0 = OK. If it reports a **regression**, a feat lost its mechanized `effects` — fix it, don't
-lower the baseline. If it says coverage **improved**, ratchet the floor up so the gain can't be
+Exit 0 = OK. If it reports a **regression**, either a feat stopped being complete or a new PENDING
+`note` clause appeared — build it, tag it `surfaced=` (where it is on the sheet), or get the user's
+sign-off for `unmodelable=`; don't lower the baseline. If it says coverage **improved**, ratchet the floor up so the gain can't be
 silently undone: `python report_feat_effects.py --write-baseline` and commit the updated
 `feat_coverage_baseline.json`. (Mirror on the frontend: `npm run coverage:baseline` after
 mechanizing more class features.)

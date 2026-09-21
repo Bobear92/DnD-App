@@ -2292,6 +2292,32 @@ class TestCharacterAppearance:
         assert resp.json()["appearance"] == self.APPEARANCE
         assert client.get(f"/api/characters/{cid}", headers=h_player).json()["appearance"] == self.APPEARANCE
 
+    # Mirrors the frontend catalog (appearance/appearanceData.js APPEARANCE_FIELDS). The column is
+    # free-form JSONB, so this guards the ROUND-TRIP of every real key — including multi-line and
+    # quote-bearing text from the long-form fields — rather than the schema.
+    ALL_FIELDS = [
+        "age", "pronouns", "gender", "height", "weight", "build", "posture",
+        "eyes", "eyeDetail", "hairColor", "hairStyle", "facialHair", "skin", "markings",
+        "distinctiveFeatures", "clothing", "accessories", "signatureItem", "voice",
+        "mannerisms", "scent", "firstImpression", "description",
+    ]
+
+    def test_every_catalog_field_round_trips(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_player, uid = make_user(client, 2)
+        campaign_id = make_campaign(client, h_gm)
+        invite_player(client, h_gm, campaign_id, uid)
+        cid = make_character(client, h_player, campaign_id)
+
+        full = {k: f"{k}: 6'2\" — line one\nline two" for k in self.ALL_FIELDS}
+        resp = client.put(f"/api/characters/{cid}", json={"appearance": full}, headers=h_player)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["appearance"] == full
+
+        stored = client.get(f"/api/characters/{cid}", headers=h_player).json()["appearance"]
+        assert set(stored) == set(self.ALL_FIELDS)
+        assert stored == full
+
     def test_gm_can_write_it_too(self, client):
         h_gm, _ = make_user(client, 1)
         h_player, uid = make_user(client, 2)

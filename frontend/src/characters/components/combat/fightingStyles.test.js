@@ -14,6 +14,25 @@ describe('gatherFightingStyles', () => {
     expect(gatherFightingStyles({ fighting_style: 'Archery', additional_fighting_styles: ['Defense'] }))
       .toEqual(['Archery', 'Defense']);
   });
+  // 2024 Fighting Style FEATS reached no math before — a 2024 Archery feat gave no +2.
+  it('includes a style granted by a Fighting Style feat', () => {
+    const feats = [{ name: 'Archery', effects: [{ kind: 'fighting_style', style: 'Archery' }] }];
+    expect(gatherFightingStyles({ feats })).toEqual(['Archery']);
+    expect(hasFightingStyle({ feats }, 'Archery')).toBe(true);
+    expect(styleToHitBonus(ranged, gatherFightingStyles({ feats })).bonus).toBe(2);
+  });
+  it('merges class, additional and feat styles, counting a repeated style once', () => {
+    const feats = [
+      { name: 'Dueling', effects: [{ kind: 'fighting_style', style: 'Dueling' }] },
+      { name: 'Archery', effects: [{ kind: 'fighting_style', style: 'Archery' }] },
+    ];
+    expect(gatherFightingStyles({ fighting_style: 'Archery', additional_fighting_styles: ['Defense'], feats }))
+      .toEqual(['Archery', 'Defense', 'Dueling']);
+  });
+  it('ignores feats with no fighting_style effect', () => {
+    const feats = [{ name: 'Alert', effects: [{ kind: 'stat_mod', stat: 'initiative', amount: 5 }] }];
+    expect(gatherFightingStyles({ feats })).toEqual([]);
+  });
   it('is empty for no styles', () => {
     expect(gatherFightingStyles({})).toEqual([]);
     expect(gatherFightingStyles()).toEqual([]);

@@ -1617,3 +1617,24 @@ describe('ActionEconomyTab — Grapple & Shove', () => {
     expect(screen.getAllByText(/An option of an Unarmed Strike/)).toHaveLength(2);
   });
 });
+
+describe('ActionEconomyTab — Grappler Grapple Attack card', () => {
+  const grappler = { id: 41, name: 'Grappler', level: 4, effects: [] };
+
+  it('shows the Grapple Attack card with its feat badge and the grappling-only requirement', () => {
+    renderTab({ characterData: { feats: [grappler] } });
+    expect(screen.getByText('Grapple Attack')).toBeInTheDocument();
+    expect(screen.getByTestId('ae-origin-feat:grappler-attack')).toHaveTextContent('Grappler feat');
+    expect(screen.getByTestId('ae-requirement-feat:grappler-attack'))
+      .toHaveTextContent(/only while you're grappling a creature/i);
+    // The equipped longsword is listed with advantage.
+    const row = screen.getAllByTestId('ae-twf-attack-feat:grappler-attack')[0];
+    expect(row).toHaveTextContent('Longsword');
+    expect(row).toHaveTextContent(/with advantage/i);
+  });
+
+  it('shows no Grapple Attack card without the feat', () => {
+    renderTab();
+    expect(screen.queryByTestId('ae-origin-feat:grappler-attack')).not.toBeInTheDocument();
+  });
+});

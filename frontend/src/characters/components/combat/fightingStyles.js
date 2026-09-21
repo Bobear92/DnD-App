@@ -2,9 +2,10 @@
  * Fighting-style mechanical effects — turns a character's chosen fighting styles
  * into real attack/AC modifiers instead of just a description card.
  *
- * Styles live in character_data.fighting_style (the class pick) plus
+ * Styles live in character_data.fighting_style (the class pick), plus
  * character_data.additional_fighting_styles (e.g. Champion's Additional Fighting
- * Style). These helpers are pure and edition-agnostic; the consumers
+ * Style), plus any 2024 Fighting Style FEAT (a `fighting_style` feat effect) — which
+ * before this reached no math at all, so a 2024 Archery feat gave no +2. These helpers are pure and edition-agnostic; the consumers
  * (computeAttack / getAttacks / computeArmorClass in inventoryData.js) pass the
  * gathered style list + the relevant equipment context.
  *
@@ -18,10 +19,18 @@
  *   Blind Fighting / Interception / Protection / Druidic Warrior (situational/reaction).
  */
 
-/** The character's chosen fighting styles (class pick + any additional). */
+import { getFeatFightingStyles } from '@/characters/components/feats/featEffects';
+
+/**
+ * The character's fighting styles: class pick + any additional + Fighting Style feats. De-duplicated,
+ * so the same style from two sources (RAW you can't take one twice, but data can say so) counts once.
+ */
 export function gatherFightingStyles(characterData = {}) {
-  return [characterData?.fighting_style, ...(characterData?.additional_fighting_styles || [])]
-    .filter(Boolean);
+  return [...new Set([
+    characterData?.fighting_style,
+    ...(characterData?.additional_fighting_styles || []),
+    ...getFeatFightingStyles(characterData?.feats || []),
+  ].filter(Boolean))];
 }
 
 export function hasFightingStyle(characterData, name) {
