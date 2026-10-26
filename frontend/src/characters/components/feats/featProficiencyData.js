@@ -13,7 +13,7 @@
  */
 import { SKILLS } from '@/encyclopedia/data/skillsData';
 import { TOOL_NAMES, ARTISAN_TOOLS, OTHER_TOOLS, GAMING_SETS, INSTRUMENTS } from '@/characters/components/inventory/toolsData';
-import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
+import { gatherProficiencies, subclassFixedLanguages } from '@/characters/components/inventory/inventoryProficiencies';
 
 const lc = (s) => (s || '').toLowerCase();
 const dedup = (arr) => [...new Set((arr || []).filter(Boolean))];
@@ -124,6 +124,8 @@ export function existingFeatProfNames(profType, { charClass, characterData = {} 
     return new Set([
       ...(cd.race_languages || []), ...(cd.background_languages || []),
       ...(cd.subclass_languages || []), ...(cd.feat_languages || []),
+      // Fixed subclass languages (Rune Knight's Giant) are derived, not stored.
+      ...subclassFixedLanguages({ charClass, subclass: cd.subclass }),
     ].map(lc));
   }
   if (profType === 'weapon') {

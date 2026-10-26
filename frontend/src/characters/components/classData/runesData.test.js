@@ -8,6 +8,7 @@ import {
   getRuneOptions,
   MASTER_OF_RUNES_LEVEL,
 } from '@/characters/components/classData/runesData';
+import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 
 describe('RUNE_OPTIONS', () => {
   it('holds the six TCoE runes', () => {
@@ -83,5 +84,35 @@ describe('getRuneOptions', () => {
   it('ignores unknown names and an empty list', () => {
     expect(getRuneOptions(['Not A Rune'])).toEqual([]);
     expect(getRuneOptions()).toEqual([]);
+  });
+});
+
+// RAW pins on text the fighter-subclass retro found wrong at the SOURCE. These strings feed the
+// encyclopedia, the pool picker and the item card, so a fix in one consumer isn't enough.
+describe('Rune Knight rules text (RAW, TCoE)', () => {
+  const rkFeature = (name) => SUBCLASS_DATA.Fighter['5e']['Rune Knight'].features.find((f) => f.name === name);
+
+  it('Fire Rune DOUBLES proficiency on tool checks — "add" is what proficiency already does', () => {
+    const fire = RUNE_OPTIONS.find((o) => o.name === 'Fire Rune');
+    expect(fire.passive.text).toMatch(/doubled/i);
+    expect(fire.description).toMatch(/proficiency bonus is doubled/i);
+    expect(fire.description).not.toMatch(/add your proficiency bonus/i);
+  });
+
+  it('Runic Shield makes the attacker use the NEW roll', () => {
+    const t = rkFeature('Runic Shield').description;
+    expect(t).toMatch(/use the new roll/i);
+    expect(t).not.toMatch(/lower/i);
+  });
+
+  it('Great Stature is a one-time 3d4-inch roll plus the 1d8 die, with no invented clause', () => {
+    const t = rkFeature('Great Stature').description;
+    expect(t).toMatch(/roll 3d4/i);
+    expect(t).toMatch(/1d8/);
+    expect(t).not.toMatch(/equipment/i);
+  });
+
+  it('Bonus Proficiencies names exactly what the fixed grant hands out', () => {
+    expect(rkFeature('Bonus Proficiencies').description).toMatch(/smith's tools.*Giant/i);
   });
 });

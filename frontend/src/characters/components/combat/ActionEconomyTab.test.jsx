@@ -1360,6 +1360,22 @@ describe('ActionEconomyTab — Unleash Incarnation on the melee attack card', ()
       expect(screen.getByTestId('ae-effect-start-giants_might')).toBeDisabled();
     });
 
+    // Runic Juggernaut makes Huge optional, so from 18 the toggle carries a Large/Huge pick.
+    it('has no size choice below 18', () => {
+      runeKnight();
+      openBonus();
+      expect(screen.queryByTestId('ae-effect-choice-giants_might')).not.toBeInTheDocument();
+    });
+
+    it('offers Large/Huge at 18, Huge selected by default, and stores a new pick', () => {
+      const onChange = vi.fn();
+      runeKnight({ level: 18, onChange });
+      openBonus();
+      expect(screen.getByTestId('ae-effect-choice-giants_might-Huge')).toHaveAttribute('aria-pressed', 'true');
+      fireEvent.click(screen.getByTestId('ae-effect-choice-giants_might-Large'));
+      expect(onChange).toHaveBeenCalledWith({ giants_might_size: 'Large' });
+    });
+
     it('does not also show the standard Use control — the toggle owns the spend', () => {
       runeKnight();
       openBonus();

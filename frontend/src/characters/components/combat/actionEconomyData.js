@@ -18,8 +18,8 @@
  * their auto-derived weapon attacks + spells + universal menu until their feature map
  * is authored — expand CLASS_FEATURE_ACTIONS_* class-by-class.
  */
-import { mightDie, sizeAt, isEffectActive } from '@/characters/components/effects/activeEffects';
-import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor, creatureSize, isShieldEntry } from '@/characters/components/inventory/inventoryData';
+import { mightDie, sizeAt, isEffectActive, activeEffectChoice } from '@/characters/components/effects/activeEffects';
+import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor, creatureSize, isShieldEntry, weaponReach, characterReachBonus } from '@/characters/components/inventory/inventoryData';
 import { hasFightingStyle } from '@/characters/components/combat/fightingStyles';
 import { specialAttackEntries } from '@/characters/components/combat/specialAttacksData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
@@ -297,11 +297,11 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
       "Giant's Might": {
         tab: 'bonus', cost: 'bonus action', resourceKey: 'giants_might_used',
         activeEffect: 'giants_might',
-        compute: ({ level }) => ({
-          detail: `For 1 minute you become ${sizeAt(level)} (if you have the room), have advantage`
+        compute: ({ level, characterData }) => ({
+          detail: `For 1 minute you become ${sizeAt(level, characterData)} (if you have the room), have advantage`
             + ` on Strength checks and Strength saving throws, and once on each of your turns one`
             + ` attack with a weapon or an unarmed strike deals an extra ${mightDie(level)} damage.`
-            + (level >= 18 ? ' You can choose to become Large instead of Huge.' : ''),
+            + (sizeAt(level, characterData) === 'Huge' ? ' While Huge, your reach increases by 5 feet.' : ''),
         }),
         description: 'Grow, gain Strength advantage and an extra damage die for 1 minute.',
       },
@@ -1277,6 +1277,9 @@ export function buildActionEconomy({
       ua.disadvantage = true;
       ua.warning = `Wearing ${badArmor.name} without proficiency — attack rolls at disadvantage.`;
     }
+    // An unarmed strike reaches as far as the creature does, so a grown Rune Knight's punch
+    // reaches 10 ft. The live inventory is spliced in for the rune-style equipped gate.
+    ua.reach = weaponReach(null, characterReachBonus({ ...characterData, inventory }, { charClass, subclass, level, edition }));
     weaponRows.push(ua);
   }
   // An improvised-weapon attack, offered by the FEAT rather than by an inventory row: Tavern
@@ -1340,6 +1343,9 @@ export function buildActionEconomy({
       // The weapon's distance band, resolved by getAttacks so this tab and the Items tab read
       // one answer. Null for a melee weapon with no throw range.
       range: atk.range || null,
+      // Melee reach when it isn't 5 ft — resolved by getAttacks (the unarmed row is given one
+      // below), so a Reach weapon and a Huge Rune Knight say how far they reach.
+      reach: atk.reach || null,
       // Situational note: a ranged/thrown attack has disadvantage while an enemy is within
       // 5 ft. Crossbow Expert removes it. Rendered with a link to the Spacing page.
       // 2024 Sharpshooter's "Firing in Melee" grants the same lift Crossbow Expert does — a
@@ -1907,6 +1913,9 @@ export function buildActionEconomy({
         // instead of the plain Use control, because spending the charge and switching the effect
         // on are one event — a counter that went down without the effect coming on is a trap.
         activeEffect: d.activeEffect ?? null,
+        // A pick the effect asks for when it starts (Runic Juggernaut: Large or Huge), rendered as
+        // buttons on the toggle and stored in character_data — null when there is nothing to pick.
+        effectChoice: d.activeEffect ? activeEffectChoice(d.activeEffect, { level, characterData }) : null,
         // A second resource this entry's Use control touches: one it falls back to SPENDING once
         // its own charge is gone, or one it hands a use back TO. See RestResourceControl.
         fallbackResourceKey: d.fallbackResourceKey ?? null,

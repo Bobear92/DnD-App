@@ -3,7 +3,7 @@ session_id: 6bb799c2-bb28-4091-aeab-9f2750996281
 title: Session logs, Fighter retro, Rune Knight plan
 date: 2026-10-26
 started: 13:53
-branch: feature/session-logs
+branch: feature/rune-knight-qa
 area: tooling
 tags: [tooling, docs, retro, user-rule, session-logs, claude-md, fighter, champion, battle-master, eldritch-knight, arcane-archer, cavalier, echo-knight, psi-warrior, rune-knight, subclass-proficiencies]
 issues: [rework]

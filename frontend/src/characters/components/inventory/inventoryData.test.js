@@ -12,7 +12,7 @@ import {
   nonProficientEquippedArmor, armorNonProficiencyNote, wornNonProficientArmor,
   assignHand, handContents, migrateHands, freeHandCount,
   isTwoHandedWeapon, weaponVersatileDie, isVersatileWeapon, isShieldEntry,
-  weaponRange, resolveWeaponRange,
+  weaponRange, resolveWeaponRange, weaponReach,
 } from '@/characters/components/inventory/inventoryData';
 
 const armor = (over) => ({ uid: Math.random().toString(), category: 'armor', equipped: false, ...over });
@@ -968,5 +968,55 @@ describe('resolveWeaponRange — Sharpshooter by edition', () => {
     const net = { name: 'Net', weapon_type: 'Ranged', range_normal: 5, range_long: null };
     expect(resolveWeaponRange(net, { feats: SS, edition: '5.5e' }))
       .toMatchObject({ normal: 35, long: null, label: '35 ft' });
+  });
+});
+
+// Melee REACH — the counterpart of the range band. Shown only when it isn't the default 5 ft.
+describe('weaponReach', () => {
+  const sword = { name: 'Longsword', weapon_type: 'Melee', properties: 'Versatile' };
+  const glaive = { name: 'Glaive', weapon_type: 'Melee', properties: 'Heavy, Reach, Two-Handed' };
+  const bow = { name: 'Longbow', weapon_type: 'Ranged', properties: 'Ammunition, Heavy, Two-Handed' };
+  const juggernaut = { bonusFt: 5, source: 'Runic Juggernaut' };
+
+  it('is null at the default 5 ft, so an ordinary sword gets no badge', () => {
+    expect(weaponReach(sword)).toBeNull();
+    expect(weaponReach(null)).toBeNull(); // unarmed strike
+  });
+
+  it('is 10 ft for a Reach weapon', () => {
+    expect(weaponReach(glaive)).toEqual({ feet: 10, label: 'Reach 10 ft', bonusFt: null, bonusSource: null });
+  });
+
+  it('adds a creature-level bonus and names its source', () => {
+    expect(weaponReach(sword, juggernaut)).toMatchObject({ feet: 10, bonusFt: 5, bonusSource: 'Runic Juggernaut' });
+    expect(weaponReach(glaive, juggernaut)).toMatchObject({ feet: 15, label: 'Reach 15 ft' });
+    expect(weaponReach(null, juggernaut)).toMatchObject({ feet: 10 });
+  });
+
+  it('never gives a ranged weapon reach', () => {
+    expect(weaponReach(bow, juggernaut)).toBeNull();
+  });
+
+  it('does not mistake a word containing "reach" for the property', () => {
+    expect(weaponReach({ ...sword, properties: 'Outreached' })).toBeNull();
+  });
+});
+
+describe('getAttacks — reach', () => {
+  const sword = { uid: 'w1', category: 'weapons', name: 'Longsword', weapon_type: 'Melee', damage: '1d8', damage_type: 'Slashing', equipped: true };
+  const base = { inventory: [sword], scores: { strength: 16 }, charClass: 'Fighter', subclass: 'Rune Knight', edition: '5e' };
+
+  it("gives a Huge Rune Knight's sword 10 ft of reach while Giant's Might runs (Runic Juggernaut)", () => {
+    const [row] = getAttacks({ ...base, level: 18, characterData: { active_effects: ['giants_might'] } });
+    expect(row.reach).toMatchObject({ feet: 10, bonusSource: 'Runic Juggernaut' });
+  });
+
+  it('gives no reach bonus below 18, or with the effect off', () => {
+    expect(getAttacks({ ...base, level: 17, characterData: { active_effects: ['giants_might'] } })[0].reach).toBeNull();
+    expect(getAttacks({ ...base, level: 18, characterData: {} })[0].reach).toBeNull();
+  });
+
+  it('still works for a caller that passes no characterData', () => {
+    expect(getAttacks({ ...base, level: 18 })[0].reach).toBeNull();
   });
 });

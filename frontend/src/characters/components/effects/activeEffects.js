@@ -53,21 +53,32 @@ const GIANTS_MIGHT = {
   resourceKey: 'giants_might_used',
   duration: '1 minute',
   // Shown on the toggle so the player knows what switching it on is claiming.
-  summary: (level) => {
-    const bits = [`Size ${sizeAt(level)}`, 'advantage on Strength checks and Strength saves',
+  // Runic Juggernaut (L18): growing to Huge is OPTIONAL — "your size can increase to Huge". The
+  // player picks on the card (ActiveEffectToggle); the pick is stored, and size + reach read it.
+  choice: {
+    key: 'giants_might_size',
+    label: 'Grow to',
+    options: (level) => ((Number(level) || 1) >= 18 ? ['Large', 'Huge'] : null),
+    defaultValue: 'Huge',
+  },
+  summary: (level, characterData) => {
+    const bits = [`Size ${sizeAt(level, characterData)}`, 'advantage on Strength checks and Strength saves',
       `once per turn one weapon or unarmed attack deals an extra ${mightDie(level)}`];
-    if (level >= 18) bits.push('reach +5 ft');
+    if (sizeAt(level, characterData) === 'Huge') bits.push('reach +5 ft');
     return bits.join(' · ');
   },
-  grants: (level) => ({
-    size: sizeAt(level),
+  grants: (level, characterData) => ({
+    size: sizeAt(level, characterData),
     // RAW is Strength CHECKS and Strength SAVES — not "saving throws" generally, which is how
     // the stored blurb reads.
     advantageAbilities: ['strength'],
     advantageSaves: ['strength'],
-    attackDie: mightDie(level),
-    // Runic Juggernaut (L18): the reach increase applies only while Huge.
-    reachBonus: level >= 18 ? 5 : 0,
+    // The damage die is NOT a grant: the attack rider calls mightDie(level) itself, and a second
+    // copy here had no reader (runeFieldReaders.test.js).
+    // Runic Juggernaut (L18): the reach increase applies only while Huge — choosing Large forgoes it.
+    reachBonus: sizeAt(level, characterData) === 'Huge' ? 5 : 0,
+    // Named on the reach badge (WeaponReachBadge) so a 15 ft glaive reads as a feature, not a bug.
+    reachSource: sizeAt(level, characterData) === 'Huge' ? 'Runic Juggernaut' : null,
   }),
 };
 
@@ -81,11 +92,12 @@ export function mightDie(level = 1) {
 
 /**
  * The size Giant's Might grows you to. Runic Juggernaut (L18) says your size *can* increase to
- * Huge — it is the player's option, not automatic, so the card says so; the number here takes
- * the larger size because that is what the feature is for and the reach bonus rides on it.
+ * Huge — the player's option, stored as `character_data.giants_might_size` by the card's choice.
+ * Unset means Huge, since that is what the feature is for; below 18 it is always Large.
  */
-export function sizeAt(level = 1) {
-  return (Number(level) || 1) >= 18 ? 'Huge' : 'Large';
+export function sizeAt(level = 1, characterData = {}) {
+  if ((Number(level) || 1) < 18) return 'Large';
+  return characterData?.giants_might_size === 'Large' ? 'Large' : 'Huge';
 }
 
 /**
@@ -204,6 +216,24 @@ export function effectForResourceKey(key) {
   return ACTIVE_EFFECTS.find((e) => e.resourceKey && e.resourceKey === key) ?? null;
 }
 
+/**
+ * The choice an effect asks for when it starts, if any — `{key, label, options, value}`, where
+ * `key` is the character_data field the pick is stored in. Null when the effect has no choice
+ * at this level (Giant's Might offers Large/Huge only from Runic Juggernaut).
+ */
+export function activeEffectChoice(effectKey, { level = 1, characterData = {} } = {}) {
+  const choice = ACTIVE_EFFECTS.find((e) => e.key === effectKey)?.choice;
+  const options = choice?.options(Number(level) || 1);
+  if (!options) return null;
+  const stored = characterData?.[choice.key];
+  return {
+    key: choice.key,
+    label: choice.label,
+    options,
+    value: options.includes(stored) ? stored : choice.defaultValue,
+  };
+}
+
 /** The effect keys currently switched on (always an array). */
 export function activeEffectKeys(characterData = {}) {
   return Array.isArray(characterData?.active_effects) ? characterData.active_effects : [];
@@ -231,19 +261,21 @@ export function toggleEffectPatch(characterData, key, on) {
 export function activeEffectGrants({ characterData = {}, charClass, subclass, level = 1, edition = '5e' } = {}) {
   const on = runningEffects({ characterData, charClass, subclass, level, edition });
   const out = {
-    size: null, advantageAbilities: [], advantageSaves: [], attackDie: null, reachBonus: 0,
+    size: null, advantageAbilities: [], advantageSaves: [], reachBonus: 0, reachSource: null,
     checkBonuses: {}, saveBonuses: {}, resistances: [],
     sources: on.map((e) => e.label),
   };
   for (const e of on) {
-    const g = e.grants(Number(level) || 1) ?? {};
+    const g = e.grants(Number(level) || 1, characterData) ?? {};
     if (g.size && (!out.size || SIZE_ORDER.indexOf(g.size) > SIZE_ORDER.indexOf(out.size))) {
       out.size = g.size;
     }
     out.advantageAbilities = [...new Set([...out.advantageAbilities, ...(g.advantageAbilities ?? [])])];
     out.advantageSaves = [...new Set([...out.advantageSaves, ...(g.advantageSaves ?? [])])];
-    if (g.attackDie) out.attackDie = g.attackDie;
-    out.reachBonus = Math.max(out.reachBonus, g.reachBonus ?? 0);
+    if ((g.reachBonus ?? 0) > out.reachBonus) {
+      out.reachBonus = g.reachBonus;
+      out.reachSource = g.reachSource ?? e.label;
+    }
     // Resistance is a boolean per damage type — two sources of it are still half damage.
     out.resistances = [...new Set([...out.resistances, ...(g.resistances ?? [])])];
     // Numeric bonuses SUM across effects: two differently-named features that both add to a
@@ -273,11 +305,11 @@ function runningEffects(ctx) {
 export function activeEffectResistances(ctx = {}) {
   const level = Number(ctx.level) || 1;
   return runningEffects(ctx).flatMap((e) => {
-    const types = e.grants(level)?.resistances ?? [];
+    const types = e.grants(level, ctx.characterData)?.resistances ?? [];
     if (types.length === 0) return [];
     return [{
       key: e.key, label: e.label, subclass: e.subclass ?? null, damageTypes: types,
-      summary: e.summary(level), duration: e.duration ?? null,
+      summary: e.summary(level, ctx.characterData), duration: e.duration ?? null,
     }];
   });
 }
@@ -292,7 +324,7 @@ export function activeEffectResistances(ctx = {}) {
  */
 function bonusParts(field, ability, ctx) {
   return runningEffects(ctx)
-    .map((e) => ({ e, amount: pickBonus(e.grants(Number(ctx.level) || 1)?.[field], ability) }))
+    .map((e) => ({ e, amount: pickBonus(e.grants(Number(ctx.level) || 1, ctx.characterData)?.[field], ability) }))
     .filter(({ amount }) => amount)
     .map(({ e, amount }) => ({ key: `effect:${e.key}`, label: e.label, value: amount }));
 }
@@ -310,7 +342,7 @@ function pickBonus(spec, ability) {
  */
 function bonusSources(field, ctx) {
   return runningEffects(ctx).flatMap((e) => {
-    const spec = e.grants(Number(ctx.level) || 1)?.[field];
+    const spec = e.grants(Number(ctx.level) || 1, ctx.characterData)?.[field];
     if (!spec?.amount || (spec.abilities ?? []).length === 0) return [];
     return [{ key: e.key, source: e.label, amount: spec.amount, abilities: spec.abilities }];
   });

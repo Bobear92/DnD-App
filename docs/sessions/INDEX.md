@@ -9,7 +9,7 @@ To find every session on a subject, use the **Tags** index at the bottom, or gre
 
 | Date | Start | Session | Area | Tags | Issues | Summary | Turns | ⚠ |
 |---|---|---|---|---|---|---|---|---|
-| 2026-10-26 | 14:28 | [Rune knight subclass QA](2026-10/26/1428_rune-knight-subclass-qa.md) | — |  |  | okay lets take a look at where we are with the rune knight subclass. Look at the fighter subclass retro and see how well … | 1 | ⚠ |
+| 2026-10-26 | 14:28 | [Rune knight subclass QA](2026-10/26/1428_rune-knight-subclass-qa.md) | — |  |  | okay lets take a look at where we are with the rune knight subclass. Look at the fighter subclass retro and see how well … | 4 | ⚠ |
 | 2026-10-26 | 13:53 | [Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md) | tooling | tooling, docs, retro, user-rule, session-logs, claude-md, fighter, champion, battle-master, eldritch-knight, arcane-archer, cavalier, echo-knight, psi-warrior, rune-knight, subclass-proficiencies | rework | Session-log hook + /log, day folders, tag list + issues field; no Fighter transcripts survived; Fighter retro written | 6 | ⚠ |
 
 ## Tags

@@ -27,7 +27,7 @@ import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatur
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { isRuneActive } from '@/characters/components/inventory/runeCarving';
 import { getRune } from '@/characters/components/classData/runesData';
-import { isEffectActive } from '@/characters/components/effects/activeEffects';
+import { ACTIVE_EFFECTS, isEffectActive } from '@/characters/components/effects/activeEffects';
 import { equippedShield } from '@/characters/components/inventory/inventoryData';
 import { getFeatSaveMods, getFeatSaveAdvantages } from '@/characters/components/feats/featEffects';
 
@@ -78,7 +78,8 @@ export const SAVE_FEATURES = [
     subclass: 'Rune Knight',
     minLevel: 3,
     editions: ['5e'],
-    advantageAbilities: ['strength'],
+    // Read off the effect's own grants, so "which saves" lives in one place (activeEffects.js).
+    advantageAbilities: ACTIVE_EFFECTS.find((e) => e.key === 'giants_might')?.grants(3)?.advantageSaves ?? [],
     applies: ({ characterData }) => isEffectActive(characterData, 'giants_might'),
   },
 ];

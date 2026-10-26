@@ -15,6 +15,8 @@ import {
 import WeaponAmmoControl from '@/characters/components/inventory/WeaponAmmoControl';
 import MagicAttackBadge from '@/characters/components/inventory/MagicAttackBadge';
 import WeaponRangeBadge from '@/characters/components/inventory/WeaponRangeBadge';
+import WeaponReachBadge from '@/characters/components/inventory/WeaponReachBadge';
+import { toolCheckProficiency } from '@/characters/components/inventory/toolChecks';
 import WeaponPropertyBadges from '@/characters/components/inventory/WeaponPropertyBadges';
 import { weaponBadges, weaponFacets } from '@/characters/components/inventory/weaponPropertyData';
 import ItemPickerDialog from '@/characters/components/inventory/ItemPickerDialog';
@@ -65,7 +67,7 @@ const AMMO_PICKER_CATEGORY = {
 
 const HAND_LABELS = { main: 'Main hand', off: 'Off hand', both: 'Both hands' };
 
-function ProficiencyBanner({ label, text, grants }) {
+function ProficiencyBanner({ label, text, grants, toolCheck = null }) {
   const none = (!text || text === 'None') && grants.length === 0;
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-1" data-testid="proficiency-banner">
@@ -78,6 +80,20 @@ function ProficiencyBanner({ label, text, grants }) {
           {grants.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {grants.map((g) => <Badge key={g} variant="secondary" className="text-xs">{g}</Badge>)}
+            </div>
+          )}
+          {/* The proficiency term on a tool check: the one part of a tool check that's fixed
+              (the DM picks the ability). A doubled total names what doubled it. */}
+          {toolCheck && (
+            <div className="text-xs text-muted-foreground" data-testid="tool-check-proficiency">
+              Proficient tool checks add{' '}
+              <span className={cn('font-semibold tabular-nums', toolCheck.doubled ? 'text-emerald-600' : 'text-foreground')}>
+                +{toolCheck.total}
+              </span>
+              {toolCheck.doubled
+                ? ` (proficiency bonus +${toolCheck.pb}, doubled by ${toolCheck.sources.map((s) => `${s.source}, ${s.note.toLowerCase()}`).join('; ')})`
+                : ' (your proficiency bonus)'}
+              , plus the ability modifier the DM calls for.
             </div>
           )}
         </>
@@ -136,7 +152,7 @@ export default function InventoryTab({
   const hexWarrior = isHexWarrior({ charClass, subclass, edition });
   const hexUid = hexWarrior ? storedHexWeaponUid(characterData) : null;
   const ac = computeArmorClass({ inventory, scores, charClass, subclass, feats: characterData?.feats, styles });
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor, hexWeaponUid: hexUid, charClass, subclass });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor, hexWeaponUid: hexUid, charClass, subclass, characterData });
   const attuned = attunedCount(inventory);
   // Worn armor/shield without proficiency — disadvantage on STR/DEX rolls + no spellcasting.
   const badArmor = nonProficientEquippedArmor(inventory, { armorProfText, raceArmor });
@@ -380,6 +396,7 @@ export default function InventoryTab({
                   {/* Same band, same component as the Action Economy card — resolved once in
                       getAttacks so the two surfaces cannot disagree. */}
                   <WeaponRangeBadge range={a.range} testId={`attack-range-${a.uid}`} />
+                  <WeaponReachBadge reach={a.reach} testId={`attack-reach-${a.uid}`} />
                 </div>
               ))}
             </div>
@@ -428,7 +445,7 @@ export default function InventoryTab({
         </>
       )}
       {activeId === 'armor' && <ProficiencyBanner label="Armor" text={proficiencies.armor.text} grants={proficiencies.armor.grants} />}
-      {activeId === 'tools' && <ProficiencyBanner label="Tool" text={proficiencies.tools.text} grants={proficiencies.tools.grants} />}
+      {activeId === 'tools' && <ProficiencyBanner label="Tool" text={proficiencies.tools.text} grants={proficiencies.tools.grants} toolCheck={toolCheckProficiency({ characterData: { ...characterData, inventory }, level })} />}
 
       {/* Hands — what's held in each hand (weapons + shields). A two-handed weapon fills both. */}
       {activeId === 'weapons' && (

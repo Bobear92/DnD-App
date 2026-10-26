@@ -2630,8 +2630,23 @@ describe('buildActionEconomy — Rune Knight (Fighter subclass)', () => {
       const l18 = rk(18).bonus.find((e) => e.name === "Giant's Might").detail;
       expect(l18).toMatch(/become Huge/);
       expect(l18).toMatch(/extra 1d10/);
-      // RAW the size increase at 18 is the player's option, not automatic.
-      expect(l18).toMatch(/can choose to become Large/);
+      expect(l18).toMatch(/reach increases by 5 feet/);
+    });
+
+    // RAW the size increase at 18 is the player's option ("can increase to Huge"), so the card
+    // carries a Large/Huge choice instead of a sentence telling the player to adjust by hand.
+    it('offers a Large/Huge choice from Runic Juggernaut, defaulting to Huge', () => {
+      expect(rk(17).bonus.find((e) => e.name === "Giant's Might").effectChoice).toBeNull();
+      expect(rk(18).bonus.find((e) => e.name === "Giant's Might").effectChoice).toEqual({
+        key: 'giants_might_size', label: 'Grow to', options: ['Large', 'Huge'], value: 'Huge',
+      });
+    });
+
+    it('follows a stored choice of Large — size in the text, and no reach line', () => {
+      const gm = rk(18, { giants_might_size: 'Large' }).bonus.find((e) => e.name === "Giant's Might");
+      expect(gm.effectChoice.value).toBe('Large');
+      expect(gm.detail).toMatch(/become Large/);
+      expect(gm.detail).not.toMatch(/reach/);
     });
 
     it('says Strength CHECKS and Strength SAVING THROWS — not saves generally', () => {
@@ -2702,6 +2717,37 @@ describe('buildActionEconomy — Rune Knight (Fighter subclass)', () => {
 
     it('is absent below level 7', () => {
       expect(rk(6).reaction.map((e) => e.name)).not.toContain('Runic Shield');
+    });
+  });
+
+  // Runic Juggernaut: +5 ft of reach while Huge. The reach belongs to the CREATURE, so an
+  // unarmed strike (built here, not by getAttacks) must carry it too.
+  describe('Runic Juggernaut reach', () => {
+    const unarmed = (level, active) => buildActionEconomy(rkArgs(level,
+      { active_effects: active ? ['giants_might'] : [] }, '5e', { inventory: [], attacks: [] }))
+      .action.find((e) => e.name === 'Unarmed Strike');
+
+    it("gives the unarmed strike 10 ft of reach while a level-18 Giant's Might runs", () => {
+      expect(unarmed(18, true).reach).toMatchObject({ feet: 10, bonusSource: 'Runic Juggernaut' });
+    });
+
+    it('gives none when the player chose to grow only to Large', () => {
+      const bare = buildActionEconomy(rkArgs(18,
+        { active_effects: ['giants_might'], giants_might_size: 'Large' }, '5e', { inventory: [], attacks: [] }));
+      expect(bare.action.find((e) => e.name === 'Unarmed Strike').reach).toBeNull();
+    });
+
+    it('gives none below 18 or with the effect off', () => {
+      expect(unarmed(17, true).reach).toBeNull();
+      expect(unarmed(18, false).reach).toBeNull();
+    });
+
+    it("passes a weapon row's reach through from getAttacks", () => {
+      const reach = { feet: 15, label: 'Reach 15 ft', bonusFt: 5, bonusSource: 'Runic Juggernaut' };
+      const ec = buildActionEconomy(rkArgs(18, {}, '5e', {
+        attacks: [{ uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true, reach }],
+      }));
+      expect(ec.action.find((e) => e.name === 'Longsword').reach).toEqual(reach);
     });
   });
 

@@ -128,3 +128,10 @@ Open-ended: add a feat, named feature or pool option when a session does real wo
 - `rune-carving`
 - `bonus-proficiencies`
 - `grapple`
+- `runic-juggernaut` — Rune Knight L18 (Huge size option + reach)
+- `runic-shield` — Rune Knight Runic Shield
+- `great-stature` — Rune Knight Great Stature
+- `fire-rune` — Rune Knight Fire Rune (passive tool doubling, Channel Rune)
+- `weapon-reach` — weapon/creature reach (`weaponReach`, `WeaponReachBadge`)
+- `tool-checks` — tool-check proficiency (`inventory/toolChecks.js`)
+- `surprise` — the (unmodelled) surprised condition

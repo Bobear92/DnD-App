@@ -16,6 +16,7 @@ import { isHexWarrior, hexWeaponUid as storedHexWeaponUid } from '@/characters/c
 import WeaponAmmoControl from '@/characters/components/inventory/WeaponAmmoControl';
 import MagicAttackBadge from '@/characters/components/inventory/MagicAttackBadge';
 import WeaponRangeBadge from '@/characters/components/inventory/WeaponRangeBadge';
+import WeaponReachBadge from '@/characters/components/inventory/WeaponReachBadge';
 import { gatherFightingStyles } from '@/characters/components/combat/fightingStyles';
 import {
   buildActionEconomy, castableSpells, applyDamageAdditions, TABS, TAB_LABELS, SOURCE_ORDER,
@@ -235,7 +236,7 @@ function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, i
  *
  * Declared at module scope, never inside ItemRow, so toggling can't remount the card's subtree.
  */
-function ActiveEffectToggle({ effectKey, entryKey, resource, characterData, onChange, readOnly }) {
+function ActiveEffectToggle({ effectKey, entryKey, resource, choice, characterData, onChange, readOnly }) {
   const active = isEffectActive(characterData, effectKey);
   const remaining = resource ? resource.remaining : null;
   const canStart = !readOnly && !!onChange && (remaining === null || remaining > 0);
@@ -261,6 +262,27 @@ function ActiveEffectToggle({ effectKey, entryKey, resource, characterData, onCh
         <span className="text-[11px] text-muted-foreground" data-testid={`ae-effect-uses-${effectKey}`}>
           {resource.remaining} / {resource.total} uses
         </span>
+      )}
+      {/* An optional pick the effect makes as it starts (Runic Juggernaut: grow to Large or
+          Huge). Stored in character_data, so size, reach and the card text all follow it. */}
+      {choice && (
+        <div className="flex items-center gap-1" data-testid={`ae-effect-choice-${effectKey}`}>
+          <span className="text-[11px] text-muted-foreground">{choice.label}</span>
+          {choice.options.map((opt) => (
+            <Button
+              key={opt}
+              type="button" size="sm"
+              variant={choice.value === opt ? 'default' : 'outline'}
+              className="h-6 px-2 text-[11px]"
+              disabled={readOnly || !onChange}
+              aria-pressed={choice.value === opt}
+              onClick={() => choice.value !== opt && onChange({ [choice.key]: opt })}
+              data-testid={`ae-effect-choice-${effectKey}-${opt}`}
+            >
+              {opt}
+            </Button>
+          ))}
+        </div>
       )}
       <div className="ml-auto flex items-center gap-1.5">
         {active ? (
@@ -459,6 +481,12 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
             <WeaponRangeBadge range={entry.range} testId={`ae-range-${entry.key}`} />
           </div>
         )}
+        {/* Melee reach, when it isn't the default 5 ft (a Reach weapon, a grown Rune Knight). */}
+        {entry.reach && (
+          <div className="mt-0.5">
+            <WeaponReachBadge reach={entry.reach} testId={`ae-reach-${entry.key}`} />
+          </div>
+        )}
         {/* A save DC this feature imposes, as a clickable number rather than arithmetic baked
             into the sentence above it — the same treatment the Arcane Shot DC gets. */}
         {entry.saveDc && (
@@ -635,6 +663,7 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
             effectKey={entry.activeEffect}
             entryKey={entry.key}
             resource={topResource}
+            choice={entry.effectChoice}
             characterData={characterData}
             onChange={onChange}
             readOnly={readOnly}
@@ -762,7 +791,7 @@ export default function ActionEconomyTab({
   const badArmor = nonProficientEquippedArmor(inventory, { armorProfText, raceArmor });
   // Hexblade's designated Hex Warrior weapon attacks with CHA when it's better.
   const hexUid = isHexWarrior({ charClass, subclass, edition }) ? storedHexWeaponUid(characterData) : null;
-  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor, hexWeaponUid: hexUid, charClass, subclass });
+  const attacks = getAttacks({ inventory, scores, level, weaponProfText, raceWeapons, size, edition, feats: characterData?.feats, styles, armorProfText, raceArmor, hexWeaponUid: hexUid, charClass, subclass, characterData });
 
   // A loading weapon caps the Attack action to one shot even with Extra Attack (unless a
   // feat lifts it — Crossbow Expert sets loadingNote to "…ignored…"). Surface a caveat on

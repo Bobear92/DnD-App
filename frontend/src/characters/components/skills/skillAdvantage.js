@@ -58,7 +58,7 @@ export const SKILL_ADVANTAGE_SOURCES = [
     resolve: ({ characterData, charClass, subclass, level, edition }) =>
       getActiveEffectDefs({ charClass, subclass, level, edition })
         .filter((e) => isEffectActive(characterData, e.key))
-        .flatMap((e) => (e.grants(Number(level) || 1)?.advantageAbilities ?? [])
+        .flatMap((e) => (e.grants(Number(level) || 1, characterData)?.advantageAbilities ?? [])
           .flatMap((ability) => skillsForAbility(ability).map((skill) => ({
             skill,
             source: e.label,

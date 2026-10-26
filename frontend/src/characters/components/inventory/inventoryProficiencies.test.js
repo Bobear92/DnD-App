@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
+import { gatherProficiencies, subclassFixedLanguages } from '@/characters/components/inventory/inventoryProficiencies';
 
 describe('gatherProficiencies', () => {
   it('pulls weapon/armor/tool text from the class', () => {
@@ -156,5 +156,36 @@ describe('gatherProficiencies', () => {
       });
       expect(p.tools.grants).toContain('Lute');
     });
+  });
+});
+
+// Rune Knight "Bonus Proficiencies" (5e Fighter, L3): smith's tools + Giant, with no choice to
+// store, so both are DERIVED from the subclass — a character who took it before this existed has
+// them without a migration.
+describe('Rune Knight Bonus Proficiencies', () => {
+  const rk = (edition = '5e') => ({ charClass: 'Fighter', subclass: 'Rune Knight', edition, characterData: {} });
+
+  it("grants smith's tools in the Items-tab tool banner", () => {
+    expect(gatherProficiencies(rk()).tools.grants).toContain("Smith's tools");
+  });
+
+  it('reads the subclass off character_data when none is passed', () => {
+    const p = gatherProficiencies({ charClass: 'Fighter', characterData: { subclass: 'Rune Knight' } });
+    expect(p.tools.grants).toContain("Smith's tools");
+  });
+
+  it('grants the Giant language', () => {
+    expect(subclassFixedLanguages(rk())).toEqual(['Giant']);
+  });
+
+  it('grants nothing to another Fighter subclass', () => {
+    const champ = { charClass: 'Fighter', subclass: 'Champion', characterData: {} };
+    expect(gatherProficiencies(champ).tools.grants).not.toContain("Smith's tools");
+    expect(subclassFixedLanguages(champ)).toEqual([]);
+  });
+
+  it('grants nothing in 2024, which ships no Rune Knight', () => {
+    expect(gatherProficiencies(rk('5.5e')).tools.grants).not.toContain("Smith's tools");
+    expect(subclassFixedLanguages(rk('5.5e'))).toEqual([]);
   });
 });

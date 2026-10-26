@@ -33,6 +33,7 @@ import JumpCard from '@/characters/components/combat/JumpCard';
 import WalletCard from '@/characters/components/inventory/WalletCard';
 import { armorSpeedPenalty, wornNonProficientArmor, stealthDisadvantageArmor } from '@/characters/components/inventory/inventoryData';
 import InventoryTab from '@/characters/components/inventory/InventoryTab';
+import { subclassFixedLanguages } from '@/characters/components/inventory/inventoryProficiencies';
 import ActionEconomyTab from '@/characters/components/combat/ActionEconomyTab';
 import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
 import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '@/characters/components/feats/featEffects';
@@ -1472,8 +1473,12 @@ export default function CharacterDetail() {
                     const featLangs = [...new Set(cd.feat_languages ?? [])].filter(l => !raceSet.has(l) && !bgSet.has(l));
                     const featSet = new Set(featLangs);
                     // A subclass grant can hand out a language instead of a skill (Cavalier /
-                    // Samurai "Bonus Proficiency"), so it gets its own source group here.
-                    const subclassLangs = [...new Set(cd.subclass_languages ?? [])]
+                    // Samurai "Bonus Proficiency"), so it gets its own source group here. A FIXED
+                    // subclass language (Rune Knight's Giant) is derived, not stored, and joins it.
+                    const subclassLangs = [...new Set([
+                      ...(cd.subclass_languages ?? []),
+                      ...subclassFixedLanguages({ charClass: character.char_class, subclass: cd.subclass, edition }),
+                    ])]
                       .filter(l => !raceSet.has(l) && !bgSet.has(l) && !featSet.has(l));
                     const hasTraits = (cd.race_traits?.length ?? 0) > 0;
                     const anyLangs = raceLangs.length > 0 || bgLangs.length > 0

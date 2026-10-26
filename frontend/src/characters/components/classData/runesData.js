@@ -33,9 +33,12 @@ export const MASTER_OF_RUNES_LEVEL = 15;
  *     field is claimed by exactly one subsystem, and a rune states only the fields it changes:
  *       skills[]      → skillAdvantage.js (the 'adv' tag in Abilities & Skills)
  *       resistances[] → defenses.js (the Defenses card)
- *       saveAdvantage → saveFeatures.js (the panel under the Saving Throws grid)
- *       toolBonus     → the Items tab's Tools sub-tab
- *       note          → prose, for the parts the app has no model for (darkvision, surprise)
+ *       toolBonus     → inventory/toolChecks.js (the tool-check line on the Tools sub-tab)
+ *       vision        → senses/senses.js (the Senses card)
+ *       text          → the one-line summary every surface prints, incl. the parts the app has
+ *                       no model for (Storm's "can't be surprised") and situation-scoped ones
+ *                       (Hill's save advantage, a saveFeatures.js panel row)
+ *   Every field must have a reader: runeFieldReaders.test.js fails on one that doesn't.
  *   • `channel` — the Channel Rune active: its action cost and the tab it files under.
  */
 export const RUNE_OPTIONS = [
@@ -61,7 +64,10 @@ export const RUNE_OPTIONS = [
     key: 'fire',
     passive: {
       toolBonus: true,
-      text: 'Whenever you use a tool, add your proficiency bonus to the check.',
+      // RAW DOUBLES the bonus on a check that uses a tool you're proficient with. The old text,
+      // "add your proficiency bonus", is what proficiency already does, so as written the passive
+      // granted nothing. Read by inventory/toolChecks.js.
+      text: 'Your proficiency bonus is doubled for any ability check that uses your proficiency with a tool.',
     },
     channel: {
       // Rides on a weapon attack you were making anyway — the Arcane Shot shape — so it costs
@@ -73,7 +79,7 @@ export const RUNE_OPTIONS = [
         + ' 1 minute, taking 2d6 fire damage at the start of each of its turns. It repeats the save at'
         + ' the end of each of its turns, ending the effect on a success.',
     },
-    description: 'Passive: whenever you use a tool, you can add your proficiency bonus to the check. Channel Rune (when you hit a creature with a weapon attack): the target takes an extra 2d6 fire damage and must succeed on a Strength saving throw or be restrained by fiery shackles for 1 minute, taking 2d6 fire damage at the start of each of its turns. It repeats the save at the end of each of its turns, ending the effect on a success.',
+    description: 'Passive: your proficiency bonus is doubled for any ability check you make that uses your proficiency with a tool. Channel Rune (when you hit a creature with a weapon attack): the target takes an extra 2d6 fire damage and must succeed on a Strength saving throw or be restrained by fiery shackles for 1 minute, taking 2d6 fire damage at the start of each of its turns. It repeats the save at the end of each of its turns, ending the effect on a success.',
   },
   {
     name: 'Frost Rune',
@@ -121,7 +127,8 @@ export const RUNE_OPTIONS = [
     minLevel: 7,
     passive: {
       resistances: ['poison'],
-      saveAdvantage: 'being poisoned',
+      // The save advantage ("against being poisoned") is situation-scoped, so it is a
+      // saveFeatures.js panel row carrying `text`, never a structured tag on a save row.
       text: 'Advantage on saving throws against being poisoned, and resistance to poison damage.',
     },
     channel: {
@@ -140,9 +147,7 @@ export const RUNE_OPTIONS = [
     minLevel: 15,
     passive: {
       skills: ['Arcana'],
-      // The app models no surprise state, so this half stays prose for the same reason Stone's
-      // darkvision does.
-      note: 'You cannot be surprised as long as you are not incapacitated.',
+      // The app models no surprise state, so "can't be surprised" stays prose inside `text`.
       text: 'Advantage on Arcana checks, and you cannot be surprised as long as you are not incapacitated.',
     },
     channel: {

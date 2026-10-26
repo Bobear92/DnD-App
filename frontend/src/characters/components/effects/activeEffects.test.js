@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ACTIVE_EFFECTS, getActiveEffectDefs, activeEffectKeys, isEffectActive,
-  toggleEffectPatch, activeEffectGrants, mightDie, sizeAt,
+  toggleEffectPatch, activeEffectGrants, mightDie, sizeAt, activeEffectChoice,
   activeEffectCheckParts, activeEffectSaveParts, FROST_RUNE_BONUS,
   activeEffectCheckSources, activeEffectSaveSources,
   activeEffectCheckBonus, activeEffectSaveBonus, activeEffectResistances,
@@ -48,6 +48,24 @@ describe('activeEffects', () => {
       expect(sizeAt(17)).toBe('Large');
       expect(sizeAt(18)).toBe('Huge');
     });
+
+    // Runic Juggernaut: "your size can increase to Huge" — the player may stay Large.
+    it('stays Large at 18 when the player chose Large, and ignores the choice below 18', () => {
+      expect(sizeAt(18, { giants_might_size: 'Large' })).toBe('Large');
+      expect(sizeAt(18, { giants_might_size: 'Huge' })).toBe('Huge');
+      expect(sizeAt(10, { giants_might_size: 'Huge' })).toBe('Large');
+    });
+
+    it('exposes the Large/Huge choice only from 18, with a stored pick winning', () => {
+      expect(activeEffectChoice('giants_might', { level: 17 })).toBeNull();
+      expect(activeEffectChoice('giants_might', { level: 18 }).value).toBe('Huge');
+      expect(activeEffectChoice('giants_might', { level: 18, characterData: { giants_might_size: 'Large' } }).value)
+        .toBe('Large');
+      // A garbage stored value falls back to the default rather than offering a non-option.
+      expect(activeEffectChoice('giants_might', { level: 18, characterData: { giants_might_size: 'Tiny' } }).value)
+        .toBe('Huge');
+      expect(activeEffectChoice('channel_rune_frost', { level: 18 })).toBeNull();
+    });
   });
 
   describe('switching an effect on and off', () => {
@@ -73,17 +91,16 @@ describe('activeEffects', () => {
     it('grants nothing while switched off', () => {
       const g = activeEffectGrants(runeKnight(10, { characterData: {} }));
       expect(g.size).toBeNull();
-      expect(g.attackDie).toBeNull();
+      expect(g.reachBonus).toBe(0);
       expect(g.advantageAbilities).toEqual([]);
       expect(g.sources).toEqual([]);
     });
 
-    it('grants size, Strength advantage and the damage die while switched on', () => {
+    it('grants size and Strength advantage while switched on', () => {
       const g = activeEffectGrants(runeKnight(10, {
         characterData: { active_effects: ['giants_might'] },
       }));
       expect(g.size).toBe('Large');
-      expect(g.attackDie).toBe('1d8');
       // RAW is Strength CHECKS and Strength SAVES — not saving throws generally, which is how
       // the stored feature blurb reads.
       expect(g.advantageAbilities).toEqual(['strength']);
@@ -97,8 +114,18 @@ describe('activeEffects', () => {
         characterData: { active_effects: ['giants_might'] },
       }));
       expect(g.size).toBe('Huge');
-      expect(g.attackDie).toBe('1d10');
       expect(g.reachBonus).toBe(5);
+      // Named, so the reach badge can say what moved the number.
+      expect(g.reachSource).toBe('Runic Juggernaut');
+    });
+
+    it('grants no extra reach at 18 when the player chose to grow only to Large', () => {
+      const g = activeEffectGrants(runeKnight(18, {
+        characterData: { active_effects: ['giants_might'], giants_might_size: 'Large' },
+      }));
+      expect(g.size).toBe('Large');
+      expect(g.reachBonus).toBe(0);
+      expect(g.reachSource).toBeNull();
     });
 
     it('ignores a stored effect the character has not earned', () => {

@@ -893,6 +893,48 @@ describe('InventoryTab — Hex Warrior weapon (Hexblade Warlock)', () => {
   });
 });
 
+// Rune Knight Bonus Proficiencies + the Fire Rune passive, on the Tools sub-tab.
+describe('Tools sub-tab — Rune Knight', () => {
+  const renderTools = (characterData, level = 5) => {
+    renderTab({ inventory: [longsword], charClass: 'Fighter', subclass: 'Rune Knight', level, characterData });
+    fireEvent.click(screen.getByTestId('inv-category-tools'));
+  };
+
+  it("lists smith's tools in the tool proficiency banner", async () => {
+    renderTools({ subclass: 'Rune Knight' });
+    expect(await screen.findByText("Smith's tools")).toBeInTheDocument();
+  });
+
+  it('states the plain proficiency bonus a tool check adds', async () => {
+    renderTools({ subclass: 'Rune Knight' });
+    expect(await screen.findByTestId('tool-check-proficiency')).toHaveTextContent(/\+3 \(your proficiency bonus\)/);
+  });
+
+  it('DOUBLES it, naming the Fire Rune, while the rune is carved on an equipped item', async () => {
+    renderTools({ subclass: 'Rune Knight', runes: ['Fire Rune', 'Cloud Rune'], rune_items: { 'Fire Rune': 'w1' }, inventory: [longsword] });
+    const line = await screen.findByTestId('tool-check-proficiency');
+    expect(line).toHaveTextContent('+6');
+    expect(line).toHaveTextContent(/doubled by Fire Rune, carved on longsword/i);
+  });
+});
+
+describe('Reach badge on the attack rows', () => {
+  const glaive = { uid: 'g1', category: 'weapons', name: 'Glaive', weapon_category: 'Martial', weapon_type: 'Melee', properties: 'Heavy, Reach, Two-Handed', damage: '1d10', damage_type: 'Slashing', equipped: true, hand: 'both', quantity: 1 };
+
+  it('shows Reach 10 ft for a Reach weapon and nothing for an ordinary sword', async () => {
+    renderTab({ inventory: [glaive, { ...longsword, equipped: false }] });
+    expect(await screen.findByTestId('attack-reach-g1')).toHaveTextContent('Reach 10 ft');
+    expect(screen.queryByTestId('attack-reach-w1')).not.toBeInTheDocument();
+  });
+
+  it("adds Runic Juggernaut's 5 ft while a level-18 Giant's Might runs", async () => {
+    renderTab({ inventory: [glaive], charClass: 'Fighter', subclass: 'Rune Knight', level: 18, characterData: { subclass: 'Rune Knight', active_effects: ['giants_might'], inventory: [glaive] } });
+    const badge = await screen.findByTestId('attack-reach-g1');
+    expect(badge).toHaveTextContent('Reach 15 ft');
+    expect(screen.getByTestId('attack-reach-g1-bonus')).toHaveTextContent('+5 ft (Runic Juggernaut)');
+  });
+});
+
 describe('Rune Carving on the item cards (Rune Knight)', () => {
   const runeKnight = (rune_items = {}, inventory = [longsword, chainMail]) => ({
     subclass: 'Rune Knight',

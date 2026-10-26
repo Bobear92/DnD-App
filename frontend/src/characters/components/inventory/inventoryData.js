@@ -704,7 +704,44 @@ export function resolveWeaponRange(weapon, { feats = [], edition = '5e' } = {}) 
   };
 }
 
-export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [], armorProfText = '', raceArmor = [], hexWeaponUid = null, charClass = null, subclass = null } = {}) {
+/** Default melee reach, and what the Reach property adds to it. */
+const BASE_REACH_FT = 5;
+const REACH_PROPERTY_FT = 5;
+
+/**
+ * How far a MELEE attack reaches — the counterpart of `weaponRange`, which is a different
+ * concept (a pure melee weapon has reach, never a range band). `weapon` may be null for an
+ * unarmed strike, which reaches as far as the creature does.
+ *
+ * Returns null at the default 5 ft: every melee attack reaches 5 ft, so printing it on every card
+ * would be noise. A Reach-property weapon (glaive, whip) or a feature that grows the creature's
+ * reach (Runic Juggernaut, while Huge) is what gets a badge — the cases where the distance is
+ * information. `{bonusFt, source}` is the creature-level bonus from activeEffectGrants.
+ */
+export function weaponReach(weapon, { bonusFt = 0, source = null } = {}) {
+  if (weapon && isPureRangedWeapon(weapon)) return null;
+  const base = BASE_REACH_FT + (weapon && /\breach\b/i.test(weapon.properties || '') ? REACH_PROPERTY_FT : 0);
+  const feet = base + (bonusFt || 0);
+  if (feet === BASE_REACH_FT) return null;
+  return {
+    feet,
+    label: `Reach ${feet} ft`,
+    bonusFt: bonusFt || null,
+    bonusSource: bonusFt ? source : null,
+  };
+}
+
+/** The creature-level reach bonus a running effect grants, in weaponReach's option shape. */
+export function characterReachBonus(characterData, ctx) {
+  if (!characterData || !ctx?.charClass) return { bonusFt: 0, source: null };
+  const g = activeEffectGrants({ characterData, ...ctx });
+  return { bonusFt: g.reachBonus || 0, source: g.reachSource || null };
+}
+
+export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfText = '', raceWeapons = [], size = 'Medium', edition = '5e', feats = [], styles = [], armorProfText = '', raceArmor = [], hexWeaponUid = null, charClass = null, subclass = null, characterData = null } = {}) {
+  // Resolved once for every row: a reach bonus belongs to the creature, not the weapon.
+  // The LIVE inventory is spliced in, since a rune-style gate reads equipped state from it.
+  const reachBonus = characterReachBonus(characterData && { ...characterData, inventory }, { charClass, subclass, level, edition });
   const equipped = (inventory || []).filter((e) => e.category === 'weapons' && e.equipped);
   // Dueling requires wielding a single weapon (a shield is fine, a second weapon is not).
   const soloWeapon = equipped.length === 1;
@@ -727,6 +764,9 @@ export function getAttacks({ inventory = [], scores = {}, level = 1, weaponProfT
     // The distance band, resolved ONCE here so the Items tab and the Action Economy card can
     // never disagree — the same reason `magical` is resolved here rather than per surface.
     row.range = resolveWeaponRange(w, { feats, edition });
+    // How far it reaches, for a melee weapon whose reach isn't the default 5 ft. Same "resolve
+    // once, read by both tabs" rule as `range`.
+    row.reach = weaponReach(w, reachBonus);
     return row;
   });
 }

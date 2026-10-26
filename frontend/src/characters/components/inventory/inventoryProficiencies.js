@@ -20,11 +20,35 @@ const labelArmor = (items) => (items || []).map((a) => (/armor|shield/i.test(a) 
 // Fixed (non-choice) proficiency grants conferred by a subclass feature. Choice-based
 // subclass grants live in subclassGrants.js; these are automatic riders.
 //   Hexblade "Hex Warrior" (5e Warlock, L1): medium armor, shields, and martial weapons.
+//   Rune Knight "Bonus Proficiencies" (5e Fighter, L3): smith's tools and the Giant language.
+// Every grant here is gained at or below the subclass's own unlock level, so holding the
+// subclass is the whole gate. `languages` is read by subclassFixedLanguages (below), not by
+// gatherProficiencies, since languages aren't an Items-tab banner.
 const SUBCLASS_PROF_GRANTS_5E = {
   Warlock: {
     'The Hexblade': { weapons: ['Martial weapons'], armor: ['Medium armor', 'Shields'] },
   },
+  Fighter: {
+    'Rune Knight': { tools: ["Smith's tools"], languages: ['Giant'] },
+  },
 };
+
+const is2024Edition = (edition) => edition === '5.5e' || edition === '2024';
+
+function subclassProfGrants(charClass, subclass, edition) {
+  if (is2024Edition(edition)) return {};
+  return SUBCLASS_PROF_GRANTS_5E[charClass]?.[subclass] || {};
+}
+
+/**
+ * Languages a subclass hands out with no choice (Rune Knight → Giant). These are DERIVED
+ * from class + subclass, never written into character_data, so a character who took the
+ * subclass before this existed has the language without a migration. Shown in the
+ * languages panel's "From Subclass" group beside chosen `subclass_languages`.
+ */
+export function subclassFixedLanguages({ charClass, subclass, edition = '5e' } = {}) {
+  return [...(subclassProfGrants(charClass, subclass, edition).languages || [])];
+}
 
 // Standard 5e weapon categories, used to tell whether a specific weapon grant
 // (e.g. "Longbow") is already covered by a "simple weapons"/"martial weapons"
@@ -98,8 +122,7 @@ export function gatherProficiencies({ charClass, subclass, edition = '5e', chara
   const cd = characterData || {};
   // Fixed proficiency grants from feats (Heavily/Lightly/Moderately Armored, etc.).
   const feat = getFeatProficiencyGrants(cd.feats);
-  const is2024 = edition === '5.5e' || edition === '2024';
-  const sub = (!is2024 && SUBCLASS_PROF_GRANTS_5E[charClass]?.[subclass || cd.subclass]) || {};
+  const sub = subclassProfGrants(charClass, subclass || cd.subclass, edition);
   const weaponText = profs.weapons || '';
   const armorText = profs.armor || '';
   const toolText = profs.tools || '';
@@ -113,6 +136,7 @@ export function gatherProficiencies({ charClass, subclass, edition = '5e', chara
     cd.background_tool_choice,
     cd.tool_choice,
     ...(cd.subclass_tool_proficiencies || []), // tools chosen via subclass features (e.g. Student of War)
+    ...(sub.tools || []), // fixed subclass tool grants (Rune Knight smith's tools)
     ...feat.tools,
     ...(cd.feat_tool_proficiencies || []), // tools chosen via a feat (Skilled)
   ]);

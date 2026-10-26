@@ -3401,6 +3401,22 @@ describe('CharacterDetail', () => {
       expect(within(block).getByText('Draconic')).toBeInTheDocument();
     });
 
+    // A FIXED subclass language (Rune Knight Bonus Proficiencies → Giant) is derived from the
+    // subclass, never stored, so it shows for a character with no subclass_languages at all.
+    it("shows the Rune Knight's fixed Giant language under From Subclass with nothing stored", async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          char_class: 'Fighter',
+          character_data: { ...BASE_CHARACTER.character_data, subclass: 'Rune Knight' },
+        },
+      });
+      renderDetail();
+      const block = await screen.findByTestId('languages-from-subclass');
+      expect(within(block).getByText('Giant')).toBeInTheDocument();
+    });
+
     it('does not show a "From Subclass" group when the subclass granted no language', async () => {
       characterService.getCharacterById.mockResolvedValue({
         success: true,

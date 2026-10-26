@@ -135,7 +135,8 @@ export const DEFENSES = [
     charClass: 'Fighter',
     subclass: 'Rune Knight',
     kind: 'resistance',
-    damageTypes: ['poison'],
+    // Read off the rune's structured passive, so the type lives in one place.
+    damageTypes: getRune('Hill Rune')?.passive?.resistances ?? [],
     minLevel: 7,
     editions: ['5e'],
     applies: (ctx) => isRuneActive('Hill Rune', ctx),

@@ -45,7 +45,7 @@
  * Adding another subclass (any of these two kinds) is a pure data entry here; the LevelUpWizard
  * `subclass-grants` step + the ClassSheet display are pool-agnostic.
  */
-import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
+import { gatherProficiencies, subclassFixedLanguages } from '@/characters/components/inventory/inventoryProficiencies';
 import { ARTISAN_TOOLS } from '@/characters/components/inventory/toolsData';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
 import { FIGHTER_FIGHTING_STYLES_5E, FIGHTER_FIGHTING_STYLES_2024 } from '@/characters/components/classData/classChoicesData';
@@ -61,8 +61,9 @@ const normEdition = (edition) => (edition === '5.5e' || edition === '2024' ? '5.
 // race + background + subclass), via gatherProficiencies — so it needs the class in ctx.
 const heldTools = (cd, { charClass } = {}) => gatherProficiencies({ charClass, characterData: cd }).tools.grants;
 const heldSkills = (cd) => cd.skill_proficiencies || [];
-const heldLanguages = (cd) => [
+const heldLanguages = (cd, { charClass } = {}) => [
   ...(cd.race_languages || []), ...(cd.background_languages || []), ...(cd.subclass_languages || []),
+  ...subclassFixedLanguages({ charClass, subclass: cd.subclass }),
 ];
 // A granted cantrip dedups against cantrips the character already knows from ANY source — a
 // High Elf who took Prestidigitation, or a Magic Initiate who took Druidcraft, isn't offered
@@ -93,7 +94,7 @@ const skillOrLanguage = (skillNames) => [
 ];
 // Held across BOTH destinations, so a language you already speak and a skill you're already
 // proficient in are equally excluded from the one picker.
-const heldSkillsOrLanguages = (cd) => [...heldSkills(cd), ...heldLanguages(cd)];
+const heldSkillsOrLanguages = (cd, ctx) => [...heldSkills(cd), ...heldLanguages(cd, ctx)];
 
 // A Battle Master Student of War grant is identical in both editions.
 const studentOfWar = {
