@@ -42,3 +42,6 @@ backend/scripts/cache/
 uploads/*
 !uploads/.gitkeep
 backend/uploads/
+
+# Claude Code session logs: raw transcripts stay local (logs + INDEX are committed)
+docs/sessions/_raw/

@@ -68,6 +68,12 @@ Uncommitted work carries across `git checkout -b`, so branching late is always s
 
 ---
 
+## Session Logs
+
+Every Claude Code session has a log in `docs/sessions/YYYY-MM/YYYY-MM-DD_HHMM_<branch>.md`, indexed in `docs/sessions/INDEX.md` (newest first). The `session-log` hook creates the file at SessionStart and appends a Turn log entry after every response — **never edit the Turn log or INDEX.md by hand.** Run **`/log`** before shipping (it is Step 5b of `/ship`) to write the title, area, summary, **where Claude struggled / where Robert stepped in**, decisions and open threads. Do not read old logs unless asked — they are history, not context.
+
+---
+
 ## What This Is
 A full-stack D&D campaign organizer and compendium. Users create campaigns, invite players, and manage all campaign content — with a customizable ruleset layered on top of the official D&D base compendium.
 

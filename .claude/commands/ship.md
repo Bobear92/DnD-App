@@ -101,6 +101,13 @@ Update these sections as needed:
 
 Scan `.claude/agents/` for any stale pattern references caused by this session's changes (e.g., renamed files, changed import paths, updated conventions).
 
+## Step 5b — Write the session log
+
+Run `/log` to fill in this session's file in `docs/sessions/` (title, area, summary, where Claude
+struggled / where Robert stepped in, decisions, open threads). Include that log file and
+`docs/sessions/INDEX.md` in the Step 6 commit. (The hook appends this /ship turn itself after the
+response, so it lands in the next commit — that's expected.)
+
 ## Step 6 — Commit, merge to main, and push
 
 Development uses **short-lived feature branches** (see CLAUDE.md → "Development Workflow"). Shipping always lands the work on `main`.

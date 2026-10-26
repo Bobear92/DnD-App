@@ -3,6 +3,19 @@
     "allow": ["Bash(git push origin main)"]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node c:/Users/rober/Documents/Projects/dnd-app/.claude/hooks/session-log.mjs start",
+            "timeout": 10,
+            "statusMessage": "Opening session log..."
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Write|Edit",
@@ -49,6 +62,17 @@
             "command": "cd c:/Users/rober/Documents/Projects/dnd-app && export L=$(wc -l < CLAUDE.md); if [ \"$L\" -gt 1500 ]; then node -e \"process.stdout.write(JSON.stringify({systemMessage:'CLAUDE.md is '+process.env.L+' lines (over the 1500 ceiling). It loads into context every turn. Before growing it, trim per-component UI prose already covered by tests (see Efficiency tripwires / context-bloat signal). This is advisory, not blocking.'}))\"; fi",
             "timeout": 15,
             "statusMessage": "Checking CLAUDE.md size..."
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node c:/Users/rober/Documents/Projects/dnd-app/.claude/hooks/session-log.mjs stop",
+            "timeout": 15,
+            "statusMessage": "Updating session log..."
           }
         ]
       }
