@@ -1,5 +1,5 @@
 /**
- * Session log — one markdown file per Claude Code session, under docs/sessions/YYYY-MM/.
+ * Session log — one markdown file per Claude Code session, under docs/sessions/YYYY-MM/DD/.
  *
  *   node session-log.mjs start   (SessionStart hook) — create this session's log file
  *   node session-log.mjs stop    (Stop hook)         — append every new turn, refresh INDEX.md
@@ -18,9 +18,13 @@
  * What Claude writes (judgment, via /log): title, area, tags, summary, and the Summary /
  * Where Claude struggled / Decisions / Open threads sections. The hook never touches those.
  *
- * File naming: YYYY-MM-DD_HHMM_<slug>.md. The slug starts as "session" (sessions begin on main,
- * before the feature branch exists) and is renamed to the branch name the first time a Stop
- * fires on a feature branch.
+ * File naming: YYYY-MM/DD/HHMM_<session-name>.md (the date is in the directories). The name is
+ * the session's title as the Claude Code tab shows it (the transcript's custom-title / ai-title),
+ * re-checked every turn; before a title exists it falls back to the branch slug, and before that
+ * to "session" (a session opens on main, before its feature branch or title exists). The branch
+ * alone can't name a log: two sessions on one branch would collide.
+ *
+ * The title also fills the `title:` frontmatter until /log writes a better one.
  *
  * Fail-open: any error exits 0 silently. A logging bug must never block a turn.
  */
@@ -90,7 +94,7 @@ function parseLog(text) {
   return { fm, body: text.slice(m[0].length) };
 }
 
-const FM_ORDER = ['session_id', 'title', 'date', 'started', 'branch', 'area', 'tags', 'summary', 'turns', 'stepped_in', 'last_uuid'];
+const FM_ORDER = ['session_id', 'title', 'date', 'started', 'branch', 'area', 'tags', 'issues', 'summary', 'turns', 'stepped_in', 'last_uuid'];
 
 function serializeLog(fm, body) {
   const keys = [...FM_ORDER.filter((k) => k in fm), ...Object.keys(fm).filter((k) => !FM_ORDER.includes(k))];
@@ -99,13 +103,17 @@ function serializeLog(fm, body) {
 
 // ---------- locating / creating the log ----------
 
+/** Every log file: docs/sessions/YYYY-MM/DD/HHMM_<slug>.md. */
 function allLogs() {
   const out = [];
   if (!fs.existsSync(SESSIONS)) return out;
-  for (const month of fs.readdirSync(SESSIONS)) {
-    const dir = path.join(SESSIONS, month);
-    if (!/^\d{4}-\d{2}$/.test(month) || !fs.statSync(dir).isDirectory()) continue;
-    for (const f of fs.readdirSync(dir)) if (f.endsWith('.md')) out.push(path.join(dir, f));
+  const subdirs = (dir, re) => fs.readdirSync(dir)
+    .filter((n) => re.test(n) && fs.statSync(path.join(dir, n)).isDirectory())
+    .map((n) => path.join(dir, n));
+  for (const month of subdirs(SESSIONS, /^\d{4}-\d{2}$/)) {
+    for (const day of subdirs(month, /^\d{2}$/)) {
+      for (const f of fs.readdirSync(day)) if (f.endsWith('.md')) out.push(path.join(day, f));
+    }
   }
   return out;
 }
@@ -121,11 +129,12 @@ function findLog(sessionId) {
 function createLog(sessionId, now = new Date()) {
   const branch = currentBranch();
   const slug = branchSlug(branch) || 'session';
-  const dir = path.join(SESSIONS, ymd(now).slice(0, 7));
+  const dir = path.join(SESSIONS, ymd(now).slice(0, 7), ymd(now).slice(8, 10));
   fs.mkdirSync(dir, { recursive: true });
-  let file = path.join(dir, `${ymd(now)}_${hm(now).replace(':', '')}_${slug}.md`);
+  const stamp = hm(now).replace(':', '');
+  let file = path.join(dir, `${stamp}_${slug}.md`);
   for (let n = 2; fs.existsSync(file); n += 1) {
-    file = path.join(dir, `${ymd(now)}_${hm(now).replace(':', '')}_${slug}-${n}.md`);
+    file = path.join(dir, `${stamp}_${slug}-${n}.md`);
   }
   const fm = {
     session_id: sessionId,
@@ -135,6 +144,7 @@ function createLog(sessionId, now = new Date()) {
     branch: branch || 'unknown',
     area: '',
     tags: '[]',
+    issues: '[]',
     summary: '',
     turns: '0',
     stepped_in: 'false',
@@ -181,6 +191,25 @@ function readTranscript(p) {
     try { out.push(JSON.parse(line)); } catch { /* skip partial line */ }
   }
   return out;
+}
+
+/**
+ * The session's name as Claude Code shows it in the tab: a title Robert set by hand
+ * (`custom-title`) wins over the generated one (`ai-title`); the latest of each wins.
+ */
+function sessionTitle(entries) {
+  let ai = '';
+  let custom = '';
+  for (const e of entries) {
+    if (e.type === 'ai-title' && e.aiTitle) ai = e.aiTitle;
+    if (e.type === 'custom-title' && e.customTitle) custom = e.customTitle;
+  }
+  return (custom || ai).trim();
+}
+
+/** "Rune knight subclass QA" → "rune-knight-subclass-qa". */
+function titleSlug(title) {
+  return (title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60).replace(/-$/, '');
 }
 
 function blocks(entry) {
@@ -282,6 +311,33 @@ function cell(s) {
   return (s || '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
 }
 
+/** `[fighter, rune-knight]` → ['fighter', 'rune-knight']. */
+function parseTags(s) {
+  return (s || '').replace(/^\[|\]$/g, '').split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+}
+
+const TAGS_FILE = path.join(SESSIONS, 'TAGS.md');
+
+/**
+ * The controlled vocabulary in docs/sessions/TAGS.md: every "- `tag`" line, grouped by its "## "
+ * section. Returns { all, issues, subjects } — issues from the "Issues" section, subjects (the
+ * class/subclass tags issues are counted against) from "Subject — classes and subclasses".
+ */
+function readVocabulary() {
+  const out = { all: new Set(), issues: [], subjects: [] };
+  if (!fs.existsSync(TAGS_FILE)) return out;
+  let section = '';
+  for (const line of fs.readFileSync(TAGS_FILE, 'utf8').split(/\r?\n/)) {
+    if (line.startsWith('## ')) { section = line.slice(3).toLowerCase(); continue; }
+    const m = line.match(/^- `([a-z0-9-]+)`/);
+    if (!m) continue;
+    out.all.add(m[1]);
+    if (section.startsWith('issues')) out.issues.push(m[1]);
+    if (section.includes('classes and subclasses')) out.subjects.push(m[1]);
+  }
+  return out;
+}
+
 function regenerateIndex() {
   const rows = [];
   for (const file of allLogs()) {
@@ -295,8 +351,10 @@ function regenerateIndex() {
       date: fm.date,
       time: fm.started,
       link: path.relative(SESSIONS, file).replace(/\\/g, '/'),
-      title: fm.title || path.basename(file, '.md').split('_').slice(2).join('_'),
+      title: fm.title || path.basename(file, '.md').split('_').slice(1).join('_'),
       area: fm.area || '—',
+      tags: parseTags(fm.tags),
+      issues: parseTags(fm.issues),
       summary: fm.summary || truncate(firstPrompt, 120),
       turns: fm.turns,
       flag: fm.stepped_in === 'true' ? '⚠' : '',
@@ -309,19 +367,63 @@ function regenerateIndex() {
     '<!-- Regenerated after every response by .claude/hooks/session-log.mjs from each log\'s frontmatter. Do not edit by hand: edit the log\'s frontmatter (or run /log) instead. -->',
     '',
     `Areas: ${AREAS.map((a) => `\`${a}\``).join(' · ')}. ⚠ = Robert interrupted or took over at least once.`,
+    'To find every session on a subject, use the **Tags** index at the bottom, or grep the logs\' frontmatter: `grep -rl "tags:.*rune-knight" docs/sessions`. Tag vocabulary: [TAGS.md](TAGS.md).',
     '',
   ];
   let month = '';
   for (const r of rows) {
     if (r.date.slice(0, 7) !== month) {
       month = r.date.slice(0, 7);
-      lines.push(`## ${month}`, '', '| Date | Start | Session | Area | Summary | Turns | ⚠ |', '|---|---|---|---|---|---|---|');
+      lines.push(`## ${month}`, '', '| Date | Start | Session | Area | Tags | Issues | Summary | Turns | ⚠ |', '|---|---|---|---|---|---|---|---|---|');
     }
-    lines.push(`| ${r.date} | ${r.time} | [${cell(r.title)}](${r.link}) | ${cell(r.area)} | ${cell(r.summary)} | ${r.turns} | ${r.flag} |`);
+    lines.push(`| ${r.date} | ${r.time} | [${cell(r.title)}](${r.link}) | ${cell(r.area)} | ${cell(r.tags.join(', '))} | ${cell(r.issues.join(', '))} | ${cell(r.summary)} | ${r.turns} | ${r.flag} |`);
     const next = rows[rows.indexOf(r) + 1];
     if (!next || next.date.slice(0, 7) !== month) lines.push('');
   }
   if (!rows.length) lines.push('_No sessions logged yet._', '');
+
+  // Tag index: tag → every session carrying it (newest first), so a search starts here.
+  const byTag = new Map();
+  for (const r of rows) for (const t of r.tags) byTag.set(t, [...(byTag.get(t) || []), r]);
+  if (byTag.size) {
+    lines.push('## Tags', '');
+    for (const t of [...byTag.keys()].sort()) {
+      const links = byTag.get(t).map((r) => `[${r.date} ${cell(r.title)}](${r.link})`).join(' · ');
+      lines.push(`- **${t}** — ${links}`);
+    }
+    lines.push('');
+  }
+
+  // Issues: how often each problem recurs, overall and per class/subclass — the retro's metric.
+  const vocab = readVocabulary();
+  const withIssues = rows.filter((r) => r.issues.length);
+  if (withIssues.length) {
+    const issueNames = [...new Set([...vocab.issues, ...withIssues.flatMap((r) => r.issues)])]
+      .filter((i) => withIssues.some((r) => r.issues.includes(i)));
+    lines.push('## Issues', '');
+    for (const i of issueNames) {
+      const hits = withIssues.filter((r) => r.issues.includes(i));
+      lines.push(`- **${i}** (${hits.length}) — ${hits.map((r) => `[${r.date} ${cell(r.title)}](${r.link})`).join(' · ')}`);
+    }
+    lines.push('');
+    const subjects = vocab.subjects.filter((s) => withIssues.some((r) => r.tags.includes(s)));
+    if (subjects.length) {
+      lines.push('### Issues by class / subclass', '', `| Subject | ${issueNames.join(' | ')} |`, `|---|${issueNames.map(() => '---').join('|')}|`);
+      for (const s of subjects) {
+        const counts = issueNames.map((i) => withIssues.filter((r) => r.tags.includes(s) && r.issues.includes(i)).length || '');
+        lines.push(`| ${s} | ${counts.join(' | ')} |`);
+      }
+      lines.push('');
+    }
+  }
+
+  // Drift: tags used in a log that TAGS.md doesn't list. Add them there (or fix the log).
+  if (vocab.all.size) {
+    const unknown = [...new Set(rows.flatMap((r) => [...r.tags, ...r.issues]))].filter((t) => !vocab.all.has(t)).sort();
+    if (unknown.length) {
+      lines.push('## Tags not in TAGS.md', '', `${unknown.map((t) => `\`${t}\``).join(', ')} — add them to [TAGS.md](TAGS.md) or correct the log.`, '');
+    }
+  }
   fs.mkdirSync(SESSIONS, { recursive: true });
   fs.writeFileSync(INDEX, lines.join('\n'));
 }
@@ -347,7 +449,8 @@ function onStop(input) {
   let file = findLog(id) || createLog(id); // SessionStart may not have run (e.g. hook added mid-session)
   const { fm, body } = parseLog(fs.readFileSync(file, 'utf8'));
 
-  const turns = newTurns(readTranscript(input.transcript_path), fm.last_uuid);
+  const entries = readTranscript(input.transcript_path);
+  const turns = newTurns(entries, fm.last_uuid);
   let newBody = body;
   if (turns.length) {
     if (!newBody.includes(TURN_LOG_HEADING)) newBody = `${newBody.trimEnd()}\n\n${TURN_LOG_HEADING}\n\n`;
@@ -358,14 +461,22 @@ function onStop(input) {
     if (turns.some((t) => t.interrupted)) fm.stepped_in = 'true';
   }
 
-  // Branch: record it, and give the file its real name once we're on a feature branch.
   const branch = currentBranch();
   if (branch) fm.branch = branch;
+  // The session's own name (the tab title) names the file and, until /log writes one, the title.
+  const name = sessionTitle(entries);
+  if (name && !fm.title) fm.title = name;
   fs.writeFileSync(file, serializeLog(fm, newBody.endsWith('\n') ? newBody : `${newBody}\n`));
-  const slug = branchSlug(branch);
-  if (slug && path.basename(file).endsWith('_session.md')) {
-    const renamed = file.replace(/_session\.md$/, `_${slug}.md`);
-    if (!fs.existsSync(renamed)) { fs.renameSync(file, renamed); file = renamed; }
+
+  // File name: HHMM_<session name>, falling back to the branch. Re-checked every turn, because
+  // the title is generated after the first prompt and may change later (or be renamed by Robert).
+  const slug = titleSlug(name) || branchSlug(branch);
+  const stamp = path.basename(file).split('_')[0];
+  if (slug && path.basename(file, '.md') !== `${stamp}_${slug}`) {
+    let renamed = path.join(path.dirname(file), `${stamp}_${slug}.md`);
+    for (let n = 2; fs.existsSync(renamed); n += 1) renamed = path.join(path.dirname(file), `${stamp}_${slug}-${n}.md`);
+    fs.renameSync(file, renamed);
+    file = renamed;
   }
 
   // Keep the full transcript next to the log (gitignored).
