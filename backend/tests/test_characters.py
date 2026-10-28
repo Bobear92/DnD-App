@@ -1549,6 +1549,46 @@ class TestInitiativeRest:
         )
         assert self._data(client, char_id, h_gm)["fighting_spirit_used"] == 3
 
+    # Strength Before Death (L18): once per long rest, level-gated so a lower Samurai is never
+    # promised it.
+    def _sbd_samurai(self, client, headers, campaign_id, *, level):
+        resp = client.post("/api/characters", json={
+            "name": "Rin", "race": "Human", "char_class": "Fighter", "level": level,
+            "campaign_id": campaign_id,
+            "character_data": {"subclass": "Samurai", "strength_before_death_used": 1},
+        }, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    def test_strength_before_death_resets_on_a_long_rest_with_a_named_change(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._sbd_samurai(client, h_gm, campaign_id, level=18)
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        assert self._data(client, char_id, h_gm)["strength_before_death_used"] == 0
+        assert "Strength Before Death recovered" in str(resp.json())
+
+    def test_strength_before_death_survives_a_short_rest(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._sbd_samurai(client, h_gm, campaign_id, level=18)
+        client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "short", "character_ids": [char_id]}, headers=h_gm,
+        )
+        assert self._data(client, char_id, h_gm)["strength_before_death_used"] == 1
+
+    def test_strength_before_death_not_promised_below_level_18(self, client):
+        h_gm, _, campaign_id = self._setup(client)
+        char_id = self._sbd_samurai(client, h_gm, campaign_id, level=17)
+        resp = client.post(
+            f"/api/characters/campaign/{campaign_id}/rest",
+            json={"rest_type": "long", "character_ids": [char_id]}, headers=h_gm,
+        )
+        assert "Strength Before Death" not in str(resp.json())
+        assert self._data(client, char_id, h_gm)["fighting_spirit_used"] == 0
+
     # ── Cavalier: Unwavering Mark + Warding Maneuver ─────────────────────────
     # Both hold ability-modifier uses, but the reset only zeroes the spent count — the pool
     # SIZE stays a frontend concern, so these assert the counters and nothing about totals.

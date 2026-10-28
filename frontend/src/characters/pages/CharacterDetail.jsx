@@ -40,6 +40,8 @@ import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from
 import { computePassiveScores } from '@/characters/components/skills/passiveSkills';
 import { getSkillAdvantageNames, skillAdvantageSourcesFor, skillAdvantageLegend } from '@/characters/components/skills/skillAdvantage';
 import { skillBreakdown, saveBreakdown, SKILL_MAP, formatBonus } from '@/characters/components/skills/skillMath';
+import { CLASS_SAVE_PROFS, featureSaveProficiencySource } from '@/characters/components/skills/saveProficiencies';
+import { getSkillBonuses, skillBonusParts } from '@/characters/components/skills/skillBonuses';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
 import SaveFeaturesPanel from '@/characters/components/skills/SaveFeaturesPanel';
 import { saveAdvantageSourcesFor, conditionalSaveBonuses } from '@/characters/components/skills/saveFeatures';
@@ -114,20 +116,6 @@ function abilityListLabel(abilities = []) {
   return `${abbrevs.slice(0, -1).join(', ')} & ${abbrevs[abbrevs.length - 1]}`;
 }
 
-const CLASS_SAVE_PROFS = {
-  Barbarian: ['str_save_prof', 'con_save_prof'],
-  Bard:      ['dex_save_prof', 'cha_save_prof'],
-  Cleric:    ['wis_save_prof', 'cha_save_prof'],
-  Druid:     ['int_save_prof', 'wis_save_prof'],
-  Fighter:   ['str_save_prof', 'con_save_prof'],
-  Monk:      ['str_save_prof', 'dex_save_prof'],
-  Paladin:   ['wis_save_prof', 'cha_save_prof'],
-  Ranger:    ['str_save_prof', 'dex_save_prof'],
-  Rogue:     ['dex_save_prof', 'int_save_prof'],
-  Sorcerer:  ['con_save_prof', 'cha_save_prof'],
-  Warlock:   ['wis_save_prof', 'cha_save_prof'],
-  Wizard:    ['int_save_prof', 'wis_save_prof'],
-};
 
 
 const XP_THRESHOLDS = [0, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000,
@@ -1660,7 +1648,12 @@ export default function CharacterDetail() {
                     <div className="grid grid-cols-3 gap-1.5">
                       {ABILITY_LABELS.map(({ key, abbrev, save }) => {
                         const featSaves = getFeatSaveProficiencies(classSection.draft?.feats ?? character.character_data?.feats ?? []);
-                        const isProficient = (savingThrows.draft?.[save] ?? false) || featSaves.includes(key);
+                        // A FEATURE can grant the proficiency too (Samurai Elegant Courtier →
+                        // WIS). Derived, never written into the stored flag, so the checkbox
+                        // still means "set by hand" and the breakdown names the feature.
+                        const featureProfSource = featureSaveProficiencySource(key, saveAdvCtx);
+                        const isProficient = (savingThrows.draft?.[save] ?? false) || featSaves.includes(key)
+                          || Boolean(featureProfSource);
                         const armorDisadvantage = Boolean(nonProfArmor) && (key === 'strength' || key === 'dexterity');
                         // A feature can make you roll this save twice without changing its number
                         // (Giant's Might while it is switched on). Tagged on the row like the skill
@@ -1686,6 +1679,7 @@ export default function CharacterDetail() {
                             ...condBonuses.map((b) => b.part),
                           ],
                           notes: [
+                            featureProfSource && `Proficient — ${featureProfSource}`,
                             advSources.length > 0
                               && `Advantage — ${advSources.map((f) => f.name).join(', ')}`,
                             armorDisadvantage && `Disadvantage — wearing ${nonProfArmor.name} without proficiency`,
@@ -2530,8 +2524,15 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
   // A running effect that adds a flat bonus to an ability's checks (Channel Rune: Frost). Named
   // in the legend because the tag is a bare number — the reader has to be able to attribute it.
   const effectCheckSources = activeEffectCheckSources(skillAdvCtx);
-  if (effectCheckSources.length > 0) {
-    legendParts.push(`Indigo total = includes ${effectCheckSources.map((s) => s.source).join(', ')}`);
+  // A permanent feature bonus to one skill (Samurai Elegant Courtier → Persuasion) is marked the
+  // same way: the coloured total means "includes something named here", whatever the source.
+  const skillBonusCtx = { ...skillAdvCtx, scores: identityDraft };
+  const indigoSources = [
+    ...effectCheckSources.map((s) => s.source),
+    ...getSkillBonuses(skillBonusCtx).filter((b) => b.amount !== 0).map((b) => b.source),
+  ];
+  if (indigoSources.length > 0) {
+    legendParts.push(`Indigo total = includes ${[...new Set(indigoSources)].join(', ')}`);
   }
   // Worn non-proficient armor: disadvantage on every STR/DEX ability check.
   if (nonProfArmorName) legendParts.push(`"dis" = disadvantage (wearing ${nonProfArmorName} without proficiency)`);
@@ -2557,7 +2558,9 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
       ability,
       isProf,
       isExpert,
-      effectBonus: activeEffectCheckBonus(ability, skillAdvCtx),
+      // Anything that colours the total: a running effect's bonus or a feature's flat bonus.
+      effectBonus: activeEffectCheckBonus(ability, skillAdvCtx)
+        + skillBonusParts(skill, skillBonusCtx).reduce((sum, p) => sum + Math.abs(p.value), 0),
       isFromBg: bgGranted.includes(skill),
       isFromRace: raceGranted.includes(skill),
       isFromFeat: featGranted.includes(skill),
@@ -2569,7 +2572,7 @@ function SkillsDisplay({ identityDraft, classData, pb, charClass, level, edition
         // A running effect that adds a flat bonus to this ability's CHECKS raises every skill
         // that uses the ability (Channel Rune: Frost → Strength → Athletics). The displayed
         // bonus IS breakdown.total, so switching the effect on moves the number.
-        extras: activeEffectCheckParts(ability, skillAdvCtx),
+        extras: [...activeEffectCheckParts(ability, skillAdvCtx), ...skillBonusParts(skill, skillBonusCtx)],
         ability,
         abilityScore: identityDraft[ability],
         pb,

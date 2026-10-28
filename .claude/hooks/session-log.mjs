@@ -1,8 +1,12 @@
 /**
  * Session log — one markdown file per Claude Code session, under docs/sessions/YYYY-MM/DD/.
  *
- *   node session-log.mjs start   (SessionStart hook) — create this session's log file
- *   node session-log.mjs stop    (Stop hook)         — append every new turn, refresh INDEX.md
+ *   node session-log.mjs start   (SessionStart hook) — delete every zero-turn log, refresh INDEX.md
+ *   node session-log.mjs stop    (Stop hook)         — create the log on the first real turn, then
+ *                                                       append every new turn, refresh INDEX.md
+ *
+ * A log exists only for a session that did work: nothing is written until a turn has happened, so
+ * a session opened and never prompted leaves no file (it used to leave an empty HHMM_session.md).
  *
  * Why a hook and not a CLAUDE.md instruction: "after every response, update the log" is exactly
  * the kind of rule that gets skipped (see feature-branch-guard.mjs). A hook runs every time and
@@ -21,7 +25,7 @@
  * File naming: YYYY-MM/DD/HHMM_<session-name>.md (the date is in the directories). The name is
  * the session's title as the Claude Code tab shows it (the transcript's custom-title / ai-title),
  * re-checked every turn; before a title exists it falls back to the branch slug, and before that
- * to "session" (a session opens on main, before its feature branch or title exists). The branch
+ * to "session" (rare now that the file is only created after the first turn). The branch
  * alone can't name a log: two sessions on one branch would collide.
  *
  * The title also fills the `title:` frontmatter until /log writes a better one.
@@ -430,15 +434,17 @@ function regenerateIndex() {
 
 // ---------- modes ----------
 
+// A log exists ONLY for a session that actually did work. Start creates nothing: a session that is
+// opened and never prompted (a new chat tab, a /clear) used to leave an empty `HHMM_session.md`
+// placeholder behind. The log is created on the first Stop that has a real turn, stamped with the
+// transcript's first timestamp, and renamed to its title in that same call.
 function onStart(input) {
-  const id = input.session_id;
-  if (!id) return;
-  if (!findLog(id)) createLog(id);
-  // Tidy: remove logs left with zero turns (opened and closed without a prompt) older than 12h.
-  const cutoff = Date.now() - 12 * 3600 * 1000;
+  if (!input.session_id) return;
+  // Tidy: delete every log with zero turns, at once. Safe with no age cutoff, because onStop
+  // rebuilds a log from the transcript if that session is ever prompted after all.
   for (const file of allLogs()) {
     const { fm } = parseLog(fs.readFileSync(file, 'utf8'));
-    if (fm.session_id !== id && Number(fm.turns || 0) === 0 && fs.statSync(file).mtimeMs < cutoff) fs.unlinkSync(file);
+    if (Number(fm.turns || 0) === 0) fs.unlinkSync(file);
   }
   regenerateIndex();
 }
@@ -446,10 +452,16 @@ function onStart(input) {
 function onStop(input) {
   const id = input.session_id;
   if (!id) return;
-  let file = findLog(id) || createLog(id); // SessionStart may not have run (e.g. hook added mid-session)
+  const entries = readTranscript(input.transcript_path);
+  let file = findLog(id);
+  if (!file) {
+    // No log yet: only create one once there is a turn to record.
+    if (!newTurns(entries, '').length) return;
+    const first = entries.find((e) => e.timestamp);
+    file = createLog(id, first ? new Date(first.timestamp) : new Date());
+  }
   const { fm, body } = parseLog(fs.readFileSync(file, 'utf8'));
 
-  const entries = readTranscript(input.transcript_path);
   const turns = newTurns(entries, fm.last_uuid);
   let newBody = body;
   if (turns.length) {

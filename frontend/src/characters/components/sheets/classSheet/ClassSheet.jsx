@@ -270,7 +270,7 @@ export default function ClassSheet({
   // read-only here, with an owed slot (a character at/past the grant level with fewer picks than
   // its count — e.g. one who leveled before this feature existed) fillable inline.
   const subclassLevelChoiceBlock = !creation && data.subclass
-    ? getEarnedSubclassGrants(config.className, config.edition, data.subclass, level)
+    ? getEarnedSubclassGrants(config.className, config.edition, data.subclass, level, data)
         .filter((g) => (g.surface ?? 'sheet') === 'sheet')
         .map((g) => {
         const held = data[g.storeField] ?? [];

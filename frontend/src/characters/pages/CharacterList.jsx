@@ -89,7 +89,10 @@ function getRestSummary(cls, edition, level, restType, characterData = {}) {
     if (characterData?.subclass === 'Battle Master') items.push('Superiority Dice');
     if (characterData?.subclass === 'Arcane Archer') items.push('Arcane Shot');
     if (characterData?.subclass === 'Eldritch Knight') items.push('All spell slots');
-    if (characterData?.subclass === 'Samurai') items.push('Fighting Spirit');
+    if (characterData?.subclass === 'Samurai') {
+      items.push('Fighting Spirit');
+      if (level >= 18) items.push('Strength Before Death');
+    }
     if (characterData?.subclass === 'Cavalier') {
       items.push('Unwavering Mark');
       if (level >= 7) items.push('Warding Maneuver');

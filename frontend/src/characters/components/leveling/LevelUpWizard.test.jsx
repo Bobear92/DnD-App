@@ -1576,6 +1576,41 @@ describe('LevelUpWizard', () => {
     });
   });
 
+  // Elegant Courtier grants Wisdom-save proficiency; ONLY a Samurai who already had it picks
+  // Intelligence or Charisma instead. The wizard must evaluate that condition against the
+  // character's current data, or it would ask every Samurai a question RAW never asks.
+  describe('subclass grants — Samurai Elegant Courtier fallback (conditional)', () => {
+    const SAMURAI_L6 = (cd = {}) => ({
+      id: 41, name: 'Kenji', char_class: 'Fighter', level: 6, constitution: 14,
+      character_data: { hp_max: 50, subclass: 'Samurai', ...cd },
+    });
+    const RESILIENT_WIS = [{
+      name: 'Resilient', choices: { ability: 'wisdom' },
+      effects: [{ kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true }],
+    }];
+
+    it('does not ask a Samurai who is gaining Wisdom-save proficiency fresh', () => {
+      render(<LevelUpWizard character={SAMURAI_L6()} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      chooseTakeAverage();
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → (no grant step)
+      expect(screen.queryByTestId('subclass-grant-elegant_courtier_save')).not.toBeInTheDocument();
+    });
+
+    it('asks one who already had it via Resilient, and stores the pick', async () => {
+      const onComplete = vi.fn().mockResolvedValue(undefined);
+      render(<LevelUpWizard character={SAMURAI_L6({ feats: RESILIENT_WIS })} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);
+      chooseTakeAverage();
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → subclass-grants
+      expect(screen.getByTestId('subclass-grant-elegant_courtier_save')).toBeInTheDocument();
+      fireEvent.click(screen.getByText('Charisma'));
+      fireEvent.click(screen.getByTestId('wizard-next'));
+      fireEvent.click(screen.getByRole('button', { name: /Confirm Level Up/i }));
+      await waitFor(() => expect(onComplete).toHaveBeenCalledWith(7, expect.objectContaining({
+        subclass_save_proficiencies: ['Charisma'],
+      })));
+    });
+  });
+
   describe('level choices — Warlock Eldritch Invocations', () => {
     // Warlock L1→2 learns its first 2 invocations (5e: none before L2). Known caster + L1 subclass.
     const WARLOCK_L1 = {

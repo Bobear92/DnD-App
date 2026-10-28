@@ -3437,3 +3437,62 @@ describe('buildActionEconomy — Grappler (both editions)', () => {
     expect(ae.action.find((e) => e.name === 'Pin: Restrain')).toBeUndefined();
   });
 });
+
+describe('buildActionEconomy — Samurai (Fighter subclass)', () => {
+  const samArgs = (level, characterData = {}, extra = {}) => ({
+    charClass: 'Fighter', subclass: 'Samurai', level, edition: '5e', characterData,
+    inventory: [],
+    attacks: [{
+      uid: 'w1', name: 'Longsword', toHit: '+5', damage: '1d8 + 3 slashing', proficient: true,
+      damageBreakdown: [{ label: 'weapon die', value: '1d8' }, { label: 'STR', value: 3 }],
+    }],
+    scores: { strength: 16 }, spellIndex: {},
+    ...extra,
+  });
+  const ON = { active_effects: ['fighting_spirit'] };
+  const fightingSpirit = (lvl, cd) => buildActionEconomy(samArgs(lvl, cd)).bonus.find((e) => e.name === 'Fighting Spirit');
+  const weaponRows = (lvl, cd, extra) => buildActionEconomy(samArgs(lvl, cd, extra)).action.filter((e) => e.source === 'Weapon');
+
+  it('Fighting Spirit is a bonus-action ACTIVE EFFECT on its long-rest pool, stating the temp HP', () => {
+    const e = fightingSpirit(3);
+    expect(e).toMatchObject({ cost: 'bonus action', resourceKey: 'fighting_spirit_used', activeEffect: 'fighting_spirit', effectLevel: 3 });
+    expect(e.detail).toMatch(/gain 5 temporary hit points/);
+    expect(fightingSpirit(15).detail).toMatch(/gain 15 temporary hit points/);
+  });
+
+  it('mentions Tireless Spirit from level 10 only', () => {
+    expect(fightingSpirit(9).detail).not.toMatch(/Tireless Spirit/);
+    expect(fightingSpirit(10).detail).toMatch(/Tireless Spirit/);
+  });
+
+  it('every weapon attack card shows advantage while Fighting Spirit runs — and only then', () => {
+    expect(weaponRows(3, {}).every((r) => !r.advantage)).toBe(true);
+    expect(weaponRows(3, ON).map((r) => r.advantage)).toEqual([['Fighting Spirit']]);
+  });
+
+  it('an unarmed strike is a weapon attack in 5e, so it gets the advantage too', () => {
+    expect(weaponRows(3, ON, { attacks: [] }).map((r) => [r.name, r.advantage]))
+      .toEqual([['Unarmed Strike', ['Fighting Spirit']]]);
+  });
+
+  it('Rapid Strike rides on the weapon cards from level 15, and says so when advantage is confirmed', () => {
+    const rider = (lvl, cd) => (weaponRows(lvl, cd)[0].riders ?? []).find((r) => r.source === 'Rapid Strike');
+    expect(rider(14, {})).toBeUndefined();
+    expect(rider(15, {}).text).toMatch(/forgo it on that roll/);
+    expect(rider(15, ON).text).toMatch(/You have advantage now \(Fighting Spirit\)/);
+    expect(rider(15, {}).text).toMatch(/Once per turn/);
+  });
+
+  it('Strength Before Death is a long-rest REACTION from level 18', () => {
+    const sbd = (lvl) => buildActionEconomy(samArgs(lvl)).reaction.find((e) => e.name === 'Strength Before Death');
+    expect(sbd(17)).toBeUndefined();
+    expect(sbd(18)).toMatchObject({ cost: 'reaction', resourceKey: 'strength_before_death_used' });
+    expect(sbd(18).detail).toMatch(/extra turn/);
+  });
+
+  it('none of it reaches another Fighter subclass', () => {
+    const ae = buildActionEconomy({ ...samArgs(18, ON), subclass: 'Champion' });
+    expect(ae.bonus.find((e) => e.name === 'Fighting Spirit')).toBeUndefined();
+    expect(ae.action.filter((e) => e.source === 'Weapon').every((r) => !r.advantage)).toBe(true);
+  });
+});

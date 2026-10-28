@@ -186,7 +186,47 @@ const CHANNEL_RUNE_STORM = {
   grants: () => ({}),
 };
 
-export const ACTIVE_EFFECTS = [GIANTS_MIGHT, CHANNEL_RUNE_FROST, CHANNEL_RUNE_HILL, CHANNEL_RUNE_STORM];
+/**
+ * Samurai "Fighting Spirit" (Fighter, L3, 5e only — the 2024 PHB has no Samurai).
+ *
+ * A bonus action that grants advantage on weapon attack rolls until the end of the turn AND a
+ * burst of temporary hit points. Both halves land on the sheet:
+ *   - `attackAdvantage` → an "advantage" tag on every weapon attack card (actionEconomyData.js),
+ *     which is also what Rapid Strike reads to say "you have advantage — forgo it for an extra
+ *     attack"
+ *   - `onStart` → the temp HP are WRITTEN into `temp_hp` in the same patch that spends the
+ *     charge, so they are real rather than a number the player copies over by hand. Temporary
+ *     hit points never stack: the new pool replaces the old only when it is larger.
+ *
+ * The shortest-lived effect in the table: "until the end of the current turn". Nothing tracks
+ * turns, so — like every other effect here — it runs until the player clicks End.
+ */
+export function fightingSpiritTempHp(level = 1) {
+  const lvl = Number(level) || 1;
+  if (lvl >= 15) return 15;
+  if (lvl >= 10) return 10;
+  return 5;
+}
+
+const FIGHTING_SPIRIT = {
+  key: 'fighting_spirit',
+  label: 'Fighting Spirit',
+  charClass: 'Fighter',
+  subclass: 'Samurai',
+  edition: '5e',
+  minLevel: 3,
+  resourceKey: 'fighting_spirit_used',
+  duration: 'until the end of your turn',
+  summary: (level) => `Advantage on weapon attack rolls until the end of your turn · ${fightingSpiritTempHp(level)} temporary hit points`,
+  grants: () => ({ attackAdvantage: true }),
+  onStart: (level, characterData) => ({
+    temp_hp: Math.max(Number(characterData?.temp_hp) || 0, fightingSpiritTempHp(level)),
+  }),
+};
+
+export const ACTIVE_EFFECTS = [
+  GIANTS_MIGHT, CHANNEL_RUNE_FROST, CHANNEL_RUNE_HILL, CHANNEL_RUNE_STORM, FIGHTING_SPIRIT,
+];
 
 /** The effect definitions this character has earned (whether or not they are switched on). */
 export function getActiveEffectDefs({
@@ -244,11 +284,21 @@ export function isEffectActive(characterData, key) {
   return activeEffectKeys(characterData).includes(key);
 }
 
-/** The patch that switches an effect on or off (callers persist it like any other change). */
-export function toggleEffectPatch(characterData, key, on) {
+/**
+ * The patch that switches an effect on or off (callers persist it like any other change).
+ *
+ * Switching ON also merges the effect's `onStart(level, characterData)` patch, if it has one —
+ * Fighting Spirit's temporary hit points. It lives HERE, not in a caller, because there are two
+ * spend points (the Action Economy card and the rest tracker) and both already route through this
+ * function: a start-up write in only one of them is the single-patch trap all over again. Callers
+ * pass `{level}` so a scaling start-up value is right.
+ */
+export function toggleEffectPatch(characterData, key, on, { level = 1 } = {}) {
   const current = activeEffectKeys(characterData);
   const next = on ? [...new Set([...current, key])] : current.filter((k) => k !== key);
-  return { active_effects: next };
+  const def = on && !current.includes(key) ? ACTIVE_EFFECTS.find((e) => e.key === key) : null;
+  const startPatch = def?.onStart ? def.onStart(Number(level) || 1, characterData ?? {}) : {};
+  return { ...startPatch, active_effects: next };
 }
 
 /**
@@ -263,6 +313,9 @@ export function activeEffectGrants({ characterData = {}, charClass, subclass, le
   const out = {
     size: null, advantageAbilities: [], advantageSaves: [], reachBonus: 0, reachSource: null,
     checkBonuses: {}, saveBonuses: {}, resistances: [],
+    // The effects granting advantage on weapon attack rolls, by name (Fighting Spirit) — a list
+    // rather than a flag so the attack card can say WHICH effect it comes from.
+    attackAdvantage: [],
     sources: on.map((e) => e.label),
   };
   for (const e of on) {
@@ -276,6 +329,7 @@ export function activeEffectGrants({ characterData = {}, charClass, subclass, le
       out.reachBonus = g.reachBonus;
       out.reachSource = g.reachSource ?? e.label;
     }
+    if (g.attackAdvantage) out.attackAdvantage.push(e.label);
     // Resistance is a boolean per damage type — two sources of it are still half damage.
     out.resistances = [...new Set([...out.resistances, ...(g.resistances ?? [])])];
     // Numeric bonuses SUM across effects: two differently-named features that both add to a

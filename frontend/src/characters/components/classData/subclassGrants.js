@@ -28,6 +28,11 @@
  *                                   // i.e. two destinations behind a single choice. Options that
  *                                   // don't name one fall back to the grant's storeField.
  *     heldFrom: (characterData, ctx) => string[],  // names already held → excluded (no doubling up)
+ *     offeredWhen?: (characterData, ctx) => boolean,
+ *                                   // a grant that exists only CONDITIONALLY. Samurai Elegant
+ *                                   // Courtier gives Wisdom-save proficiency, and only if you
+ *                                   // ALREADY have it do you pick Intelligence or Charisma instead.
+ *                                   // Omitted = always offered.
  *     surface: 'sheet' | 'banner' | 'skills' | 'spells',
  *                                   // where the CHOSEN value is shown afterward (default 'sheet').
  *                                   //   'sheet'  = a class-pool pick the ClassSheet renders in
@@ -51,6 +56,7 @@ import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects'
 import { FIGHTER_FIGHTING_STYLES_5E, FIGHTER_FIGHTING_STYLES_2024 } from '@/characters/components/classData/classChoicesData';
 import { FEAT_LANGUAGE_OPTIONS } from '@/characters/components/feats/featProficiencyData';
 import { SKILLS_BY_NAME } from '@/encyclopedia/data/skillsData';
+import { CLASS_SAVE_PROFS, CHOSEN_SAVE_FIELD, nonFeatureSaveProficiencies } from '@/characters/components/skills/saveProficiencies';
 
 const lc = (s) => (s || '').toLowerCase();
 const dedup = (arr) => [...new Set((arr || []).filter(Boolean))];
@@ -95,6 +101,18 @@ const skillOrLanguage = (skillNames) => [
 // Held across BOTH destinations, so a language you already speak and a skill you're already
 // proficient in are equally excluded from the one picker.
 const heldSkillsOrLanguages = (cd, ctx) => [...heldSkills(cd), ...heldLanguages(cd, ctx)];
+
+// Samurai Elegant Courtier's fallback: Wisdom-save proficiency, UNLESS you already have it, in
+// which case you pick Intelligence or Charisma. "Already" means from anything other than this
+// feature — the stored class/hand-set flags and feats (Resilient) — or the fallback would always
+// fire on the proficiency the feature itself grants.
+const wisdomSaveHeldElsewhere = (cd, { charClass } = {}) =>
+  nonFeatureSaveProficiencies(cd, { classSaves: CLASS_SAVE_PROFS[charClass] ?? [] }).includes('wisdom');
+const heldSaveNames = (cd, { charClass } = {}) => [
+  ...nonFeatureSaveProficiencies(cd, { classSaves: CLASS_SAVE_PROFS[charClass] ?? [] })
+    .map((a) => a[0].toUpperCase() + a.slice(1)),
+  ...(cd[CHOSEN_SAVE_FIELD] || []),
+];
 
 // A Battle Master Student of War grant is identical in both editions.
 const studentOfWar = {
@@ -151,6 +169,29 @@ export const SUBCLASS_GRANTS = {
           surface: 'skills',
         },
       ],
+      // Samurai is 5e-only (Xanathar's) — the 2024 PHB has no Samurai.
+      Samurai: [
+        {
+          level: 3, key: 'samurai_bonus_proficiency', label: 'Bonus Proficiency — Skill or Language',
+          count: 1, storeField: 'skill_proficiencies',
+          options: skillOrLanguage(['History', 'Insight', 'Performance', 'Persuasion']),
+          heldFrom: heldSkillsOrLanguages,
+          surface: 'skills',
+        },
+        {
+          level: 7, key: 'elegant_courtier_save', label: 'Elegant Courtier — Saving Throw',
+          count: 1, storeField: CHOSEN_SAVE_FIELD,
+          options: [
+            { value: 'Intelligence', description: 'You already have Wisdom-save proficiency, so Elegant Courtier grants proficiency in Intelligence saving throws instead.' },
+            { value: 'Charisma', description: 'You already have Wisdom-save proficiency, so Elegant Courtier grants proficiency in Charisma saving throws instead.' },
+          ],
+          heldFrom: heldSaveNames,
+          offeredWhen: wisdomSaveHeldElsewhere,
+          // Shown on the sheet as well as in the saves grid: the sheet block is where an owed
+          // pick (a Samurai who took Resilient WIS before this existed) gets filled in.
+          surface: 'sheet',
+        },
+      ],
     },
     '5.5e': {
       'Battle Master': [studentOfWar],
@@ -166,7 +207,7 @@ export const SUBCLASS_GRANTS = {
 };
 
 // Re-exported held resolvers so future skill/language grants can reference them by name.
-export const HELD_RESOLVERS = { heldTools, heldSkills, heldLanguages, heldFightingStyles, heldCantrips };
+export const HELD_RESOLVERS = { heldTools, heldSkills, heldLanguages, heldFightingStyles, heldCantrips, heldSaveNames };
 
 function subclassGrantsFor(charClass, edition, subclass) {
   if (!subclass) return [];
@@ -174,13 +215,24 @@ function subclassGrantsFor(charClass, edition, subclass) {
 }
 
 /** Grants the subclass confers exactly at `level` (the level being gained) — drives the wizard step. */
-export function getSubclassGrants(charClass, edition, subclass, level) {
-  return subclassGrantsFor(charClass, edition, subclass).filter((g) => g.level === Number(level));
+export function getSubclassGrants(charClass, edition, subclass, level, characterData = null) {
+  return subclassGrantsFor(charClass, edition, subclass)
+    .filter((g) => g.level === Number(level))
+    .filter((g) => isOffered(g, characterData, charClass));
+}
+
+// A conditional grant (offeredWhen) is offered only when its condition holds. Callers that pass
+// no character data get every grant, which keeps the old behaviour for any older call site.
+function isOffered(grant, characterData, charClass) {
+  if (!grant.offeredWhen || !characterData) return true;
+  return grant.offeredWhen(characterData, { charClass });
 }
 
 /** Grants already earned by `level` (grant.level <= level) — drives the sheet display + owed-slot detection. */
-export function getEarnedSubclassGrants(charClass, edition, subclass, level) {
-  return subclassGrantsFor(charClass, edition, subclass).filter((g) => g.level <= Number(level));
+export function getEarnedSubclassGrants(charClass, edition, subclass, level, characterData = null) {
+  return subclassGrantsFor(charClass, edition, subclass)
+    .filter((g) => g.level <= Number(level))
+    .filter((g) => isOffered(g, characterData, charClass));
 }
 
 /** A grant's option objects minus any the character already holds (per the grant's heldFrom). */

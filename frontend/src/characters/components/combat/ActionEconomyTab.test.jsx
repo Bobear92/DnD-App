@@ -1654,3 +1654,36 @@ describe('ActionEconomyTab — Grappler Grapple Attack card', () => {
     expect(screen.queryByTestId('ae-origin-feat:grappler-attack')).not.toBeInTheDocument();
   });
 });
+
+describe('ActionEconomyTab — Samurai Fighting Spirit', () => {
+  const samurai = (props = {}) => renderTab({
+    subclass: 'Samurai', level: 10,
+    characterData: { subclass: 'Samurai' },
+    onChange: vi.fn(),
+    ...props,
+  });
+
+  it('starting it spends a use, switches it on AND writes the temp HP — one patch', () => {
+    const onChange = vi.fn();
+    samurai({ onChange });
+    goToTab('bonus');
+    fireEvent.click(screen.getByTestId('ae-effect-start-fighting_spirit'));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith({
+      temp_hp: 10, active_effects: ['fighting_spirit'], fighting_spirit_used: 1,
+    });
+  });
+
+  it('while it runs, the weapon attack card says it has advantage and names why', () => {
+    samurai({ characterData: { subclass: 'Samurai', active_effects: ['fighting_spirit'], fighting_spirit_used: 1 } });
+    goToTab('action');
+    const tag = screen.getAllByTestId(/^ae-advantage-/)[0];
+    expect(tag).toHaveTextContent('with advantage (Fighting Spirit)');
+  });
+
+  it('no advantage tag when it is off', () => {
+    samurai();
+    goToTab('action');
+    expect(screen.queryByTestId(/^ae-advantage-/)).not.toBeInTheDocument();
+  });
+});

@@ -4,7 +4,7 @@ import {
   toggleEffectPatch, activeEffectGrants, mightDie, sizeAt, activeEffectChoice,
   activeEffectCheckParts, activeEffectSaveParts, FROST_RUNE_BONUS,
   activeEffectCheckSources, activeEffectSaveSources,
-  activeEffectCheckBonus, activeEffectSaveBonus, activeEffectResistances,
+  activeEffectCheckBonus, activeEffectSaveBonus, activeEffectResistances, fightingSpiritTempHp,
 } from '@/characters/components/effects/activeEffects';
 import { RUNE_OPTIONS, channelRuneKey } from '@/characters/components/classData/runesData';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
@@ -375,5 +375,41 @@ describe("Rune Knight feature text — the grapple clause that isn't in the feat
         expect(def.resourceKey).toBe(channelRuneKey(rune));
       }
     });
+  });
+});
+
+describe('Samurai Fighting Spirit', () => {
+  const samurai = (level, extra = {}) => ({ charClass: 'Fighter', subclass: 'Samurai', level, edition: '5e', ...extra });
+
+  it('is earned from level 3, 5e only', () => {
+    expect(getActiveEffectDefs(samurai(3)).map((e) => e.key)).toEqual(['fighting_spirit']);
+    expect(getActiveEffectDefs(samurai(2))).toEqual([]);
+    expect(getActiveEffectDefs(samurai(10, { edition: '5.5e' }))).toEqual([]);
+  });
+
+  it('temporary hit points scale 5, then 10 at level 10, then 15 at level 15', () => {
+    expect([3, 9, 10, 14, 15, 20].map(fightingSpiritTempHp)).toEqual([5, 5, 10, 10, 15, 15]);
+  });
+
+  it('starting it WRITES the temp HP in the same patch that switches it on', () => {
+    expect(toggleEffectPatch({}, 'fighting_spirit', true, { level: 10 }))
+      .toEqual({ temp_hp: 10, active_effects: ['fighting_spirit'] });
+  });
+
+  it('temp HP never stack — a larger pool already held is kept', () => {
+    expect(toggleEffectPatch({ temp_hp: 12 }, 'fighting_spirit', true, { level: 3 }).temp_hp).toBe(12);
+    expect(toggleEffectPatch({ temp_hp: 2 }, 'fighting_spirit', true, { level: 3 }).temp_hp).toBe(5);
+  });
+
+  it('ending it leaves temp HP alone, and an effect with no onStart writes nothing extra', () => {
+    expect(toggleEffectPatch({ temp_hp: 5, active_effects: ['fighting_spirit'] }, 'fighting_spirit', false))
+      .toEqual({ active_effects: [] });
+    expect(toggleEffectPatch({}, 'giants_might', true, { level: 3 })).toEqual({ active_effects: ['giants_might'] });
+  });
+
+  it('grants attack advantage only while running, naming the effect', () => {
+    expect(activeEffectGrants({ ...samurai(3), characterData: {} }).attackAdvantage).toEqual([]);
+    expect(activeEffectGrants({ ...samurai(3), characterData: { active_effects: ['fighting_spirit'] } }).attackAdvantage)
+      .toEqual(['Fighting Spirit']);
   });
 });

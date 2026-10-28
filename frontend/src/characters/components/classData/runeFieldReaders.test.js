@@ -48,6 +48,7 @@ const GRANTS_READERS = {
   checkBonus: ['effects/activeEffects.js'],
   saveBonus: ['effects/activeEffects.js'],
   resistances: ['effects/activeEffects.js'],
+  attackAdvantage: ['effects/activeEffects.js', 'combat/actionEconomyData.js'],
 };
 
 const fieldsOf = (objs) => [...new Set(objs.flatMap((o) => Object.keys(o ?? {})))];

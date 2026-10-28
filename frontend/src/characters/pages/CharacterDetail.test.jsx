@@ -3689,3 +3689,64 @@ describe('CharacterDetail — Appearance (Narrative tab)', () => {
     expect(screen.queryByTestId('appearance-note-height-great-stature')).not.toBeInTheDocument();
   });
 });
+
+// Samurai Elegant Courtier (L7): a derived WIS-save proficiency and a +WIS bonus to Persuasion.
+// Both are numbers the sheet already prints, so the test is that the numbers MOVE and say why.
+describe('CharacterDetail — Samurai Elegant Courtier', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'player' } });
+    useAuth.mockReturnValue({ user: { id: 2, username: 'player' } });
+    characterService.getTimelineEvents.mockResolvedValue({ success: true, data: [] });
+    characterService.getCharacterNpcs.mockResolvedValue({ success: true, data: [] });
+    settingsService.getCalendar.mockResolvedValue(null);
+  });
+
+  function mockSamurai(level, extra = {}) {
+    characterService.getCharacterById.mockResolvedValue({
+      success: true,
+      data: {
+        ...BASE_CHARACTER, level, wisdom: 16, // WIS +3, CHA 8 → -1, PB +3
+        character_data: { ...BASE_CHARACTER.character_data, subclass: 'Samurai', ...extra },
+      },
+    });
+  }
+
+  it('makes the Wisdom save proficient and names the feature in its breakdown', async () => {
+    mockSamurai(7);
+    renderDetail();
+    await openStatsSubTab('abilities');
+    const wis = await screen.findByTestId('save-bonus-wisdom');
+    expect(wis).toHaveTextContent('+6'); // WIS +3 + PB +3
+    fireEvent.click(wis);
+    expect(screen.getByTestId('save-breakdown-wisdom')).toHaveTextContent(/Proficient — Elegant Courtier/);
+  });
+
+  it('adds the Wisdom modifier to Persuasion, colours the total, and names it in the legend', async () => {
+    mockSamurai(7);
+    renderDetail();
+    await openStatsSubTab('abilities');
+    const persuasion = await screen.findByTestId('skill-bonus-Persuasion');
+    expect(persuasion).toHaveTextContent('+2'); // CHA -1 + WIS +3
+    expect(persuasion.className).toMatch(/text-indigo-400/);
+    expect(screen.getByText(/Indigo total = includes Elegant Courtier/)).toBeInTheDocument();
+    // Deception is also Charisma and is untouched.
+    expect(screen.getByTestId('skill-bonus-Deception')).toHaveTextContent('−1');
+  });
+
+  it('a level-6 Samurai has neither', async () => {
+    mockSamurai(6);
+    renderDetail();
+    await openStatsSubTab('abilities');
+    expect(await screen.findByTestId('save-bonus-wisdom')).toHaveTextContent('+3');
+    expect(screen.getByTestId('skill-bonus-Persuasion')).toHaveTextContent('−1');
+    expect(screen.queryByText(/Indigo total/)).not.toBeInTheDocument();
+  });
+
+  it('a chosen INT/CHA fallback makes that save proficient too', async () => {
+    mockSamurai(7, { wis_save_prof: true, subclass_save_proficiencies: ['Charisma'] });
+    renderDetail();
+    await openStatsSubTab('abilities');
+    expect(await screen.findByTestId('save-bonus-charisma')).toHaveTextContent('+2'); // CHA -1 + PB +3
+  });
+});

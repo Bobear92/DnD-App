@@ -18,7 +18,7 @@
  * their auto-derived weapon attacks + spells + universal menu until their feature map
  * is authored — expand CLASS_FEATURE_ACTIONS_* class-by-class.
  */
-import { mightDie, sizeAt, isEffectActive, activeEffectChoice } from '@/characters/components/effects/activeEffects';
+import { mightDie, sizeAt, isEffectActive, activeEffectChoice, activeEffectGrants, fightingSpiritTempHp } from '@/characters/components/effects/activeEffects';
 import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor, creatureSize, isShieldEntry, weaponReach, characterReachBonus } from '@/characters/components/inventory/inventoryData';
 import { hasFightingStyle } from '@/characters/components/combat/fightingStyles';
 import { specialAttackEntries } from '@/characters/components/combat/specialAttacksData';
@@ -448,6 +448,38 @@ export const SUBCLASS_FEATURE_ACTIONS_5E = {
       },
     },
     'Psi Warrior': PSI_WARRIOR_ACTIONS,
+    // Samurai is 5e-ONLY (Xanathar's) — there is no 2024 Samurai, so no 5.5e entry.
+    Samurai: {
+      // An ACTIVE EFFECT, not a bare counter: Use spends the charge, writes the temporary hit
+      // points into `temp_hp`, and switches on the advantage that every weapon attack card then
+      // shows (see activeEffects.js FIGHTING_SPIRIT). End it when your turn ends.
+      'Fighting Spirit': {
+        tab: 'bonus', cost: 'bonus action', resourceKey: 'fighting_spirit_used',
+        activeEffect: 'fighting_spirit',
+        compute: ({ level }) => ({
+          detail: 'Until the end of this turn you have advantage on weapon attack rolls, and you'
+            + ` gain ${fightingSpiritTempHp(level)} temporary hit points (they don't stack — keep`
+            + ' the higher pool). Switch it off when your turn ends.'
+            // Tireless Spirit is resolved by the GM's Start Combat flow, but the player should
+            // know why a use came back.
+            + ((level ?? 1) >= 10
+              ? ' Tireless Spirit: when you roll initiative with no uses left, you regain one.'
+              : ''),
+        }),
+        description: 'Advantage on weapon attack rolls until the end of the turn, plus temporary'
+          + ' hit points. Three uses per long rest.',
+      },
+      // RAW is a REACTION, once per long rest — neither of which the stored feature text said
+      // before this pass (it described a different "delay the damage" feature). The extra turn and
+      // the death-save rules stay text: the app has no turn order or death-save state.
+      'Strength Before Death': {
+        tab: 'reaction', cost: 'reaction', resourceKey: 'strength_before_death_used',
+        description: "When damage reduces you to 0 hit points and doesn't kill you outright, delay"
+          + ' falling unconscious and immediately take an extra turn, interrupting the current one.'
+          + ' Taking damage during it causes death saving throw failures as normal. When it ends,'
+          + ' you fall unconscious if you still have 0 hit points. Once per long rest.',
+      },
+    },
   },
 };
 
@@ -552,6 +584,24 @@ export const ATTACK_RIDERS = [
     text: 'Your ranged attacks ignore half cover and three-quarters cover.',
   },
   giantsMightRider,
+  {
+    // Samurai Rapid Strike (L15). It costs no action and spends nothing — it rides on the Attack
+    // action you are already taking — so it is a rider on the weapon cards. Its trigger is
+    // "you have advantage against a target", which the app can confirm for exactly one source:
+    // Fighting Spirit running. Any other advantage (a prone target, being unseen) needs a target
+    // model the app doesn't have, so the rider is always shown and SAYS when it can confirm.
+    source: 'Rapid Strike',
+    scope: 'all',
+    applies: ({ charClass, subclass, level, edition }) =>
+      charClass === 'Fighter' && subclass === 'Samurai' && (level ?? 1) >= 15
+      && edition !== '5.5e' && edition !== '2024',
+    text: ({ characterData }) => (isEffectActive(characterData, 'fighting_spirit')
+      ? 'You have advantage now (Fighting Spirit). On one attack, forgo it to make one additional'
+        + ' weapon attack against the same target as part of this Attack action. Once per turn.'
+      : 'When you take the Attack action and have advantage on an attack against a target, you'
+        + ' can forgo it on that roll to make one additional weapon attack against that target'
+        + ' as part of the same action. Once per turn.'),
+  },
 ];
 
 /**
@@ -1916,6 +1966,9 @@ export function buildActionEconomy({
         // A pick the effect asks for when it starts (Runic Juggernaut: Large or Huge), rendered as
         // buttons on the toggle and stored in character_data — null when there is nothing to pick.
         effectChoice: d.activeEffect ? activeEffectChoice(d.activeEffect, { level, characterData }) : null,
+        // The level the effect starts at — a start-up patch can scale with it (Fighting Spirit's
+        // temporary hit points), and the card's toggle has no other way to know the level.
+        effectLevel: d.activeEffect ? level : null,
         // A second resource this entry's Use control touches: one it falls back to SPENDING once
         // its own charge is gone, or one it hands a use back TO. See RestResourceControl.
         fallbackResourceKey: d.fallbackResourceKey ?? null,
@@ -1941,6 +1994,16 @@ export function buildActionEconomy({
       if (dmg?.dice) {
         row.riderDamages = [...(row.riderDamages || []), { ...dmg, source: rider.source }];
       }
+    }
+  }
+
+  // A running effect that grants ADVANTAGE on weapon attack rolls (Samurai Fighting Spirit).
+  // Tagged on every weapon attack card — an unarmed strike is a melee weapon attack in 5e, so it
+  // qualifies too — naming the effect, so the tag disappears the moment the effect is ended.
+  const attackAdvantage = activeEffectGrants({ characterData, charClass, subclass, level, edition }).attackAdvantage;
+  if (attackAdvantage.length > 0) {
+    for (const row of buckets.action.filter((e) => e.source === 'Weapon')) {
+      row.advantage = attackAdvantage;
     }
   }
 

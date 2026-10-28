@@ -324,6 +324,20 @@ describe('CharacterList — rest buttons (GM view)', () => {
     expect(screen.getByText('Fighting Spirit')).toBeInTheDocument();
   });
 
+  // Strength Before Death (L18) is once per long rest; the summary must promise it only once held.
+  it.each([[18, 1], [17, 0]])('long rest summary for a level-%i Samurai lists Strength Before Death %i time(s)', async (level, n) => {
+    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
+      { ...CHARACTERS[0], level, character_data: { subclass: 'Samurai' } },
+    ] });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    await waitFor(() => screen.getByText(/Apply a long rest/i));
+    expect(screen.getByText('Fighting Spirit')).toBeInTheDocument();
+    expect(screen.queryAllByText('Strength Before Death')).toHaveLength(n);
+  });
+
   // The Echo Knight's three pools unlock at three different levels and two different rest
   // types, so the summary has to be level-aware in both directions.
   it('long rest summary lists only Unleash Incarnation for a L5 Echo Knight', async () => {

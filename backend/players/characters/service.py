@@ -922,6 +922,11 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
             if cd.get('subclass') == 'Samurai':
                 patch['fighting_spirit_used'] = 0
                 changes.append('Fighting Spirit recovered')
+                # Strength Before Death (L18) — once per long rest. Level-gated so the summary
+                # never promises a feature the character doesn't have.
+                if level >= 18:
+                    patch['strength_before_death_used'] = 0
+                    changes.append('Strength Before Death recovered')
             if cd.get('subclass') == 'Cavalier':
                 # Both Cavalier pools hold ability-modifier uses; the reset only zeroes the
                 # spent count, so the pool SIZE stays a frontend concern (config restResources).

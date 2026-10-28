@@ -106,7 +106,7 @@ export function RestUseSteppers({ usedKey, used = 0, total = 0, onChange, readOn
  */
 export function RestResourceControl({
   row, onChange, readOnly = false, isGm = false, showRemaining = true, idPrefix = 'rest',
-  fallbackRow = null, restoresRow = null, activeEffect = null, characterData = null,
+  fallbackRow = null, restoresRow = null, activeEffect = null, characterData = null, level = 1,
 }) {
   const [confirm, setConfirm] = useState(false);
   const effectRunning = !!activeEffect && isEffectActive(characterData || {}, activeEffect.key);
@@ -123,7 +123,7 @@ export function RestResourceControl({
     if (restoresRow) patch[restoresRow.key] = Math.max(0, restoresRow.used - 1);
     // Starting the effect and paying for it are ONE event — a charge that went down without the
     // effect coming on is a use the player paid for and did not get.
-    if (activeEffect) Object.assign(patch, toggleEffectPatch(characterData || {}, activeEffect.key, true));
+    if (activeEffect) Object.assign(patch, toggleEffectPatch(characterData || {}, activeEffect.key, true, { level }));
     onChange?.(patch);
     setConfirm(false);
   };
@@ -264,6 +264,7 @@ export default function RestResourceTracker({ resources = [], level = 1, data = 
             // tracker row gets this without a config edit — and none can be forgotten.
             activeEffect={effectForResourceKey(r.key)}
             characterData={data}
+            level={level}
             onChange={onChange}
             readOnly={readOnly}
             isGm={isGm}

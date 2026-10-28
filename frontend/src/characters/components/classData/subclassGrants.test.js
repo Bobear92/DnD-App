@@ -215,3 +215,49 @@ describe('subclassGrants — split-destination grant (Cavalier Bonus Proficiency
     expect(grantStoreFields(studentOfWar)).toEqual(['subclass_tool_proficiencies']);
   });
 });
+
+// ── Samurai: Bonus Proficiency + Elegant Courtier's conditional fallback ──────────
+describe('subclassGrants — Samurai', () => {
+  const [bonusProf, courtierSave] = SUBCLASS_GRANTS.Fighter['5e'].Samurai;
+  const resilientWis = { feats: [{
+    name: 'Resilient', choices: { ability: 'wisdom' },
+    effects: [{ kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true }],
+  }] };
+
+  it('is 5e only — there is no 2024 Samurai', () => {
+    expect(SUBCLASS_GRANTS.Fighter['5.5e'].Samurai).toBeUndefined();
+  });
+
+  it('Bonus Proficiency offers the four RAW skills OR a language, split by destination', () => {
+    const skills = bonusProf.options.filter((o) => !o.storeField).map((o) => o.value);
+    expect(skills).toEqual(['History', 'Insight', 'Performance', 'Persuasion']);
+    expect(grantStoreFieldFor(bonusProf, 'Insight')).toBe('skill_proficiencies');
+    expect(grantStoreFieldFor(bonusProf, 'Elvish')).toBe('subclass_languages');
+    expect(applyGrant(bonusProf, ['Elvish'], {})).toEqual({ subclass_languages: ['Elvish'] });
+  });
+
+  it('Bonus Proficiency is offered at level 3', () => {
+    expect(getSubclassGrants('Fighter', '5e', 'Samurai', 3, {}).map((g) => g.key)).toEqual(['samurai_bonus_proficiency']);
+  });
+
+  it('the INT/CHA fallback is NOT offered at 7 when Wisdom-save proficiency is new', () => {
+    expect(getSubclassGrants('Fighter', '5e', 'Samurai', 7, {})).toEqual([]);
+    expect(getEarnedSubclassGrants('Fighter', '5e', 'Samurai', 7, {}).map((g) => g.key))
+      .toEqual(['samurai_bonus_proficiency']);
+  });
+
+  it('the fallback IS offered when Wisdom was already held — from Resilient or a stored flag', () => {
+    expect(getSubclassGrants('Fighter', '5e', 'Samurai', 7, resilientWis).map((g) => g.key)).toEqual(['elegant_courtier_save']);
+    expect(getSubclassGrants('Fighter', '5e', 'Samurai', 7, { wis_save_prof: true }).map((g) => g.key)).toEqual(['elegant_courtier_save']);
+  });
+
+  it('the fallback writes the pick to subclass_save_proficiencies, and hides a save already held', () => {
+    expect(applyGrant(courtierSave, ['Charisma'], {})).toEqual({ subclass_save_proficiencies: ['Charisma'] });
+    const opts = availableGrantOptions(courtierSave, { ...resilientWis, cha_save_prof: true }, { charClass: 'Fighter' });
+    expect(opts.map((o) => o.value)).toEqual(['Intelligence']);
+  });
+
+  it('a caller passing no character data still gets every grant (older call sites)', () => {
+    expect(getSubclassGrants('Fighter', '5e', 'Samurai', 7).map((g) => g.key)).toEqual(['elegant_courtier_save']);
+  });
+});

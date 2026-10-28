@@ -139,7 +139,7 @@ export const FIGHTER_SUBCLASSES_5E = [
   { value: 'Echo Knight',    description: 'Create a shimmering echo of yourself — attack from its position and swap places with it in a flash.' },
   { value: 'Psi Warrior',    description: 'Telekinetic fighter using Psionic Power dice to push enemies, protect yourself, and augment attacks.' },
   { value: 'Rune Knight',    description: 'Carve magical runes into weapons and armor; grow to Giant size for enhanced reach and damage.' },
-  { value: 'Samurai',        description: 'Fighting Spirit grants advantage and temp HP; Elegant Courtier adds Wisdom saves and Charisma proficiency.' },
+  { value: 'Samurai',        description: 'Fighting Spirit grants advantage and temp HP; Elegant Courtier adds Wisdom to Persuasion and Wisdom save proficiency.' },
 ];
 
 export const FIGHTER_SUBCLASSES_2024 = [

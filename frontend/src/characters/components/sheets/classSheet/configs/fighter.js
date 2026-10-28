@@ -184,6 +184,11 @@ const REST_RESOURCES = [
     recharge: 'long', minLevel: 3, subclass: 'Samurai',
     description: 'Bonus action: advantage on your weapon attack rolls until the end of the turn, plus temporary hit points — five of them, rising to ten at tenth level and fifteen at fifteenth.',
   },
+  {
+    key: 'strength_before_death_used', label: 'Strength Before Death (Long Rest)', total: () => 1,
+    recharge: 'long', minLevel: 18, subclass: 'Samurai',
+    description: "Reaction: when damage drops you to 0 hit points without killing you outright, take an extra turn before you fall unconscious.",
+  },
 ];
 
 const ASI_LEVELS = [4, 6, 8, 12, 14, 16, 19];

@@ -50,6 +50,8 @@ can see whether a problem is shrinking. Mark one only when it actually happened.
 - `feat-effects` — feat `effects` model (`featEffects.js` + `seed_feats.py`)
 - `class-config` — data-driven class configs (`ClassSheet`)
 - `initiative` — `initiativeData.js` + `_INITIATIVE_RESOURCES`
+- `skill-bonuses` — `skills/skillBonuses.js` (permanent flat bonus to one skill)
+- `save-proficiencies` — `skills/saveProficiencies.js` (feature-granted save proficiency, `CLASS_SAVE_PROFS`)
 
 ## Systems and surfaces
 
@@ -135,3 +137,7 @@ Open-ended: add a feat, named feature or pool option when a session does real wo
 - `weapon-reach` — weapon/creature reach (`weaponReach`, `WeaponReachBadge`)
 - `tool-checks` — tool-check proficiency (`inventory/toolChecks.js`)
 - `surprise` — the (unmodelled) surprised condition
+- `fighting-spirit` — Samurai Fighting Spirit (active effect, temp HP, attack advantage)
+- `elegant-courtier` — Samurai Elegant Courtier (Persuasion +WIS, WIS save, INT/CHA fallback)
+- `rapid-strike` — Samurai Rapid Strike
+- `strength-before-death` — Samurai Strength Before Death

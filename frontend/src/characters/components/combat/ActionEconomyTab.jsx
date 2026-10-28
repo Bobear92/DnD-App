@@ -236,12 +236,12 @@ function ArcaneShotBlock({ arcaneShot, entryKey, resource, onChange, readOnly, i
  *
  * Declared at module scope, never inside ItemRow, so toggling can't remount the card's subtree.
  */
-function ActiveEffectToggle({ effectKey, entryKey, resource, choice, characterData, onChange, readOnly }) {
+function ActiveEffectToggle({ effectKey, entryKey, resource, choice, characterData, onChange, readOnly, level = 1 }) {
   const active = isEffectActive(characterData, effectKey);
   const remaining = resource ? resource.remaining : null;
   const canStart = !readOnly && !!onChange && (remaining === null || remaining > 0);
   const start = () => {
-    const patch = toggleEffectPatch(characterData, effectKey, true);
+    const patch = toggleEffectPatch(characterData, effectKey, true, { level });
     // One patch, so a spent charge and a running effect can never disagree.
     if (resource) patch[resource.key] = (resource.used ?? 0) + 1;
     onChange(patch);
@@ -469,6 +469,13 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
               breakdownTestId={`ae-damage-breakdown-${entry.key}`}
             />
             {view.damageFlags || ''}
+            {/* Advantage from a running effect (Fighting Spirit). It qualifies the to-hit, so
+                it sits on the numbers' line and names its source. */}
+            {entry.advantage?.length > 0 && (
+              <span className="text-teal-600 font-medium" data-testid={`ae-advantage-${entry.key}`}>
+                {' · with advantage ('}{entry.advantage.join(', ')}{')'}
+              </span>
+            )}
           </p>
         ) : (
           entry.detail && <p className="text-xs text-muted-foreground mt-0.5">{entry.detail}</p>
@@ -664,6 +671,7 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
             entryKey={entry.key}
             resource={topResource}
             choice={entry.effectChoice}
+            level={entry.effectLevel ?? 1}
             characterData={characterData}
             onChange={onChange}
             readOnly={readOnly}

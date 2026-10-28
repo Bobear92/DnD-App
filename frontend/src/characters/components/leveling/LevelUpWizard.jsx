@@ -30,6 +30,7 @@ import { getHpBonusesPerLevel, hpRollBase, effectiveMaxHp } from '@/characters/c
 import { getManeuvers, maneuversKnownAtLevel } from '@/characters/components/classData/maneuversData';
 import { getLevelChoices, availablePoolOptions, applyLevelChoice, poolOptionDescription } from '@/characters/components/classData/levelChoicesData';
 import { getSubclassGrants, availableGrantOptions, applyGrant } from '@/characters/components/classData/subclassGrants';
+import { featureSaveProficiencies } from '@/characters/components/skills/saveProficiencies';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import FeatPicker from '@/characters/components/feats/FeatPicker';
 import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from '@/characters/components/feats/FeatSpellGrantPicker';
@@ -336,7 +337,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // Subclass grants gained at this level — proficiency picks (Battle Master Student of War) or
   // class-pool picks (Champion Additional Fighting Style), unified in subclassGrants.js. Drives
   // the Subclass Grants step.
-  const subclassGrantList = getSubclassGrants(character.char_class, edition, effectiveSubclass, newLevel);
+  const subclassGrantList = getSubclassGrants(character.char_class, edition, effectiveSubclass, newLevel, character.character_data ?? {});
   const needsSubclassGrants = subclassGrantList.length > 0;
   const subclassGrantsLabel = subclassGrantList.length === 1 ? subclassGrantList[0].label : 'Subclass Choices';
 
@@ -563,6 +564,11 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     // fall back to the class default when no toggle is stored.
     ..._ABILITIES.filter((a) => (cd[`${a.slice(0, 3)}_save_prof`] ?? classSaves.includes(a))),
     ...getFeatSaveProficiencies(cd.feats || []),
+    // A feature grant (Samurai Elegant Courtier → Wisdom), so Resilient can't re-offer it.
+    ...featureSaveProficiencies({
+      charClass: character.char_class, subclass: effectiveSubclass, level: character.level ?? 1,
+      edition, characterData: cd,
+    }).map((p) => p.ability),
   ];
   // The abilities offerable for a half-feat's ability choice (Resilient hides saves already held).
   const featAbilityOptions = featAbilityChoiceOptions(pickedFeat, featAbilityChoice, { saveProficiencies });

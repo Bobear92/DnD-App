@@ -3,14 +3,14 @@ session_id: c06706d4-db72-4707-9552-132c511e72f8
 title: Rune Knight finished to level 20
 date: 2026-10-26
 started: 14:28
-branch: feature/rune-knight-qa
+branch: main
 area: character-system
 tags: [build, qa, fighter, rune-knight, bonus-proficiencies, subclass-proficiencies, fire-rune, tool-checks, runic-juggernaut, runic-shield, great-stature, giants-might, weapon-reach, active-effects, items-tab, action-economy, guard-test, prose-signoff, surprise, 5e]
 issues: [raw-correction, computed-not-shown, mechanism-extended, prose-to-mechanic]
 summary: Rune Knight L3-20 audit: RAW text fixes, Bonus Proficiencies, Fire Rune tool doubling, Juggernaut reach + Large/Huge pick
-turns: 4
+turns: 5
 stepped_in: true
-last_uuid: 3ca872f5-749e-4a4c-a27e-7ebfec3bacc5
+last_uuid: 53658dd8-ed80-449d-bd85-c754366410e3
 ---
 
 # Rune Knight finished to level 20
@@ -131,3 +131,22 @@ last_uuid: 3ca872f5-749e-4a4c-a27e-7ebfec3bacc5
 > I'll wait …
 
 **Commands run:** 2
+
+### 5. 2026-10-26 18:05
+
+**Robert:**
+> i think things are looking good. 
+> Lets /ship
+
+**Claude:**
+> The Rune Knight work is shipped: `main` is at **`faa2b13`** and pushed to GitHub. The feature branch is deleted locally and on GitHub.
+> 
+> - **Checks:** all 3,484 frontend tests pass, the production build succeeds, and you checked it in the running app. Nothing on the backend changed, so the feat-coverage check didn't apply.
+> - **Docs:** I removed leftover references to the deleted `attackDie` field from CLAUDE.md and the `/subclass-features` skill.
+> - **Session log:** written, with new tags for the Rune Knight features.
+> - **Commit contents:** everything was uncommitted on the branch, so the commit also carries the earlier session-logs edits (`INDEX.md` and the earlier session's log file).
+> - **Attribution:** the commit says "Claude Opus 4.8", because CLAUDE.md asks for that wording. It differs from the model actually running this session, so you may want to update that line in CLAUDE.md.
+> 
+> The …
+
+**Commands run:** 9

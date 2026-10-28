@@ -297,3 +297,30 @@ describe('RestResourceTracker — effect rows are wired automatically', () => {
     expect(onChange).toHaveBeenCalledWith({ second_wind_used: 1 });
   });
 });
+
+// Fighting Spirit's start-up write: the tracker row must hand out the temporary hit points too,
+// not only the Action Economy card — two spend points, one rule (toggleEffectPatch).
+describe('RestResourceTracker — Samurai Fighting Spirit writes its temp HP', () => {
+  const resources = [
+    { key: 'fighting_spirit_used', label: 'Fighting Spirit (Long Rest)', total: () => 3, recharge: 'long', minLevel: 3 },
+  ];
+
+  it('spends the charge, switches it on and writes the level-scaled temp HP in one patch', () => {
+    const onChange = vi.fn();
+    render(<RestResourceTracker resources={resources} level={10} data={{}} scores={{}} onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText('Use Fighting Spirit (Long Rest)'));
+    fireEvent.click(screen.getByTestId('rest-use-confirm-button'));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith({
+      fighting_spirit_used: 1, active_effects: ['fighting_spirit'], temp_hp: 10,
+    });
+  });
+
+  it('keeps a larger temp HP pool the character already has', () => {
+    const onChange = vi.fn();
+    render(<RestResourceTracker resources={resources} level={3} data={{ temp_hp: 9 }} scores={{}} onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText('Use Fighting Spirit (Long Rest)'));
+    fireEvent.click(screen.getByTestId('rest-use-confirm-button'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ temp_hp: 9 }));
+  });
+});
