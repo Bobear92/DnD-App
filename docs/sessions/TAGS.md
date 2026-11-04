@@ -52,6 +52,7 @@ can see whether a problem is shrinking. Mark one only when it actually happened.
 - `initiative` — `initiativeData.js` + `_INITIATIVE_RESOURCES`
 - `skill-bonuses` — `skills/skillBonuses.js` (permanent flat bonus to one skill)
 - `save-proficiencies` — `skills/saveProficiencies.js` (feature-granted save proficiency, `CLASS_SAVE_PROFS`)
+- `auto-effects` — `leveling/levelUpAutoEffects.js` (derived effects announced in the level-up wizard)
 
 ## Systems and surfaces
 
@@ -68,6 +69,7 @@ can see whether a problem is shrinking. Mark one only when it actually happened.
 - `encounters` — the GM encounters / initiative page
 - `campaign-tools` — NPCs, locations, calendar, timeline, sessions
 - `session-logs` — the session-log system itself
+- `theme` — app theming / Tailwind colours (index.css, the `dark` class, palette choices)
 
 ## Risk and backend
 
@@ -141,3 +143,6 @@ Open-ended: add a feat, named feature or pool option when a session does real wo
 - `elegant-courtier` — Samurai Elegant Courtier (Persuasion +WIS, WIS save, INT/CHA fallback)
 - `rapid-strike` — Samurai Rapid Strike
 - `strength-before-death` — Samurai Strength Before Death
+- `tireless-spirit` — Samurai Tireless Spirit (initiative regain)
+- `starting-equipment` — character-creation starting equipment / weapon picker
+- `race-traits` — racial traits and where they surface (`raceTraitsData.js`)

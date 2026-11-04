@@ -36,11 +36,11 @@ import InventoryTab from '@/characters/components/inventory/InventoryTab';
 import { subclassFixedLanguages } from '@/characters/components/inventory/inventoryProficiencies';
 import ActionEconomyTab from '@/characters/components/combat/ActionEconomyTab';
 import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
-import { getFeatStatMods, getFeatStatModSources, getFeatSaveProficiencies } from '@/characters/components/feats/featEffects';
+import { getFeatStatMods, getFeatStatModSources } from '@/characters/components/feats/featEffects';
 import { computePassiveScores } from '@/characters/components/skills/passiveSkills';
 import { getSkillAdvantageNames, skillAdvantageSourcesFor, skillAdvantageLegend } from '@/characters/components/skills/skillAdvantage';
 import { skillBreakdown, saveBreakdown, SKILL_MAP, formatBonus } from '@/characters/components/skills/skillMath';
-import { CLASS_SAVE_PROFS, featureSaveProficiencySource } from '@/characters/components/skills/saveProficiencies';
+import { CLASS_SAVE_PROFS, saveProficiencySource } from '@/characters/components/skills/saveProficiencies';
 import { getSkillBonuses, skillBonusParts } from '@/characters/components/skills/skillBonuses';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
 import SaveFeaturesPanel from '@/characters/components/skills/SaveFeaturesPanel';
@@ -99,6 +99,15 @@ import { cn } from '@/lib/utils';
 // Racial rest-resource keys that are HP mechanics — tracked in the HP & Movement
 // sub-tab, between Max HP and Hit Dice.
 const HP_ADJACENT_RACIAL_KEYS = ['relentless_endurance_used'];
+
+// Saving-throw proficiency swatch by SOURCE. Gold and Blue match the skills grid (class / feat);
+// Rose (a class or subclass feature) and Slate (set by hand) are saves-only.
+const SAVE_SOURCE_SWATCH = {
+  class: 'bg-primary border-primary',
+  feat: 'bg-sky-500 border-sky-500',
+  feature: 'bg-rose-500 border-rose-500',
+  manual: 'bg-slate-400 border-slate-400',
+};
 
 const ABILITY_LABELS = [
   { key: 'strength', label: 'Strength', abbrev: 'STR', save: 'str_save_prof' },
@@ -613,6 +622,29 @@ export default function CharacterDetail() {
     edition,
     characterData: classSection.draft ?? character?.character_data ?? {},
   };
+
+  // Where each save's proficiency comes from (class / feat / feature / by hand) — colours the
+  // Saving Throws grid. The legend lists only the non-class sources actually present, naming them.
+  const saveSourceCtx = {
+    storedProfs: savingThrows.draft ?? {},
+    charClass: character.char_class,
+    feats: classSection.draft?.feats ?? character.character_data?.feats ?? [],
+    featureCtx: saveAdvCtx,
+  };
+  const saveSourceLegend = (() => {
+    const byKind = {};
+    for (const { key } of ABILITY_LABELS) {
+      const src = saveProficiencySource(key, saveSourceCtx);
+      if (!src || src.kind === 'class') continue;
+      (byKind[src.kind] ??= new Set()).add(src.source);
+    }
+    const named = (kind) => [...byKind[kind]].filter(Boolean).join(', ');
+    return [
+      byKind.feat && `Blue = from feat (${named('feat')})`,
+      byKind.feature && `Rose = from ${named('feature')}`,
+      byKind.manual && 'Slate = set by hand',
+    ].filter(Boolean);
+  })();
 
   // Context for feat save bonuses that apply only SOMETIMES (Shield Master). Separate from
   // saveAdvCtx because it needs EQUIPMENT: the bonus is real only while the shield is held,
@@ -1647,13 +1679,12 @@ export default function CharacterDetail() {
                     <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Saving Throws</div>
                     <div className="grid grid-cols-3 gap-1.5">
                       {ABILITY_LABELS.map(({ key, abbrev, save }) => {
-                        const featSaves = getFeatSaveProficiencies(classSection.draft?.feats ?? character.character_data?.feats ?? []);
-                        // A FEATURE can grant the proficiency too (Samurai Elegant Courtier →
-                        // WIS). Derived, never written into the stored flag, so the checkbox
-                        // still means "set by hand" and the breakdown names the feature.
-                        const featureProfSource = featureSaveProficiencySource(key, saveAdvCtx);
-                        const isProficient = (savingThrows.draft?.[save] ?? false) || featSaves.includes(key)
-                          || Boolean(featureProfSource);
+                        // WHERE the proficiency comes from — the class's own saves, a feat
+                        // (Resilient), a feature (Samurai Elegant Courtier → WIS; derived, never
+                        // written into the stored flag) or a flag set by hand. Coloured like the
+                        // skills grid so a save the class doesn't give stands out.
+                        const profSource = saveProficiencySource(key, saveSourceCtx);
+                        const isProficient = Boolean(profSource);
                         const armorDisadvantage = Boolean(nonProfArmor) && (key === 'strength' || key === 'dexterity');
                         // A feature can make you roll this save twice without changing its number
                         // (Giant's Might while it is switched on). Tagged on the row like the skill
@@ -1679,7 +1710,9 @@ export default function CharacterDetail() {
                             ...condBonuses.map((b) => b.part),
                           ],
                           notes: [
-                            featureProfSource && `Proficient — ${featureProfSource}`,
+                            profSource?.kind === 'feat' && `Proficient — ${profSource.source} (feat)`,
+                            profSource?.kind === 'feature' && `Proficient — ${profSource.source}`,
+                            profSource?.kind === 'manual' && 'Proficient — set by hand (not a class save)',
                             advSources.length > 0
                               && `Advantage — ${advSources.map((f) => f.name).join(', ')}`,
                             armorDisadvantage && `Disadvantage — wearing ${nonProfArmor.name} without proficiency`,
@@ -1692,13 +1725,19 @@ export default function CharacterDetail() {
                                 <button
                                   type="button"
                                   onClick={() => savingThrows.setDraft(d => ({ ...d, [save]: !d[save] }))}
+                                  data-testid={`save-prof-${key}`}
+                                  data-source={profSource?.kind ?? 'none'}
                                   className={cn(
                                     'h-3.5 w-3.5 rounded-sm border flex-shrink-0 transition-colors',
-                                    isProficient ? 'bg-primary border-primary' : 'bg-background border-border'
+                                    profSource ? SAVE_SOURCE_SWATCH[profSource.kind] : 'bg-background border-border'
                                   )}
                                 />
                               ) : (
-                                <div className={cn('h-3.5 w-3.5 rounded-sm border flex-shrink-0', isProficient ? 'bg-primary border-primary' : 'bg-muted border-border')} />
+                                <div
+                                  data-testid={`save-prof-${key}`}
+                                  data-source={profSource?.kind ?? 'none'}
+                                  className={cn('h-3.5 w-3.5 rounded-sm border flex-shrink-0', profSource ? SAVE_SOURCE_SWATCH[profSource.kind] : 'bg-muted border-border')}
+                                />
                               )}
                               <span className="flex-1 text-xs">{abbrev}</span>
                               {advSources.length > 0 && (
@@ -1730,6 +1769,13 @@ export default function CharacterDetail() {
                         );
                       })}
                     </div>
+                    {/* Source legend — only when some save is NOT from the class, since a grid of
+                        plain gold checkboxes needs no key. */}
+                    {saveSourceLegend.length > 0 && (
+                      <p className="text-[10px] text-muted-foreground mt-1.5" data-testid="saves-source-legend">
+                        {['Gold = class save', ...saveSourceLegend].join(' · ')}
+                      </p>
+                    )}
                     {/* Names the running effect behind the indigo tags. The saves grid has no
                         legend of its own, and a bonus a player cannot attribute reads as a bug
                         in the modifier. */}

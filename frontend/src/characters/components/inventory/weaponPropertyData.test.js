@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   weaponPropertyDescription, weaponPropertyBaseName, parseWeaponProperties,
-  weaponHandedness, weaponBadges, weaponFacets, sortWeaponFacets, weaponMatchesFilters,
+  weaponHandedness, weaponBadges, weaponFacets, weaponFilterFacets, sortWeaponFacets, weaponMatchesFilters,
 } from '@/characters/components/inventory/weaponPropertyData';
 
 describe('weaponPropertyBaseName', () => {
@@ -59,6 +59,22 @@ describe('weaponFacets', () => {
   it('returns base-name facets (category + handedness + properties)', () => {
     const f = weaponFacets({ weapon_category: 'Martial', properties: '["Versatile (1d10)", "Finesse"]' });
     expect(f).toEqual(['Martial', 'Versatile', 'Finesse']);
+  });
+});
+
+describe('melee / ranged facet', () => {
+  const longbow = { weapon_category: 'Martial', weapon_type: 'Ranged', properties: '["Ammunition", "Heavy", "Two-Handed"]' };
+  it('badges the weapon type after the category', () => {
+    expect(weaponBadges(longbow).map((x) => x.label)).toEqual(['Martial', 'Ranged', 'Two-handed', 'Ammunition', 'Heavy']);
+  });
+  it('offers Ranged as a filter but not Ammunition (which read as "show me ammunition")', () => {
+    const f = weaponFilterFacets(longbow);
+    expect(f).toContain('Ranged');
+    expect(f).not.toContain('Ammunition');
+    expect(weaponFacets(longbow)).toContain('Ammunition');
+  });
+  it('orders Melee/Ranged right after the category', () => {
+    expect(sortWeaponFacets(['Heavy', 'Ranged', 'Martial', 'Melee'])).toEqual(['Martial', 'Melee', 'Ranged', 'Heavy']);
   });
 });
 

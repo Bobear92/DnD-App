@@ -12,6 +12,7 @@ const WEAPONS = [
   { id: 1, name: 'Longsword', weapon_category: 'Martial', weapon_type: 'Melee', damage: '1d8', damage_type: 'Slashing', properties: '["Versatile"]', weight: 3, cost: '15 gp' },
   { id: 2, name: 'Dagger', weapon_category: 'Simple', weapon_type: 'Melee', damage: '1d4', damage_type: 'Piercing' },
   { id: 3, name: 'Greatsword', weapon_category: 'Martial', weapon_type: 'Melee', damage: '2d6', damage_type: 'Slashing', properties: '["Two-Handed", "Heavy"]', weight: 6, cost: '50 gp', description: 'A massive two-handed blade.' },
+  { id: 4, name: 'Longbow', weapon_category: 'Martial', weapon_type: 'Ranged', damage: '1d8', damage_type: 'Piercing', properties: '["Ammunition", "Heavy", "Two-Handed"]', weight: '2 lb.', cost: '50 gp', range_normal: 150, range_long: 600 },
 ];
 const ARMOR = [{ id: 10, name: 'Chain Mail', armor_type: 'Heavy', armor_class: 16 }];
 const GEAR = [
@@ -67,6 +68,40 @@ describe('StartingEquipmentStep', () => {
     });
   });
 
+  it('summarises each weapon slot pick at the bottom (QA: two stacked grids were hard to read)', async () => {
+    renderStep();
+    fireEvent.click(await screen.findByTestId('equip-opt-f2-b'));
+    const first = await screen.findByTestId('equip-picks-summary-f2:b:0');
+    const second = screen.getByTestId('equip-picks-summary-f2:b:1');
+    expect(first).toHaveTextContent(/first martial weapon:\s*Not chosen yet/i);
+    expect(second).toHaveTextContent(/second martial weapon:\s*Not chosen yet/i);
+    fireEvent.click(screen.getByTestId('equip-weapon-f2:b:0-Longsword'));
+    fireEvent.click(screen.getByTestId('equip-weapon-f2:b:1-Greatsword'));
+    expect(first).toHaveTextContent(/first martial weapon:\s*Longsword/i);
+    expect(second).toHaveTextContent(/second martial weapon:\s*Greatsword/i);
+  });
+
+  it('a pick can be removed from the summary, deselecting its card and dropping it from the inventory', async () => {
+    const onResult = vi.fn();
+    renderStep({ onResult });
+    fireEvent.click(await screen.findByTestId('equip-weapon-f2:a:0-Longsword'));
+    await waitFor(() => expect(onResult.mock.calls.at(-1)[0].inventory.some((e) => e.name === 'Longsword')).toBe(true));
+    expect(screen.queryByTestId('equip-picks-remove-f2:b:0')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('equip-picks-remove-f2:a:0'));
+    expect(screen.getByTestId('equip-picks-summary-f2:a:0')).toHaveTextContent(/Not chosen yet/);
+    expect(screen.queryByTestId('equip-picks-remove-f2:a:0')).not.toBeInTheDocument();
+    expect(screen.getByTestId('equip-weapon-f2:a:0-Longsword').className).not.toMatch(/border-primary/);
+    await waitFor(() => expect(onResult.mock.calls.at(-1)[0].inventory.some((e) => e.name === 'Longsword')).toBe(false));
+  });
+
+  it('the pick summary still names a pick that a filter has hidden', async () => {
+    renderStep();
+    fireEvent.click(await screen.findByTestId('equip-weapon-f2:a:0-Longsword'));
+    fireEvent.click(screen.getByTestId('weapon-filter-Ranged'));
+    expect(screen.queryByTestId('equip-weapon-f2:a:0-Longsword')).not.toBeInTheDocument();
+    expect(screen.getByTestId('equip-picks-summary-f2:a:0')).toHaveTextContent('Longsword');
+  });
+
   it('shows full weapon info on each martial weapon card', async () => {
     renderStep();
     const greatsword = await screen.findByTestId('equip-weapon-f2:a:0-Greatsword');
@@ -111,6 +146,26 @@ describe('StartingEquipmentStep', () => {
     expect(screen.getByTestId('weapon-filter-Two-handed')).toBeInTheDocument();
     expect(screen.getByTestId('weapon-filter-Heavy')).toBeInTheDocument();
     expect(screen.getByTestId('weapon-filter-Versatile')).toBeInTheDocument();
+  });
+
+  it('offers Melee/Ranged filters instead of an Ammunition filter (QA: it read as "ammunition")', async () => {
+    renderStep();
+    await screen.findByTestId('weapon-filter-bar');
+    expect(screen.getByTestId('weapon-filter-Melee')).toBeInTheDocument();
+    expect(screen.getByTestId('weapon-filter-Ranged')).toBeInTheDocument();
+    expect(screen.queryByTestId('weapon-filter-Ammunition')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('weapon-filter-Ranged'));
+    expect(screen.getByTestId('equip-weapon-f2:a:0-Longbow')).toBeInTheDocument();
+    expect(screen.queryByTestId('equip-weapon-f2:a:0-Longsword')).not.toBeInTheDocument();
+  });
+
+  it('a weapon card shows its range band and does not double the weight unit', async () => {
+    renderStep();
+    const card = await screen.findByTestId('equip-weapon-f2:a:0-Longbow');
+    expect(screen.getByTestId('equip-weapon-f2:a:0-Longbow-range')).toHaveTextContent('Range: 150/600 ft');
+    expect(card).toHaveTextContent('2 lb. · 50 gp');
+    expect(card).not.toHaveTextContent('lb. lb');
+    expect(screen.getByTestId('equip-weapon-f2:a:0-Longsword')).toHaveTextContent('3 lb. · 15 gp');
   });
 
   it('filtering by Two-handed hides non-matching weapon cards', async () => {

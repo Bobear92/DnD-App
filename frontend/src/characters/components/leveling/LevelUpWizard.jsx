@@ -31,6 +31,7 @@ import { getManeuvers, maneuversKnownAtLevel } from '@/characters/components/cla
 import { getLevelChoices, availablePoolOptions, applyLevelChoice, poolOptionDescription } from '@/characters/components/classData/levelChoicesData';
 import { getSubclassGrants, availableGrantOptions, applyGrant } from '@/characters/components/classData/subclassGrants';
 import { featureSaveProficiencies } from '@/characters/components/skills/saveProficiencies';
+import { levelUpAutoEffects, signed } from '@/characters/components/leveling/levelUpAutoEffects';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import FeatPicker from '@/characters/components/feats/FeatPicker';
 import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from '@/characters/components/feats/FeatSpellGrantPicker';
@@ -623,6 +624,16 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     return out;
   };
 
+  // Effects this level applies with no pick (Elegant Courtier's WIS-save proficiency and +WIS to
+  // Persuasion) — stated on the Features step and the recap, so the player can see they landed.
+  // Scores include any ASI/feat chosen in this run, so the recap's numbers are the final ones.
+  const autoEffects = levelUpAutoEffects({
+    charClass: character.char_class, subclass: effectiveSubclass, edition,
+    fromLevel: character.level ?? 1, toLevel: newLevel, characterData: cd,
+    scores: Object.fromEntries(ABILITIES.map((a) => [a.key, combinedScoreUpdates()[a.key] ?? character[a.key] ?? 10])),
+  });
+  const hasAutoEffects = autoEffects.saveProficiencies.length > 0 || autoEffects.skillBonuses.length > 0;
+
   const toggleManeuver = (name) => {
     setManeuverPicks((prev) => {
       if (prev.includes(name)) return prev.filter((n) => n !== name);
@@ -1075,6 +1086,32 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                 </div>
               ))}
             </div>
+
+            {hasAutoEffects && (
+              <div className="rounded-md border border-primary/40 bg-primary/5 p-3 space-y-1.5" data-testid="auto-effects">
+                <div className="text-xs font-semibold text-primary">Applied to your sheet automatically</div>
+                <ul className="space-y-1 text-xs text-foreground">
+                  {autoEffects.saveProficiencies.map((p) => (
+                    <li key={`save-${p.ability}`} data-testid={`auto-effect-save-${p.ability}`}>
+                      {p.alreadyHeld ? (
+                        <>You're already proficient in <span className="font-medium capitalize">{p.ability}</span> saving throws,
+                          so <span className="font-medium">{p.source}</span> lets you choose Intelligence or Charisma saving throws instead — you'll pick on a later step.</>
+                      ) : (
+                        <><span className="font-medium capitalize">{p.ability}</span> saving throws: you become proficient
+                          ({p.source}) — your save is now <span className="font-medium">{signed(p.total)}</span>
+                          <span className="text-muted-foreground"> ({signed(p.abilityMod)} {p.ability.slice(0, 3).toUpperCase()}, {signed(p.pb)} proficiency)</span>.</>
+                      )}
+                    </li>
+                  ))}
+                  {autoEffects.skillBonuses.map((b) => (
+                    <li key={`skill-${b.key}-${b.skill}`} data-testid={`auto-effect-skill-${b.skill}`}>
+                      <span className="font-medium">{b.skill}</span> checks: <span className="font-medium">{signed(b.amount)}</span>
+                      <span className="text-muted-foreground"> ({b.label ?? b.source})</span>, added to the skill on your sheet.
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
@@ -1680,6 +1717,18 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                   <span className="text-muted-foreground">New features</span>
                   <span className="font-medium">{displayFeatures.length === 0 ? 'None' : displayFeatures.map(f => f.name).join(', ')}</span>
                 </div>
+                {autoEffects.saveProficiencies.filter((p) => !p.alreadyHeld).map((p) => (
+                  <div key={`save-${p.ability}`} className="flex justify-between" data-testid={`confirm-auto-save-${p.ability}`}>
+                    <span className="text-muted-foreground">Save proficiency</span>
+                    <span className="font-medium"><span className="capitalize">{p.ability}</span> {signed(p.total)} <span className="text-muted-foreground font-normal">({p.source})</span></span>
+                  </div>
+                ))}
+                {autoEffects.skillBonuses.map((b) => (
+                  <div key={`skill-${b.key}-${b.skill}`} className="flex justify-between" data-testid={`confirm-auto-skill-${b.skill}`}>
+                    <span className="text-muted-foreground">{b.skill} bonus</span>
+                    <span className="font-medium">{signed(b.amount)} <span className="text-muted-foreground font-normal">({b.label ?? b.source})</span></span>
+                  </div>
+                ))}
                 {needsSubclassGrants && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">{subclassGrantsLabel}</span>

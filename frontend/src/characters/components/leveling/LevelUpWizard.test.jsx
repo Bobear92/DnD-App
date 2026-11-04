@@ -1596,6 +1596,30 @@ describe('LevelUpWizard', () => {
       expect(screen.queryByTestId('subclass-grant-elegant_courtier_save')).not.toBeInTheDocument();
     });
 
+    it('states the automatic Wisdom-save proficiency and Persuasion bonus on the features step and the recap', () => {
+      render(<LevelUpWizard character={{ ...SAMURAI_L6(), wisdom: 14 }} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      chooseTakeAverage(); // hp → features
+      expect(screen.getByTestId('auto-effect-save-wisdom')).toHaveTextContent(/you become proficient/i);
+      expect(screen.getByTestId('auto-effect-save-wisdom')).toHaveTextContent('+5');
+      expect(screen.getByTestId('auto-effect-skill-Persuasion')).toHaveTextContent(/\+2/);
+      fireEvent.click(screen.getByTestId('wizard-next')); // features → confirm
+      expect(screen.getByTestId('confirm-auto-save-wisdom')).toHaveTextContent(/wisdom \+5/i);
+      expect(screen.getByTestId('confirm-auto-skill-Persuasion')).toHaveTextContent('+2');
+    });
+
+    it('tells a Samurai who already had the save that the INT/CHA pick replaces it', () => {
+      render(<LevelUpWizard character={SAMURAI_L6({ feats: RESILIENT_WIS })} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      chooseTakeAverage();
+      expect(screen.getByTestId('auto-effect-save-wisdom')).toHaveTextContent(/already proficient/i);
+      expect(screen.getByTestId('auto-effect-save-wisdom')).toHaveTextContent(/Intelligence or Charisma/);
+    });
+
+    it('shows no automatic-effects block on a level that grants none', () => {
+      render(<LevelUpWizard character={{ ...SAMURAI_L6(), level: 4 }} campaign={CAMPAIGN_5E} onComplete={vi.fn()} onClose={vi.fn()} />);
+      chooseTakeAverage();
+      expect(screen.queryByTestId('auto-effects')).not.toBeInTheDocument();
+    });
+
     it('asks one who already had it via Resilient, and stores the pick', async () => {
       const onComplete = vi.fn().mockResolvedValue(undefined);
       render(<LevelUpWizard character={SAMURAI_L6({ feats: RESILIENT_WIS })} campaign={CAMPAIGN_5E} onComplete={onComplete} onClose={vi.fn()} />);

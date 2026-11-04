@@ -108,13 +108,13 @@ export default function MyPage() {
 
 // Hide fields from players
 {isGm && !playerView && (
-  <Card className="border-amber-400 bg-amber-50">
+  <Card className="border-amber-500/30 bg-amber-50/5">
     {/* GM Notes — private */}
   </Card>
 )}
 ```
 - Never use `user.is_admin` to gate GM actions — always `campaign?.userRole === 'gm'`
-- GM Notes cards: amber border + background (`border-amber-400 bg-amber-50`), labeled "Private"
+- GM Notes cards: faint amber border + tint (`border-amber-500/30 bg-amber-50/5`, as NPCDetail does), labeled "Private". The app is dark-only: never a solid light palette like `bg-amber-50` (it renders as a pale box); prefer theme tokens, and see `src/test/darkTheme.test.js`
 
 ### Dirty-State Save/Reset Pattern
 ```jsx

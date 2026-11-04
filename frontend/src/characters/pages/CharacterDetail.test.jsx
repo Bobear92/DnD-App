@@ -3521,6 +3521,22 @@ describe('CharacterDetail', () => {
       expect(screen.queryByTestId('save-features')).not.toBeInTheDocument();
     });
 
+    it("lists a Halfling's Brave under the saves, expanding to the trait text", async () => {
+      characterService.getCharacterById.mockResolvedValue({
+        success: true,
+        data: {
+          ...BASE_CHARACTER,
+          race: 'Halfling',
+          character_data: { ...BASE_CHARACTER.character_data, race_traits: ['Lucky', 'Brave', 'Halfling Nimbleness'] },
+        },
+      });
+      renderDetail();
+      await openStatsSubTab('abilities');
+      fireEvent.click(await screen.findByTestId('save-feature-race-brave'));
+      expect(screen.getByTestId('save-feature-race-brave-desc')).toHaveTextContent(/against being frightened/i);
+      expect(screen.queryByTestId('save-feature-race-halfling-nimbleness')).not.toBeInTheDocument();
+    });
+
     it('shows no panel for a Cavalier below the level the feature is gained', async () => {
       mockCavalier({ level: 2 });
       renderDetail();
@@ -3732,6 +3748,34 @@ describe('CharacterDetail — Samurai Elegant Courtier', () => {
     expect(screen.getByText(/Indigo total = includes Elegant Courtier/)).toBeInTheDocument();
     // Deception is also Charisma and is untouched.
     expect(screen.getByTestId('skill-bonus-Deception')).toHaveTextContent('−1');
+  });
+
+  it('colours a save the class does not give by its source, with a legend naming it', async () => {
+    mockSamurai(7, { feats: [{
+      name: 'Resilient', choices: { ability: 'intelligence' },
+      effects: [{ kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true }],
+    }] });
+    renderDetail();
+    await openStatsSubTab('abilities');
+    await screen.findByTestId('save-bonus-wisdom');
+    expect(screen.getByTestId('save-prof-strength')).toHaveAttribute('data-source', 'class');
+    expect(screen.getByTestId('save-prof-wisdom')).toHaveAttribute('data-source', 'feature');
+    expect(screen.getByTestId('save-prof-wisdom').className).toMatch(/bg-rose-500/);
+    expect(screen.getByTestId('save-prof-intelligence')).toHaveAttribute('data-source', 'feat');
+    expect(screen.getByTestId('save-prof-intelligence').className).toMatch(/bg-sky-500/);
+    expect(screen.getByTestId('save-prof-charisma')).toHaveAttribute('data-source', 'none');
+    const legend = screen.getByTestId('saves-source-legend');
+    expect(legend).toHaveTextContent('Gold = class save');
+    expect(legend).toHaveTextContent('Blue = from feat (Resilient)');
+    expect(legend).toHaveTextContent('Rose = from Elegant Courtier');
+  });
+
+  it('shows no save legend when every proficient save is a class save', async () => {
+    mockSamurai(6);
+    renderDetail();
+    await openStatsSubTab('abilities');
+    await screen.findByTestId('save-bonus-wisdom');
+    expect(screen.queryByTestId('saves-source-legend')).not.toBeInTheDocument();
   });
 
   it('a level-6 Samurai has neither', async () => {

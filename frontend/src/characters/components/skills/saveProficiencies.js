@@ -99,3 +99,28 @@ export function nonFeatureSaveProficiencies(characterData = {}, { classSaves = [
   });
   return [...new Set([...stored, ...getFeatSaveProficiencies(characterData?.feats ?? [])])];
 }
+
+/**
+ * WHERE this save's proficiency comes from — drives the source colour on the Saving Throws grid,
+ * the skills-grid convention (Gold = class, Blue = feat). Precedence when two sources overlap is
+ * class → feat → feature → by hand, so the most fundamental source is the one named.
+ *
+ * @param {string} ability  'wisdom', …
+ * @param {{ storedProfs?: Object, charClass?: string, feats?: Object[], featureCtx?: Object }} ctx
+ *   storedProfs — the per-ability `<abbr>_save_prof` flags (class defaults already filled in);
+ *   featureCtx — the featureSaveProficiencies context (class/subclass/level/edition/characterData).
+ * @returns {{ kind: 'class'|'feat'|'feature'|'manual', source: string|null } | null} null = not proficient
+ */
+export function saveProficiencySource(ability, {
+  storedProfs = {}, charClass, feats = [], featureCtx = {},
+} = {}) {
+  const flag = `${abbr(ability)}_save_prof`;
+  const stored = Boolean(storedProfs[flag]);
+  if (stored && (CLASS_SAVE_PROFS[charClass] ?? []).includes(flag)) return { kind: 'class', source: charClass ?? null };
+  const feat = (feats || []).find((f) => getFeatSaveProficiencies([f]).includes(ability));
+  if (feat) return { kind: 'feat', source: feat.name ?? null };
+  const feature = featureSaveProficiencySource(ability, featureCtx);
+  if (feature) return { kind: 'feature', source: feature };
+  if (stored) return { kind: 'manual', source: null };
+  return null;
+}

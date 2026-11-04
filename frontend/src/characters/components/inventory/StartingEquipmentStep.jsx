@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import itemService from '@/encyclopedia/itemService';
 import WeaponPropertyBadges from '@/characters/components/inventory/WeaponPropertyBadges';
 import {
-  weaponBadges, weaponFacets, sortWeaponFacets, weaponMatchesFilters, weaponPropertyDescription,
+  weaponBadges, weaponFilterFacets, sortWeaponFacets, weaponMatchesFilters, weaponPropertyDescription,
 } from '@/characters/components/inventory/weaponPropertyData';
 import {
   classStartingEquipment, backgroundStartingEquipment, classStartingWealth,
@@ -13,7 +13,7 @@ import {
   buildItemIndex, weaponNamesOfCategory, defaultSelectedOptions,
   enumerateChooseSlots, buildStartingInventory,
 } from '@/characters/components/inventory/startingEquipmentResolver';
-import { weaponAttackWarning } from '@/characters/components/inventory/inventoryData';
+import { weaponAttackWarning, weaponRange } from '@/characters/components/inventory/inventoryData';
 
 // A selectable weapon card showing the full stat block, used by the "choose a weapon"
 // slots so players can compare weapons in full instead of picking blind from a dropdown.
@@ -21,7 +21,10 @@ import { weaponAttackWarning } from '@/characters/components/inventory/inventory
 // their explanations; clicking the card anywhere else selects the weapon.
 function WeaponCard({ weapon, selected, onSelect, testId, warning, warningTestId }) {
   const dmg = [weapon.damage, weapon.damage_type].filter(Boolean).join(' ');
-  const physical = [weapon.weight ? `${weapon.weight} lb` : null, weapon.cost].filter(Boolean).join(' · ');
+  // The compendium stores weight with its unit already ("3 lb."); only bare numbers get one.
+  const weight = weapon.weight && /^[\d.]+$/.test(String(weapon.weight).trim()) ? `${weapon.weight} lb.` : weapon.weight;
+  const physical = [weight, weapon.cost].filter(Boolean).join(' · ');
+  const range = weaponRange(weapon);
   return (
     <div
       role="button"
@@ -42,9 +45,9 @@ function WeaponCard({ weapon, selected, onSelect, testId, warning, warningTestId
           ⚠ {warning}
         </div>
       )}
-      {(weapon.range || physical || weapon.description) && (
+      {(range || physical || weapon.description) && (
         <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5">
-          {weapon.range && <div>Range: {weapon.range}</div>}
+          {range && <div data-testid={`${testId}-range`}>Range: {range.label}</div>}
           {physical && <div>{physical}</div>}
           {weapon.description && <div className="italic leading-relaxed">{weapon.description}</div>}
         </div>
@@ -176,7 +179,7 @@ export default function StartingEquipmentStep({ charClass, backgroundName, backg
         if (seen.has(key)) continue;
         seen.add(key);
         const w = weaponByName[key];
-        if (w) facets.push(...weaponFacets(w));
+        if (w) facets.push(...weaponFilterFacets(w));
       }
     }
     return sortWeaponFacets(facets);
@@ -324,6 +327,33 @@ export default function StartingEquipmentStep({ charClass, backgroundName, backg
                   </div>
                 );
               })}
+              {/* What's picked so far, one line per slot. With two "pick a martial weapon" grids
+                  stacked (or a filter hiding a pick), the highlighted card alone was hard to read. */}
+              <div className="rounded-md border bg-background/60 px-3 py-2 text-sm" data-testid="equip-picks-summary">
+                <div className="text-xs font-medium text-muted-foreground mb-1">Your choices</div>
+                <ul className="space-y-0.5">
+                  {slots.map((slot) => (
+                    <li key={slot.slotKey} className="flex flex-wrap items-center gap-x-1.5" data-testid={`equip-picks-summary-${slot.slotKey}`}>
+                      <span className="text-muted-foreground capitalize">{slot.label}:</span>
+                      {picks[slot.slotKey] ? (
+                        <>
+                          <span className="font-medium">{picks[slot.slotKey]}</span>
+                          {/* Deselect from here, so changing your mind doesn't mean finding the card again. */}
+                          <button
+                            type="button"
+                            onClick={() => setPicks((p) => { const { [slot.slotKey]: _drop, ...rest } = p; return rest; })}
+                            className="inline-flex items-center rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            aria-label={`Remove ${picks[slot.slotKey]}`}
+                            data-testid={`equip-picks-remove-${slot.slotKey}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      ) : <span className="italic text-muted-foreground">Not chosen yet</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
         </section>

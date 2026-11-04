@@ -30,6 +30,7 @@ import { getRune } from '@/characters/components/classData/runesData';
 import { ACTIVE_EFFECTS, isEffectActive } from '@/characters/components/effects/activeEffects';
 import { equippedShield } from '@/characters/components/inventory/inventoryData';
 import { getFeatSaveMods, getFeatSaveAdvantages } from '@/characters/components/feats/featEffects';
+import { RACE_TRAIT_DESCRIPTIONS } from '@/characters/components/race/raceTraitsData';
 
 /**
  * @typedef {Object} SaveFeatureEntry
@@ -82,6 +83,21 @@ export const SAVE_FEATURES = [
     advantageAbilities: ACTIVE_EFFECTS.find((e) => e.key === 'giants_might')?.grants(3)?.advantageSaves ?? [],
     applies: ({ characterData }) => isEffectActive(characterData, 'giants_might'),
   },
+];
+
+/**
+ * Racial traits that change the character's own saving throws, matched by name against
+ * `character_data.race_traits` (the senses.js shape) and described from RACE_TRAIT_DESCRIPTIONS,
+ * so nothing here retypes the rules text. All of them are scoped by SITUATION (frightened,
+ * poison, charmed, magic) or are a reroll, never by a bare ability, so none tags a save row.
+ */
+export const RACE_SAVE_TRAITS = [
+  'Brave',              // Halfling — vs. frightened
+  'Lucky',              // Halfling — reroll a natural 1 on a save
+  'Stout Resilience',   // Stout Halfling — vs. poison
+  'Dwarven Resilience', // Dwarf — vs. poison
+  'Fey Ancestry',       // Elf / Half-Elf — vs. charmed
+  'Gnome Cunning',      // Gnome — INT/WIS/CHA saves vs. magic
 ];
 
 /** Stable, DOM-safe id for an entry — used for test ids and React keys. */
@@ -154,7 +170,22 @@ export function getSaveFeatures({
   // Feats come through their structured effects, not through SAVE_FEATURES, so a feat keeps
   // ONE mechanization route. They are appended rather than merged into the sort: the class
   // list is ordered by the level you gained it, and a feat has no level in that sense.
-  return [...classFeatures, ...featSaveFeatures(characterData?.feats)];
+  return [...classFeatures, ...raceSaveFeatures(characterData), ...featSaveFeatures(characterData?.feats)];
+}
+
+/** The racial half of the panel's list, in RACE_SAVE_TRAITS order. */
+function raceSaveFeatures(characterData) {
+  const traits = Array.isArray(characterData?.race_traits) ? characterData.race_traits : [];
+  return RACE_SAVE_TRAITS
+    .filter((name) => traits.includes(name))
+    .map((name) => ({
+      key: `race-${name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      name,
+      source: 'Racial',
+      level: 0,
+      description: RACE_TRAIT_DESCRIPTIONS[name] ?? null,
+      advantageAbilities: [],
+    }));
 }
 
 /** The feat half of the panel's list, built from `save_advantage` effects. */

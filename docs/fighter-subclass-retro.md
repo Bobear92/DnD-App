@@ -1,9 +1,18 @@
-# Fighter subclass retrospective (Jun 26 – Sep 21, 2026)
+# Fighter subclass retrospective (Jun 26 – Nov 4, 2026)
 
-Covers Champion, Battle Master, Eldritch Knight, Arcane Archer, Cavalier, Echo Knight, Psi Warrior,
-Rune Knight and the feat/grapple follow-ups after them: 78 commits, `a634037` → `6a62373`.
+Covers all nine Fighter subclasses — Champion, Battle Master, Eldritch Knight, Arcane Archer,
+Cavalier, Echo Knight, Psi Warrior, Rune Knight, Samurai — and the feat/grapple follow-ups between them.
 
-**Sources and their limits.** No session transcripts survive. Claude Code's 30-day cleanup ran on
+- **§1–§4** were written on 2026-10-26 from 78 commits (`a634037` → `6a62373`), before any session
+  transcripts existed. Items fixed since are marked **[fixed `<commit>`]** in place.
+- **§5** covers the Rune Knight finish, the Samurai build and the Samurai QA pass (`faa2b13`,
+  `52e61c3`, branch `feature/samurai-qa`). These are the first sessions with real logs in
+  `docs/sessions/`, so §5 is measured, not reconstructed.
+- **§6** is what to carry into the Wizard subclasses.
+
+*The original §1–§4 follow.*
+
+**Sources and their limits (§1–§4).** No session transcripts survive for that period. Claude Code's 30-day cleanup ran on
 2026-10-26 at 13:17, and the newest Fighter commit is from Sep 21. (`cleanupPeriodDays` is now
 3650, and `docs/sessions/` logs every session from here on.) This retro is built from:
 - the commit messages, which are detailed and usually say what QA found;
@@ -42,6 +51,7 @@ Features list. The Giant's Might grapple clause survived `d3455f6`, which said i
 was only removed in `6a50940`, three weeks later, after a player read it and called the correct Grapple
 card wrong. Found while planning §5: the **Fire Rune** passive is also wrong. RAW *doubles* your
 proficiency bonus on checks that use a tool you're proficient with; the stored text says "add".
+**[fixed `faa2b13`: Runic Shield, Great Stature and the Fire Rune corrected at the source and pinned by tests]**
 
 **Root cause:** `SUBCLASS_DATA` was authored as summaries, and the audit trusts it as input. RAW checks
 happen only when building a mechanic forces Claude to read closely, and the fix lands wherever that
@@ -101,7 +111,7 @@ finding this session was a mechanic that was computed correctly and displayed no
 - Samurai Fighting Spirit and the Psi Warrior die regain were reset by the backend with no UI to spend or announce them
 - Feats added from the sheet stored **no effects at all** (`45981f8`)
 - creature size was computed and printed nowhere (`d3455f6`)
-- **still true today:** Runic Juggernaut's `reachBonus` is aggregated in `activeEffects.js` and read by nothing, and the Fire Rune's `passive.toolBonus` has no reader either
+- ~~still true today:~~ Runic Juggernaut's `reachBonus` is aggregated in `activeEffects.js` and read by nothing, and the Fire Rune's `passive.toolBonus` has no reader either **[fixed `faa2b13`: both read now, and `runeFieldReaders.test.js` found three more dead fields]**
 
 **Root cause:** tests check that a producer returns the right value. Nothing checks that every
 produced field has a reader. The rule "a `grants` field with no reader is a silent no-op" was written
@@ -175,14 +185,32 @@ From the commit messages ("user's call", "found in QA") and the feedback memorie
 
 ---
 
-## 4. Proposed process changes (NOT applied — for Robert's review)
+## 4. Proposed process changes
+
+**Status as of 2026-11-04.** Proposals 1, 2 and 6 were *followed* in the Rune Knight and Samurai
+sessions because the session prompt said "read the retro", but they lived only here until Nov 4. A
+proposal that lives only in this file works only while someone remembers to point at it. On Nov 4,
+1, 2, 5 and 6 were written into `/subclass-features` (§6a).
+
+| # | Proposal | Status |
+|---|---|---|
+| 1 | Phase 0 RAW check, fix at the source | **Done** (Nov 4: `/subclass-features` Phase 0). It caught 5 bad blurbs across two subclasses while it was still only in this doc (§5). |
+| 2 | "Moment of use" column | **Done** (Nov 4: a triage column). Samurai placements held up in QA (Rapid Strike, Strength Before Death). |
+| 3 | Producer/consumer guard | **Done** (`runeFieldReaders.test.js`, `faa2b13`). It removed 3 dead fields, and Samurai added a guard entry for `attackAdvantage`. |
+| 4 | Model-size estimate on prose sign-offs | **Not done.** |
+| 5 | Player read-through before QA | **Done** (Nov 4: a Phase 3 subsection). Every Samurai QA finding was presentation (§5), which is this step's job. |
+| 6 | Per-clause contract check | **Done** (Nov 4: a "contract fit" triage column). Extensions were planned at audit (`offeredWhen`, `onStart`, `attackAdvantage`), not found in QA. |
+| 7 | Stale skill/doc text | **Done.** "Proven so far" and the fixed-proficiency row are fixed. |
+| 8 | `/log` every session | **Done** (`cc811c0`, `b940fa5`). |
+
+*The original proposals, as written on 2026-10-26:*
 
 1. **`/subclass-features` Phase 0 — RAW text check, corrected at the source.** Before triage, compare
    every feature blurb **and every pool option** against RAW and list the discrepancies. Correct them in
    `SUBCLASS_DATA` / the pool module *in the same change* as the mechanic, never only in the consumer's
    local copy, and pin each corrected clause with a test (the `activeEffects.test.js` shape). Where
    Claude isn't sure of the RAW wording, say so and ask Robert for the text rather than guessing.
-   *Would have caught:* every row in §1a, including the Runic Shield and Fire Rune blurbs still wrong today.
+   *Would have caught:* every row in §1a, including the Runic Shield and Fire Rune blurbs (since fixed in `faa2b13`).
 2. **Triage table gets a "moment of use" column.** Per clause: *what is the player looking at when they
    use this?* Route there first and pick the cost badge second. Default rules: triggered by a hit or an
    attack → attach to the attack card; changes HP → the HP block; changes a roll → that roll's row.
@@ -213,3 +241,125 @@ From the commit messages ("user's call", "found in QA") and the feedback memorie
      and the CLAUDE.md Fire Rune line repeats the "+PB to tool checks" error.
 8. **`/log` at the end of every session** (now installed), so the next retro reads transcripts rather
    than reconstructing from commits.
+
+---
+
+## 5. Rune Knight finish + Samurai (Oct 26 – Nov 4)
+
+Measured from the session logs (`docs/sessions/2026-10/26/1428_*`, `2026-10/28/1534_*`,
+`2026-11/04/0826_*`), which are the first real transcripts this retro has had.
+
+### 5a. The audit-first procedure worked
+
+| | Rune Knight (first pass, Aug–Sep) | Samurai (Oct 28) |
+|---|---|---|
+| Build | many sessions + 5 QA commits over 4 weeks | **1 session, 1 commit** |
+| Bad stored text | found in QA, by a player | **found at audit, before any code** |
+| Mechanics wrong in QA | several (computed-not-shown, misplaced cards) | **none** |
+| Mechanism extensions | found mid-build or in QA | **all planned at audit** (`offeredWhen`, `onStart`, `attackAdvantage`) |
+| Prose sign-off | after the fact | **before any code** |
+
+The Samurai QA pass (Nov 4) found **no wrong Samurai mechanic**. Tireless Spirit, Rapid Strike and
+Strength Before Death were all checked and left as built. Every QA change was about presentation
+or a surface next to the subclass (§5c).
+
+**Why it worked:** the build prompt said *"look at all the pitfalls we fell into with the other fighter
+subclasses"*, so §1–§4 were read before the audit. That is the weak point. Proposals 1, 2, 5 and 6
+are in no skill, so the next subclass gets them only if the prompt names this file again.
+
+### 5b. What still went wrong at build time
+
+- **Stored text was wrong again: 5 blurbs across 2 subclasses.** Rune Knight had Runic Shield, Great
+  Stature and the Fire Rune. Samurai had **Strength Before Death**, which described a different feature
+  (no reaction, no once-per-rest), and **Elegant Courtier**, which was missing its INT/CHA fallback. Both
+  were caught at audit this time, but the rate is unchanged: **assume every blurb is wrong until checked.**
+- **A guard can't catch prose that's already wrong.** The reaction guard scans feature text for "use
+  your reaction". Strength Before Death's blurb never said "reaction", so the guard passed it. Guards over
+  prose protect correct prose from regressing; only the RAW check (Phase 0) catches prose that was wrong
+  to begin with.
+- **CLAUDE.md claimed work that didn't exist.** It said Samurai's Bonus Proficiency was "pure data
+  entry", but it had never been authored. Caught at audit. Treat CLAUDE.md statements about *other*
+  subclasses as claims to verify, not facts.
+- **Robert overrode two simplifications.** He had the INT/CHA fallback picker built when Claude proposed
+  deferring it, and had a negative WIS modifier applied as-is when Claude proposed flooring it at 0.
+  §1e's pattern is the same: Claude leans toward a smaller build, Robert toward RAW-complete.
+  **Default to the full RAW rule and offer the simplification as the alternative, not the reverse.**
+- **Tooling cost turns in every session.** Python heredocs mangled escapes (`\b`, `\s`, `\+`) and
+  apostrophes. They broke `fighter.js` parsing (29 test files failed to load), broke two test titles,
+  and failed outright while this section was being written. The fix: use Write/Edit for any text
+  containing regexes or quotes, and save heredocs for plain data.
+
+### 5c. Samurai QA findings (Nov 4), and the categories they reveal
+
+| Finding | Category |
+|---|---|
+| Elegant Courtier's WIS-save proficiency and +WIS Persuasion were applied, but the level-up wizard showed only the paragraph | **derived-not-announced** (new) |
+| Save proficiencies didn't show where they came from (class vs feat vs feature), though skills did | **provenance-not-shown** |
+| Halfling Brave (and 5 other racial save traits) had no place on the saves surface | computed-not-shown, for race traits |
+| The new wizard box was unreadable in the app's theme | **dark-mode variants are dead code** (§5d) |
+| Starting equipment: an "Ammunition" filter read as "show me ammunition"; weight printed "lb. lb"; ranges missing; two stacked weapon grids hard to read | presentation, in character creation |
+
+**Derived-not-announced** is the sibling of §1d's computed-not-shown. When a mechanic is *derived*
+(computed from class + subclass + level, never stored), nothing happens at the moment it is gained,
+so the player sees no evidence it was applied. Fixed generically: `leveling/levelUpAutoEffects.js` diffs
+the derived registries between the old and new level, and the wizard lists the result in an "Applied to
+your sheet automatically" box. A new row in `FEATURE_SAVE_PROFICIENCIES` or `SKILL_BONUS_SOURCES` now
+shows up in the wizard with no wizard change. **When adding a new derived registry, add it to that diff.**
+
+### 5d. Found in passing: `dark:` variants never apply
+
+`src/index.css` defines `@custom-variant dark (&:is(.dark *))`, but nothing ever sets a `.dark` class,
+because the theme *is* dark at `:root`. So **all ~550 `dark:` classes in 59 `.jsx` files are dead**,
+and every light-palette surface (`bg-amber-50`, `bg-emerald-50`, `bg-amber-100` badges) renders as a
+light box with pale text. The heavy-weapon warning and the amber subclass pill in the wizard are live
+examples. New UI should use the theme tokens (`primary`, `foreground`, `muted-foreground`, `card`,
+`border`), which is what fixed the wizard box.
+
+**[fixed Nov 4, Robert's call]** `<html class="dark">` in `frontend/index.html` switches every `dark:`
+variant on at once, with no per-file sweep. It's guarded by `src/test/darkTheme.test.js`. Before
+the switch, a scan found no element that had a light background with a `dark:` *text* override but no
+`dark:` *background*, so turning it on made nothing less readable. Light-palette classes with no
+`dark:` partner at all are unaffected and remain a cleanup item.
+
+---
+
+## 6. Carry into the Wizard subclasses
+
+### 6a. Write the procedure into the skill, not just this doc
+
+§5a's result came from reading this file. **[done Nov 4]** Proposals **1, 2, 5, 6** and the new §5c
+check are now in `/subclass-features`:
+
+- **Phase 0, RAW check:** every blurb and every pool option. Assume all are wrong.
+- **Triage columns:** moment of use; contract fit (proposal 6).
+- **Derived-effect check:** for any mechanic that is derived rather than picked, confirm the level-up
+  wizard announces it through `levelUpAutoEffects`, or extend that diff.
+- **Phase 3, player read-through** (proposal 5), plus: provenance shown where a number has more than
+  one possible source; theme tokens only, no `dark:` / light palettes.
+- **Default to RAW-complete,** offering the simplification as the alternative (§5b).
+
+### 6b. Missing models the Wizard is likely to hit
+
+Scanned from the Wizard subclass features (5e schools + Bladesinging, War Magic, Chronurgy,
+Graviturgy, Scribes; 2024 Abjurer, Diviner, Evoker, Illusionist). These are *predictions to verify in
+the audit*, not findings:
+
+| Missing model | Likely features | Note |
+|---|---|---|
+| **Concentration state** | War Magic Durable Magic (+2 AC/saves while concentrating), Bladesong (concentration saves), War Caster | Deferred app-wide so far. Several features hinge on it, so `/grill` it before the first one. |
+| **"When you cast a spell of school X" event** | Abjuration Arcane Ward (charges on an abjuration cast), Necromancy Grim Harvest, Evocation riders | The Cast dialog exists (`spellUpcast.js`), but no cast *event* feeds other features. |
+| **Spell-damage display per cast** | Empowered Evocation (+INT to one damage roll), Potent Cantrip, Overchannel | Upcast parsing covers ~31% of spells (`docs/spell-upcast-review.md`). These ride on the same surface. |
+| **A damage-absorbing pool** | Arcane Ward (HP that absorbs damage, then recharges) | Close to temp HP, but persists, has its own max and recharges. Not a rest counter. |
+| **Spellbook copying** | School Savant (half time/cost to copy) | No spellbook-copy model, so likely honest prose. Get sign-off. |
+| **Target model** | Sculpt Spells, Hypnotic Gaze, Illusory Reality | Same line as Fighter. Expect prose sign-offs. |
+
+Existing mechanisms likely to absorb most of the rest: **active effects** (Bladesong: AC + INT, speed,
+Acrobatics advantage), **senses** (Divination Third Eye), **defenses** (Necromancy Inured to Undeath),
+**save features**, **companions** (Undead Thralls, which has real HP; see the mounts note in
+CLAUDE.md), **reaction cards** (Illusory Self, Arcane Deflection, Instinctive Charm), and the existing
+**Portent** rolls.
+
+**The Wizard sheet is config-driven** (ClassSheet, like Fighter), so `subclassPanels` and the shared
+`CasterSpellBlock` apply. Prove one school end-to-end first (breadth-before-vertical): Abjuration or
+Evocation exercises the cast-event and spell-damage gaps earliest. Don't build eight schools on an
+unproven cast model.

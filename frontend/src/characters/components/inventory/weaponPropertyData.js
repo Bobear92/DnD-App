@@ -8,6 +8,8 @@
 export const WEAPON_PROPERTY_DESCRIPTIONS = {
   Simple: 'Simple weapons are basic arms that almost everyone — even most spellcasters — is trained to use.',
   Martial: 'Martial weapons need specialized training; usually only martial classes (Fighter, Paladin, Barbarian, etc.) are proficient with them.',
+  Melee: 'Used to attack a creature within your reach (usually 5 feet). A Thrown melee weapon can also be thrown, but it is still a melee weapon.',
+  Ranged: 'Used to attack a creature at a distance. Most ranged weapons need Ammunition; a few (darts, nets) are thrown instead.',
   'One-handed': 'Used in one hand, leaving your other hand free for a shield, a second weapon, or spell components.',
   'Two-handed': "Requires both hands, so you can't also hold a shield or a second weapon while attacking with it.",
   Versatile: 'Can be wielded with one or two hands. Using two hands deals the larger damage die shown in parentheses (e.g. 1d10 instead of 1d8).',
@@ -65,6 +67,7 @@ export function weaponBadges(weapon = {}) {
   );
   const badges = [];
   if (weapon.weapon_category) badges.push({ label: weapon.weapon_category, variant: 'outline' });
+  if (weapon.weapon_type) badges.push({ label: weapon.weapon_type, variant: 'outline' });
   badges.push({ label: weaponHandedness(props), variant: 'outline' });
   for (const p of others) badges.push({ label: p, variant: 'secondary' });
   return badges;
@@ -79,10 +82,21 @@ export function weaponFacets(weapon = {}) {
   return weaponBadges(weapon).map((b) => weaponPropertyBaseName(b.label));
 }
 
+// Badges that are real properties but make poor FILTERS. "Ammunition" as a chip read as
+// "show me ammunition" and listed bows and crossbows (found in QA) — the question a player is
+// actually asking is "which ones are ranged?", which the Ranged facet answers.
+const NON_FILTER_FACETS = new Set(['Ammunition']);
+
+/** The facets offered as filter chips — weaponFacets minus the ones that mislead as a filter. */
+export function weaponFilterFacets(weapon = {}) {
+  return weaponFacets(weapon).filter((f) => !NON_FILTER_FACETS.has(f));
+}
+
 // Preferred display order for facet filter chips: category, then handedness, then
 // the combat-relevant properties. Anything unlisted sorts to the end alphabetically.
 const FACET_ORDER = [
   'Simple', 'Martial',
+  'Melee', 'Ranged',
   'One-handed', 'Two-handed', 'Versatile',
   'Light', 'Heavy', 'Finesse', 'Thrown', 'Reach',
   'Ammunition', 'Loading', 'Range', 'Special',

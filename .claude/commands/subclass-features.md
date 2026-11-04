@@ -77,12 +77,37 @@ level below where it usually looks.** A new pool module is a new place the audit
 | **Anything named "Channel …"** (Channel Rune, Channel Divinity) **or any use-it-and-it-lasts feature** (Giant's Might) — **HARD RULE (user)** | `effects/activeEffects.js` → an `ACTIVE_EFFECTS` entry with `resourceKey` = the feature's charge, plus `activeEffect: '<key>'` on its action-economy entry / rune `channel` | **It must get an active status AND do something while active** — a bare Use counter that spends a charge and changes nothing is a bug (QA: Channel Rune: Hill spent its charge and granted no resistance anywhere). "Does something" = a `grants` field with a real reader (`resistances` → Defenses card, `checkBonus`/`saveBonus` → skill/save numbers, `advantageAbilities`/`advantageSaves` → adv tags, `size`/`reachBonus`; every field is enforced by `runeFieldReaders.test.js`), or a `hidden(ctx)`-gated Action Economy card that exists only while the effect runs (Storm → "Prophetic State" reaction). If no existing `grants` field fits, add one + its consumer; never ship the toggle alone. Built: Giant's Might, Channel Rune Frost/Hill/Storm. A channel that is instantaneous or lands only on the TARGET (Cloud/Fire/Stone) — ask before inventing a state. |
 | **Pure rules text** (crit range, resistance, advantage on X, "can't be disarmed") | prose-only → leave as the feature description | Honest "flavor, not forgotten". Most "Improved Critical"-type features. |
 
+## Phase 0 — RAW text check (before triage — assume every blurb is wrong)
+The stored text is a summary, and it has been wrong in **every** Fighter subclass from Arcane Archer on —
+5 more blurbs across Rune Knight + Samurai alone, one of which (Strength Before Death) described a
+different feature entirely. Triage built on a wrong blurb builds the wrong mechanic, and a test suite
+pinned to the blurb stays green (see `docs/fighter-subclass-retro.md` §1a, §5b).
+1. For **every** feature blurb in `SUBCLASS_DATA` **and every pool option** (runes, maneuvers, Arcane Shot
+   options…), compare it to RAW and list the discrepancies: wrong numbers, missing clauses (a fallback, a
+   recharge, a cost word), invented clauses.
+2. Fix them **at the source** (`SUBCLASS_DATA` / the pool module) in the same change as the mechanic —
+   never only in a consumer's local copy — and pin each corrected clause with a test.
+3. Where you aren't sure of the exact RAW wording, **say so and ask the user for the text**; don't guess.
+4. A guard over prose (the reaction guard, the combo guard) only protects text that is already right: a
+   blurb that never says "reaction" passes the reaction guard. This phase is the only defence against that.
+5. Treat CLAUDE.md's claims about *this* subclass as unverified ("Samurai Bonus Proficiency is pure data
+   entry" was written before it existed). Grep for the code.
+
 ## Phase 1 — Audit (always do this first, present before any code)
 1. Resolve the class from the subclass name (ask if ambiguous).
 2. Read `SUBCLASS_DATA[class]['5e'][sub]` and `['5.5e'][sub]`.
 3. Produce a **triage table**: one row per feature × edition →
-   `level | feature | edition(s) | mechanical clause(s) | → mechanism (from the table) | status`
+   `level | feature | edition(s) | mechanical clause(s) | moment of use | → mechanism (from the table) | contract fit | status`
    where status ∈ `already built` / `to build (existing mechanism)` / `NEEDS NEW MECHANISM (flag)` / `prose-only`.
+   - **moment of use** — *what is the player looking at when they reach for this?* Route there FIRST and
+     pick the cost badge second. Defaults: triggered by a hit / an attack → attach to the attack card;
+     changes HP → the HP block; changes a roll → that roll's row; changes nothing on your sheet → its own
+     card. Routing by cost badge ("it says bonus action, so the Bonus tab") is how Arcane Shot, Unleash
+     Incarnation, Reclaim Potential and Telekinetic Master all landed in the wrong place first.
+   - **contract fit** — state the chosen mechanism's contract in one line and check the clause fits it
+     EXACTLY (a pool sized by an ability modifier? a free use that then costs a pool die? one feature with
+     two costs? a grant offered only sometimes?). A mismatch is a *planned* extension, named here — not a
+     QA rework a week later. Samurai's `offeredWhen` / `onStart` / `attackAdvantage` were all found this way.
 
    **3a. EXPAND CONTAINERS.** A feature that grants a pool gets **one row per OPTION**, never one row
    for the feature. Rune Carving is six rows, not one. Combat Superiority is one row per maneuver.
@@ -145,6 +170,10 @@ If you can't name the missing model, it is probably mechanizable and you haven't
 Say plainly in the list which ones you think are genuinely un-modelable versus which are **deferred**
 (buildable, just not now) — the user may disagree with either, which is the entire point of showing them.
 
+**Default to the RAW-complete build, and offer the simplification as the alternative — not the reverse.**
+The user has overridden every "let's simplify" recommendation so far (build the Elegant Courtier INT/CHA
+fallback picker rather than defer it; apply a negative WIS modifier as-is rather than floor it at 0).
+
 ## Phase 2 — Plan (CLAUDE.md plan-first rule: ≥3 files = state the plan)
 List, per to-build feature: which file(s) change, which mechanism, which tests, which CLAUDE.md sections.
 **Surface every `NEEDS NEW MECHANISM` row explicitly** and get a decision before building it. Then proceed.
@@ -160,6 +189,28 @@ For each approved feature:
    `getRestSummary` (`CharacterList.jsx`) — both, or rest looks like it "restores" an un-persisted value.
 4. Write/extend tests alongside (mandatory — backend pytest + frontend Vitest). Run them. QA the feature
    in isolation before moving to the next.
+5. **Derived effects must be announced at level-up.** A mechanic DERIVED from class + subclass + level
+   (never picked, never stored — e.g. Elegant Courtier's WIS-save proficiency and +WIS Persuasion) happens
+   silently: the wizard shows only the paragraph, so the player has no evidence it was applied (QA,
+   "derived-not-announced"). `leveling/levelUpAutoEffects.js` diffs the derived registries between the old
+   and new level and the wizard lists the result. A new row in `FEATURE_SAVE_PROFICIENCIES` /
+   `SKILL_BONUS_SOURCES` is picked up free; **a NEW derived registry must be added to that diff.**
+
+### Player read-through (before handing QA to the user)
+Read every new card and line **as a player mid-combat**, not as the author. jsdom proves it rendered, not
+that it reads right — every Samurai QA finding was in this category. Check:
+- **One number per quantity.** Never a second number beside a total ("+2" next to a +7 reads as "+7 and 2
+  more"); a folded-in bonus colours the total and is named in words.
+- **A remaining-count sits beside its owner,** not beside the weapon ("5 / 5 remaining" next to a longsword
+  claims the longsword has five uses).
+- **No two lines that open with the same string** (read as doubled damage).
+- **Nothing stated in prose that the sheet should show** (size, reach, range).
+- **Nothing badged with a cost the player doesn't pay,** and the card's text agrees with its badge.
+- **Provenance where a number has more than one possible source** — skills colour by source, saves now
+  do too (Gold class · Blue feat · Rose feature · Slate by hand). A new source must join that scheme.
+- **Theme tokens only** (`primary`, `foreground`, `muted-foreground`, `card`, `border`, `muted`). Avoid
+  light palettes (`bg-amber-50`, `bg-emerald-50`); an unreadable box on the dark theme was a QA finding.
+- **Each automatic effect is visible in the level-up wizard** (step 5 above).
 
 ### Interaction-nuance checklist (probe these during QA — the Phase 1 audit usually misses them)
 The triage table tells you *what* to mechanize; these are the RAW edges + cross-feature couplings that the

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   featureSaveProficiencies, featureSaveProficiencySource, nonFeatureSaveProficiencies,
-  CLASS_SAVE_PROFS, CHOSEN_SAVE_FIELD,
+  CLASS_SAVE_PROFS, CHOSEN_SAVE_FIELD, saveProficiencySource,
 } from '@/characters/components/skills/saveProficiencies';
 
 const samurai = (level, characterData = {}, extra = {}) => ({
@@ -54,5 +54,39 @@ describe('nonFeatureSaveProficiencies — "do you ALREADY have it?"', () => {
 
   it('never counts the feature grant itself — or the fallback would always fire', () => {
     expect(nonFeatureSaveProficiencies({}, { classSaves: CLASS_SAVE_PROFS.Fighter })).not.toContain('wisdom');
+  });
+});
+
+describe('saveProficiencySource — where a save proficiency comes from', () => {
+  const FIGHTER_FLAGS = { str_save_prof: true, con_save_prof: true };
+  const RESILIENT_WIS = [{
+    name: 'Resilient', choices: { ability: 'wisdom' },
+    effects: [{ kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true }],
+  }];
+
+  it('a class save is "class"', () => {
+    expect(saveProficiencySource('strength', { storedProfs: FIGHTER_FLAGS, charClass: 'Fighter' }))
+      .toEqual({ kind: 'class', source: 'Fighter' });
+  });
+
+  it('a feat-granted save names the feat', () => {
+    expect(saveProficiencySource('wisdom', { storedProfs: FIGHTER_FLAGS, charClass: 'Fighter', feats: RESILIENT_WIS }))
+      .toEqual({ kind: 'feat', source: 'Resilient' });
+  });
+
+  it('a feature-granted save names the feature', () => {
+    expect(saveProficiencySource('wisdom', {
+      storedProfs: FIGHTER_FLAGS, charClass: 'Fighter', featureCtx: samurai(7),
+    })).toEqual({ kind: 'feature', source: 'Elegant Courtier' });
+  });
+
+  it('a non-class flag set by hand is "manual"', () => {
+    expect(saveProficiencySource('intelligence', { storedProfs: { ...FIGHTER_FLAGS, int_save_prof: true }, charClass: 'Fighter' }))
+      .toEqual({ kind: 'manual', source: null });
+  });
+
+  it('an unchecked class save, and an unheld save, are not proficient', () => {
+    expect(saveProficiencySource('strength', { storedProfs: { str_save_prof: false }, charClass: 'Fighter' })).toBeNull();
+    expect(saveProficiencySource('charisma', { storedProfs: FIGHTER_FLAGS, charClass: 'Fighter' })).toBeNull();
   });
 });

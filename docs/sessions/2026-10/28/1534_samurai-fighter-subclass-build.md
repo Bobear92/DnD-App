@@ -3,14 +3,14 @@ session_id: 3bbd6fad-9075-4787-b08a-ce787bfc2937
 title: Samurai subclass built to level 20
 date: 2026-10-28
 started: 15:34
-branch: feature/samurai-subclass
+branch: main
 area: character-system
 tags: [build, fighter, samurai, 5e, bonus-proficiencies, fighting-spirit, elegant-courtier, rapid-strike, strength-before-death, subclass-grants, active-effects, attack-riders, rest-resources, skill-bonuses, save-proficiencies, action-economy, stats-tab, level-up-wizard, rest-endpoint, prose-signoff, session-logs, tooling]
 issues: [raw-correction, mechanism-extended]
 summary: Samurai L3-20 (5e): Fighting Spirit active effect + temp HP, Elegant Courtier, Rapid Strike, SBD; empty session logs removed
-turns: 4
+turns: 5
 stepped_in: true
-last_uuid: f3347301-d956-4c13-9b35-10bf6e006a96
+last_uuid: eb318cc0-f016-4105-86bd-708fdadc1a58
 ---
 
 # Samurai subclass built to level 20
@@ -129,3 +129,27 @@ last_uuid: f3347301-d956-4c13-9b35-10bf6e006a96
 > - A session start cleaned up …
 
 **Commands run:** 6
+
+### 5. 2026-10-28 16:26
+
+**Robert:**
+> Cool lets /ship. We will QA in another session.
+
+**Claude:**
+> The Samurai work is on `main` at **`52e61c3`** and pushed. The feature branch is deleted locally and remotely.
+> 
+> **Checks before shipping:**
+> - Frontend: all 3,530 tests pass, and the production build succeeds.
+> - Backend: all 897 tests pass, and the feat-coverage gate passes.
+> - **Real-app check:** I drove the running app with Playwright on a throwaway level-18 Samurai, and all 8 checks passed:
+>   - Wisdom save shows +9 and Persuasion shows +2, with the legend naming Elegant Courtier.
+>   - Starting Fighting Spirit saved the use, the effect and 15 temp HP.
+>   - The advantage tag and the Rapid Strike note show on the weapon card.
+>   - The Strength Before Death reaction card is there.
+>   - A long rest resets both Samurai pools and names them in the summary.
+>   
+>   I deleted the character afterwards.
+> 
+> The session log is written. I added six tags to `TAGS.md`: four Samurai features plus the two new mod …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/c--Users-rober-Documents-Projects-dnd-app/3bbd6fad-9075-4787-b08a-ce787bfc2937/scratchpad/verify.mjs` · **Commands run:** 14

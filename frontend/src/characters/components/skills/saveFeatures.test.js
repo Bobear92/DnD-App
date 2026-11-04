@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   getSaveFeatures, saveFeatureKey, SAVE_FEATURES,
-  saveAdvantageSourcesFor, getSaveAdvantageAbilities, conditionalSaveBonuses, saveAdvantageText,
+  saveAdvantageSourcesFor, getSaveAdvantageAbilities, conditionalSaveBonuses, saveAdvantageText, RACE_SAVE_TRAITS,
 } from './saveFeatures';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 
@@ -343,5 +343,28 @@ describe('saveAdvantageText', () => {
 
   it('reads correctly with no situation at all', () => {
     expect(saveAdvantageText({ abilities: ['wisdom'] })).toBe('Advantage on Wisdom saving throws.');
+  });
+});
+
+describe('getSaveFeatures — racial traits', () => {
+  it("lists a Halfling's Brave with the trait's own rules text, sourced as Racial", () => {
+    const f = getSaveFeatures({ charClass: 'Fighter', level: 3, characterData: { race_traits: ['Lucky', 'Brave', 'Halfling Nimbleness'] } });
+    const brave = f.find((x) => x.name === 'Brave');
+    expect(brave).toMatchObject({ key: 'race-brave', source: 'Racial' });
+    expect(brave.description).toMatch(/advantage on saving throws against being frightened/i);
+    // Lucky rerolls a natural 1 on a save, so it belongs here too; Nimbleness does not.
+    expect(f.map((x) => x.name)).toContain('Lucky');
+    expect(f.map((x) => x.name)).not.toContain('Halfling Nimbleness');
+  });
+
+  it('tags no save row — every racial save trait is situational', () => {
+    const f = getSaveFeatures({ characterData: { race_traits: RACE_SAVE_TRAITS } });
+    expect(f).toHaveLength(RACE_SAVE_TRAITS.length);
+    expect(f.every((x) => x.advantageAbilities.length === 0)).toBe(true);
+    expect(f.every((x) => x.description)).toBe(true);
+  });
+
+  it('lists nothing racial without race traits', () => {
+    expect(getSaveFeatures({ charClass: 'Fighter', level: 1, characterData: {} })).toEqual([]);
   });
 });
