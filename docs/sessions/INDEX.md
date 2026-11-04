@@ -9,7 +9,7 @@ To find every session on a subject, use the **Tags** index at the bottom, or gre
 
 | Date | Start | Session | Area | Tags | Issues | Summary | Turns | ⚠ |
 |---|---|---|---|---|---|---|---|---|
-| 2026-11-04 | 08:26 | [Frontend and backend startup for Samurai QA](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) | — |  |  | Start the frontend and backend. I will QA the Samurai. | 15 |  |
+| 2026-11-04 | 08:26 | [Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) | character-system | qa, docs, retro, tooling, fighter, samurai, elegant-courtier, tireless-spirit, rapid-strike, strength-before-death, starting-equipment, race-traits, save-features, save-proficiencies, auto-effects, character-create, level-up-wizard, stats-tab, encounters, theme, claude-md, 5e | computed-not-shown, presentation, mechanism-extended | Samurai QA (no mechanic bugs); equipment picker, racial save traits, wizard auto-effects, save provenance; dark: on | 17 | ⚠ |
 
 ## 2026-10
 
@@ -21,72 +21,81 @@ To find every session on a subject, use the **Tags** index at the bottom, or gre
 
 ## Tags
 
-- **5e** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
+- **5e** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **action-economy** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **active-effects** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **arcane-archer** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **attack-riders** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
+- **auto-effects** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
 - **battle-master** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **bonus-proficiencies** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **build** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **cavalier** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **champion** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
-- **claude-md** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
-- **docs** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
+- **character-create** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
+- **claude-md** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
+- **docs** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **echo-knight** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **eldritch-knight** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
-- **elegant-courtier** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
-- **fighter** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
+- **elegant-courtier** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
+- **encounters** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
+- **fighter** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **fighting-spirit** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
 - **fire-rune** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **giants-might** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **great-stature** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **guard-test** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **items-tab** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
-- **level-up-wizard** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
+- **level-up-wizard** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
 - **prose-signoff** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **psi-warrior** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
-- **qa** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
-- **rapid-strike** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
+- **qa** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
+- **race-traits** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
+- **rapid-strike** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
 - **rest-endpoint** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
 - **rest-resources** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
-- **retro** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
+- **retro** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **rune-knight** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **runic-juggernaut** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **runic-shield** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
-- **samurai** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
-- **save-proficiencies** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
+- **samurai** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
+- **save-features** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
+- **save-proficiencies** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
 - **session-logs** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **skill-bonuses** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
-- **stats-tab** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
-- **strength-before-death** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
+- **starting-equipment** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
+- **stats-tab** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
+- **strength-before-death** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
 - **subclass-grants** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
 - **subclass-proficiencies** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **surprise** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
+- **theme** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
+- **tireless-spirit** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
 - **tool-checks** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
-- **tooling** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
+- **tooling** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **user-rule** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **weapon-reach** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 
 ## Issues
 
 - **raw-correction** (2) — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
-- **computed-not-shown** (1) — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
-- **mechanism-extended** (2) — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
+- **computed-not-shown** (2) — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
+- **mechanism-extended** (3) — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **prose-to-mechanic** (1) — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **rework** (1) — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
+- **presentation** (1) — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
 
 ### Issues by class / subclass
 
-| Subject | raw-correction | computed-not-shown | mechanism-extended | prose-to-mechanic | rework |
-|---|---|---|---|---|---|
-| fighter | 2 | 1 | 2 | 1 | 1 |
-| champion |  |  |  |  | 1 |
-| battle-master |  |  |  |  | 1 |
-| eldritch-knight |  |  |  |  | 1 |
-| arcane-archer |  |  |  |  | 1 |
-| cavalier |  |  |  |  | 1 |
-| echo-knight |  |  |  |  | 1 |
-| psi-warrior |  |  |  |  | 1 |
-| rune-knight | 1 | 1 | 1 | 1 | 1 |
-| samurai | 1 |  | 1 |  |  |
+| Subject | raw-correction | computed-not-shown | mechanism-extended | prose-to-mechanic | rework | presentation |
+|---|---|---|---|---|---|---|
+| fighter | 2 | 2 | 3 | 1 | 1 | 1 |
+| champion |  |  |  |  | 1 |  |
+| battle-master |  |  |  |  | 1 |  |
+| eldritch-knight |  |  |  |  | 1 |  |
+| arcane-archer |  |  |  |  | 1 |  |
+| cavalier |  |  |  |  | 1 |  |
+| echo-knight |  |  |  |  | 1 |  |
+| psi-warrior |  |  |  |  | 1 |  |
+| rune-knight | 1 | 1 | 1 | 1 | 1 |  |
+| samurai | 1 | 1 | 2 |  |  | 1 |

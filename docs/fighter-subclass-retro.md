@@ -325,6 +325,9 @@ the switch, a scan found no element that had a light background with a `dark:` *
 
 ## 6. Carry into the Wizard subclasses
 
+The open items below are tracked as checkboxes in [`docs/tickets/wizard-subclasses.md`](tickets/wizard-subclasses.md).
+Start the Wizard work there.
+
 ### 6a. Write the procedure into the skill, not just this doc
 
 §5a's result came from reading this file. **[done Nov 4]** Proposals **1, 2, 5, 6** and the new §5c

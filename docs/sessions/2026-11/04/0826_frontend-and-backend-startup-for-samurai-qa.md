@@ -3,14 +3,14 @@ session_id: 1c2a3f70-e77c-4bf1-bcb9-ea11648ba330
 title: Samurai QA and Fighter retro update
 date: 2026-11-04
 started: 08:26
-branch: feature/samurai-qa
+branch: feature/wizard-prework-todos
 area: character-system
 tags: [qa, docs, retro, tooling, fighter, samurai, elegant-courtier, tireless-spirit, rapid-strike, strength-before-death, starting-equipment, race-traits, save-features, save-proficiencies, auto-effects, character-create, level-up-wizard, stats-tab, encounters, theme, claude-md, 5e]
 issues: [computed-not-shown, presentation, mechanism-extended]
 summary: Samurai QA (no mechanic bugs); equipment picker, racial save traits, wizard auto-effects, save provenance; dark: on
-turns: 15
+turns: 17
 stepped_in: true
-last_uuid: f056ba7c-0902-40ca-8f88-d8632fd9654f
+last_uuid: e370043f-1d3f-4699-965f-b0bc20060d05
 ---
 
 # Samurai QA and Fighter retro update
@@ -26,6 +26,7 @@ last_uuid: f056ba7c-0902-40ca-8f88-d8632fd9654f
 - Saves grid colours each proficiency by source (`saveProficiencySource`: Gold class · Blue feat · Rose feature · Slate by hand) with a `saves-source-legend`.
 - `<html class="dark">`: all ~550 `dark:` classes were dead (the theme is dark at `:root`, but the variant keys on `.dark`); guarded by `src/test/darkTheme.test.js`.
 - `docs/fighter-subclass-retro.md`: §4 status table, §5 (Rune Knight finish + Samurai, measured from session logs), §6 (Wizard carry-over and predicted missing models). Phase 0 RAW check, moment-of-use and contract-fit columns, the derived-effect check and the player read-through written into `/subclass-features`.
+- Shipped as `3bd8c3a`. Follow-up: the open items became the Wizard pre-work worklist `docs/tickets/wizard-subclasses.md`.
 - Verified in the running app (read-only Playwright, GM account): html has `dark`, the WIS save shows source `feature` with the legend, racial save traits listed, 0 console errors. Frontend 3,562 tests; build green.
 
 ## Where Claude struggled / where Robert stepped in
@@ -49,6 +50,8 @@ last_uuid: f056ba7c-0902-40ca-8f88-d8632fd9654f
 - Retro proposals 1, 2, 5, 6 codified in `/subclass-features` before the Wizard work (Robert approved).
 
 ## Open threads
+
+**All of the below are now checkboxes in `docs/tickets/wizard-subclasses.md`** (linked from retro §6). Start the Wizard work there.
 
 - Light-palette classes with **no** `dark:` partner still render pale (unchanged by the switch). Sweep them when touched.
 - Retro proposal 4 (model-size estimate on prose sign-offs) is still not done.
@@ -305,3 +308,38 @@ last_uuid: f056ba7c-0902-40ca-8f88-d8632fd9654f
 > - **Default to the full rules version** and offer the simpler version as the alternat …
 
 **Files edited:** `.claude/commands/subclass-features.md`, `frontend/index.html`, `frontend/src/test/darkTheme.test.js`, `docs/fighter-subclass-retro.md`, `CLAUDE.md` · **Commands run:** 4
+
+### 16. 2026-11-04 12:47
+
+**Robert:**
+> okay lets /ship and merge to main
+
+**Claude:**
+> Shipped. The work is on `main` at **`3bd8c3a`** and pushed, and the `feature/samurai-qa` branch is deleted.
+> 
+> - **Tests and build:** all 3,562 frontend tests pass and the production build succeeds. Nothing in the backend changed, so the backend checks didn't apply.
+> - **Checked in the running app:** I logged in as the test GM and only looked, changing nothing. The Samurai's Wisdom save shows the Elegant Courtier colour with the legend "Gold = class save · Rose = from Elegant Courtier". The Halfling traits Brave, Lucky and Stout Resilience appear in Features Affecting Saves. Dark mode is on and there were no console errors.
+> - **Agent fix:** the `frontend-page-expert` agent recommended a pale amber background for GM Notes cards, the kind that renders as a light box on the dark page. It now points to the faint amber tint NPC Detail actually uses.
+> - **Session log:** written. It records that yo …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/c--Users-rober-Documents-Projects-dnd-app/1c2a3f70-e77c-4bf1-bcb9-ea11648ba330/scratchpad/verify.mjs`, `docs/sessions/2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md` · **Commands run:** 15
+
+### 17. 2026-11-04 12:52
+
+**Robert:**
+> Put the still open items as todos for when we start to build out the wizard
+
+**Claude:**
+> The open items are now a to-do list in [docs/tickets/wizard-subclasses.md](docs/tickets/wizard-subclasses.md), and retro §6 links to it.
+> 
+> **Before the first Wizard school:**
+> - [ ] **Concentration:** use `/grill` to decide how to handle concentration (Durable Magic, Bladesong, War Caster).
+> - [ ] **Spell-cast event:** use `/grill` to decide on a "when you cast a spell of school X" event (Arcane Ward, Grim Harvest, the Evocation features).
+> - [ ] **Proving school:** pick one school to build end to end first. The retro suggests Abjuration or Evocation.
+> - [ ] **Size estimates:** add the "how big would this be to build" estimate to the skill's skipped-mechanics list (the retro's proposal 4).
+> 
+> **Cleanups, to do as the files come up:**
+> - [ ] **Pale boxes:** fix the boxes that use a light colour with no dark-mode version, a file at a time rather than one big sweep.
+> - [ ] **Feat-spell key warning:* …
+
+**Files edited:** `docs/tickets/wizard-subclasses.md`, `docs/fighter-subclass-retro.md` · **Commands run:** 2
