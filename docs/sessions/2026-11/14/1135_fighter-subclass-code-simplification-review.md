@@ -3,14 +3,14 @@ session_id: 287a44bd-214e-406f-a4f6-12ae4e512444
 title: Fighter and shared-systems consolidation pass
 date: 2026-11-14
 started: 11:35
-branch: feature/fighter-consolidation-review
+branch: feature/fighter-retro-learnings
 area: character-system
-tags: [consolidation, bugfix, docs, tooling, fighter, rest-endpoint, rest-resources, max-hp, feat-acquisition, feat-effects, feature-gate, character-context, ability-math, attack-riders, entry-riders, equipment-features, active-effects, defenses, save-features, save-proficiencies, companions, action-economy, features-tab, level-up-wizard, character-create, character-list, claude-md, great-weapon-master, guard-test]
+tags: [consolidation, bugfix, docs, tooling, fighter, rest-endpoint, rest-resources, max-hp, feat-acquisition, feat-effects, feature-gate, character-context, ability-math, attack-riders, entry-riders, equipment-features, active-effects, defenses, save-features, save-proficiencies, companions, action-economy, features-tab, level-up-wizard, character-create, character-list, claude-md, great-weapon-master, guard-test, retro]
 issues: [rework]
-summary: Audited Fighter + shared systems; fixed long-rest HP bug, consolidated 6 duplications, cut CLAUDE.md 240→95 KB
-turns: 14
+summary: Audited Fighter + shared systems; fixed long-rest HP, consolidated 6 duplications, CLAUDE.md 240→95 KB; lessons index
+turns: 20
 stepped_in: true
-last_uuid: e7d463a0-579e-4716-af82-a24c452e3f7f
+last_uuid: 5ea4fe12-2f1a-44eb-9bb4-165e0ecd3c7b
 ---
 
 # Fighter and shared-systems consolidation pass
@@ -41,6 +41,12 @@ in the agreed order. Shipped as one commit on `feature/fighter-consolidation-rev
   move are defined once (`EQUIPMENT_FEATURES` rows with `attackScope`) and render as ordinary riders.
 - Tests: frontend 3,630 → 3,891; backend 897 → 981. Guards added: `claudeMdBudget`, `noDuplicateHelpers`,
   `restResourceContract`, `maxHpParity`.
+- **Nov 15, second ship (docs only):** the Fighter retro extended through Nov 15 — §7 on the consolidation pass
+  (duplication hiding bugs; tables owned by a surface; CLAUDE.md as a cost; what worked; struggles), proposals
+  9–13 in the §4 table, §6c listing the new shared modules for the Wizard. New `docs/learnings.md`: ~85
+  lessons from the retro, memories, session logs and CLAUDE.md in ten categories, each with what enforces it,
+  topped by the six that nothing enforces. Linked from CLAUDE.md's Docs index and the `/retro` skill; two new
+  memories (the index pointer, and the heredoc/codemod lesson).
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -65,11 +71,20 @@ in the agreed order. Shipped as one commit on `feature/fighter-consolidation-rev
   assumed ability scores were inputs when they are read-only text. Both were the test, not the code.
 - **Bash heredocs with mixed quotes failed repeatedly** in this shell; I switched to writing scripts with the Write tool.
 - **The backend went down mid-session** (the restart task exited); noticed and restarted on resuming.
+- **Nov 15 docs pass:** a first draft of `docs/learnings.md` cited session logs from August that don't exist
+  (logging started Oct 26) and overstated two claims; corrected before showing Robert.
+- **I branched while another session's uncommitted work sat in the tree**, so that work rode onto my branch.
+  Caught and flagged; should have checked `git status` for foreign changes before branching.
 - **Not done:** I never clicked through the UI myself. Robert QA'd the running app before /ship; my runtime check was the
   production build plus a read-only dry-run rest against the dev DB.
 
 ## Decisions
 
+- **Lessons get one categorized index with an enforcement column** (`docs/learnings.md`), not more retro
+  prose: Robert asked for learnings to be readily available and categorized, and a lesson with no enforcer
+  is the one that recurs.
+- **Shipped the docs separately** from the parallel world-building-toggle session that shares this working
+  tree (Robert agreed): independent subject, cleaner history; the other session's files were left unstaged.
 - **Backend owns what a rest recovers; the frontend shows a dry run** — the same call the initiative flow made. No frontend
   prediction of backend behaviour (now a standing rule in CLAUDE.md).
 - **Cross-language duplicates are checked through committed fixtures**, not trusted: max-HP cases and the rest-table contract.
@@ -88,6 +103,12 @@ in the agreed order. Shipped as one commit on `feature/fighter-consolidation-rev
 
 ## Open threads
 
+- **Proposals 9, 12, 13 (§7g) are not yet in any skill**: ask "who else knows this?" at audit, codemod
+  discipline, a whole-system pass after each class. The six "nothing enforces this yet" lessons in
+  `docs/learnings.md` are the candidates for guards or skill steps.
+- **A second session works in this same folder** (world-building-only toggle); the working tree was moved to
+  `feature/world-building-only-toggle` for it after this ship. Two sessions sharing one working tree means
+  one `git checkout` moves both.
 - **#6 (held):** `buildActionEconomy` is still one ~950-line function with hand-written per-feat blocks (Crossbow Expert,
   Tavern Brawler, Charger ×2, Grappler, War Magic, Two-Weapon Fighting). Split into per-source builders when the next
   class shows whether it hurts.
@@ -352,3 +373,103 @@ in the agreed order. Shipped as one commit on `feature/fighter-consolidation-rev
 > The session log is written and `main` hasn't moved. Everything else for the ship is ready; I'm waiting on the full backend suite (about 11 minutes) before committing, and will finish the commit, merge and push as soon as it reports.
 
 **Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/287a44bd-214e-406f-a4f6-12ae4e512444/scratchpad/verify_rest.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/287a44bd-214e-406f-a4f6-12ae4e512444/scratchpad/write_log.py` · **Commands run:** 8
+
+### 15. 2026-11-15 12:52
+
+**Robert:**
+> <task-notification>
+> <task-id>b7jgh7a5h</task-id>
+> <tool-use-id>toolu_0115ceioUmsEnmf4YMyosPk1</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\287a44bd-214e-406f-a4f6-12ae4e512444\tasks\b7jgh7a5h.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run the full backend test suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> Shipped. `main` is at **`892ce4a`** and pushed; the feature branch is deleted.
+> 
+> ## What was verified before the push
+> 
+> - **Frontend:** 3891 tests pass, and the production build succeeds.
+> - **Backend:** 981 tests pass; the feat-coverage gate is OK (52/114 complete, no regression).
+> - **Live check:** a read-only dry-run rest against the running backend returned "HP restored to …" for characters that store only `hp_rolls` (five of six in the first campaign I checked) and saved nothing. That confirms the long-rest bug was real and is fixed.
+> - **UI:** I relied on your QA; I did not click through it myself.
+> 
+> ## What's in the commit
+> 
+> 117 files: the long-rest HP fix, the GM add-feat fix, the five consolidations (#1, #3, #4, #5, #8), and the CLAUDE.md split (#2).
+> 
+> ## Left open
+> 
+> - **#6 and #7** are still held: splitting `buildActionEconomy`, and moving Battle Master maneuvers into the level-up pools …
+
+**Commands run:** 3
+
+### 16. 2026-11-15 17:20
+
+**Robert:**
+> <task-notification>
+> <task-id>b3kvyo680</task-id>
+> <task-id>bhuq7ecus</task-id>
+> <task-id>__orphan_summary__:shell</task-id>
+> <status>stopped</status>
+> <summary>2 background shell command tasks didn't finish before the previous session ended. Task ids: b3kvyo680, bhuq7ecus.</summary>
+> <note>No completion record was found for them in the previous session. They may have been stopped (via the UI, Monitor timeout, or agent teardown — these leave no transcript marker), or they may have been running when the previous Claude Code process exited. They have been marked stopped. Task ids in this notification …
+
+**Claude:**
+> _(no text reply)_
+
+### 17. 2026-11-15 17:21
+
+**Robert:**
+> Add all of our learnings and what you can to the fighter subclass retro. Make sure all of our other learnings are readily availiable can catagorized
+
+**Claude:**
+> You've hit your Fable limit · resets 3pm (America/New_York). Switch to another model, or manage usage credits at https://claude.ai/settings/usage?from=cc_cli_limit_message, to continue.
+
+**Commands run:** 1
+
+### 18. 2026-11-15 17:22
+
+**Robert:**
+> /model default
+
+**Claude:**
+> _(no text reply)_
+
+### 19. 2026-11-15 17:22
+
+**Robert:**
+> continue
+
+**Claude:**
+> The retro is extended and every lesson is now in one categorized index. Docs only; nothing is committed, since you didn't ask to ship.
+> 
+> ## What's new
+> 
+> **`docs/fighter-subclass-retro.md`** now runs through Nov 15:
+> - **§7, the consolidation pass.** The main finding is that duplication was hiding two live bugs: the long-rest HP restore and the GM add-feat path. The table in §7a lists each duplicated concept, how many copies it had, and what drifted.
+>   - The root cause: each subclass was built by asking "where does this show?" and never "who else already knows this?".
+>   - It also covers CLAUDE.md as a per-turn cost, what worked, where I struggled (four broken codemods, heredocs again), and what's still open.
+> - **§4** gains proposals 9–13 with their status. Two are already done: shared fixtures for cross-language copies, and the CLAUDE.md size gate. Three are only proposed: ask "who else know …
+
+**Files edited:** `docs/fighter-subclass-retro.md`, `docs/learnings.md`, `CLAUDE.md`, `.claude/commands/retro.md`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/feedback_shell_edits.md`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/reference_learnings_index.md` · **Commands run:** 5
+
+### 20. 2026-11-15 17:29
+
+**Robert:**
+> So should we ship these changes here? or wait and ship altogether in the other session?
+
+**Claude:**
+> I'd ship these here, now, on their own.
+> 
+> **Why separately:**
+> - **They're independent.** Four docs files that share nothing with the world-building toggle, so they don't need to wait for its QA.
+> - **Cleaner history.** One commit per subject means the retro update and the toggle feature can each be found and reverted on their own.
+> - **Shipping together costs more.** The docs would sit uncommitted until the toggle is finished and tested, and the other session would have to account for files it didn't write.
+> 
+> **How I'd do it:**
+> - Stage only my four files: the retro, `docs/learnings.md`, `CLAUDE.md` and `.claude/commands/retro.md`. Then commit, fast-forward `main`, and push.
+> - The other session's changes stay uncommitted and untouched, since nothing in my commit overlaps them.
+> 
+> **One thing to settle first:** after the merge I'd normally switch back to `main` and delete this branch. That would …

@@ -33,6 +33,7 @@ load when needed rather than every turn. **They are not optional reading: open t
 | Why a column or `character_data` key is shaped the way it is; seeding history | [docs/schema-notes.md](docs/schema-notes.md) |
 | What each backend test file covers | [docs/backend-tests.md](docs/backend-tests.md) |
 | Multi-session worklists | `docs/tickets/` (see its README) |
+| Planning a feature or class, before QA hand-off, or writing a retro — every lesson learned, by category, with what enforces it | [docs/learnings.md](docs/learnings.md) |
 
 **Where new documentation goes:** a new or changed system description → its `docs/systems/` file (create one and add a row
 here if none fits). CLAUDE.md gets at most a one-line change, plus any new STANDING RULE in "Character sheet rules".

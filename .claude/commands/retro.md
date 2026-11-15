@@ -19,6 +19,7 @@ Review this session's work against the **Efficiency tripwires** in CLAUDE.md and
 ## Output format
 1. **Smells found** — bullet list, each: what fired + the cheaper approach we should have taken. If none, say so plainly (don't invent one).
 2. **Backlog update** — if any smell is worth acting on later, offer to append it to `docs/character-system-backlog.md` (do not write without confirmation).
+2b. **Lessons index** — read `docs/learnings.md` first; if a smell repeats a lesson already there, say so (a repeat means its enforcement is too weak). For a NEW lesson, offer to add one row in the right category with what enforces it (`none` is a valid answer, and lands it in the "nothing enforces yet" table).
 3. **One-line verdict** — was this session's process efficient, and the single highest-leverage process change for next time.
 
 ## Arguments

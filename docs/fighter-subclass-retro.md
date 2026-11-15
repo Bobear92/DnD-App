@@ -1,7 +1,8 @@
-# Fighter subclass retrospective (Jun 26 – Nov 4, 2026)
+# Fighter subclass retrospective (Jun 26 – Nov 15, 2026)
 
 Covers all nine Fighter subclasses — Champion, Battle Master, Eldritch Knight, Arcane Archer,
-Cavalier, Echo Knight, Psi Warrior, Rune Knight, Samurai — and the feat/grapple follow-ups between them.
+Cavalier, Echo Knight, Psi Warrior, Rune Knight, Samurai — the feat/grapple follow-ups between them,
+and the whole-system consolidation pass that closed out the Fighter work.
 
 - **§1–§4** were written on 2026-10-26 from 78 commits (`a634037` → `6a62373`), before any session
   transcripts existed. Items fixed since are marked **[fixed `<commit>`]** in place.
@@ -9,6 +10,12 @@ Cavalier, Echo Knight, Psi Warrior, Rune Knight, Samurai — and the feat/grappl
   `52e61c3`, branch `feature/samurai-qa`). These are the first sessions with real logs in
   `docs/sessions/`, so §5 is measured, not reconstructed.
 - **§6** is what to carry into the Wizard subclasses.
+- **§7** covers the consolidation pass of Nov 14–15 (`892ce4a`): looking at the Fighter and the
+  shared systems as a whole once every subclass had passed QA.
+
+**Every lesson in this file is also indexed by category in [`docs/learnings.md`](learnings.md)**,
+together with the lessons from the memories, the session logs and CLAUDE.md, and what (if anything)
+enforces each one. Start there when planning; come here for the evidence.
 
 *The original §1–§4 follow.*
 
@@ -202,6 +209,11 @@ proposal that lives only in this file works only while someone remembers to poin
 | 6 | Per-clause contract check | **Done** (Nov 4: a "contract fit" triage column). Extensions were planned at audit (`offeredWhen`, `onStart`, `attackAdvantage`), not found in QA. |
 | 7 | Stale skill/doc text | **Done.** "Proven so far" and the fixed-proficiency row are fixed. |
 | 8 | `/log` every session | **Done** (`cc811c0`, `b940fa5`). |
+| 9 | "Who else already knows this?" at audit (§7g) | **Proposed** Nov 15. |
+| 10 | Cross-language copies checked by a shared fixture (§7g) | **Done** for max HP and rest resources (`892ce4a`); the convention is not yet written into a skill. |
+| 11 | A size gate on every always-loaded doc (§7g) | **Done** for CLAUDE.md (`claudeMdBudget.test.js`, `892ce4a`). |
+| 12 | Codemod discipline (§7g) | **Proposed** Nov 15; recorded as a memory, in no skill. |
+| 13 | A periodic whole-system pass after each class (§7g) | **Proposed** Nov 15. |
 
 *The original proposals, as written on 2026-10-26:*
 
@@ -366,3 +378,139 @@ CLAUDE.md), **reaction cards** (Illusory Self, Arcane Deflection, Instinctive Ch
 `CasterSpellBlock` apply. Prove one school end-to-end first (breadth-before-vertical): Abjuration or
 Evocation exercises the cast-event and spell-damage gaps earliest. Don't build eight schools on an
 unproven cast model.
+
+### 6c. Use the shared modules the consolidation pass left behind (added Nov 15)
+
+The Wizard is the first class built after §7. Each of these replaced a pattern the Fighter repeated by
+hand, so reaching past them re-creates the duplication §7 removed:
+
+| Need | Use | Not |
+|---|---|---|
+| Gate a row by class / subclass / level / edition | declarative keys checked by `matchesGate` (`shared/featureGate.js`); `applies(ctx)` only for what the keys can't say | a hand-written filter, or `edition === '5.5e'` |
+| A rest-recharging pool (Arcane Recovery, Arcane Ward's recharge…) | one row in the backend `_REST_RESOURCES`, then `UPDATE_REST_CONTRACT=1 pytest tests/test_rest_resources.py` | a branch in `_compute_rest_patch`, or any frontend summary of the rest |
+| An ability modifier, proficiency bonus or signed number | `shared/abilityMath.js` | a local `mod()` (the `noDuplicateHelpers` guard fails the build) |
+| Class / subclass / level / scores on CharacterDetail | `sheetCtx` (`shared/characterContext.js`) | `character.*` or a draft read directly |
+| A feature that rides on an attack AND belongs on the item | an `EQUIPMENT_FEATURES` row with `attackScope` | a new field on the attack entry |
+| A feat-like choice at level-up | extend `featAcquisition` + `FeatChoiceFields` | a picker in one surface only |
+
+Before adding any new table or surface, ask the §7g question: **who else already knows this fact?**
+
+---
+
+## 7. The whole-system consolidation pass (Nov 14–15)
+
+Measured from `docs/sessions/2026-11/14/1135_fighter-subclass-code-simplification-review.md`; shipped
+as `892ce4a` (117 files).
+
+Once all nine subclasses had passed QA, Robert asked for a look at the Fighter, its subclasses and the
+systems they run through *as a whole*: creation, the sheet, the level-up wizard, the backend. Claude
+audited read-only and reported eight findings ranked by size, risk and payoff, plus a "leave alone" list.
+Robert picked the order; seven items were built in one session.
+
+### 7a. Duplication was hiding real bugs
+
+The audit went looking for redundancy and found two live bugs, both sitting in the gap between copies:
+
+| Duplicated concept | Copies | What drifted | Found by |
+|---|---|---|---|
+| Maximum HP | frontend `effectiveMaxHp` (reads `hp_rolls`) + backend long rest (read `hp_max`) | The frontend moved to `hp_rolls` months earlier; nothing writes `hp_max` any more. **A long rest restored nobody's HP**, and every backend rest test seeded `hp_max` by hand, so the suite stayed green. | tracing max HP across the language boundary |
+| Taking a feat | Variant Human creation, the level-up wizard, the GM's Add Feat | The least-used copy (GM Add Feat) skipped every choice: Magic Initiate granted no spells, Skilled no skills, half-feats no +1 | comparing the three acquisition paths |
+| What a rest recovers | backend branches, the class configs, a frontend `getRestSummary` mirror | Every new subclass had to be written into all three plus two test files | reading the rest code beside the config |
+| The ability modifier | 3 exported copies, ~15 local helpers, ~12 inline formulas | A missing score gave NaN in some, 0 in others, "-5" in one | grepping the formula |
+| "Is this a 2024 campaign?" | `normEdition` defined 7 times; dozens of inline checks; some tables compared the raw string | A row authored `'5.5e'` silently missed a campaign stored as `'2024'` (Remarkable Athlete and Heroic Warrior did) | a new test written for the consolidation |
+| "What does this character currently have?" on the sheet | 17 inline answers in CharacterDetail | 5 panels read the saved character, the rest the unsaved draft | listing the call sites |
+| Weapon-card notes | `EQUIPMENT_FEATURES` rows + 4 bespoke attack-entry fields with their own render branches | Two definitions of the same text, kept in step by hand | comparing the Items and Action Economy tabs |
+
+**The lesson:** a duplicated concept is not only maintenance cost; it is where bugs hide, because each
+copy has its own tests and those tests check the copy, not agreement between copies. The hp_max bug is
+the sharpest case: a test that seeds a data shape the app no longer writes keeps a dead path green
+indefinitely.
+
+### 7b. The pattern behind them: tables owned by a surface
+
+Every subclass was built by asking "where does this show?" and adding a row to the table that surface
+owned. When a second surface needed the same fact, it got its own table or a mirror. Nine subclasses on,
+rest resources lived in three places, weapon notes in two, feat acquisition in three, and the
+class/subclass/level/edition gate in about ten. Nothing in the subclass procedure asked **"who else
+already knows this?"**, and the per-subclass QA never compared surfaces with each other.
+
+This is §1c from the other side. §1c was a mechanism re-generalized for each new subclass; this is the
+same fact re-stated for each new surface. Both stayed invisible until something looked across subclasses
+and surfaces at once, which only the whole-system pass did.
+
+### 7c. CLAUDE.md had become a per-turn cost
+
+CLAUDE.md was 240 KB, loaded on every turn, and 93 KB of it sat under "Frontend Not Yet Built" while
+describing systems that were built (the Action Economy paragraph alone was 27 KB). Each session appended
+narrative and none removed any. The split moved every line verbatim into `docs/systems/`,
+`docs/schema-notes.md` and `docs/backend-tests.md` (checked by script: no line of 40+ characters was
+lost), left rules and compact reference behind, and added a 100 KB budget test. It landed at 95 KB, not
+the 80 KB estimated, because the schema and endpoint tables can't shrink.
+
+**The lesson:** a document loaded every turn needs a size gate the way code needs a coverage gate.
+"Context bloat" was already a tripwire in CLAUDE.md; a tripwire nobody measures doesn't fire.
+
+### 7d. What worked (repeat it)
+
+- **Report first, and let Robert choose the scope and order.** Four scoping questions up front (deliverable,
+  breadth, backend, docs), a ranked report with size and risk per item, and an explicit "leave alone"
+  list. Nothing was built that Robert hadn't picked, and two items (#6, #7) were held on Claude's advice.
+- **Prove a consolidation with unchanged existing tests.** `TestApplyRest` passed unchanged against the
+  new rest table; the creation (132) and level-up (131) suites passed unchanged against the shared feat
+  flow. Unchanged tests are the evidence that behaviour didn't move.
+- **Check cross-language copies with a committed fixture both suites read.** `max_hp_cases.json` runs in
+  pytest and Vitest; `rest_resources_contract.json` lets a frontend test check the backend's table. A
+  "keep these in sync" comment had been the only defence before, and it had failed (hp_max).
+- **Ship a guard with every consolidation** so the duplicate can't grow back: `noDuplicateHelpers`,
+  `restResourceContract`, `claudeMdBudget`, `attackCardFeatures`. Each has self-tests so it can't pass
+  vacuously.
+- **New tests find latent bugs.** `attackCardFeatures.test.js` caught the "2024" spelling miss on its
+  first run.
+- **Check the result against the real database at ship.** A read-only dry-run rest against the dev
+  database showed five of six characters storing only `hp_rolls` getting "HP restored to …", which
+  confirmed both the bug and the fix.
+- **Move documentation verbatim and verify by script** instead of rewriting it, so nothing is lost and
+  the move is reviewable.
+
+### 7e. Where Claude struggled
+
+- **Regex codemods broke code four times** (`rework`). Renaming `abMod` to `abilityMod` shadowed a local
+  `const abilityMod` (100 failing tests); the inline edition rewrite swallowed the parentheses of six
+  `if (…)` statements; a fragment replace turned `…)?.subclass_cantrips` into a non-existent field and
+  hid the Spells tab for an Arcane Archer; the import pruner read a spread (`...getX(`) as unused and
+  dropped two live imports (123 failing tests). Each was caught by the suite in the same turn, because
+  the affected files were tested after every codemod.
+- **A rename reached files it shouldn't have.** A repo-wide `sed` for a test-file rename also edited a
+  session log and the git-ignored raw transcript.
+- **Shell heredocs failed again**, for the fourth session running (§5b). Writing scripts with the Write
+  tool and running them fixed it every time; it should be the first choice, not the fallback.
+- **Wrong test assumptions:** Resilient's effect key (`from_ability_choice`, not `from_choice`), and ability
+  scores asserted as inputs when they render as read-only text. Both were the test, not the code.
+- **An estimate was off:** CLAUDE.md "about 80 KB" landed at 95 KB, leaving about 5 KB of headroom.
+- **A background server died unnoticed** until the session resumed.
+
+### 7f. Held and open
+
+- **#6 Split `buildActionEconomy`** (~950 lines with hand-written per-feat blocks) — held until the next
+  class shows whether it hurts.
+- **#7 Battle Master maneuvers as a fifth level-up pool** — held; the Martial Adept merge is the awkward part.
+- **Removing a feat doesn't undo** the ability increase or proficiencies it added.
+- **~37 single-spelling edition checks** remain (many are page toggles and fine).
+- **CLAUDE.md has ~5 KB of headroom** under its cap.
+- **The "Character sheet rules" section of CLAUDE.md was written, not moved**, and is awaiting Robert's review.
+
+### 7g. Proposed process changes (added to §4 as 9–13)
+
+9. **"Who else already knows this?" at audit.** Before a subclass adds a table, a field or a surface,
+   search for the fact already being computed somewhere. If it is, extend that one. *Would have prevented:*
+   the rest mirror, the weapon-note fields, the third feat-acquisition path.
+10. **Cross-language copies get a shared fixture**, never a "keep in sync" comment. Done for max HP and
+    rest resources; write the convention into `/class-config` and `/subclass-features` so the next one
+    follows it.
+11. **Every always-loaded document gets a size gate.** Done for CLAUDE.md. `MEMORY.md` is the other
+    always-loaded file and has none.
+12. **Codemod discipline:** check for an existing binding with the new name before a rename; scope every
+    `sed`/script to explicit paths, never the repo root; run the affected test files after each codemod,
+    not at the end; write scripts with the Write tool, not heredocs.
+13. **A whole-system pass after each class**, before the next one starts. Per-subclass QA can't see
+    duplication between surfaces; this pass found two live bugs that eight subclass QA passes had missed.
