@@ -34,6 +34,7 @@ import { getEarnedSubclassGrants, availableGrantOptions } from '@/characters/com
 import { getEarnedLevelChoices } from '@/characters/components/classData/levelChoicesData';
 import { getSubclassCaster } from '@/characters/components/classData/subclassCasterData';
 import Field from '@/characters/components/sheets/Field';
+import { abilityMod } from '@/characters/components/shared/abilityMath';
 
 function WeaponMasteryList({ value = [], onChange, readOnly, max }) {
   const [input, setInput] = useState('');
@@ -134,7 +135,7 @@ export default function ClassSheet({
   onHeal,
 }) {
   const set = (key, value) => onChange?.({ [key]: value });
-  const conMod = Math.floor(((scores.constitution ?? 10) - 10) / 2);
+  const conMod = abilityMod(scores.constitution);
   const showCombat = section === 'stats' || (!creation && section !== 'features' && section !== 'spells');
   const showFeatures = section === 'all' || section === 'features';
   const subclassUnlocked = level >= config.subclass.unlockLevel;

@@ -30,8 +30,8 @@
  * table alongside its counter (the racialRestResources.js shape), not here.
  */
 
-const normEdition = (edition) => (edition === '5.5e' || edition === '2024' ? '5.5e' : '5e');
 
+import { normEdition } from '@/characters/components/shared/featureGate';
 export const SUBCLASS_SPELL_GRANTS = {
   Fighter: {
     'Psi Warrior': [

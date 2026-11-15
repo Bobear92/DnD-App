@@ -186,7 +186,7 @@ When a change touches 3 or more files, produce a brief plan **before making any 
 - Which files will change and what specifically changes in each
 - Any class-specific exceptions (e.g. Fighter/Rogue skill list restrictions)
 - Which tests will be written or updated
-- What CLAUDE.md line(s) need updating
+- Which docs need updating (CLAUDE.md for the routes table / not-built list; `docs/frontend-map.md` or a `docs/systems/` file for descriptions)
 
 Post this checklist first, then proceed. This prevents wrong-approach detours.
 
@@ -207,7 +207,7 @@ Always:
 1. Register the route in `frontend/src/App.jsx`
 2. Add navigation link in `Sidebar.jsx` with a lucide-react icon
 3. Write tests in co-located `.test.jsx` files — tests ship with the feature, never deferred
-4. Update `CLAUDE.md`: frontend file tree, implemented routes table, "Frontend Not Yet Built" list
+4. Update the docs: a ONE-LINE row in the `CLAUDE.md` implemented-routes table and its "Frontend Not Yet Built" list; the component/service entries, per-page behaviour, test catalog and the route's full description go to `docs/frontend-map.md`; how a character-sheet system works goes to its `docs/systems/` file. CLAUDE.md is rules + compact reference only and is capped at 100 KB by `src/test/claudeMdBudget.test.js` — see its "Docs index" for which file owns what.
 5. Run `npm test` from `frontend/` and confirm all tests pass before reporting done
 
 ## Encyclopedia Module Patterns

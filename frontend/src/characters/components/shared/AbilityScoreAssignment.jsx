@@ -3,6 +3,7 @@ import { Dices, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { formatAbilityMod } from '@/characters/components/shared/abilityMath';
 
 // D&D 5e standard point buy costs (index = score - 8)
 const POINT_COSTS = [0, 1, 2, 3, 4, 5, 7, 9]; // scores 8–15
@@ -11,11 +12,6 @@ const STAT_LABELS = ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'W
 const STAT_ABBREVS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 const STANDARD_SPREAD = [15, 14, 13, 12, 10, 8];
 const TOTAL_POINTS = 27;
-
-function modifier(score) {
-  const m = Math.floor((score - 10) / 2);
-  return m >= 0 ? `+${m}` : `${m}`;
-}
 
 // ─── Standard Spread ─────────────────────────────────────────────────────────
 
@@ -69,7 +65,7 @@ export function StandardSpreadAssignment({ scores, onChange }) {
                     <option key={v} value={v}>{v}</option>
                   ))}
                 </select>
-                <span className="text-xs text-muted-foreground w-8 text-right">{modifier(scores[key])}</span>
+                <span className="text-xs text-muted-foreground w-8 text-right">{formatAbilityMod(scores[key])}</span>
               </div>
             </div>
           );
@@ -141,7 +137,7 @@ export function PointBuyAssignment({ scores, onChange }) {
                 onClick={() => adjust(key, +1)}
                 disabled={scores[key] >= 15 || POINT_COSTS[scores[key] - 8 + 1] - POINT_COSTS[scores[key] - 8] > pointsLeft}
               >+</button>
-              <span className="text-xs text-muted-foreground ml-1 w-8">{modifier(scores[key])}</span>
+              <span className="text-xs text-muted-foreground ml-1 w-8">{formatAbilityMod(scores[key])}</span>
             </div>
           </div>
         ))}
@@ -330,7 +326,7 @@ export function DiceRollAssignment({ scores, onChange, allowRerollOnes, rolls, o
                     ))}
                   </select>
                   <span className="text-xs text-muted-foreground w-8 text-right">
-                    {assignedIdx !== null && rolls[assignedIdx] ? modifier(rolls[assignedIdx].total) : ''}
+                    {assignedIdx !== null && rolls[assignedIdx] ? formatAbilityMod(rolls[assignedIdx].total) : ''}
                   </span>
                 </div>
               </div>

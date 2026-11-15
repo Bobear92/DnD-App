@@ -27,8 +27,8 @@ import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/u
 import {
   ekSpellSlots, ekSpellsInSlot, EK_SLOT_RESTRICTED, EK_SLOT_ANY,
 } from '@/characters/components/classData/subclassCasterData';
+import { abilityMod, profBonus } from '@/characters/components/shared/abilityMath';
 
-const abMod = (score) => Math.floor(((score ?? 10) - 10) / 2);
 
 export default function CasterSpellBlock({
   caster,
@@ -59,19 +59,19 @@ export default function CasterSpellBlock({
   const slotsTable = caster.slotsForLevel(level);
   const { spellSlots, availableSlots, setSlotUsed, handleCastSpell } = useSlotCaster({ slots: slotsTable, data, onChange });
 
-  const abilityMod = abMod(abilityScores[caster.spellcastingAbility ?? 'intelligence']);
+  const castingMod = abilityMod(abilityScores[caster.spellcastingAbility ?? 'intelligence']);
   // Cast-dialog figures: the character's spell save DC + attack bonus (constant across slot
   // levels). Passed to every SpellList with a Cast button so upcasting a save/attack spell
   // shows the actual numbers.
-  const pb = Math.ceil(level / 4) + 1;
-  const spellSaveDc = 8 + pb + abilityMod;
-  const spellAttackBonus = pb + abilityMod;
+  const pb = profBonus(level);
+  const spellSaveDc = 8 + pb + castingMod;
+  const spellAttackBonus = pb + castingMod;
   // Which `character_data` key holds the leveled list, and how big it may get. Both are
   // descriptor-driven so a hand-written sheet keeps its existing storage key (the 5e Ranger, for
   // one, stores a 2014 spells-KNOWN list under `prepared_spells`) instead of being migrated.
   const kind = caster.kind ?? 'spellbook';
   const listKey = caster.listKey ?? 'prepared_spells';
-  const prepareLimit = (caster.prepareLimit ?? ((l, m) => Math.max(1, l + m)))(level, abilityMod);
+  const prepareLimit = (caster.prepareLimit ?? ((l, m) => Math.max(1, l + m)))(level, castingMod);
   const prepared = data[listKey] ?? [];
   const spellbook = data.spellbook ?? [];
   const locked = data.prepared_locked ?? false;

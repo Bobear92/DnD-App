@@ -12,6 +12,7 @@ import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { getFeatStatMods, getFeatStatModSources } from '@/characters/components/feats/featEffects';
 import { hasDurableFeat } from '@/characters/components/combat/combatBonuses';
 import { armorSpeedPenalty } from '@/characters/components/inventory/inventoryData';
+import { profBonus } from '@/characters/components/shared/abilityMath';
 
 function Field({ label, children }) {
   return (
@@ -57,7 +58,7 @@ export default function CombatBlock({ hitDie, data = {}, set, readOnly = false, 
       {(() => {
         // Feat speed bonuses (e.g. Mobile +10) fold into Total Speed here — the shared speed
         // renderer — so every data-driven sheet shows the real number.
-        const pb = Math.ceil(level / 4) + 1;
+        const pb = profBonus(level);
         const featSpeed = getFeatStatMods(data.feats, 'speed', { pb });
         const sources = getFeatStatModSources(data.feats, 'speed', { pb });
         // Equipped armor with an unmet Strength requirement reduces speed by 10 ft.

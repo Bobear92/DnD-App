@@ -18,8 +18,9 @@
  * with buildBreakdown, which the panel renders as a clickable number, the same treatment every
  * other derived number on the sheet gets. Traits are name + rules text, collapsed by default.
  */
-import { profBonus } from '@/characters/components/inventory/inventoryData';
 import { buildBreakdown } from '@/characters/components/skills/skillMath';
+import { profBonus } from '@/characters/components/shared/abilityMath';
+import { matchesGate } from '@/characters/components/shared/featureGate';
 
 /**
  * The echo's AC. Exported because the Action Economy tab's Manifest Echo card shows the same
@@ -103,10 +104,7 @@ export const COMPANIONS = [
  */
 export function getCompanions({ charClass, subclass, edition = '5e', level = 1 } = {}) {
   return COMPANIONS
-    .filter((c) => c.charClass === charClass
-      && c.subclass === subclass
-      && (!c.edition || c.edition === edition)
-      && level >= c.minLevel)
+    .filter((c) => matchesGate(c, { charClass, subclass, level, edition }))
     .map((c) => ({
       key: c.key,
       name: c.name,

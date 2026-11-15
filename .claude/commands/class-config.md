@@ -60,8 +60,11 @@ ongoing work this skill covers.
   reimplement them per config.
 
 ## Workflow A — modify an existing config (Fighter/Wizard)
-1. Edit the config object. If you add a `restResource`, **mirror its reset in the backend**
-   `_compute_rest_patch` (`backend/players/characters/service.py`) and in `getRestSummary` (`CharacterList.jsx`).
+1. Edit the config object. If you add a `restResource`, **add its row to the backend `_REST_RESOURCES` table**
+   (`backend/players/characters/service.py`), regenerate the contract
+   (`UPDATE_REST_CONTRACT=1 pytest tests/test_rest_resources.py`) and commit it. There is no frontend
+   mirror to edit — the rest dialog shows a backend dry run — and `restResourceContract.test.js`
+   fails `npm test` if the row is missing, on the wrong rest type, or gated at a later level.
 2. Run tests (below). Add/extend `classSheet/ClassSheet.test.jsx` or `configs/configs.test.js` as needed.
 
 ## Workflow B — migrate a legacy hand-written sheet to a config (the 22 remaining)
@@ -111,8 +114,8 @@ cd frontend && npm test -- --run
 `classSheet/ClassSheet.test.jsx`, and the `hooks/`/`configs/` tests cover the data-driven layer. Restart
 uvicorn if you touched any `.py` (backend rest sync).
 
-## Update CLAUDE.md
-Reflect the migrated/added class in the frontend `classSheet/` section + test listing.
+## Update the docs
+Reflect the migrated/added class in `docs/frontend-map.md` (the `classSheet/` section + test catalog) and, if a class left the hand-written list, the "Frontend Not Yet Built" line in CLAUDE.md. CLAUDE.md is rules + compact reference only and is capped at 100 KB by `src/test/claudeMdBudget.test.js` — see its "Docs index" for which file owns what.
 
 ## Arguments
 $ARGUMENTS

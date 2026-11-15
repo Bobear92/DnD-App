@@ -10,6 +10,7 @@
  * reminder by the HP block instead of only in the subclass features list.
  */
 
+import { isEdition2024 } from '@/characters/components/shared/featureGate';
 const SURVIVOR_UNLOCK = 18;
 
 /** True when this character is a Champion Fighter of high enough level for Survivor. */
@@ -38,7 +39,7 @@ export function survivorNote({ charClass, subclass, level = 1, edition = '5e', c
   const base =
     `Survivor: at the start of each of your turns, if you have at least 1 HP but no more ` +
     `than half your HP maximum, you regain ${regain} HP (5 + CON modifier).`;
-  return edition === '5.5e'
+  return isEdition2024(edition)
     ? `${base} You also gain a +3 bonus to death saving throws.`
     : base;
 }
@@ -48,7 +49,7 @@ const HEROIC_WARRIOR_UNLOCK = 10;
 /** True when this character is a 2024 Champion Fighter of high enough level for Heroic Warrior. */
 export function hasHeroicWarrior({ charClass, subclass, level = 1, edition = '5e' } = {}) {
   return (
-    edition === '5.5e' &&
+    isEdition2024(edition) &&
     charClass === 'Fighter' &&
     subclass === 'Champion' &&
     (level ?? 1) >= HEROIC_WARRIOR_UNLOCK
@@ -104,7 +105,7 @@ const REMARKABLE_ATHLETE_MOVE_UNLOCK = 3;
 /** True when this character has the 2024 Champion Remarkable Athlete post-crit free move. */
 export function hasRemarkableAthleteMove({ charClass, subclass, level = 1, edition = '5e' } = {}) {
   return (
-    edition === '5.5e' &&
+    isEdition2024(edition) &&
     charClass === 'Fighter' &&
     subclass === 'Champion' &&
     (level ?? 1) >= REMARKABLE_ATHLETE_MOVE_UNLOCK

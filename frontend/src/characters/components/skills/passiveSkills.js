@@ -19,7 +19,8 @@
 
 import { getFeatStatMods, getFeatStatModSources } from '@/characters/components/feats/featEffects';
 import { getRaceGrantedSkillsFromTraits } from '@/characters/components/race/raceProficienciesData';
-import { abilityMod as mod, abilityPart, proficiencyPart, buildBreakdown } from './skillMath';
+import { abilityPart, proficiencyPart, buildBreakdown } from './skillMath';
+import { abilityMod as mod } from '@/characters/components/shared/abilityMath';
 
 /**
  * The passive scores we display, in render order.

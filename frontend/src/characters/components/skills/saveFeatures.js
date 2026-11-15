@@ -31,6 +31,7 @@ import { ACTIVE_EFFECTS, isEffectActive } from '@/characters/components/effects/
 import { equippedShield } from '@/characters/components/inventory/inventoryData';
 import { getFeatSaveMods, getFeatSaveAdvantages } from '@/characters/components/feats/featEffects';
 import { RACE_TRAIT_DESCRIPTIONS } from '@/characters/components/race/raceTraitsData';
+import { matchesGate } from '@/characters/components/shared/featureGate';
 
 /**
  * @typedef {Object} SaveFeatureEntry
@@ -132,19 +133,6 @@ function lookupDescription(entry, edition) {
   return entry.description ?? null;
 }
 
-/** True when every gate the entry declares is satisfied by this character. */
-function matches(entry, ctx) {
-  const { charClass, subclass, level, edition } = ctx;
-  if (entry.charClass !== charClass) return false;
-  if (entry.subclass && entry.subclass !== subclass) return false;
-  if ((level ?? 1) < entry.minLevel) return false;
-  if (entry.editions && !entry.editions.includes(edition)) return false;
-  // Escape hatch for gates the declarative keys cannot express — a rune depends on whether it
-  // is carved onto an EQUIPPED item, which is character_data state. See defenses.js, same shape.
-  if (entry.applies && !entry.applies(ctx)) return false;
-  return true;
-}
-
 /**
  * The save-affecting features this character actually has, in level order.
  *
@@ -156,7 +144,7 @@ export function getSaveFeatures({
   charClass, subclass, level = 1, edition = '5e', characterData = {},
 } = {}) {
   const classFeatures = SAVE_FEATURES
-    .filter((entry) => matches(entry, { charClass, subclass, level, edition, characterData }))
+    .filter((entry) => matchesGate(entry, { charClass, subclass, level, edition, characterData }))
     .map((entry) => ({
       key: saveFeatureKey(entry),
       name: entry.name,

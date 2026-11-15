@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { getManeuvers, maneuversKnownAtLevel, superiorityDie, superiorityDiceCount } from '@/characters/components/classData/maneuversData';
 import { martialAdeptDieCount, martialAdeptManeuverCount } from '@/characters/components/feats/featEffects';
 import { RestResourceControl } from '@/characters/components/sheets/classSheet/RestResourceTracker';
-import { abilityMod, profBonus } from '@/characters/components/inventory/inventoryData';
+import { abilityMod, profBonus } from '@/characters/components/shared/abilityMath';
 
 /**
  * Battle Master subclass panel (rendered in the Features tab's subclass sub-tab):

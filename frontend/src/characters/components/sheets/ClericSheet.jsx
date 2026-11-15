@@ -88,7 +88,6 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [], rac
   );
 }
 
-const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
 
 export default function ClericSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', abilityScores = {}, campaignId, isGm = false, gmEdit = false, acExtra = null, maxHpNode = null, raceGrantedCantrips = [], featSpells = null, featTrackers = null }) {
   const set = (key, value) => onChange?.({ [key]: value });

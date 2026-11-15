@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { levelUpAutoEffects, signed } from './levelUpAutoEffects';
+import { levelUpAutoEffects } from './levelUpAutoEffects';
+import { formatBonus } from '@/characters/components/shared/abilityMath';
 
 const SAMURAI = { charClass: 'Fighter', subclass: 'Samurai', edition: '5e' };
 const RESILIENT_WIS = [{
@@ -54,8 +55,8 @@ describe('levelUpAutoEffects — Samurai Elegant Courtier', () => {
 
 describe('signed', () => {
   it('prints a modifier with its sign', () => {
-    expect(signed(2)).toBe('+2');
-    expect(signed(0)).toBe('+0');
-    expect(signed(-1)).toBe('−1');
+    expect(formatBonus(2)).toBe('+2');
+    expect(formatBonus(0)).toBe('+0');
+    expect(formatBonus(-1)).toBe('−1');
   });
 });

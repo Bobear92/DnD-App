@@ -21,7 +21,7 @@ per their own rules — **don't copy 2014 effects to 2024** (Alert, Observant, O
 - **Resolver** `frontend/src/characters/components/feats/featEffects.js` — one helper per kind
   (`getFeatStatMods`, `getFeatActions`, `getFeatUnarmedDice`, `featAbilityChoices`,
   `featFixedAbilityScores`, `isMechanized`). Add a helper here when you add a kind.
-- **Snapshot at acquisition** — `LevelUpWizard.jsx` and `CharacterCreate.jsx` (Variant Human) copy the
+- **Snapshot at acquisition** — `LevelUpWizard.jsx` and `CharacterCreate.jsx` (Variant Human) copy the **All three acquisition surfaces (LevelUpWizard, Variant Human creation, the GM Add Feat in `FeatsSubTab`) go through `feats/featAcquisition.js` + `FeatChoiceFields.jsx` — a new kind of acquisition choice is added THERE, never per surface (see docs/systems/feat-effects.md › "Taking a feat").**
   picked feat's `effects` (and any choice) onto `character_data.feats[i]` so consumers resolve
   synchronously (inventory-snapshot pattern). Shape: `{id, name, level, effects?, choices?}`.
 - **Coverage tool** `backend/report_feat_effects.py` — CLAUSE-level. Every `note` is **pending** (no tag),
@@ -43,10 +43,10 @@ Each effect is `{ kind, …, label? }`. `label` is the chip text in the Feats su
 | `save_advantage` | `{abilities:[...], situation?}` | `getFeatSaveAdvantages` → merged into `getSaveFeatures` → the **Features Affecting Saves** panel | **wired**. ADVANTAGE on your OWN saves (War Caster, Mage Slayer 5e, Dungeon Delver). `abilities: []` is correct when RAW names none ("saving throws to avoid or resist traps"). **`situation` is load-bearing**: with one, the entry is panel-only; without one, the named abilities get an `adv` tag on their save rows. Never tag a situation-scoped advantage — it tells the player to roll every save of that ability twice. A clause about an ENEMY's save (Mage Slayer's concentration disadvantage) is NOT this kind — it belongs where that effect fires. |
 | `fighting_style` | `{style, label}` | `getFeatFightingStyles` → merged into `fightingStyles.gatherFightingStyles` (alongside the class pick + additional styles, de-duped) | **wired**. The 2024 Fighting Style FEATS — Archery, Defense, Dueling, Thrown Weapon Fighting, Two-Weapon Fighting — reach the SAME attack/AC math a class-granted style uses (before this a 2024 Archery feat gave no +2). Author it **only** for a style `fightingStyles.js` actually computes; one with no math there (Great Weapon Fighting, Blind Fighting) would count as mechanized while doing nothing. Defense's old `ac_mod` was REMOVED when it moved here — carrying both double-counts the +1. |
 | `ability_score` | `{ability, amount}` | folded into level-up score updates | **wired** (LevelUpWizard). Variant-Human-creation path: TODO. |
-| `ability_choice` | `{abilities:[...], amount}` | acquisition chooser → score | **wired in LevelUpWizard** (`feat-ability-{stat}`). Variant Human creation: TODO. |
+| `ability_choice` | `{abilities:[...], amount}` | acquisition chooser → score | **wired on all three acquisition surfaces** via `featAcquisition` (`{prefix}-ability-{stat}`). |
 | `attack_mod` | `{target:'unarmed', dice}` | `getFeatUnarmedDice` → Action Economy unarmed row | **unarmed wired**. Weapon to-hit/damage riders now have a consumer in `inventoryData` `computeAttack`/`getAttacks` (`styles` arg, used today by the fighting-style helper `combat/fightingStyles.js` — Archery/Dueling/Thrown/Defense); a feat weapon bonus would plug in the same way. |
 | `action` | `{name, economy, description, trigger}` | `getFeatActions` → Action Economy bucket | **wired**. `economy` ∈ `no_action\|action\|bonus\|action+bonus\|reaction`. **Read the rules text for what it GRANTS, before writing a `note`:** "you can use your reaction to …" is ALWAYS an `action` effect with `economy: 'reaction'` (a card in the Reactions tab), never a note — Shield Master's Interpose Shield sat in a note until QA. `backend/tests/test_feat_seed_data.py` fails a feat whose text grants a reaction with no reaction action, so if the prose is wrong (Boon of Recovery claimed a reaction RAW doesn't give), fix the prose to the rulebook instead. After editing, re-run `python seed_feats.py` — it refreshes the effects snapshotted onto existing characters. **Read the trigger for the COMBO pattern:** "If you take the Attack action, you can use a bonus action to …" (2024: "when you Attack with …") is an **Action + Bonus combo**, not a bonus action. Author it with `economy: 'bonus'` and keep the Attack-action wording in `trigger` — `isAttackActionBonus` routes it to the combo bucket automatically (Shield Master, Polearm Master). If the combo needs a specific weapon/item, add a row to `ATTACK_ACTION_COMBO_GATES` (opener weapon, or a `needs` item that shows a warning; never hide the card just because the bonus half's item is missing). |
-| `resource` | `{key, label, total, recharge:'short'\|'long'}` | FeatsSubTab tracker (RestResourceControl) + backend `_compute_rest_patch` reset + `getRestSummary` | **wired** (Lucky, Martial Adept). `total: 'pb'` scales with the proficiency bonus (2024 Lucky). |
+| `resource` | `{key, label, total, recharge:'short'\|'long'}` | FeatsSubTab tracker (RestResourceControl) + backend `_compute_rest_patch` reset (generic — it reads the snapshotted effect, nothing to add) | **wired** (Lucky, Martial Adept). `total: 'pb'` scales with the proficiency bonus (2024 Lucky). |
 | `proficiency` | `{prof_type:'skill'\|'tool'\|'weapon'\|'armor'\|'language'\|'saving_throw'\|'skill_or_tool', items?:[...], count?}` | banners / skills / saves / languages | **wired**. Fixed `items` grants → `featEffects.getFeatProficiencyGrants` (banners). `saving_throw` (Resilient) → saves display. **count-choice** (`count`, no items: Skilled/Linguist/Weapon Master) → `featProficiencyData.js` pickers in the LevelUpWizard feat step + Variant Human creation; picks stored in skill_proficiencies / feat_tool_proficiencies / feat_languages / feat_weapon_proficiencies. |
 | `expertise` | `{count}` | skills panel (purple) via `expertise_skills` | **wired**. `featProficiencyData` builds a count-choice grant whose pool is the character's proficient skills (incl. one picked from the same feat); routed to `expertise_skills`. Skill Expert. |
 | `spell_grant` | `{source_kind, cantrips, leveled, fixed?, school?, ritual?, free_cast?, ability}` | `FeatSpellGrantPicker` (acquisition) → `choices.spell_grant`; `getFeatGrantedSpells` → Spells-tab Feats section | **wired** (Magic Initiate, Spell Sniper, Telekinetic, Telepathic, Fey/Shadow Touched, Ritual Caster). See the spell-grant section below. |
@@ -112,8 +112,8 @@ Only once the user signs off does a clause get `unmodelable="<missing model>"`; 
 2. Wire it into the right surface:
    - derived stat → `CharacterDetail.jsx` (initiative is the template).
    - action → already generic in `actionEconomyData.buildActionEconomy`.
-   - resource → `RestResourceTracker` block + **backend** `_compute_rest_patch` reset + `getRestSummary`.
-   - proficiency/expertise → `inventoryProficiencies.js` banners / `SkillsDisplay`; a *choice* grant also needs an acquisition step (LevelUpWizard + Variant Human), mirroring `subclassGrants`.
+   - resource → `RestResourceTracker` block; the **backend** rest flow resets any `resource` effect generically from the snapshot.
+   - proficiency/expertise → `inventoryProficiencies.js` banners / `SkillsDisplay`; a *choice* grant is picked up by `featAcquisition` + `FeatChoiceFields` on every acquisition surface — extend the model, not the surfaces.
 3. Test the consumer (component test) + keep `CharacterDetail.test.jsx` green.
 
 ## Workflow C — 2024 + homebrew
@@ -127,8 +127,8 @@ Only once the user signs off does a clause get `unmodelable="<missing model>"`; 
 cd frontend && npm test -- --run     # featEffects, FeatsSubTab, LevelUpWizard, actionEconomyData, CharacterDetail
 cd backend && pytest tests/test_races_backgrounds_feats.py -q
 ```
-Restart uvicorn after any `.py` change (model/schema/seed/rest sync). Update CLAUDE.md (feats schema,
-featEffects listing, "Frontend Not Yet Built" feat bullet) + the coverage numbers.
+Restart uvicorn after any `.py` change (model/schema/seed/rest sync). Update the docs: `docs/systems/feat-effects.md`
+(the effects model + consumers), `docs/schema-notes.md` (feat seeding notes + coverage numbers), and in CLAUDE.md only the compact `feats` schema entry if the effect KINDS changed.
 
 ## Arguments
 $ARGUMENTS

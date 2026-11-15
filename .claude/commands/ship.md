@@ -86,16 +86,23 @@ available driving method; the repo essentials it should cover:
 Observe behavior, don't just re-run tests. If verification fails, fix before committing — do not
 ship on green tests alone.
 
-## Step 4 — Audit CLAUDE.md
+## Step 4 — Audit the docs
 
-Update these sections as needed:
-- **Database schema**: table count (currently 37), new table definitions
+CLAUDE.md is rules + compact reference only, capped at 100 KB by `src/test/claudeMdBudget.test.js`. Its "Docs index" says which file owns what.
+
+**In CLAUDE.md** (one line each — never narrative):
+- **Database schema**: table count, new tables as compact column listings
 - **Backend structure tree**: new modules/files
 - **API endpoints tables**: new routes
-- **Frontend catalog** → `docs/frontend-map.md` (NOT CLAUDE.md): new components/pages with descriptions, per-page UI behaviours
 - **Implemented routes table**: new routes with status
-- **Test file listing**: new test files with test counts
-- **What's NOT Built Yet**: remove items just completed, add newly deferred items
+- **Frontend Not Yet Built**: remove items just completed, add newly deferred items
+- **Character sheet rules**: a new standing rule, if QA produced one
+
+**Outside CLAUDE.md:**
+- **How a system works** → its `docs/systems/*.md` file (new file ⇒ add a Docs-index row)
+- **Frontend catalog, per-page UI behaviours, frontend test catalog, full route notes** → `docs/frontend-map.md`
+- **Backend test files with counts** → `docs/backend-tests.md`
+- **Why a column/key is shaped as it is, seeding history** → `docs/schema-notes.md`
 
 ## Step 5 — Check agents
 

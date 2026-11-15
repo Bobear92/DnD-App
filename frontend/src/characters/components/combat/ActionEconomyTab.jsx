@@ -10,7 +10,7 @@ import encyclopediaService from '@/encyclopedia/encyclopediaService';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
 import { getRaceGrantedWeapons, getRaceGrantedArmor } from '@/characters/components/race/raceProficienciesData';
 import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
-import { getAttacks, creatureSize, formatSigned, nonProficientEquippedArmor } from '@/characters/components/inventory/inventoryData';
+import { getAttacks, creatureSize, nonProficientEquippedArmor } from '@/characters/components/inventory/inventoryData';
 import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
 import { isHexWarrior, hexWeaponUid as storedHexWeaponUid } from '@/characters/components/inventory/weaponBondData';
 import WeaponAmmoControl from '@/characters/components/inventory/WeaponAmmoControl';
@@ -25,6 +25,7 @@ import { getClassConfig } from '@/characters/components/sheets/classSheet/config
 import { useRestResource } from '@/characters/components/sheets/classSheet/hooks/useRestResource';
 import { RestResourceControl } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
+import { formatSigned } from '@/characters/components/shared/abilityMath';
 
 const TAB_ICONS = { no_action: Sparkles, action: Swords, bonus: Zap, 'action+bonus': Repeat, reaction: ShieldAlert };
 
@@ -592,16 +593,6 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
             >How spacing works</Link>
           </p>
         )}
-        {entry.savageAttacksNote && (
-          <p className="text-[11px] text-emerald-600 leading-tight mt-0.5" data-testid={`ae-savage-${entry.key}`}>
-            {entry.savageAttacksNote}
-          </p>
-        )}
-        {entry.eldritchStrikeNote && (
-          <p className="text-[11px] text-violet-500 leading-tight mt-0.5" data-testid={`ae-eldritch-${entry.key}`}>
-            {entry.eldritchStrikeNote}
-          </p>
-        )}
         {entry.hexNote && (
           <p className="text-[11px] text-violet-500 leading-tight mt-0.5" data-testid={`ae-hex-${entry.key}`}>
             {entry.hexNote}
@@ -610,16 +601,6 @@ function ItemRow({ entry, resource, onChange, readOnly, isGm, campaignId, invent
         {entry.critRange && (
           <p className="text-[11px] text-primary leading-tight font-medium mt-0.5" data-testid={`ae-crit-${entry.key}`}>
             Crit {entry.critRange}{entry.critSource ? ` (${entry.critSource})` : ''}
-          </p>
-        )}
-        {entry.remarkableMoveNote && (
-          <p className="text-[11px] text-emerald-600 leading-tight mt-0.5" data-testid={`ae-remarkable-move-${entry.key}`}>
-            {entry.remarkableMoveNote}
-          </p>
-        )}
-        {entry.greatWeaponMasterNote && (
-          <p className="text-[11px] text-emerald-600 leading-tight mt-0.5" data-testid={`ae-gwm-${entry.key}`}>
-            {entry.greatWeaponMasterNote}
           </p>
         )}
         {/* Ammunition: a weapon with the Ammunition property fires from a stack in the

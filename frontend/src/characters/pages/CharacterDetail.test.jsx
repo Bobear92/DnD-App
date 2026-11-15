@@ -59,9 +59,34 @@ vi.mock('../../shared/components/layout/MainLayout', () => ({
 
 // FeatsSubTab fetches the feat catalogue — mock it to a marker that echoes its props.
 vi.mock('@/characters/components/feats/FeatsSubTab', () => ({
-  default: ({ feats = [], canManage }) => (
-    <div data-testid="feats-subtab-mock" data-can-manage={String(!!canManage)}>
+  default: ({ feats = [], canManage, onAddFeat, charClass, saveProficiencies = [] }) => (
+    <div
+      data-testid="feats-subtab-mock"
+      data-can-manage={String(!!canManage)}
+      data-char-class={String(charClass)}
+      data-saves={saveProficiencies.join(',')}
+    >
       {feats.map((f, i) => <span key={i} data-testid="feat-name">{f.name ?? f}</span>)}
+      {/* Stand-ins for the real Add Feat flow, which hands the page a patch plus the feat's
+          ability-score increases (see FeatsSubTab.test.jsx for the flow itself). */}
+      <button
+        type="button"
+        data-testid="mock-add-half-feat"
+        onClick={() => onAddFeat?.({
+          patch: { feats: [...feats, { id: 20, name: 'Tavern Brawler', choices: { ability: 'strength' } }] },
+          asi: { strength: 1 },
+        })}
+      >add half-feat</button>
+      <button
+        type="button"
+        data-testid="mock-add-big-feat"
+        onClick={() => onAddFeat?.({ patch: { feats: [...feats, { id: 30, name: 'Epic' }] }, asi: { strength: 9 } })}
+      >add big feat</button>
+      <button
+        type="button"
+        data-testid="mock-add-plain-feat"
+        onClick={() => onAddFeat?.({ patch: { feats: [...feats, { id: 10, name: 'Alert' }], feat_languages: ['Elvish'] }, asi: {} })}
+      >add plain feat</button>
     </div>
   ),
 }));
@@ -2983,6 +3008,81 @@ describe('CharacterDetail', () => {
       await waitFor(() => expect(screen.getByTestId('features-subtab-feats')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('features-subtab-feats'));
       expect(screen.getByTestId('feats-subtab-mock')).toHaveAttribute('data-can-manage', 'false');
+    });
+
+    // A feat added from the sheet arrives as a character_data patch PLUS its ability-score
+    // increases. Scores are columns on the character, so the page must write both in one save.
+    describe('adding a feat from the sheet', () => {
+      const openFeatsAsGm = async () => {
+        useCampaign.mockReturnValue({ campaign: { id: 1, name: 'Test', userRole: 'gm' } });
+        useAuth.mockReturnValue({ user: { id: 99, username: 'gm' } });
+        characterService.updateCharacter.mockImplementation(async (_id, body) => ({
+          success: true,
+          data: { ...BASE_CHARACTER, ...body, character_data: body.character_data ?? BASE_CHARACTER.character_data },
+        }));
+        renderDetail();
+        await waitFor(() => expect(screen.getByTestId('features-subtab-feats')).toBeInTheDocument());
+        fireEvent.click(screen.getByTestId('features-subtab-feats'));
+      };
+
+      it('saves the feat and the ability-score increase together', async () => {
+        await openFeatsAsGm();
+        fireEvent.click(screen.getByTestId('mock-add-half-feat'));
+        await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalledTimes(1));
+        const [, body] = characterService.updateCharacter.mock.calls[0];
+        expect(body.strength).toBe(17); // 16 + 1
+        expect(body.character_data.feats).toEqual([{ id: 20, name: 'Tavern Brawler', choices: { ability: 'strength' } }]);
+        // The rest of the character_data rides along untouched.
+        expect(body.character_data.fighting_style).toBe('Defense');
+      });
+
+      it('caps a raised score at 20', async () => {
+        await openFeatsAsGm();
+        fireEvent.click(screen.getByTestId('mock-add-big-feat'));
+        await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalled());
+        expect(characterService.updateCharacter.mock.calls[0][1].strength).toBe(20);
+      });
+
+      it('a feat with no ability increase writes no score at all', async () => {
+        await openFeatsAsGm();
+        fireEvent.click(screen.getByTestId('mock-add-plain-feat'));
+        await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalled());
+        const [, body] = characterService.updateCharacter.mock.calls[0];
+        expect(body).not.toHaveProperty('strength');
+        expect(body.character_data.feat_languages).toEqual(['Elvish']);
+        expect(body.character_data.feats).toEqual([{ id: 10, name: 'Alert' }]);
+      });
+
+      it('the new score reaches the sheet without a reload', async () => {
+        await openFeatsAsGm();
+        await openStatsSubTab('abilities');
+        // No ability score is 17 before the feat (STR is 16) — scores are read-only text.
+        expect(screen.queryAllByText('17')).toHaveLength(0);
+        fireEvent.click(screen.getByTestId('mock-add-half-feat'));
+        await waitFor(() => expect(characterService.updateCharacter).toHaveBeenCalled());
+        await waitFor(() => expect(screen.getAllByText('17').length).toBeGreaterThan(0));
+      });
+
+      it('the added feat is listed afterwards', async () => {
+        await openFeatsAsGm();
+        fireEvent.click(screen.getByTestId('mock-add-half-feat'));
+        expect(await screen.findByText('Tavern Brawler')).toBeInTheDocument();
+      });
+
+      it('a failed save surfaces the error', async () => {
+        await openFeatsAsGm();
+        characterService.updateCharacter.mockResolvedValue({ success: false, error: 'Save failed' });
+        fireEvent.click(screen.getByTestId('mock-add-half-feat'));
+        expect(await screen.findByText('Save failed')).toBeInTheDocument();
+      });
+
+      it('hands the sub-tab the class and the saves already held (so Resilient cannot re-offer them)', async () => {
+        await openFeatsAsGm();
+        const mock = screen.getByTestId('feats-subtab-mock');
+        expect(mock).toHaveAttribute('data-char-class', 'Fighter');
+        // A Fighter is proficient in Strength and Constitution saves.
+        expect(mock.getAttribute('data-saves').split(',').sort()).toEqual(['constitution', 'strength']);
+      });
     });
 
     it('GM can manage feats (canManage true)', async () => {

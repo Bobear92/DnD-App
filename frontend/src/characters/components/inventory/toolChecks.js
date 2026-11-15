@@ -13,8 +13,8 @@
 //     `passive.toolBonus` flag is the producer field this module reads.
 // Artificer Tool Expertise (L6) is the same clause and would be the second row.
 
-import { profBonus } from '@/characters/components/inventory/inventoryData';
 import { activeRunes } from '@/characters/components/inventory/runeCarving';
+import { profBonus } from '@/characters/components/shared/abilityMath';
 
 const TOOL_CHECK_SOURCES = [
   {

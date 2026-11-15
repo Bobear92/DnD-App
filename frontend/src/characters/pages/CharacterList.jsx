@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Eye, EyeOff, Moon, Plus, Sun, Swords, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,22 +14,11 @@ import MainLayout from '../../shared/components/layout/MainLayout';
 import characterService from '../characterService';
 import { useCampaign } from '../../campaigns/CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
-import { getRacialRestResources } from '@/characters/components/race/racialRestResources';
-import { getFeatResources, getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
-import { isDivination } from '@/characters/components/subclass/PortentTracker';
 import { cn } from '@/lib/utils';
+import { formatAbilityMod } from '@/characters/components/shared/abilityMath';
 
 const ABILITY_LABELS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 const ABILITY_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
-
-function modifier(score) {
-  return Math.floor((score - 10) / 2);
-}
-
-function modStr(score) {
-  const m = modifier(score);
-  return m >= 0 ? `+${m}` : `${m}`;
-}
 
 const CLASS_COLORS = {
   Fighter: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
@@ -40,96 +29,6 @@ const CLASS_COLORS = {
 
 function classBadgeClass(charClass) {
   return CLASS_COLORS[charClass] || 'bg-muted text-muted-foreground';
-}
-
-const SPELLCASTING_CLASSES = new Set(['Bard', 'Cleric', 'Druid', 'Paladin', 'Ranger', 'Sorcerer', 'Wizard', 'Artificer']);
-
-function getRestSummary(cls, edition, level, restType, characterData = {}) {
-  const is2024 = edition === '5.5e';
-  const traits = characterData?.race_traits ?? [];
-  const racial = getRacialRestResources(traits, level);
-  const featResources = getFeatResources(characterData?.feats ?? [], { pb: Math.ceil((level || 1) / 4) + 1 });
-
-  if (restType === 'short') {
-    const items = [];
-    if (cls === 'Warlock') items.push('Pact magic slots');
-    if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');
-    if (cls === 'Fighter') {
-      items.push('Action Surge & Second Wind');
-      if (characterData?.subclass === 'Battle Master') items.push('Superiority Dice');
-      if (characterData?.subclass === 'Arcane Archer') items.push('Arcane Shot');
-      if (characterData?.subclass === 'Echo Knight' && level >= 10) items.push('Shadow Martyr');
-      // The Psionic Energy POOL is long-rest only; a short rest returns just the two
-      // once-per-rest charges that spend alongside it.
-      if (characterData?.subclass === 'Psi Warrior') {
-        items.push('Psionic Energy die regain & Telekinetic Movement');
-      }
-      // Channel Rune is the only Rune Knight resource that returns on a SHORT rest — both
-      // Giant's Might and Runic Shield are long-rest only.
-      if (characterData?.subclass === 'Rune Knight' && level >= 3) items.push('Channel Rune');
-    }
-    if (cls === 'Bard' && (is2024 || level >= 5)) items.push('Bardic Inspiration');
-    if ((cls === 'Cleric' || cls === 'Paladin') && is2024) items.push('Channel Divinity');
-    if (cls === 'Wizard') items.push('Arcane Recovery');
-    // Racial features that recharge on a short rest
-    racial.filter(r => r.recharge === 'short').forEach(r => items.push(r.label));
-    // Feat resources that recharge on a short rest (e.g. Martial Adept superiority die)
-    featResources.filter(r => r.recharge === 'short').forEach(r => items.push(r.label));
-    return items.length > 0 ? items : ['No short rest resources'];
-  }
-
-  const items = ['HP fully restored', 'Hit dice partially recovered'];
-  if (SPELLCASTING_CLASSES.has(cls)) items.push('All spell slots');
-  if (cls === 'Barbarian') items.push('Rages');
-  else if (cls === 'Bard') items.push('Bardic Inspiration');
-  else if (cls === 'Cleric') items.push('Channel Divinity, spell preparation unlocked');
-  else if (cls === 'Druid') items.push('Wild Shape, spell preparation unlocked');
-  else if (cls === 'Fighter') {
-    items.push('Action Surge, Second Wind & Indomitable');
-    if (characterData?.subclass === 'Battle Master') items.push('Superiority Dice');
-    if (characterData?.subclass === 'Arcane Archer') items.push('Arcane Shot');
-    if (characterData?.subclass === 'Eldritch Knight') items.push('All spell slots');
-    if (characterData?.subclass === 'Samurai') {
-      items.push('Fighting Spirit');
-      if (level >= 18) items.push('Strength Before Death');
-    }
-    if (characterData?.subclass === 'Cavalier') {
-      items.push('Unwavering Mark');
-      if (level >= 7) items.push('Warding Maneuver');
-    }
-    if (characterData?.subclass === 'Echo Knight') {
-      items.push('Unleash Incarnation');
-      if (level >= 10) items.push('Shadow Martyr');
-      if (level >= 15) items.push('Reclaim Potential');
-    }
-    if (characterData?.subclass === 'Psi Warrior') {
-      items.push('Psionic Energy dice');
-      if (level >= 7) items.push('Psi-Powered Leap');
-      if (level >= 15) items.push('Bulwark of Force');
-    }
-    if (characterData?.subclass === 'Rune Knight') {
-      items.push("Giant's Might");
-      if (level >= 7) items.push('Runic Shield');
-      // A long rest is also a short one, so Channel Rune comes back as well.
-      if (level >= 3) items.push('Channel Rune');
-    }
-  }
-  else if (cls === 'Monk') items.push(is2024 ? 'Focus points' : 'Ki points');
-  else if (cls === 'Paladin') items.push('Lay on Hands, Divine Sense & Channel Divinity, spell preparation unlocked');
-  else if (cls === 'Ranger') items.push('Spell preparation unlocked');
-  else if (cls === 'Sorcerer') items.push(is2024 ? 'Sorcery points, Innate Sorcery' : 'Sorcery points');
-  else if (cls === 'Warlock') items.push(is2024 ? 'Pact magic slots, Magical Cunning' : 'Pact magic slots');
-  else if (cls === 'Wizard') items.push(is2024 ? 'Arcane Recovery, Memorize Spell, spell preparation unlocked' : 'Arcane Recovery, spell preparation unlocked');
-  else if (cls === 'Artificer') items.push('Flash of Genius, spell preparation unlocked');
-  // Racial features (long rest recovers both short- and long-recharge ones)
-  racial.forEach(r => items.push(r.label));
-  // Feat resources (long rest recovers all)
-  featResources.forEach(r => items.push(r.label));
-  // Feat spell-grant free casts (Magic Initiate, etc.) — 1/long rest
-  getFeatGrantedSpells(characterData?.feats ?? []).freeCasts.forEach(fc => items.push(`${fc.name} (feat free cast)`));
-  // Divination Wizard: Portent dice cleared (re-roll after the rest)
-  if (cls === 'Wizard' && isDivination(characterData?.subclass)) items.push('Portent dice cleared (re-roll)');
-  return items;
 }
 
 const CharacterList = () => {
@@ -147,6 +46,12 @@ const CharacterList = () => {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [restDialog, setRestDialog] = useState(null); // null | 'short' | 'long'
   const [restLoading, setRestLoading] = useState(false);
+  // What the rest WILL do, per character — a dry run of the same backend table that applies it
+  // (RestRequest.dry_run). The dialog used to predict this from a hand-kept frontend copy of
+  // the backend's rules, which had to be edited alongside it for every new pool.
+  const [restPreview, setRestPreview] = useState({ status: 'idle', byId: {}, error: '' });
+  // Guards against a slow preview for a dialog the GM has since closed or reopened.
+  const previewRequest = useRef(0);
 
   const isGm = campaign?.userRole === 'gm';
   const displayAsPlayer = !isGm || playerView;
@@ -198,18 +103,40 @@ const CharacterList = () => {
     }
   };
 
+  const openRestDialog = async (restType) => {
+    const ids = Array.from(selectedIds);
+    const requestId = ++previewRequest.current;
+    setRestDialog(restType);
+    setRestPreview({ status: 'loading', byId: {}, error: '' });
+    const result = await characterService.previewRest(campaignId, restType, ids);
+    if (requestId !== previewRequest.current) return;
+    if (result.success) {
+      const byId = {};
+      for (const item of result.data?.applied_to ?? []) byId[item.character_id] = item.changes ?? [];
+      setRestPreview({ status: 'ready', byId, error: '' });
+    } else {
+      // The preview is information, not a gate: the GM can still confirm the rest.
+      setRestPreview({ status: 'error', byId: {}, error: result.error });
+    }
+  };
+
+  const closeRestDialog = () => {
+    previewRequest.current += 1;
+    setRestDialog(null);
+  };
+
   const handleApplyRest = async () => {
     if (!restDialog || selectedIds.size === 0) return;
     setRestLoading(true);
     const result = await characterService.applyRest(campaignId, restDialog, Array.from(selectedIds));
     setRestLoading(false);
     if (result.success) {
-      setRestDialog(null);
+      closeRestDialog();
       setSelectedIds(new Set());
       loadCharacters();
     } else {
       setError(result.error);
-      setRestDialog(null);
+      closeRestDialog();
     }
   };
 
@@ -269,7 +196,7 @@ const CharacterList = () => {
               size="sm"
               data-testid="short-rest-btn"
               disabled={selectedIds.size === 0}
-              onClick={() => setRestDialog('short')}
+              onClick={() => openRestDialog('short')}
             >
               <Sun className="h-4 w-4 mr-1.5" />
               Short Rest
@@ -279,7 +206,7 @@ const CharacterList = () => {
               size="sm"
               data-testid="long-rest-btn"
               disabled={selectedIds.size === 0}
-              onClick={() => setRestDialog('long')}
+              onClick={() => openRestDialog('long')}
             >
               <Moon className="h-4 w-4 mr-1.5" />
               Long Rest
@@ -360,7 +287,7 @@ const CharacterList = () => {
       </Dialog>
 
       {/* Rest confirmation dialog */}
-      <Dialog open={!!restDialog} onOpenChange={() => setRestDialog(null)}>
+      <Dialog open={!!restDialog} onOpenChange={closeRestDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -371,6 +298,11 @@ const CharacterList = () => {
           <p className="text-sm text-muted-foreground">
             Apply a {restDialog === 'short' ? 'short' : 'long'} rest to {selectedChars.length} selected character{selectedChars.length !== 1 ? 's' : ''}?
           </p>
+          {restPreview.status === 'error' && (
+            <p className="text-xs text-amber-500" data-testid="rest-preview-error">
+              Couldn't load what this rest will recover ({restPreview.error}). You can still apply it.
+            </p>
+          )}
           <div className="space-y-3 max-h-64 overflow-y-auto">
             {selectedChars.map(char => (
               <div key={char.id} className="rounded-md border bg-muted/30 p-3">
@@ -381,19 +313,26 @@ const CharacterList = () => {
                   </span>
                   <span className="text-xs text-muted-foreground">Lv {char.level}</span>
                 </div>
-                <ul className="space-y-0.5">
-                  {getRestSummary(char.char_class, campaign?.edition || '5e', char.level, restDialog, char.character_data).map(item => (
-                    <li key={item} className="text-xs text-muted-foreground flex items-start gap-1.5">
-                      <span className="mt-1 h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+                {restPreview.status === 'loading' && (
+                  <p className="text-xs text-muted-foreground" data-testid={`rest-preview-loading-${char.id}`}>
+                    Working out what recovers…
+                  </p>
+                )}
+                {restPreview.status === 'ready' && (
+                  <ul className="space-y-0.5" data-testid={`rest-preview-${char.id}`}>
+                    {(restPreview.byId[char.id] ?? []).map(item => (
+                      <li key={item} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                        <span className="mt-1 h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRestDialog(null)} disabled={restLoading}>
+            <Button variant="outline" onClick={closeRestDialog} disabled={restLoading}>
               Cancel
             </Button>
             <Button onClick={handleApplyRest} disabled={restLoading} data-testid="confirm-rest-btn">
@@ -480,7 +419,7 @@ function CharacterCard({ character, isGm, isOwner, displayAsPlayer, showCheckbox
         {ABILITY_KEYS.map((key, i) => (
           <div key={key} className="flex flex-col items-center rounded bg-muted/50 px-1 py-1.5">
             <span className="text-[10px] font-medium text-muted-foreground uppercase">{ABILITY_LABELS[i]}</span>
-            <span className="text-sm font-bold leading-none mt-0.5">{modStr(character[key])}</span>
+            <span className="text-sm font-bold leading-none mt-0.5">{formatAbilityMod(character[key])}</span>
             <span className="text-[10px] text-muted-foreground">{character[key]}</span>
           </div>
         ))}

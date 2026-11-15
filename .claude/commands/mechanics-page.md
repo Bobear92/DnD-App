@@ -92,9 +92,9 @@ Page: `<mechanic>-back`. Card: `<mechanic>-card`, `<mechanic>-details-toggle`, `
 ```bash
 cd frontend && npm test          # the new *Data / *Card / *Page / MechanicsTab tests + CharacterDetail
 ```
-Frontend-only — no backend/uvicorn restart. Update **CLAUDE.md**: the routes table (new
-`…/mechanics/<slug>` row), the file listing (helper + page [+ card]), the relevant tab description if a
-surface gained a link, and the "Game-mechanics reference pages" bullet under "What's NOT Built Yet"
+Frontend-only — no backend/uvicorn restart. Update the docs: a ONE-LINE row in the **CLAUDE.md** routes table (new
+`…/mechanics/<slug>`), with the page's full description under "Routes — full notes" in `docs/frontend-map.md` beside the file listing (helper + page [+ card]); the framework notes in `docs/systems/mechanics-pages.md`; and the
+"Mechanics pages still owed" line under "Frontend Not Yet Built"
 (move the mechanic from coming-soon to built).
 
 ## Arguments

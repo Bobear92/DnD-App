@@ -4,6 +4,8 @@ import { Award, RefreshCw, Trash2, Plus, ArrowUpRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import FeatPicker from '@/characters/components/feats/FeatPicker';
+import FeatChoiceFields from '@/characters/components/feats/FeatChoiceFields';
+import { resolveFeatAcquisition, featAdditionPatch, EMPTY_FEAT_CHOICES } from '@/characters/components/feats/featAcquisition';
 import featService from '@/encyclopedia/featService';
 import { getFeatResources, getFeatManeuvers } from '@/characters/components/feats/featEffects';
 import { getManeuvers } from '@/characters/components/classData/maneuversData';
@@ -70,10 +72,25 @@ function effectChipLabel(e, feat) {
  * description + prerequisite. Read-only for everyone; when `canManage` (GM, not player
  * view) it also offers an Add Feat picker and a per-feat remove. Changes are emitted via
  * `onChange({ feats })` (CharacterDetail persists immediately through autoSaveClassPatch).
+ *
+ * Adding a feat runs the SAME follow-up choices as the level-up wizard and Variant Human
+ * creation (featAcquisition + FeatChoiceFields): a feat that asks for an ability score,
+ * proficiencies, spells or maneuvers shows those pickers and is only added once they are
+ * filled. This path used to store a bare `{id, name, effects}`, so a GM-added Magic Initiate
+ * granted no spells and Skilled no skills.
+ *
+ * `onAddFeat({ patch, asi })`, when given, receives the character_data patch AND the feat's
+ * ability-score increases — scores are columns on the character, not character_data, so only
+ * the page can apply them. Without it the patch goes through `onChange` and `asi` is dropped.
  */
-export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', canManage = false, onChange, characterData = {}, readOnly = false, pb = 0 }) {
+export default function FeatsSubTab({
+  feats = [], campaignId, edition = '5e', canManage = false, onChange, onAddFeat, characterData = {},
+  readOnly = false, pb = 0, charClass = null, saveProficiencies = [],
+}) {
   const [catalogue, setCatalogue] = useState([]);
   const [adding, setAdding] = useState(false);
+  // A feat picked in Add Feat that still needs follow-up choices: { feat, choices }.
+  const [pending, setPending] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,24 +138,36 @@ export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', ca
     };
   };
 
-  const addFeat = (feat) => {
-    if (!feat) return;
-    // Snapshot the feat's structured `effects` onto the instance (inventory-snapshot pattern) so
-    // the sheet's resolvers (unarmed die, proficiency banners, action economy, the Defenses
-    // panel) work without a re-fetch — matching how the LevelUpWizard / Variant Human
-    // acquisition paths store feats.
-    //
-    // The effects are read off the CATALOGUE, not off `feat`: FeatPicker's documented payload is
-    // `{id, name}` only, so trusting `feat.effects` silently stored every feat added here with no
-    // mechanics at all (the resolved list above papered over it for display, but anything reading
-    // character_data.feats directly got a bare {id, name}).
-    const full = catalogue.find((c) => (feat.id != null && c.id === feat.id) || c.name === feat.name);
-    const entry = { id: feat.id, name: feat.name };
-    const effects = Array.isArray(feat.effects) ? feat.effects : full?.effects;
-    if (Array.isArray(effects)) entry.effects = effects;
-    onChange?.({ feats: [...feats, entry] });
+  const acquisition = (feat, choices) => resolveFeatAcquisition({
+    feat,
+    choices,
+    charClass,
+    characterData,
+    proficientSkills: characterData?.skill_proficiencies ?? [],
+    saveProficiencies,
+  });
+
+  const commitFeat = (model) => {
+    const patch = featAdditionPatch(model, { ...characterData, feats });
+    if (onAddFeat) onAddFeat({ patch, asi: model.asi });
+    else onChange?.(patch);
+    setPending(null);
     setAdding(false);
   };
+
+  const addFeat = (picked) => {
+    if (!picked) return;
+    // The catalogue entry carries the structured `effects`; FeatPicker's payload is `{id, name}`
+    // only, and trusting that payload once stored every feat added here with no mechanics.
+    const full = catalogue.find((c) => (picked.id != null && c.id === picked.id) || c.name === picked.name)
+      ?? { id: picked.id, name: picked.name, ...(Array.isArray(picked.effects) ? { effects: picked.effects } : {}) };
+    const model = acquisition(full, EMPTY_FEAT_CHOICES);
+    // Nothing to ask → add straight away. Otherwise hold it until the choices are made.
+    if (model.needsChoices) setPending({ feat: full, choices: EMPTY_FEAT_CHOICES });
+    else commitFeat(model);
+  };
+
+  const pendingModel = pending ? acquisition(pending.feat, pending.choices) : null;
 
   const removeFeat = (idx) => {
     onChange?.({ feats: feats.filter((_, i) => i !== idx) });
@@ -254,7 +283,32 @@ export default function FeatsSubTab({ feats = [], campaignId, edition = '5e', ca
       )}
 
       {canManage && (
-        adding ? (
+        pendingModel ? (
+          <div className="space-y-3 rounded-md border p-3" data-testid="add-feat-choices">
+            <div className="text-sm font-semibold">Adding {pending.feat.name}</div>
+            <FeatChoiceFields
+              model={pendingModel}
+              onChange={(choices) => setPending({ ...pending, choices })}
+              campaignId={campaignId}
+              edition={edition}
+              knownManeuvers={characterData?.maneuvers ?? []}
+              testIdPrefix="add-feat"
+              spellTestIdPrefix="add-feat-spell"
+              maneuverTestIdPrefix="add-feat-maneuver"
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                disabled={!pendingModel.complete.all}
+                onClick={() => commitFeat(pendingModel)}
+                data-testid="add-feat-confirm"
+              >
+                Add {pending.feat.name}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setPending(null)} data-testid="add-feat-cancel">Cancel</Button>
+            </div>
+          </div>
+        ) : adding ? (
           <div className="space-y-2">
             <FeatPicker feats={addable} value={null} onChange={addFeat} testIdPrefix="add-feat" />
             <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>Cancel</Button>

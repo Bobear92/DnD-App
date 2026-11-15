@@ -314,12 +314,17 @@ describe('ActionEconomyTab', () => {
 
   it('shows a Savage Attacks note on a melee weapon entry for a Half-Orc', () => {
     renderTab({ inventory: [longswordEntry], characterData: { race_traits: ['Savage Attacks', 'Relentless Endurance'] } });
-    expect(screen.getByTestId('ae-savage-weapon:w1:0')).toHaveTextContent(/Savage Attacks/i);
+    // A rider: named on the card, rules text one click away.
+    const rider = screen.getByTestId('ae-rider-savage-attacks');
+    expect(rider).toHaveTextContent('Savage Attacks');
+    expect(screen.queryByTestId('ae-rider-savage-attacks-text')).not.toBeInTheDocument();
+    fireEvent.click(rider);
+    expect(screen.getByTestId('ae-rider-savage-attacks-text')).toHaveTextContent(/critical hit/i);
   });
 
   it('no Savage Attacks note without the trait', () => {
     renderTab({ inventory: [longswordEntry] });
-    expect(screen.queryByTestId('ae-savage-weapon:w1:0')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ae-rider-savage-attacks')).not.toBeInTheDocument();
   });
 
   it('shows the Champion crit range on a weapon attack entry', () => {
@@ -334,15 +339,16 @@ describe('ActionEconomyTab', () => {
 
   it('shows the 2024 Champion Remarkable Athlete post-crit move note on a weapon attack entry', () => {
     renderTab({ inventory: [longswordEntry], subclass: 'Champion', level: 3, edition: '5.5e' });
-    expect(screen.getByTestId('ae-remarkable-move-weapon:w1:0')).toHaveTextContent('half your Speed');
+    fireEvent.click(screen.getByTestId('ae-rider-remarkable-athlete'));
+    expect(screen.getByTestId('ae-rider-remarkable-athlete-text')).toHaveTextContent('half your Speed');
   });
 
   it('no Remarkable Athlete move note in 5e / for a non-Champion', () => {
     renderTab({ inventory: [longswordEntry], subclass: 'Champion', level: 3, edition: '5e' });
-    expect(screen.queryByTestId('ae-remarkable-move-weapon:w1:0')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ae-rider-remarkable-athlete')).not.toBeInTheDocument();
     cleanup();
     renderTab({ inventory: [longswordEntry], subclass: 'Battle Master', level: 3, edition: '5.5e' });
-    expect(screen.queryByTestId('ae-remarkable-move-weapon:w1:0')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ae-rider-remarkable-athlete')).not.toBeInTheDocument();
   });
 
   // A spell card answers "what does it cost me?"; the next question is always the spell's own
@@ -717,7 +723,8 @@ describe('ActionEconomyTab', () => {
       effects: [{ kind: 'action', name: 'Cleave (Bonus Attack)', economy: 'bonus', trigger: 'When you score a critical hit or reduce a creature to 0 HP with a melee weapon', description: 'Make one melee weapon attack as a bonus action.' }],
     };
     renderTab({ inventory: [greatswordEntry], scores: { strength: 16 }, characterData: { feats: [gwmFeat] } });
-    expect(screen.getByTestId('ae-gwm-weapon:gs1:0')).toHaveTextContent(/critical hit.*bonus action/i);
+    fireEvent.click(screen.getByTestId('ae-rider-great-weapon-master'));
+    expect(screen.getByTestId('ae-rider-great-weapon-master-text')).toHaveTextContent(/critical hit.*bonus action/i);
     // The standalone "Cleave (Bonus Attack)" entry is also present in the Bonus Actions bucket.
     goToTab('bonus');
     expect(screen.getByText(/cleave/i)).toBeInTheDocument();
@@ -725,7 +732,7 @@ describe('ActionEconomyTab', () => {
 
   it('shows no GWM bonus-attack note without the feat', () => {
     renderTab({ inventory: [greatswordEntry], scores: { strength: 16 } });
-    expect(screen.queryByTestId('ae-gwm-weapon:gs1:0')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ae-rider-great-weapon-master')).not.toBeInTheDocument();
   });
 
   it('shows Weapon Bond as a Subclass bonus action for an Eldritch Knight at L3', () => {
@@ -752,15 +759,16 @@ describe('ActionEconomyTab', () => {
 
   it('shows the Eldritch Strike note on a weapon entry for an Eldritch Knight at L10', () => {
     renderTab({ subclass: 'Eldritch Knight', level: 10 });
-    expect(screen.getByTestId('ae-eldritch-weapon:w1:0')).toHaveTextContent(/disadvantage on the next saving throw/i);
+    fireEvent.click(screen.getByTestId('ae-rider-eldritch-strike'));
+    expect(screen.getByTestId('ae-rider-eldritch-strike-text')).toHaveTextContent(/disadvantage on the next saving throw/i);
   });
 
   it('shows no Eldritch Strike note below L10 or for a non-EK subclass', () => {
     renderTab({ subclass: 'Eldritch Knight', level: 9 });
-    expect(screen.queryByTestId('ae-eldritch-weapon:w1:0')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ae-rider-eldritch-strike')).not.toBeInTheDocument();
     cleanup();
     renderTab({ subclass: 'Champion', level: 10 });
-    expect(screen.queryByTestId('ae-eldritch-weapon:w1:0')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ae-rider-eldritch-strike')).not.toBeInTheDocument();
   });
 
   it('shows Arcane Charge on its own line under Action Surge for an Eldritch Knight at L15', () => {

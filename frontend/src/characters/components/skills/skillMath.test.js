@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
-  abilityMod, formatBonus, skillBreakdown, saveBreakdown, ABILITY_ABBREV,
-  SKILL_MAP, skillsForAbility,
+  skillBreakdown,
+  saveBreakdown,
+  ABILITY_ABBREV,
+  SKILL_MAP,
+  skillsForAbility,
 } from './skillMath';
+import { abilityMod, formatBonus } from '@/characters/components/shared/abilityMath';
 
 describe('abilityMod', () => {
   it('halves score minus 10, rounding down', () => {

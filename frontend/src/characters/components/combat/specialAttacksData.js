@@ -20,8 +20,9 @@
  */
 
 import { SIZE_ORDER } from '@/characters/components/effects/activeEffects';
+import { isEdition2024 } from '@/characters/components/shared/featureGate';
 
-const is2024 = (edition) => edition === '5.5e' || edition === '2024';
+const is2024 = isEdition2024;
 
 /**
  * The next size up, for the "no more than one size larger than you" limit.

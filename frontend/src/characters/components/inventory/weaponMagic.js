@@ -22,6 +22,7 @@
  * The result carries its SOURCE, because that is what tells a player when the tag stops applying.
  */
 import { isArcaneShotBow } from '@/characters/components/classData/arcaneShotData';
+import { matchesGate } from '@/characters/components/shared/featureGate';
 
 /**
  * Each entry: which characters have the source, and which of their weapons it covers.
@@ -52,12 +53,7 @@ export const MAGIC_ATTACK_SOURCES = [
  */
 export function magicalAttackSource(weapon, { charClass, subclass, level = 1, edition = '5e' } = {}) {
   if (!weapon) return null;
-  const match = MAGIC_ATTACK_SOURCES.find((s) => (
-    s.charClass === charClass
-    && (!s.subclass || s.subclass === subclass)
-    && (!s.edition || s.edition === edition)
-    && (level ?? 1) >= (s.minLevel ?? 1)
-    && s.appliesTo(weapon)
-  ));
+  const ctx = { charClass, subclass, level, edition };
+  const match = MAGIC_ATTACK_SOURCES.find((s) => matchesGate(s, ctx) && s.appliesTo(weapon));
   return match ? { source: match.source, note: match.note } : null;
 }

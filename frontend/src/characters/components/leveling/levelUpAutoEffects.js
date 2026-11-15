@@ -14,8 +14,7 @@ import {
   featureSaveProficiencies, nonFeatureSaveProficiencies, CLASS_SAVE_PROFS, CHOSEN_SAVE_FIELD,
 } from '@/characters/components/skills/saveProficiencies';
 import { getSkillBonuses } from '@/characters/components/skills/skillBonuses';
-import { abilityMod } from '@/characters/components/skills/skillMath';
-import { profBonus } from '@/characters/components/classData/classProgressionTables';
+import { abilityMod, profBonus } from '@/characters/components/shared/abilityMath';
 
 /**
  * @returns {{
@@ -50,7 +49,3 @@ export function levelUpAutoEffects({
   return { saveProficiencies, skillBonuses };
 }
 
-/** "+2" / "−1" / "+0" — a signed modifier as the sheet prints one. */
-export function signed(n) {
-  return n < 0 ? `−${Math.abs(n)}` : `+${n}`;
-}

@@ -157,11 +157,16 @@ describe('getEquipmentFeatures — contract', () => {
     expect(sources(melee, both)).toEqual(['Warding Maneuver', 'Savage Attacks', 'Great Weapon Master']);
   });
 
-  it('every entry declares a testId, a text resolver and known scopes', () => {
+  it('every entry declares a testId, a text resolver, a gate and known scopes', () => {
     for (const f of EQUIPMENT_FEATURES) {
       expect(f.testId, f.source).toMatch(/^[a-z0-9-]+$/);
       expect(typeof f.text, f.source).toBe('function');
-      expect(typeof f.applies, f.source).toBe('function');
+      // A row is gated by declarative keys (charClass/subclass/minLevel/edition — the shared
+      // featureGate) and/or an `applies` predicate. A row with NEITHER would attach its note
+      // to every character's items.
+      const declarative = ['charClass', 'subclass', 'minLevel', 'edition', 'editions'].some((k) => f[k] != null);
+      expect(declarative || typeof f.applies === 'function', `${f.source} declares no gate`).toBe(true);
+      if (f.applies != null) expect(typeof f.applies, f.source).toBe('function');
       for (const s of f.scopes) expect(ITEM_SCOPES[s], `${f.source} scope ${s}`).toBeTruthy();
     }
   });

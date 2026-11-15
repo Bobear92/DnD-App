@@ -11,8 +11,9 @@
  * everywhere CombatBonuses is rendered — no per-sheet edits needed.
  */
 
-const mod = (score) => Math.floor(((score ?? 10) - 10) / 2);
 
+import { abilityMod } from '@/characters/components/shared/abilityMath';
+import { normEdition } from '@/characters/components/shared/featureGate';
 /** True for the Sorcerer Draconic Bloodline (5e) / Draconic Sorcery (2024) subclass. */
 export function isDraconicSorcerer(charClass, subclass) {
   if (charClass !== 'Sorcerer') return false;
@@ -40,7 +41,7 @@ const REMARKABLE_ATHLETE_UNLOCK = { '5e': 7, '5.5e': 3 };
  */
 export function remarkableAthlete({ charClass, subclass, level = 1, edition = '5e', pb = 0 } = {}) {
   if (charClass !== 'Fighter' || subclass !== 'Champion') return null;
-  const ed = edition === '5.5e' ? '5.5e' : '5e';
+  const ed = normEdition(edition);
   if ((level ?? 1) < REMARKABLE_ATHLETE_UNLOCK[ed]) return null;
   if (ed === '5.5e') {
     return { edition: '5.5e', advantageInitiative: true, advantageSkills: ['Athletics'] };
@@ -192,9 +193,9 @@ export function effectiveMaxHp(characterData = {}, { level = 1, conMod = 0, char
  * Returns [{ source, detail, formula, value }] computed from ability scores.
  */
 export function getAcOptions({ charClass, subclass, scores = {} } = {}) {
-  const dex = mod(scores.dexterity);
-  const con = mod(scores.constitution);
-  const wis = mod(scores.wisdom);
+  const dex = abilityMod(scores.dexterity);
+  const con = abilityMod(scores.constitution);
+  const wis = abilityMod(scores.wisdom);
   const options = [];
   if (charClass === 'Barbarian') {
     options.push({ source: 'Unarmored Defense', detail: 'Barbarian — no armor', formula: '10 + DEX + CON', value: 10 + dex + con });

@@ -18,6 +18,7 @@ import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeat
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import { cn } from '@/lib/utils';
 import Field from '@/characters/components/sheets/Field';
+import { abilityMod } from '@/characters/components/shared/abilityMath';
 
 // Paladin is half-caster; in 2024 slots start at L1
 const PALADIN_SLOTS = {
@@ -126,7 +127,6 @@ function WeaponMasteryList({ value, onChange, readOnly, max }) {
   );
 }
 
-const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
 
 export default function PaladinSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', abilityScores = {}, campaignId, isGm = false, acExtra = null, maxHpNode = null }) {
   const set = (key, value) => onChange?.({ [key]: value });
@@ -136,7 +136,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
   const [spellSubTab, setSpellSubTab] = useState('prepared');
 
-  const chaMod = abMod(abilityScores.charisma);
+  const chaMod = abilityMod(abilityScores.charisma);
   const prepareLimit = Math.max(1, level + chaMod);
 
   const slots = slotsForLevel(level);

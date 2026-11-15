@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -18,6 +18,7 @@ vi.mock('../characterService', () => ({
     toggleVisibility: vi.fn(),
     deleteCharacter: vi.fn(),
     applyRest: vi.fn(),
+    previewRest: vi.fn(),
   },
 }));
 
@@ -176,6 +177,10 @@ describe('CharacterList — rest buttons (GM view)', () => {
   beforeEach(() => {
     useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
     characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: CHARACTERS });
+    characterService.previewRest.mockResolvedValue({ success: true, data: { rest_type: 'long', applied_to: [
+      { character_id: 1, name: 'Arathorn', changes: ['Second Wind recovered'] },
+      { character_id: 2, name: 'Mia Silverleaf', changes: ['Spell slots recovered'] },
+    ] } });
   });
 
   it('shows Short Rest and Long Rest buttons for GM', async () => {
@@ -241,243 +246,170 @@ describe('CharacterList — rest buttons (GM view)', () => {
     expect(screen.getByTestId('confirm-rest-btn')).toBeTruthy();
   });
 
-  it('long rest summary lists a feat spell free cast (Magic Initiate)', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], character_data: { feats: [
-        { id: 10, name: 'Magic Initiate', choices: { spell_grant: { leveled: [{ name: 'Mage Armor', level: 1 }], free_casts: ['Mage Armor'] } } },
-      ] } },
-    ] });
-    renderList();
-    await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
-    fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText(/Mage Armor \(feat free cast\)/i)).toBeInTheDocument();
-  });
+  // ── Rest preview ──────────────────────────────────────────────────────────
+  // The dialog shows a DRY RUN from the backend (characterService.previewRest) rather than
+  // predicting the rest from a frontend copy of the rules. WHICH pools come back for which
+  // class/subclass/level is therefore the backend's to test (test_characters.py::TestApplyRest,
+  // test_rest_resources.py); these cover that the dialog asks, shows the answer, and copes.
 
-  it('long rest summary lists spell slots for an Eldritch Knight Fighter', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], character_data: { subclass: 'Eldritch Knight' } },
-    ] });
-    renderList();
-    await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
-    fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText('All spell slots')).toBeInTheDocument();
-  });
-
-  it('rest summary lists Arcane Shot for an Arcane Archer on both rest types', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], character_data: { subclass: 'Arcane Archer' } },
-    ] });
+  it('opening the short rest dialog asks the backend for a dry run of the selected characters', async () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));
     fireEvent.click(screen.getByTestId('char-checkbox-1'));
     fireEvent.click(screen.getByTestId('short-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a short rest/i));
-    expect(screen.getByText('Arcane Shot')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
-    fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText('Arcane Shot')).toBeInTheDocument();
+    await waitFor(() => expect(characterService.previewRest).toHaveBeenCalledWith('5', 'short', [1]));
+    expect(characterService.applyRest).not.toHaveBeenCalled();
   });
 
-  // Both Cavalier pools recharge on a long rest, but Warding Maneuver isn't gained until L7 —
-  // the summary must not promise back a feature the character doesn't have yet.
-  it('long rest summary lists Unwavering Mark for a L5 Cavalier but not Warding Maneuver', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], character_data: { subclass: 'Cavalier' } },
-    ] });
+  it('opening the long rest dialog previews a long rest for every selected character', async () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('select-all-btn'));
     fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText('Unwavering Mark')).toBeInTheDocument();
-    expect(screen.queryByText('Warding Maneuver')).not.toBeInTheDocument();
+    await waitFor(() => expect(characterService.previewRest).toHaveBeenCalledWith('5', 'long', [1, 2]));
   });
 
-  it('long rest summary adds Warding Maneuver for a L7 Cavalier', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], level: 7, character_data: { subclass: 'Cavalier' } },
-    ] });
+  it('lists the changes the backend returned, under the character they belong to', async () => {
+    characterService.previewRest.mockResolvedValue({ success: true, data: { rest_type: 'long', applied_to: [
+      { character_id: 1, name: 'Arathorn', changes: ['HP restored to 44', 'Second Wind recovered'] },
+      { character_id: 2, name: 'Mia Silverleaf', changes: ['Spell slots recovered'] },
+    ] } });
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('select-all-btn'));
     fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText('Warding Maneuver')).toBeInTheDocument();
+
+    const fighter = await screen.findByTestId('rest-preview-1');
+    expect(within(fighter).getByText('HP restored to 44')).toBeInTheDocument();
+    expect(within(fighter).getByText('Second Wind recovered')).toBeInTheDocument();
+    expect(within(fighter).queryByText('Spell slots recovered')).toBeNull();
+
+    const wizard = screen.getByTestId('rest-preview-2');
+    expect(within(wizard).getByText('Spell slots recovered')).toBeInTheDocument();
+    expect(within(wizard).queryByText('Second Wind recovered')).toBeNull();
   });
 
-  // The backend has reset fighting_spirit_used since the Samurai pool was created, but this
-  // summary never mentioned it — so a GM saw the rest restore something it hadn't promised.
-  it('long rest summary lists Fighting Spirit for a Samurai', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], character_data: { subclass: 'Samurai' } },
-    ] });
-    renderList();
-    await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
-    fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText('Fighting Spirit')).toBeInTheDocument();
-  });
-
-  // Strength Before Death (L18) is once per long rest; the summary must promise it only once held.
-  it.each([[18, 1], [17, 0]])('long rest summary for a level-%i Samurai lists Strength Before Death %i time(s)', async (level, n) => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], level, character_data: { subclass: 'Samurai' } },
-    ] });
-    renderList();
-    await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
-    fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText('Fighting Spirit')).toBeInTheDocument();
-    expect(screen.queryAllByText('Strength Before Death')).toHaveLength(n);
-  });
-
-  // The Echo Knight's three pools unlock at three different levels and two different rest
-  // types, so the summary has to be level-aware in both directions.
-  it('long rest summary lists only Unleash Incarnation for a L5 Echo Knight', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], character_data: { subclass: 'Echo Knight' } },
-    ] });
-    renderList();
-    await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
-    fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText('Unleash Incarnation')).toBeInTheDocument();
-    expect(screen.queryByText('Shadow Martyr')).not.toBeInTheDocument();
-    expect(screen.queryByText('Reclaim Potential')).not.toBeInTheDocument();
-  });
-
-  it('long rest summary lists all three Echo Knight pools at L15', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], level: 15, character_data: { subclass: 'Echo Knight' } },
-    ] });
-    renderList();
-    await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
-    fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText('Unleash Incarnation')).toBeInTheDocument();
-    expect(screen.getByText('Shadow Martyr')).toBeInTheDocument();
-    expect(screen.getByText('Reclaim Potential')).toBeInTheDocument();
-  });
-
-  it('short rest summary lists Shadow Martyr alone, and only from L10', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], level: 10, character_data: { subclass: 'Echo Knight' } },
-    ] });
+  it('shows nothing it was not told: the dialog invents no changes of its own', async () => {
+    // The regression this guards: the old dialog computed its own list, so a Fighter saw
+    // "Action Surge & Second Wind" whatever the backend actually did.
+    characterService.previewRest.mockResolvedValue({ success: true, data: { rest_type: 'short', applied_to: [
+      { character_id: 1, name: 'Arathorn', changes: ['No short rest resources to recover'] },
+    ] } });
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));
     fireEvent.click(screen.getByTestId('char-checkbox-1'));
     fireEvent.click(screen.getByTestId('short-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a short rest/i));
-    expect(screen.getByText('Shadow Martyr')).toBeInTheDocument();
-    // The other two are long-rest only — a short rest must not promise them back.
-    expect(screen.queryByText('Unleash Incarnation')).not.toBeInTheDocument();
+
+    const preview = await screen.findByTestId('rest-preview-1');
+    expect(within(preview).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(preview).getByText('No short rest resources to recover')).toBeInTheDocument();
+    expect(screen.queryByText(/Action Surge/)).toBeNull();
   });
 
-  it('short rest summary omits Shadow Martyr below L10', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], level: 9, character_data: { subclass: 'Echo Knight' } },
-    ] });
+  it('shows a working state until the preview arrives', async () => {
+    let resolvePreview;
+    characterService.previewRest.mockReturnValue(new Promise((resolve) => { resolvePreview = resolve; }));
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));
     fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+
+    expect(await screen.findByTestId('rest-preview-loading-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('rest-preview-1')).toBeNull();
+
+    resolvePreview({ success: true, data: { rest_type: 'long', applied_to: [
+      { character_id: 1, name: 'Arathorn', changes: ['Indomitable recovered'] },
+    ] } });
+    expect(await screen.findByText('Indomitable recovered')).toBeInTheDocument();
+    expect(screen.queryByTestId('rest-preview-loading-1')).toBeNull();
+  });
+
+  it('a failed preview is reported but does not block applying the rest', async () => {
+    characterService.previewRest.mockResolvedValue({ success: false, error: 'Server unavailable' });
+    characterService.applyRest.mockResolvedValue({ success: true, data: { rest_type: 'long', applied_to: [] } });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+
+    const note = await screen.findByTestId('rest-preview-error');
+    expect(note).toHaveTextContent('Server unavailable');
+    expect(screen.queryByTestId('rest-preview-1')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('confirm-rest-btn'));
+    await waitFor(() => expect(characterService.applyRest).toHaveBeenCalledWith('5', 'long', [1]));
+  });
+
+  it('a character the backend returned nothing for gets an empty list, not a crash', async () => {
+    characterService.previewRest.mockResolvedValue({ success: true, data: { rest_type: 'long', applied_to: [] } });
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+
+    const preview = await screen.findByTestId('rest-preview-1');
+    expect(within(preview).queryAllByRole('listitem')).toHaveLength(0);
+  });
+
+  it('reopening the dialog for the other rest type replaces the earlier preview', async () => {
+    characterService.previewRest.mockImplementation(async (_cid, restType) => ({
+      success: true,
+      data: { rest_type: restType, applied_to: [
+        { character_id: 1, name: 'Arathorn', changes: [restType === 'short' ? 'Second Wind recovered' : 'Indomitable recovered'] },
+      ] },
+    }));
+    renderList();
+    await waitFor(() => screen.getByText('Arathorn'));
+    fireEvent.click(screen.getByTestId('char-checkbox-1'));
+
     fireEvent.click(screen.getByTestId('short-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a short rest/i));
-    expect(screen.queryByText('Shadow Martyr')).not.toBeInTheDocument();
-  });
+    expect(await screen.findByText('Second Wind recovered')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Cancel'));
 
-  // The Psi Warrior splits across both rest types differently from every other subclass: the
-  // Psionic Energy POOL is long-rest only, while two of the charges spent alongside it return on
-  // a short rest. A summary that flattened the two would promise the dice back after a nap.
-  it('long rest summary lists the Psionic Energy dice, gated by level', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], character_data: { subclass: 'Psi Warrior' } },
-    ] });
-    renderList();
-    await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
     fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText('Psionic Energy dice')).toBeInTheDocument();
-    expect(screen.queryByText('Psi-Powered Leap')).not.toBeInTheDocument();
-    expect(screen.queryByText('Bulwark of Force')).not.toBeInTheDocument();
+    expect(await screen.findByText('Indomitable recovered')).toBeInTheDocument();
+    expect(screen.queryByText('Second Wind recovered')).toBeNull();
   });
 
-  it('long rest summary adds Psi-Powered Leap and Bulwark of Force at L15', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], level: 15, character_data: { subclass: 'Psi Warrior' } },
-    ] });
+  it('a slow preview for a dialog that was closed and reopened never overwrites the newer one', async () => {
+    let resolveShort;
+    characterService.previewRest.mockImplementation((_cid, restType) => (
+      restType === 'short'
+        ? new Promise((resolve) => { resolveShort = resolve; })
+        : Promise.resolve({ success: true, data: { rest_type: 'long', applied_to: [
+          { character_id: 1, name: 'Arathorn', changes: ['Indomitable recovered'] },
+        ] } })
+    ));
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));
     fireEvent.click(screen.getByTestId('char-checkbox-1'));
-    fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText('Psionic Energy dice')).toBeInTheDocument();
-    expect(screen.getByText('Psi-Powered Leap')).toBeInTheDocument();
-    expect(screen.getByText('Bulwark of Force')).toBeInTheDocument();
-  });
 
-  it('short rest summary returns the charges but never the Psionic Energy dice', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], level: 15, character_data: { subclass: 'Psi Warrior' } },
-    ] });
-    renderList();
-    await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
     fireEvent.click(screen.getByTestId('short-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a short rest/i));
-    expect(screen.getByText('Psionic Energy die regain & Telekinetic Movement')).toBeInTheDocument();
-    expect(screen.queryByText('Psionic Energy dice')).not.toBeInTheDocument();
-    expect(screen.queryByText('Bulwark of Force')).not.toBeInTheDocument();
+    await screen.findByTestId('rest-preview-loading-1');
+    fireEvent.click(screen.getByText('Cancel'));
+    fireEvent.click(screen.getByTestId('long-rest-btn'));
+    expect(await screen.findByText('Indomitable recovered')).toBeInTheDocument();
+
+    // The stale short-rest answer lands late — the long-rest dialog must keep its own list.
+    await act(async () => {
+      resolveShort({ success: true, data: { rest_type: 'short', applied_to: [
+        { character_id: 1, name: 'Arathorn', changes: ['Second Wind recovered'] },
+      ] } });
+    });
+    expect(screen.getByText('Indomitable recovered')).toBeInTheDocument();
+    expect(screen.queryByText('Second Wind recovered')).toBeNull();
   });
 
-  // Both Rune Knight pools are LONG-rest only, so a nap must promise neither.
-  it('long rest summary lists the Rune Knight pools, gated by level', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], character_data: { subclass: 'Rune Knight' } },
-    ] });
+  it('previewing changes nothing: no reload, and the selection is kept', async () => {
     renderList();
     await waitFor(() => screen.getByText('Arathorn'));
     fireEvent.click(screen.getByTestId('char-checkbox-1'));
     fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText("Giant's Might")).toBeInTheDocument();
-    // Runic Shield unlocks at 7 — the default character is below it.
-    expect(screen.queryByText('Runic Shield')).not.toBeInTheDocument();
-  });
+    await screen.findByTestId('rest-preview-1');
+    fireEvent.click(screen.getByText('Cancel'));
 
-  it('long rest summary adds Runic Shield from L7', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], level: 7, character_data: { subclass: 'Rune Knight' } },
-    ] });
-    renderList();
-    await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
-    fireEvent.click(screen.getByTestId('long-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a long rest/i));
-    expect(screen.getByText("Giant's Might")).toBeInTheDocument();
-    expect(screen.getByText('Runic Shield')).toBeInTheDocument();
-  });
-
-  it('short rest summary promises neither Rune Knight pool', async () => {
-    characterService.getCharactersByCampaign.mockResolvedValue({ success: true, data: [
-      { ...CHARACTERS[0], level: 7, character_data: { subclass: 'Rune Knight' } },
-    ] });
-    renderList();
-    await waitFor(() => screen.getByText('Arathorn'));
-    fireEvent.click(screen.getByTestId('char-checkbox-1'));
-    fireEvent.click(screen.getByTestId('short-rest-btn'));
-    await waitFor(() => screen.getByText(/Apply a short rest/i));
-    expect(screen.queryByText("Giant's Might")).not.toBeInTheDocument();
-    expect(screen.queryByText('Runic Shield')).not.toBeInTheDocument();
+    expect(characterService.getCharactersByCampaign).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('long-rest-btn')).not.toBeDisabled();
   });
 
   it('confirmation dialog shows selected character names', async () => {

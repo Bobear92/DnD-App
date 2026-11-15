@@ -18,6 +18,7 @@ import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeat
 import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spells/ClassSpellBrowser';
 import { cn } from '@/lib/utils';
 import Field from '@/characters/components/sheets/Field';
+import { abilityMod } from '@/characters/components/shared/abilityMath';
 
 const SPELL_SLOTS = {
   1:  [2, 0, 0, 0, 0, 0, 0, 0, 0], 2:  [3, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -97,7 +98,6 @@ function SkillPicker({ value, onChange, max, backgroundSkills = [], raceSkills =
   );
 }
 
-const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
 
 export default function DruidSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', abilityScores = {}, campaignId, isGm = false, acExtra = null, maxHpNode = null }) {
   const set = (key, value) => onChange?.({ [key]: value });
@@ -107,7 +107,7 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
   const removeSpell = (key, name) => onChange?.({ [key]: (data[key] ?? []).filter(s => s !== name) });
   const [spellSubTab, setSpellSubTab] = useState('prepared');
 
-  const wisMod = abMod(abilityScores.wisdom);
+  const wisMod = abilityMod(abilityScores.wisdom);
   const prepareLimit = Math.max(1, level + wisMod);
 
   const slots = slotsForLevel(level);

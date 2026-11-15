@@ -16,6 +16,8 @@ import { styleToHitBonus, styleDamageBonus, styleAcBonus } from '@/characters/co
 import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
 import { magicalAttackSource } from '@/characters/components/inventory/weaponMagic';
+import { abilityMod, profBonus, formatSigned } from '@/characters/components/shared/abilityMath';
+import { isEdition2024 } from '@/characters/components/shared/featureGate';
 
 /** Two or more equipped melee weapons (Dual Wielder's condition). */
 function twoMeleeWeaponsEquipped(inventory = []) {
@@ -30,9 +32,6 @@ export const MAX_ATTUNED = 3;
 
 const STRIP_KEYS = new Set(['id', 'owner_type', 'owner_id', 'created_at', 'updated_at']);
 
-export const abilityMod = (score) => Math.floor(((Number(score) || 10) - 10) / 2);
-export const profBonus = (level) => Math.ceil((Number(level) || 1) / 4) + 1;
-export const formatSigned = (n) => (n >= 0 ? `+${n}` : `${n}`);
 
 function genUid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -539,7 +538,7 @@ export function creatureSize(characterData = {}, race = '', ctx = null) {
  */
 export function weaponAttackWarning(weapon, { size = 'Medium', scores = {}, edition = '5e' } = {}) {
   if (!isHeavyWeapon(weapon)) return null;
-  if (edition === '5.5e' || edition === '2024') {
+  if (isEdition2024(edition)) {
     const ranged = (weapon.weapon_type || '').toLowerCase() === 'ranged';
     if (ranged) {
       const dex = Number(scores.dexterity) || 10;
@@ -572,7 +571,7 @@ const isCrossbow = (weapon = {}) => /crossbow/i.test(weapon.name || '');
  *   Otherwise → the one-attack-per-action cap (Extra Attack grants no extra shot here).
  */
 export function weaponLoadingNote(weapon, { feats = [], proficient = false, edition = '5e' } = {}) {
-  if (edition === '5.5e' || edition === '2024') return null;
+  if (isEdition2024(edition)) return null;
   if (!isLoadingWeapon(weapon)) return null;
   if (proficient && isCrossbow(weapon) && hasFeat(feats, 'Crossbow Expert')) {
     return 'Loading ignored (Crossbow Expert).';
@@ -690,7 +689,7 @@ export function weaponRange(weapon) {
 export function resolveWeaponRange(weapon, { feats = [], edition = '5e' } = {}) {
   const band = weaponRange(weapon);
   if (!band || !isPureRangedWeapon(weapon) || !hasFeat(feats, 'Sharpshooter')) return band;
-  const is2024 = edition === '5.5e' || edition === '2024';
+  const is2024 = isEdition2024(edition);
   if (!is2024) return { ...band, longRangeOk: true, longRangeSource: 'Sharpshooter' };
   const normal = band.normal + LONG_SHOT_BONUS_FT;
   // The long band does NOT move: RAW raises normal range only, which narrows the disadvantage

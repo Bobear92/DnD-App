@@ -1,8 +1,7 @@
 import {
   psionicDie, psionicDiceTotal, psionicDieAndInt, psiSaveDc, nextPsionicDieStep,
 } from '@/characters/components/classData/psiWarriorData';
-import { profBonus } from '@/characters/components/classData/classProgressionTables';
-import { abilityMod } from '@/characters/components/inventory/inventoryData';
+import { profBonus, abilityMod } from '@/characters/components/shared/abilityMath';
 
 /**
  * Psi Warrior "Psionic Energy" summary for the Features tab — the pool DEFINITION, at a glance:

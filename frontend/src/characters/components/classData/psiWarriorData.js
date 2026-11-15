@@ -22,9 +22,8 @@
 // Both editions use the same numbers; the 2024 revision renames nothing and moves no level, so
 // every consumer registers one authored entry against both.
 
-import { abilityMod } from '@/characters/components/inventory/inventoryData';
-import { profBonus } from '@/characters/components/classData/classProgressionTables';
 import { buildBreakdown } from '@/characters/components/skills/skillMath';
+import { abilityMod, profBonus } from '@/characters/components/shared/abilityMath';
 
 /** Levels at which the Psionic Energy die grows, largest threshold first. */
 const DIE_STEPS = [

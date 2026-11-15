@@ -1,0 +1,557 @@
+{
+  "class_resources": [
+    {
+      "keys": [
+        "second_wind_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "action_surge_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 2
+    },
+    {
+      "keys": [
+        "indomitable_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 9
+    },
+    {
+      "keys": [
+        "superiority_dice_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Battle Master"
+      ],
+      "edition": null,
+      "min_level": 3
+    },
+    {
+      "keys": [
+        "arcane_shot_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Arcane Archer"
+      ],
+      "edition": null,
+      "min_level": 3
+    },
+    {
+      "keys": [
+        "fighting_spirit_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Samurai"
+      ],
+      "edition": null,
+      "min_level": 3
+    },
+    {
+      "keys": [
+        "strength_before_death_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Samurai"
+      ],
+      "edition": null,
+      "min_level": 18
+    },
+    {
+      "keys": [
+        "unwavering_mark_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Cavalier"
+      ],
+      "edition": null,
+      "min_level": 3
+    },
+    {
+      "keys": [
+        "warding_maneuver_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Cavalier"
+      ],
+      "edition": null,
+      "min_level": 7
+    },
+    {
+      "keys": [
+        "unleash_incarnation_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Echo Knight"
+      ],
+      "edition": null,
+      "min_level": 3
+    },
+    {
+      "keys": [
+        "shadow_martyr_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Echo Knight"
+      ],
+      "edition": null,
+      "min_level": 10
+    },
+    {
+      "keys": [
+        "reclaim_potential_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Echo Knight"
+      ],
+      "edition": null,
+      "min_level": 15
+    },
+    {
+      "keys": [
+        "psionic_energy_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Psi Warrior"
+      ],
+      "edition": null,
+      "min_level": 3
+    },
+    {
+      "keys": [
+        "psionic_energy_regain_used",
+        "telekinetic_movement_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Psi Warrior"
+      ],
+      "edition": null,
+      "min_level": 3
+    },
+    {
+      "keys": [
+        "psi_powered_leap_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Psi Warrior"
+      ],
+      "edition": null,
+      "min_level": 7
+    },
+    {
+      "keys": [
+        "bulwark_of_force_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Psi Warrior"
+      ],
+      "edition": null,
+      "min_level": 15
+    },
+    {
+      "keys": [
+        "giants_might_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Rune Knight"
+      ],
+      "edition": null,
+      "min_level": 3
+    },
+    {
+      "keys": [
+        "runic_shield_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Rune Knight"
+      ],
+      "edition": null,
+      "min_level": 7
+    },
+    {
+      "keys": [
+        "channel_rune_cloud_used",
+        "channel_rune_fire_used",
+        "channel_rune_frost_used",
+        "channel_rune_stone_used",
+        "channel_rune_hill_used",
+        "channel_rune_storm_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Fighter"
+      ],
+      "subclass": [
+        "Rune Knight"
+      ],
+      "edition": null,
+      "min_level": 3
+    },
+    {
+      "keys": [
+        "rages_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Barbarian"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "bardic_inspiration_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Bard"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "bardic_inspiration_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Bard"
+      ],
+      "subclass": null,
+      "edition": "5e",
+      "min_level": 5
+    },
+    {
+      "keys": [
+        "bardic_inspiration_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Bard"
+      ],
+      "subclass": null,
+      "edition": "5.5e",
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "channel_divinity_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Cleric",
+        "Paladin"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "channel_divinity_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Cleric",
+        "Paladin"
+      ],
+      "subclass": null,
+      "edition": "5.5e",
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "wild_shape_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Druid"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "ki_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Monk"
+      ],
+      "subclass": null,
+      "edition": "5e",
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "ki_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Monk"
+      ],
+      "subclass": null,
+      "edition": "5.5e",
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "uncanny_metabolism_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Monk"
+      ],
+      "subclass": null,
+      "edition": "5.5e",
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "lay_on_hands_used",
+        "divine_sense_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Paladin"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "sorcery_points_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Sorcerer"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "innate_sorcery_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Sorcerer"
+      ],
+      "subclass": null,
+      "edition": "5.5e",
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "pact_slots_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Warlock"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "magical_cunning_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Warlock"
+      ],
+      "subclass": null,
+      "edition": "5.5e",
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "arcane_recovery_used"
+      ],
+      "recharge": "short",
+      "char_class": [
+        "Wizard"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "memorize_spell_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Wizard"
+      ],
+      "subclass": null,
+      "edition": "5.5e",
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "flash_of_genius_used"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Artificer"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "prepared_locked"
+      ],
+      "recharge": "long",
+      "char_class": [
+        "Artificer",
+        "Cleric",
+        "Druid",
+        "Paladin",
+        "Ranger",
+        "Wizard"
+      ],
+      "subclass": null,
+      "edition": null,
+      "min_level": 1
+    },
+    {
+      "keys": [
+        "portent_rolls"
+      ],
+      "recharge": "long",
+      "char_class": null,
+      "subclass": [
+        "Diviner",
+        "School of Divination"
+      ],
+      "edition": null,
+      "min_level": 1
+    }
+  ],
+  "racial_resources": [
+    {
+      "trait": "Breath Weapon",
+      "key": "breath_weapon_used",
+      "recharge": "short",
+      "min_level": 1
+    },
+    {
+      "trait": "Relentless Endurance",
+      "key": "relentless_endurance_used",
+      "recharge": "long",
+      "min_level": 1
+    },
+    {
+      "trait": "Drow Magic",
+      "key": "drow_faerie_fire_used",
+      "recharge": "long",
+      "min_level": 3
+    },
+    {
+      "trait": "Drow Magic",
+      "key": "drow_darkness_used",
+      "recharge": "long",
+      "min_level": 5
+    },
+    {
+      "trait": "Infernal Legacy",
+      "key": "infernal_hellish_rebuke_used",
+      "recharge": "long",
+      "min_level": 3
+    },
+    {
+      "trait": "Infernal Legacy",
+      "key": "infernal_darkness_used",
+      "recharge": "long",
+      "min_level": 5
+    }
+  ]
+}

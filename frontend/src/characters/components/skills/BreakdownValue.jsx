@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { formatBonus } from './skillMath';
+import { formatBonus } from '@/characters/components/shared/abilityMath';
 
 // A derived number you can click to see how it was calculated.
 //

@@ -22,6 +22,7 @@ import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
 import { cn } from '@/lib/utils';
 import Field from '@/characters/components/sheets/Field';
+import { abilityMod } from '@/characters/components/shared/abilityMath';
 
 const WIZARD_SLOTS = {
   1:  [2,0,0,0,0,0,0,0,0], 2:  [3,0,0,0,0,0,0,0,0],
@@ -105,7 +106,6 @@ function SkillPicker({ value, onChange, max, allowed, backgroundSkills = [], rac
   );
 }
 
-const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
 
 export default function DruidSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', abilityScores = {}, campaignId, isGm = false, acExtra = null, maxHpNode = null }) {
   const set = (key, value) => onChange?.({ [key]: value });
@@ -116,7 +116,7 @@ export default function DruidSheet({ data = {}, onChange, readOnly = false, leve
 
   const [spellSubTab, setSpellSubTab] = useState('prepared');
 
-  const wisMod = abMod(abilityScores.wisdom);
+  const wisMod = abilityMod(abilityScores.wisdom);
   const prepareLimit = Math.max(1, level + wisMod);
 
   const slots = slotsForLevel(level);

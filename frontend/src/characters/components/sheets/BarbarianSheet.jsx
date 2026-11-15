@@ -14,6 +14,7 @@ import { BARBARIAN_SUBCLASSES_5E } from '@/characters/components/classData/class
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import Field from '@/characters/components/sheets/Field';
+import { abilityMod } from '@/characters/components/shared/abilityMath';
 
 // Rage count by level
 function rageCount(level) {
@@ -104,8 +105,8 @@ export default function BarbarianSheet({ data = {}, onChange, readOnly = false, 
   const rageDmg = rageDamage(level);
   const usedRages = data.rages_used ?? 0;
 
-  const dexMod = Math.floor(((scores.dexterity ?? 10) - 10) / 2);
-  const conMod = Math.floor(((scores.constitution ?? 10) - 10) / 2);
+  const dexMod = abilityMod(scores.dexterity);
+  const conMod = abilityMod(scores.constitution);
   const unarmoredAC = 10 + dexMod + conMod;
   const dexStr = dexMod >= 0 ? `+${dexMod}` : `${dexMod}`;
   const conStr = conMod >= 0 ? `+${conMod}` : `${conMod}`;

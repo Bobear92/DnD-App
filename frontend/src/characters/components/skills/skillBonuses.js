@@ -1,3 +1,5 @@
+import { abilityMod } from '@/characters/components/shared/abilityMath';
+import { normEdition } from '@/characters/components/shared/featureGate';
 /**
  * Skill bonuses — a FEATURE that adds a number to one skill's checks, permanently.
  *
@@ -11,9 +13,7 @@
  * right now (an empty list when it doesn't apply).
  */
 
-import { abilityMod } from '@/characters/components/skills/skillMath';
 
-const normEdition = (edition) => (edition === '5.5e' || edition === '2024' ? '5.5e' : '5e');
 
 export const SKILL_BONUS_SOURCES = [
   {

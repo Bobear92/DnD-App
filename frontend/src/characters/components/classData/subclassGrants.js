@@ -57,10 +57,10 @@ import { FIGHTER_FIGHTING_STYLES_5E, FIGHTER_FIGHTING_STYLES_2024 } from '@/char
 import { FEAT_LANGUAGE_OPTIONS } from '@/characters/components/feats/featProficiencyData';
 import { SKILLS_BY_NAME } from '@/encyclopedia/data/skillsData';
 import { CLASS_SAVE_PROFS, CHOSEN_SAVE_FIELD, nonFeatureSaveProficiencies } from '@/characters/components/skills/saveProficiencies';
+import { normEdition } from '@/characters/components/shared/featureGate';
 
 const lc = (s) => (s || '').toLowerCase();
 const dedup = (arr) => [...new Set((arr || []).filter(Boolean))];
-const normEdition = (edition) => (edition === '5.5e' || edition === '2024' ? '5.5e' : '5e');
 
 // ── Shared "already held" resolvers ──────────────────────────────────────────
 // A proficiency tool grant dedups against every tool proficiency the character has (class +

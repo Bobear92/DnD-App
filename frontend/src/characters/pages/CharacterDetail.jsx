@@ -39,7 +39,7 @@ import FeatsSubTab from '@/characters/components/feats/FeatsSubTab';
 import { getFeatStatMods, getFeatStatModSources } from '@/characters/components/feats/featEffects';
 import { computePassiveScores } from '@/characters/components/skills/passiveSkills';
 import { getSkillAdvantageNames, skillAdvantageSourcesFor, skillAdvantageLegend } from '@/characters/components/skills/skillAdvantage';
-import { skillBreakdown, saveBreakdown, SKILL_MAP, formatBonus } from '@/characters/components/skills/skillMath';
+import { skillBreakdown, saveBreakdown, SKILL_MAP } from '@/characters/components/skills/skillMath';
 import { CLASS_SAVE_PROFS, saveProficiencySource } from '@/characters/components/skills/saveProficiencies';
 import { getSkillBonuses, skillBonusParts } from '@/characters/components/skills/skillBonuses';
 import BreakdownValue, { BreakdownPanel } from '@/characters/components/skills/BreakdownValue';
@@ -95,6 +95,8 @@ import {
   WizardSheet as WizardSheet2024,
 } from '@/characters/components/sheets/2024';
 import { cn } from '@/lib/utils';
+import { formatBonus, formatAbilityMod } from '@/characters/components/shared/abilityMath';
+import { buildCharacterContext } from '@/characters/components/shared/characterContext';
 
 // Racial rest-resource keys that are HP mechanics — tracked in the HP & Movement
 // sub-tab, between Max HP and Hit Dice.
@@ -151,9 +153,6 @@ function qualifiesForLevelUp(level, xp) {
 // immediately instead of showing a number the save will silently change.
 export const MAX_XP = XP_THRESHOLDS[20];
 
-function mod(score) { return Math.floor((score - 10) / 2); }
-function modStr(score) { const m = mod(score); return m >= 0 ? `+${m}` : `${m}`; }
-function profBonus(level) { return Math.ceil(level / 4) + 1; }
 
 const CLASS_SHEETS_5E = {
   Artificer: ArtificerSheet,
@@ -379,6 +378,32 @@ export default function CharacterDetail() {
     }
   };
 
+  // A feat added from the sheet (GM): its character_data patch AND any ability-score increase it
+  // carries (a half-feat's +1) go out in ONE save — scores are columns on the character, so the
+  // Feats sub-tab cannot write them through a character_data patch.
+  const addFeatFromSheet = async ({ patch, asi = {} }) => {
+    const next = { ...(classDraftRef.current ?? {}), ...patch };
+    classDraftRef.current = next;
+    classSection.setDraft(next);
+    const scoreUpdates = {};
+    for (const [ability, amount] of Object.entries(asi)) {
+      if (amount) scoreUpdates[ability] = Math.min(20, (character?.[ability] ?? 10) + amount);
+    }
+    const merged = { ...next, ...(savingThrows.draft ?? {}) };
+    const result = await characterService.updateCharacter(characterId, { character_data: merged, ...scoreUpdates });
+    if (result.success) {
+      setCharacter(result.data);
+      classSection.commit(result.data.character_data ?? merged);
+      if (Object.keys(scoreUpdates).length) {
+        // Keep any unsaved identity edits as unsaved; otherwise the new scores are simply the saved ones.
+        if (identity.isDirty) identity.setDraft((d) => ({ ...d, ...scoreUpdates }));
+        else identity.commit({ ...identity.draft, ...scoreUpdates });
+      }
+    } else {
+      setError(result.error);
+    }
+  };
+
   const saveGmNotes = async () => {
     await saveSection({ gm_notes: gmNotes.draft }, () => gmNotes.commit(gmNotes.draft));
   };
@@ -591,45 +616,43 @@ export default function CharacterDetail() {
     );
   }
 
-  const pb = profBonus(identity.draft?.level ?? character.level);
+  // The character as the sheet currently shows it — class, subclass, level, edition, the live
+  // character_data, scores — resolved ONCE (draft where there is one, saved otherwise) and read
+  // by every derived surface below. See shared/characterContext.js for why this is one object.
+  const sheetCtx = buildCharacterContext({
+    character, campaign, draftData: classSection.draft, draftIdentity: identity.draft,
+  });
+  const pb = sheetCtx.pb;
 
   // Armor worn without proficiency (RAW, both editions): disadvantage on STR/DEX ability
   // checks, saving throws, and attack rolls, and no spellcasting. Drives the saves note,
   // the skill "dis" tags, and the Spells-tab banner; the per-attack disadvantage is folded
   // in by getAttacks (Items + Action Economy tabs).
   const nonProfArmor = wornNonProficientArmor({
-    inventory: (classSection.draft ?? character.character_data)?.inventory,
+    inventory: sheetCtx.inventory,
     charClass: character.char_class,
-    characterData: classSection.draft ?? character.character_data ?? {},
+    characterData: sheetCtx.characterData,
   });
   // Bulky armor (Chain Mail, Half Plate, …) gives disadvantage on Dexterity (Stealth)
   // checks — independent of proficiency, and cancelled for medium armor by Medium Armor
   // Master. Drives the Stealth "dis" tag on the Abilities & Skills panel.
   const stealthArmor = stealthDisadvantageArmor(
-    (classSection.draft ?? character.character_data)?.inventory ?? [],
-    { feats: (classSection.draft ?? character.character_data)?.feats ?? [] },
+    sheetCtx.inventory,
+    { feats: sheetCtx.feats },
   );
-  const edition = campaign?.edition || '5e';
+  const edition = sheetCtx.edition;
   const ClassSheet = (edition === '5.5e' ? CLASS_SHEETS_2024 : CLASS_SHEETS_5E)[character.char_class];
 
   // Context for the save-affecting features (the panel under the grid AND the per-row advantage
   // tag). It reads the DRAFT character_data, so switching Giant's Might on updates the grid
   // without a reload — the same source the skill-advantage tags read.
-  const saveAdvCtx = {
-    charClass: character.char_class,
-    subclass: classSection.draft?.subclass ?? character?.character_data?.subclass,
-    level: identity.draft?.level ?? character.level,
-    edition,
-    characterData: classSection.draft ?? character?.character_data ?? {},
-  };
-
   // Where each save's proficiency comes from (class / feat / feature / by hand) — colours the
   // Saving Throws grid. The legend lists only the non-class sources actually present, naming them.
   const saveSourceCtx = {
     storedProfs: savingThrows.draft ?? {},
     charClass: character.char_class,
-    feats: classSection.draft?.feats ?? character.character_data?.feats ?? [],
-    featureCtx: saveAdvCtx,
+    feats: sheetCtx.feats,
+    featureCtx: sheetCtx,
   };
   const saveSourceLegend = (() => {
     const byKind = {};
@@ -647,11 +670,11 @@ export default function CharacterDetail() {
   })();
 
   // Context for feat save bonuses that apply only SOMETIMES (Shield Master). Separate from
-  // saveAdvCtx because it needs EQUIPMENT: the bonus is real only while the shield is held,
+  // sheetCtx because it needs EQUIPMENT: the bonus is real only while the shield is held,
   // so stowing it takes the line away.
   const conditionalSaveCtx = {
-    feats: (classSection.draft ?? character.character_data)?.feats ?? [],
-    inventory: (classSection.draft ?? character.character_data)?.inventory ?? [],
+    feats: sheetCtx.feats,
+    inventory: sheetCtx.inventory,
     pb,
   };
 
@@ -660,7 +683,7 @@ export default function CharacterDetail() {
   // a once-per-rest use, so it comes from the same table that drives the Racial Features tracker.
   const raceGrantedLeveled = getRacialSpellResources(
     character.character_data?.race_traits ?? [],
-    identity.draft?.level ?? character.level,
+    sheetCtx.level,
   );
   const featGrantedSpells = getFeatGrantedSpells(character.character_data?.feats);
   const hasFeatSpells = featGrantedSpells.cantrips.length + featGrantedSpells.leveled.length + featGrantedSpells.ritualBooks.length > 0;
@@ -669,20 +692,20 @@ export default function CharacterDetail() {
   const subclassCaster = !!getSubclassCaster(
     character.char_class,
     edition,
-    (classSection.draft ?? character.character_data)?.subclass,
+    sheetCtx.subclass,
     character.level,
   );
   // Cantrips granted by a SUBCLASS feature (Arcane Archer Lore) — stored by the subclass-grant
   // mechanism, shown as their own Spells-tab source the way race-granted cantrips are.
-  const subclassCantrips = (classSection.draft ?? character.character_data)?.subclass_cantrips ?? [];
+  const subclassCantrips = sheetCtx.characterData.subclass_cantrips ?? [];
   // Spells a subclass FEATURE grants outright (Psi Warrior's Telekinetic Master → telekinesis at
   // will). Derived from class+subclass+level rather than stored, because there is no choice to
   // store — the opposite shape from subclass_cantrips above, which is a level-up pick. Both feed
   // the one "Subclass" source so a character never sees two subclass spell cards.
   const subclassGranted = getSubclassGrantedSpells({
     charClass: character.char_class,
-    subclass: (classSection.draft ?? character.character_data)?.subclass,
-    level: identity.draft?.level ?? character.level,
+    subclass: sheetCtx.subclass,
+    level: sheetCtx.level,
     edition,
   });
   const subclassSpells = [
@@ -704,8 +727,8 @@ export default function CharacterDetail() {
   // (same interim pattern as the feat speed note).
   const hpAdjacentRacialNode = classSection.draft !== null ? (
     <RacialResourceTracker
-      traits={character?.character_data?.race_traits ?? []}
-      level={identity.draft?.level ?? character.level}
+      traits={sheetCtx.raceTraits}
+      level={sheetCtx.level}
       data={classSection.draft}
       onChange={autoSaveClassPatch}
       readOnly={!showEditable}
@@ -724,7 +747,7 @@ export default function CharacterDetail() {
   const hpAdjacentClassNode = (classSection.draft !== null && hpAdjacentClassResources.length > 0) ? (
     <RestResourceTracker
       resources={hpAdjacentClassResources}
-      level={identity.draft?.level ?? character.level}
+      level={sheetCtx.level}
       data={classSection.draft}
       scores={identity.draft ?? {}}
       onChange={autoSaveClassPatch}
@@ -1031,10 +1054,10 @@ export default function CharacterDetail() {
                   appearance={appearance.draft}
                   onChange={setAppearanceField}
                   canEdit={showEditable}
-                  charClass={character.char_class}
-                  subclass={character.character_data?.subclass}
-                  level={character.level}
-                  edition={campaign?.edition}
+                  charClass={sheetCtx.charClass}
+                  subclass={sheetCtx.subclass}
+                  level={sheetCtx.level}
+                  edition={sheetCtx.edition}
                 />
               </SectionCard>
               </>)}
@@ -1437,7 +1460,7 @@ export default function CharacterDetail() {
                       <div className="space-y-1">
                         <Label className="text-xs">Race / Species</Label>
                         <Input value={identity.draft.race} onChange={e => identity.setDraft(d => ({ ...d, race: e.target.value }))} />
-                        {character?.character_data?.subrace && (
+                        {sheetCtx.subrace && (
                           <p className="text-xs text-muted-foreground mt-0.5">Subrace: <span className="font-medium text-foreground">{character.character_data.subrace}</span></p>
                         )}
                         {character?.character_data?.draconic_bloodline?.name && (
@@ -1471,7 +1494,7 @@ export default function CharacterDetail() {
                   ) : (
                     <div className="flex flex-wrap gap-2 text-sm">
                       <Badge variant="outline">{identity.draft.race || 'Unknown race'}</Badge>
-                      {character?.character_data?.subrace && (
+                      {sheetCtx.subrace && (
                         <Badge variant="outline">{character.character_data.subrace}</Badge>
                       )}
                       {character?.character_data?.draconic_bloodline?.name && (
@@ -1586,7 +1609,7 @@ export default function CharacterDetail() {
                           <div className="rounded-md border w-full text-center py-2 font-bold">
                             {identity.draft[key]}
                           </div>
-                          <span className="text-xs text-muted-foreground">{modStr(identity.draft[key])}</span>
+                          <span className="text-xs text-muted-foreground">{formatAbilityMod(identity.draft[key])}</span>
                         </div>
                       ))}
                     </div>
@@ -1603,11 +1626,11 @@ export default function CharacterDetail() {
                       {(() => {
                         const { breakdown, featSources: sources, advantage } = initiativeBreakdown({
                           dexterity: identity.draft.dexterity,
-                          feats: classSection.draft?.feats ?? character.character_data?.feats ?? [],
+                          feats: sheetCtx.feats,
                           pb,
                           charClass: character.char_class,
-                          subclass: classSection.draft?.subclass ?? character.character_data?.subclass,
-                          level: character.level,
+                          subclass: sheetCtx.subclass,
+                          level: sheetCtx.level,
                           edition,
                         });
                         return (
@@ -1647,8 +1670,8 @@ export default function CharacterDetail() {
                       {computePassiveScores({
                         abilityScores: identity.draft,
                         pb,
-                        classData: classSection.draft ?? character.character_data ?? {},
-                        feats: classSection.draft?.feats ?? character.character_data?.feats ?? [],
+                        classData: sheetCtx.characterData,
+                        feats: sheetCtx.feats,
                       }).map((p) => (
                         <div key={p.key} className="rounded-md border py-2 px-2" data-testid={`passive-${p.key}`}>
                           <div className="text-[10px] text-muted-foreground uppercase">{p.label}</div>
@@ -1690,8 +1713,8 @@ export default function CharacterDetail() {
                         // (Giant's Might while it is switched on). Tagged on the row like the skill
                         // grid's, so the advantage is read off the save itself rather than inferred
                         // from the feature list below.
-                        const advSources = saveAdvantageSourcesFor(key, saveAdvCtx);
-                        const effectSaveBonus = activeEffectSaveBonus(key, saveAdvCtx);
+                        const advSources = saveAdvantageSourcesFor(key, sheetCtx);
+                        const effectSaveBonus = activeEffectSaveBonus(key, sheetCtx);
                         // A bonus that applies only in a situation the app can't detect
                         // (Shield Master — "targets only you"). It IS summed into the number,
                         // so the total is a best case; the restriction and its source ride
@@ -1706,7 +1729,7 @@ export default function CharacterDetail() {
                           // (Channel Rune: Frost). The displayed number IS breakdown.total, so
                           // the save goes up the moment the effect is switched on.
                           extras: [
-                            ...activeEffectSaveParts(key, saveAdvCtx),
+                            ...activeEffectSaveParts(key, sheetCtx),
                             ...condBonuses.map((b) => b.part),
                           ],
                           notes: [
@@ -1779,7 +1802,7 @@ export default function CharacterDetail() {
                     {/* Names the running effect behind the indigo tags. The saves grid has no
                         legend of its own, and a bonus a player cannot attribute reads as a bug
                         in the modifier. */}
-                    {activeEffectSaveSources(saveAdvCtx).map((src) => (
+                    {activeEffectSaveSources(sheetCtx).map((src) => (
                       <p
                         key={src.key}
                         className="text-[10px] text-indigo-400 mt-1"
@@ -1813,10 +1836,10 @@ export default function CharacterDetail() {
                       rerolls, situational bonuses. The grid above can only show a number. */}
                   <SaveFeaturesPanel
                     charClass={character.char_class}
-                    subclass={classSection.draft?.subclass ?? character?.character_data?.subclass}
-                    level={character.level}
+                    subclass={sheetCtx.subclass}
+                    level={sheetCtx.level}
                     edition={edition}
-                    characterData={classSection.draft ?? character?.character_data ?? {}}
+                    characterData={sheetCtx.characterData}
                   />
 
                   {/* Skills */}
@@ -1825,7 +1848,7 @@ export default function CharacterDetail() {
                     classData={classSection.draft}
                     pb={pb}
                     charClass={character.char_class}
-                    level={character.level}
+                    level={sheetCtx.level}
                     edition={edition}
                     readOnly={displayAsPlayer || !canEdit}
                     nonProfArmorName={nonProfArmor?.name}
@@ -1847,8 +1870,8 @@ export default function CharacterDetail() {
                     readOnly={!showEditable}
                     note={heroicWarriorNote({
                       charClass: character.char_class,
-                      subclass: classSection.draft?.subclass ?? character?.character_data?.subclass,
-                      level: identity.draft?.level ?? character.level,
+                      subclass: sheetCtx.subclass,
+                      level: sheetCtx.level,
                       edition,
                     })}
                   />
@@ -1870,18 +1893,18 @@ export default function CharacterDetail() {
                     onHeal={autoSaveClassPatch}
                     effectiveMaxHp={
                       computeEffectiveMaxHp(classSection.draft ?? {}, {
-                        level: identity.draft?.level ?? character.level,
-                        conMod: Math.floor(((identity.draft?.constitution ?? character.constitution ?? 10) - 10) / 2),
+                        level: sheetCtx.level,
+                        conMod: sheetCtx.mods.constitution,
                         charClass: character.char_class,
-                        subclass: classSection.draft?.subclass,
-                        raceTraits: character?.character_data?.race_traits ?? [],
-                        feats: character?.character_data?.feats ?? [],
+                        subclass: sheetCtx.subclass,
+                        raceTraits: sheetCtx.raceTraits,
+                        feats: sheetCtx.feats,
                       })
                     }
                     readOnly={!showEditable}
                     gmEdit={gmEdit}
                     isGm={isGm && !playerView}
-                    level={identity.draft?.level ?? character.level}
+                    level={sheetCtx.level}
                     section="stats"
                     scores={identity.draft ?? {}}
                     abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
@@ -1889,14 +1912,14 @@ export default function CharacterDetail() {
                     maxHpNode={
                       <MaxHpValue
                         charClass={character.char_class}
-                        subclass={classSection.draft?.subclass}
-                        raceTraits={character?.character_data?.race_traits ?? []}
-                        feats={character?.character_data?.feats ?? []}
-                        level={identity.draft?.level ?? character.level}
-                        conMod={Math.floor(((identity.draft?.constitution ?? character.constitution ?? 10) - 10) / 2)}
+                        subclass={sheetCtx.subclass}
+                        raceTraits={sheetCtx.raceTraits}
+                        feats={sheetCtx.feats}
+                        level={sheetCtx.level}
+                        conMod={sheetCtx.mods.constitution}
                         baseMaxHp={hpRollBase(classSection.draft ?? {}, {
-                          level: identity.draft?.level ?? character.level,
-                          conMod: Math.floor(((identity.draft?.constitution ?? character.constitution ?? 10) - 10) / 2),
+                          level: sheetCtx.level,
+                          conMod: sheetCtx.mods.constitution,
                         })}
                       />
                     }
@@ -1911,7 +1934,7 @@ export default function CharacterDetail() {
                       into CombatBlock's Total Speed, so only the hand-written sheets — which can't yet —
                       show this central annotation. Drops away as classes migrate to the config. */}
                   {(() => {
-                    const feats = classSection.draft?.feats ?? character.character_data?.feats ?? [];
+                    const feats = sheetCtx.feats;
                     const featSpeed = getFeatStatMods(feats, 'speed', { pb });
                     if (!featSpeed || getClassConfig(character.char_class, edition)) return null;
                     const sources = getFeatStatModSources(feats, 'speed', { pb });
@@ -1944,10 +1967,10 @@ export default function CharacterDetail() {
                   {(() => {
                     const note = survivorNote({
                       charClass: character.char_class,
-                      subclass: classSection.draft?.subclass ?? character?.character_data?.subclass,
-                      level: identity.draft?.level ?? character.level,
+                      subclass: sheetCtx.subclass,
+                      level: sheetCtx.level,
                       edition,
-                      conMod: Math.floor(((identity.draft?.constitution ?? character.constitution ?? 10) - 10) / 2),
+                      conMod: sheetCtx.mods.constitution,
                     });
                     return note ? (
                       <div
@@ -1976,15 +1999,7 @@ export default function CharacterDetail() {
                   the character has no defenses. */}
               {statsSubTab === 'hp' && (() => {
                 const defenseCtx = {
-                  charClass: character.char_class,
-                  subclass: classSection.draft?.subclass ?? character?.character_data?.subclass,
-                  level: identity.draft?.level ?? character.level,
-                  edition,
-                  characterData: {
-                    ...(character?.character_data ?? {}),
-                    ...(classSection.draft ?? {}),
-                  },
-                  pb,
+                  ...sheetCtx,
                   campaignId,
                 };
                 // Gate the CARD, not just its contents — an empty titled card is worse than
@@ -2009,9 +2024,9 @@ export default function CharacterDetail() {
                     ...(character?.character_data ?? {}),
                     ...(classSection.draft ?? {}),
                   },
-                  race: identity.draft?.race ?? character.race,
-                  subrace: character?.character_data?.subrace,
-                  level: identity.draft?.level ?? character.level,
+                  race: sheetCtx.race,
+                  subrace: sheetCtx.subrace,
+                  level: sheetCtx.level,
                 };
                 if (!hasSenses(senseCtx)) return null;
                 return (
@@ -2024,11 +2039,11 @@ export default function CharacterDetail() {
               {/* Jumping — computed long/high jump distances (display-only); links to the mechanics page */}
               {statsSubTab === 'hp' && (
                 <JumpCard
-                  strength={identity.draft?.strength ?? character.strength}
-                  feats={character?.character_data?.feats ?? []}
+                  strength={sheetCtx.scores.strength}
+                  feats={sheetCtx.feats}
                   charClass={character.char_class}
-                  subclass={classSection.draft?.subclass ?? character?.character_data?.subclass}
-                  level={character.level}
+                  subclass={sheetCtx.subclass}
+                  level={sheetCtx.level}
                   edition={edition}
                 />
               )}
@@ -2080,7 +2095,7 @@ export default function CharacterDetail() {
                     readOnly={!showEditable}
                     gmEdit={gmEdit}
                     isGm={isGm && !playerView}
-                    level={identity.draft?.level ?? character.level}
+                    level={sheetCtx.level}
                     section="features"
                     scores={identity.draft ?? {}}
                     abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
@@ -2091,12 +2106,15 @@ export default function CharacterDetail() {
               {featuresSubTab === 'feats' && (
                 <SectionCard title="Feats" canEdit={false}>
                   <FeatsSubTab
-                    feats={classSection.draft?.feats ?? character.character_data?.feats ?? []}
+                    feats={sheetCtx.feats}
                     campaignId={campaignId}
                     edition={edition}
                     canManage={isGm && !playerView}
                     onChange={autoSaveClassPatch}
-                    characterData={classSection.draft ?? character.character_data ?? {}}
+                    onAddFeat={addFeatFromSheet}
+                    characterData={sheetCtx.characterData}
+                    charClass={sheetCtx.charClass}
+                    saveProficiencies={ABILITY_LABELS.map(({ key }) => key).filter((key) => saveProficiencySource(key, saveSourceCtx))}
                     readOnly={!showEditable}
                     pb={pb}
                   />
@@ -2128,11 +2146,11 @@ export default function CharacterDetail() {
                 <InventoryTab
                   inventory={classSection.draft.inventory ?? []}
                   scores={identity.draft ?? {}}
-                  level={identity.draft?.level ?? character.level}
+                  level={sheetCtx.level}
                   charClass={character.char_class}
-                  subclass={classSection.draft.subclass}
-                  race={identity.draft?.race ?? character.race}
-                  subrace={character?.character_data?.subrace}
+                  subclass={sheetCtx.subclass}
+                  race={sheetCtx.race}
+                  subrace={sheetCtx.subrace}
                   campaignId={campaignId}
                   characterData={classSection.draft}
                   edition={edition}
@@ -2148,14 +2166,14 @@ export default function CharacterDetail() {
               {classSection.draft !== null && (
                 <ActionEconomyTab
                   charClass={character.char_class}
-                  subclass={classSection.draft.subclass}
-                  level={identity.draft?.level ?? character.level}
+                  subclass={sheetCtx.subclass}
+                  level={sheetCtx.level}
                   edition={edition}
                   characterData={classSection.draft}
                   inventory={classSection.draft.inventory ?? []}
                   scores={identity.draft ?? {}}
-                  race={identity.draft?.race ?? character.race}
-                  subrace={character?.character_data?.subrace}
+                  race={sheetCtx.race}
+                  subrace={sheetCtx.subrace}
                   campaignId={campaignId}
                   onChange={autoSaveClassPatch}
                   readOnly={!showEditable}
@@ -2182,7 +2200,7 @@ export default function CharacterDetail() {
                   // the character actually has spells from it (so the tab doesn't get crowded).
                   const isCaster = ClassSheet && classSection.draft !== null
                     && (SPELLCASTING_CLASSES.has(character.char_class) || subclassCaster);
-                  const featData = classSection.draft?.feats ?? character.character_data?.feats ?? [];
+                  const featData = sheetCtx.feats;
                   const fg = getFeatGrantedSpells(featData);
                   const hasFeat = fg.cantrips.length + fg.leveled.length + fg.ritualBooks.length > 0;
                   // Casters that render through the shared CasterSpellBlock show the unified level
@@ -2199,7 +2217,7 @@ export default function CharacterDetail() {
                   const featTrackersNode = hasFeat ? (
                     <FeatSpellsSection
                       feats={featData}
-                      characterData={classSection.draft ?? character.character_data ?? {}}
+                      characterData={sheetCtx.characterData}
                       onChange={autoSaveClassPatch}
                       readOnly={!showEditable}
                       isGm={isGm && !playerView}
@@ -2269,7 +2287,7 @@ export default function CharacterDetail() {
                             onChange={autoSaveClassPatch}
                             readOnly={!showEditable}
                             gmEdit={gmEdit}
-                            level={identity.draft?.level ?? character.level}
+                            level={sheetCtx.level}
                             section="spells"
                             abilityScores={{ intelligence: identity.draft?.intelligence ?? 10, wisdom: identity.draft?.wisdom ?? 10, charisma: identity.draft?.charisma ?? 10 }}
                             campaignId={campaignId}
@@ -2286,7 +2304,7 @@ export default function CharacterDetail() {
                       {active === 'subclass' && (
                         <div className="rounded-lg border bg-card p-4 space-y-2" data-testid="subclass-spells">
                           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            {(classSection.draft ?? character.character_data)?.subclass} Spells
+                            {sheetCtx.subclass} Spells
                           </div>
                           {/* A feature-granted spell names the feature and the ability it uses on
                               its own row: a Psi Warrior casting telekinesis with INT has no
@@ -2340,7 +2358,7 @@ export default function CharacterDetail() {
                           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Spells from Feats</div>
                           <FeatSpellsSection
                             feats={featData}
-                            characterData={classSection.draft ?? character.character_data ?? {}}
+                            characterData={sheetCtx.characterData}
                             onChange={autoSaveClassPatch}
                             readOnly={!showEditable}
                             isGm={isGm && !playerView}

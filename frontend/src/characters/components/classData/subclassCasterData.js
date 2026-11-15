@@ -37,6 +37,7 @@
  *      one cantrip per level; 5e cantrips are permanent once chosen.
  */
 
+import { normEdition } from '@/characters/components/shared/featureGate';
 // Third-caster spell slots by CLASS level (index = level − 1), padded to 9 spell levels
 // so consumers can share the full-caster slot-grid rendering. Slots begin at L3 (the
 // subclass unlock) and cap at 4th-level slots (L19+).
@@ -156,7 +157,7 @@ export const SUBCLASS_CASTERS = {
  * omit it to ask "is this a caster subclass at all".
  */
 export function getSubclassCaster(charClass, edition, subclass, level) {
-  const ed = edition === '5.5e' || edition === '2024' ? '5.5e' : '5e';
+  const ed = normEdition(edition);
   const caster = SUBCLASS_CASTERS[charClass]?.[ed]?.[subclass] || null;
   if (!caster) return null;
   if (level != null && Number(level) < caster.unlockLevel) return null;

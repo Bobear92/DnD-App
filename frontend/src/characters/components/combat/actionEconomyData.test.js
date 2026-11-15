@@ -8,6 +8,9 @@ import { RUNE_OPTIONS } from '@/characters/components/classData/runesData';
 import { ARCANE_SHOT_OPTIONS } from '@/characters/components/classData/arcaneShotData';
 import { getManeuvers } from '@/characters/components/classData/maneuversData';
 
+// The text of the rider named `source` on an entry, or null when it carries no such rider.
+const riderText = (entry, source) => (entry?.riders ?? []).find((r) => r.source === source)?.text ?? null;
+
 describe('classifyCastingTime', () => {
   it('buckets by casting time (bonus before action)', () => {
     expect(classifyCastingTime('1 bonus action')).toEqual({ tab: 'bonus', cost: 'bonus action' });
@@ -214,17 +217,17 @@ describe('buildActionEconomy — Fighter', () => {
   it('rides the 2024 Champion Remarkable Athlete post-crit move onto weapon attacks (not 5e / non-Champion / unarmed)', () => {
     const ec = buildActionEconomy({ ...fighterArgs(3, '5.5e'), subclass: 'Champion' });
     const ls = ec.action.find((e) => e.name === 'Longsword');
-    expect(ls.remarkableMoveNote).toContain('half your Speed');
+    expect(riderText(ls, 'Remarkable Athlete')).toContain('half your Speed');
 
     // 5e Champion has no such rider.
     const e5e = buildActionEconomy({ ...fighterArgs(3, '5e'), subclass: 'Champion' });
-    expect(e5e.action.find((e) => e.name === 'Longsword').remarkableMoveNote).toBeNull();
+    expect(riderText(e5e.action.find((e) => e.name === 'Longsword'), 'Remarkable Athlete')).toBeNull();
 
     // Non-Champion and the unarmed fallback never get it.
     const bm = buildActionEconomy({ ...fighterArgs(3, '5.5e'), subclass: 'Battle Master' });
-    expect(bm.action.find((e) => e.name === 'Longsword').remarkableMoveNote).toBeNull();
+    expect(riderText(bm.action.find((e) => e.name === 'Longsword'), 'Remarkable Athlete')).toBeNull();
     const unarmed = buildActionEconomy({ ...fighterArgs(3, '5.5e'), subclass: 'Champion', attacks: [] });
-    expect(unarmed.action.find((e) => e.name === 'Unarmed Strike').remarkableMoveNote).toBeNull();
+    expect(riderText(unarmed.action.find((e) => e.name === 'Unarmed Strike'), 'Remarkable Athlete')).toBeNull();
   });
 
   it('adds a spacing note (disadvantage within 5 ft) to a ranged weapon attack', () => {
@@ -265,7 +268,7 @@ describe('buildActionEconomy — Fighter', () => {
     args.characterData = { race_traits: ['Menacing', 'Savage Attacks', 'Relentless Endurance'] };
     args.inventory = [{ uid: 'w1', name: 'Longsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile (1d10)"]' }];
     const ls = buildActionEconomy(args).action.find((e) => e.name === 'Longsword');
-    expect(ls.savageAttacksNote).toMatch(/Savage Attacks/i);
+    expect(riderText(ls, 'Savage Attacks')).toMatch(/Savage Attacks/i);
   });
 
   it('no Savage Attacks note on a ranged weapon even for a Half-Orc', () => {
@@ -274,14 +277,14 @@ describe('buildActionEconomy — Fighter', () => {
     args.attacks = [{ uid: 'lb1', name: 'Longbow', toHit: '+7', damage: '1d8 + 3 Piercing', proficient: true }];
     args.inventory = [{ uid: 'lb1', name: 'Longbow', category: 'weapons', equipped: true, weapon_type: 'Ranged', properties: '["Ammunition", "Two-Handed"]' }];
     const bow = buildActionEconomy(args).action.find((e) => e.name === 'Longbow');
-    expect(bow.savageAttacksNote).toBeNull();
+    expect(riderText(bow, 'Savage Attacks')).toBeNull();
   });
 
   it('no Savage Attacks note without the trait', () => {
     const args = fighterArgs(5, '5e');
     args.inventory = [{ uid: 'w1', name: 'Longsword', category: 'weapons', equipped: true, weapon_type: 'Melee', properties: '["Versatile (1d10)"]' }];
     const ls = buildActionEconomy(args).action.find((e) => e.name === 'Longsword');
-    expect(ls.savageAttacksNote).toBeNull();
+    expect(riderText(ls, 'Savage Attacks')).toBeNull();
   });
 
   it('gives the unarmed strike a to-hit breakdown too', () => {
@@ -1009,7 +1012,7 @@ describe('buildActionEconomy — Fighter', () => {
         args.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', damage: '2d6 + 3 slashing', proficient: true }];
         args.characterData = { feats: [GWM] };
         const row = buildActionEconomy(args).action.find((e) => e.name === 'Greatsword');
-        expect(row.greatWeaponMasterNote).toMatch(/critical hit.*bonus action/i);
+        expect(riderText(row, 'Great Weapon Master')).toMatch(/critical hit.*bonus action/i);
       }
     });
 
@@ -1018,7 +1021,7 @@ describe('buildActionEconomy — Fighter', () => {
       const noFeat = fighterArgs(4, '5e');
       noFeat.inventory = [greatsword];
       noFeat.attacks = [{ uid: 'gs', name: 'Greatsword', toHit: '+6', damage: '2d6 + 3 slashing', proficient: true }];
-      expect(buildActionEconomy(noFeat).action.find((e) => e.name === 'Greatsword').greatWeaponMasterNote).toBeNull();
+      expect(riderText(buildActionEconomy(noFeat).action.find((e) => e.name === 'Greatsword'), 'Great Weapon Master')).toBeNull();
 
       // Ranged weapon — GWM's bonus attack is melee-only
       const ranged = fighterArgs(4, '5e');
@@ -1026,7 +1029,7 @@ describe('buildActionEconomy — Fighter', () => {
       ranged.inventory = [bow];
       ranged.attacks = [{ uid: 'lb', name: 'Longbow', toHit: '+5', damage: '1d8 + 2 piercing', proficient: true }];
       ranged.characterData = { feats: [GWM] };
-      expect(buildActionEconomy(ranged).action.find((e) => e.name === 'Longbow').greatWeaponMasterNote).toBeNull();
+      expect(riderText(buildActionEconomy(ranged).action.find((e) => e.name === 'Longbow'), 'Great Weapon Master')).toBeNull();
 
       // Unarmed fallback (no weapon equipped) carries no note
       const unarmed = fighterArgs(4, '5e');
@@ -1034,7 +1037,7 @@ describe('buildActionEconomy — Fighter', () => {
       unarmed.attacks = [];
       unarmed.characterData = { feats: [GWM] };
       const unarmedRow = buildActionEconomy(unarmed).action.find((e) => /unarmed/i.test(e.name));
-      expect(unarmedRow?.greatWeaponMasterNote ?? null).toBeNull();
+      expect(riderText(unarmedRow, 'Great Weapon Master')).toBeNull();
     });
 
     it('attaches a −5/+10 powerAttack variant to a proficient Heavy melee weapon (5e)', () => {
@@ -1636,16 +1639,16 @@ describe('buildActionEconomy — Eldritch Knight (Fighter subclass)', () => {
   it('rides the Eldritch Strike note onto real weapon attacks at L10 (not unarmed, not non-EK)', () => {
     const ec = buildActionEconomy(ekArgs(10));
     const ls = ec.action.find((e) => e.name === 'Longsword');
-    expect(ls.eldritchStrikeNote).toMatch(/disadvantage on the next saving throw/);
+    expect(riderText(ls, 'Eldritch Strike')).toMatch(/disadvantage on the next saving throw/);
     // Below L10 → null.
     const l9 = buildActionEconomy(ekArgs(9)).action.find((e) => e.name === 'Longsword');
-    expect(l9.eldritchStrikeNote).toBeNull();
+    expect(riderText(l9, 'Eldritch Strike')).toBeNull();
     // Unarmed fallback (no uid) → null.
     const ua = buildActionEconomy(ekArgs(10, '5e', { attacks: [] })).action.find((e) => e.name === 'Unarmed Strike');
-    expect(ua.eldritchStrikeNote).toBeNull();
+    expect(riderText(ua, 'Eldritch Strike')).toBeNull();
     // Champion → null.
     const champ = buildActionEconomy({ ...ekArgs(10), subclass: 'Champion' }).action.find((e) => e.name === 'Longsword');
-    expect(champ.eldritchStrikeNote).toBeNull();
+    expect(riderText(champ, 'Eldritch Strike')).toBeNull();
   });
 });
 

@@ -25,7 +25,7 @@ export function allFeatEffects(feats = []) {
 
 // A stat_mod amount / resource total is a number, or the string 'pb' for proficiency-bonus
 // scaling (2024 Alert's initiative, Lucky's luck points) — resolved with the pb passed by the
-// consumer (CharacterDetail computes it; getRestSummary derives it from level). pb defaults to 0
+// consumer (CharacterDetail computes it; the backend rest flow derives it from level). pb defaults to 0
 // so a PB-scaled value that isn't given a pb simply contributes nothing rather than crashing.
 const resolveAmount = (v, pb) => (v === 'pb' ? (Number(pb) || 0) : (Number(v) || 0));
 

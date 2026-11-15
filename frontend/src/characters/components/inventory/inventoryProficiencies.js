@@ -12,6 +12,7 @@
 // those still detect proficiency via the broad category that covered the grant.
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
 import { getFeatProficiencyGrants } from '@/characters/components/feats/featEffects';
+import { isEdition2024 } from '@/characters/components/shared/featureGate';
 
 const dedup = (arr) => [...new Set((arr || []).filter(Boolean))];
 
@@ -33,7 +34,7 @@ const SUBCLASS_PROF_GRANTS_5E = {
   },
 };
 
-const is2024Edition = (edition) => edition === '5.5e' || edition === '2024';
+const is2024Edition = isEdition2024;
 
 function subclassProfGrants(charClass, subclass, edition) {
   if (is2024Edition(edition)) return {};

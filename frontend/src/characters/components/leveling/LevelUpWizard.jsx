@@ -31,23 +31,22 @@ import { getManeuvers, maneuversKnownAtLevel } from '@/characters/components/cla
 import { getLevelChoices, availablePoolOptions, applyLevelChoice, poolOptionDescription } from '@/characters/components/classData/levelChoicesData';
 import { getSubclassGrants, availableGrantOptions, applyGrant } from '@/characters/components/classData/subclassGrants';
 import { featureSaveProficiencies } from '@/characters/components/skills/saveProficiencies';
-import { levelUpAutoEffects, signed } from '@/characters/components/leveling/levelUpAutoEffects';
+import { levelUpAutoEffects } from '@/characters/components/leveling/levelUpAutoEffects';
 import OptionCardPicker from '@/characters/components/shared/OptionCardPicker';
 import FeatPicker from '@/characters/components/feats/FeatPicker';
-import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from '@/characters/components/feats/FeatSpellGrantPicker';
-import FeatManeuverPicker from '@/characters/components/feats/FeatManeuverPicker';
+import FeatChoiceFields from '@/characters/components/feats/FeatChoiceFields';
+import { resolveFeatAcquisition } from '@/characters/components/feats/featAcquisition';
 import { checkFeatPrerequisite } from '@/characters/components/feats/featPrerequisites';
-import { featAbilityChoices, featFixedAbilityScores, getFeatProficiencyGrants, getSpellGrantSpecs, featGrantRedundant, featAbilityChoiceOptions, getFeatSaveProficiencies, getManeuverGrantSpec, maneuverGrantComplete } from '@/characters/components/feats/featEffects';
-import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, groupFeatProfOptions, FEAT_SKILL_OPTIONS } from '@/characters/components/feats/featProficiencyData';
+import { featGrantRedundant, getFeatProficiencyGrants, getFeatSaveProficiencies } from '@/characters/components/feats/featEffects';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
 import featService from '@/encyclopedia/featService';
+import { formatBonus, abilityMod } from '@/characters/components/shared/abilityMath';
 
 const ABILITY_LABEL = {
   strength: 'Strength', dexterity: 'Dexterity', constitution: 'Constitution',
   intelligence: 'Intelligence', wisdom: 'Wisdom', charisma: 'Charisma',
 };
 
-function conMod(score) { return Math.floor((score - 10) / 2); }
 
 // Known casters choose their spells at level-up (vs. prepared casters who swap each long rest).
 const KNOWN_CASTERS = new Set(['Bard', 'Sorcerer', 'Warlock']);
@@ -127,7 +126,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
 
   const newLevel = (character.level ?? 1) + 1;
   const hitDie = config?.hitDie ?? HIT_DICE[character.char_class] ?? 8;
-  const con = conMod(character.constitution ?? 10);
+  const con = abilityMod(character.constitution ?? 10);
   const average = Math.floor(hitDie / 2) + 1;
 
   const subclassUnlockLevel = config?.subclass?.unlockLevel ?? SUBCLASS_UNLOCK[character.char_class];
@@ -555,7 +554,6 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
 
   // The full picked feat (with effects) + any ability-score choice it demands (half-feats).
   const pickedFeat = featPick ? visibleFeats.find((f) => f.id === featPick.id) : null;
-  const featAbilityChoice = pickedFeat ? (featAbilityChoices(pickedFeat)[0] || null) : null; // slice: one choice
   // Saving-throw proficiencies the character already has (class defaults overridden by any stored
   // toggle, plus feat-granted saves) — used to filter Resilient's ability chooser.
   const _ABILITIES = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
@@ -571,50 +569,34 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
       edition, characterData: cd,
     }).map((p) => p.ability),
   ];
-  // The abilities offerable for a half-feat's ability choice (Resilient hides saves already held).
-  const featAbilityOptions = featAbilityChoiceOptions(pickedFeat, featAbilityChoice, { saveProficiencies });
-  // Count-choice proficiency grants the picked feat demands (Skilled / Linguist / Weapon Master),
-  // plus Expertise grants (Skill Expert) whose pool is the character's proficient skills — including
-  // a skill picked from this same feat (so you can expertise what you just gained).
-  const _skillSet = new Set(FEAT_SKILL_OPTIONS.map((s) => s.toLowerCase()));
-  // The skills granted by THIS feat being picked (a Skilled skill_or_tool pick or a Skill
-  // Expert skill pick) — recorded on the feat instance so the Stats skills panel can flag them.
-  const featSkillPicks = [...new Set([
-    ...(featProfChoices.skill || []),
-    ...((featProfChoices.skill_or_tool || []).filter((s) => _skillSet.has(s.toLowerCase()))),
-  ])];
-  const proficientSkills = [...new Set([
-    ...(character.character_data?.skill_proficiencies ?? []),
-    ...featSkillPicks,
-  ])];
-  const featProfCtx = { charClass: character.char_class, characterData: character.character_data ?? {} };
-  const featProfGrants = pickedFeat ? getFeatProficiencyChoices(pickedFeat, { proficientSkills }) : [];
-  const featProfRequired = (g) => Math.min(g.count, availableFeatOptions(g, featProfCtx).length);
-  const featProfComplete = featProfGrants.every((g) => (featProfChoices[g.prof_type]?.length || 0) >= featProfRequired(g));
-  // Spell-grant spec (Magic Initiate) the picked feat asks the player to fulfil.
-  const featSpellSpec = pickedFeat ? (getSpellGrantSpecs(pickedFeat)[0] || null) : null;
-  const featSpellComplete = !featSpellSpec || spellGrantComplete(featSpellSpec, featSpellGrant);
-  // Maneuver-grant spec (Martial Adept): pick N Battle Master maneuvers, excluding any already known.
-  const featManeuverSpec = pickedFeat ? getManeuverGrantSpec(pickedFeat) : null;
-  const featManeuverComplete = maneuverGrantComplete(featManeuverSpec, featManeuverPicks);
-  const selectFeat = (f) => { setFeatPick(f); setFeatAbilityPick(''); setFeatProfChoices({}); setFeatSpellGrant(null); setFeatManeuverPicks([]); };
-  const toggleFeatProf = (profType, name, max) => {
-    setFeatProfChoices((prev) => {
-      const cur = prev[profType] || [];
-      if (cur.includes(name)) return { ...prev, [profType]: cur.filter((n) => n !== name) };
-      if (cur.length >= max) return prev;
-      return { ...prev, [profType]: [...cur, name] };
-    });
+  // Everything the picked feat asks of the player — the ability choice, proficiency picks, spell
+  // grant and maneuvers — resolved by the shared acquisition model (also used by Variant Human
+  // creation and the GM's Add Feat), so the three flows cannot drift.
+  const featPickChoices = { ability: featAbilityPick, prof: featProfChoices, spell: featSpellGrant, maneuvers: featManeuverPicks };
+  const setFeatPickChoices = (next) => {
+    setFeatAbilityPick(next.ability); setFeatProfChoices(next.prof);
+    setFeatSpellGrant(next.spell); setFeatManeuverPicks(next.maneuvers);
   };
-
+  const featModel = resolveFeatAcquisition({
+    feat: pickedFeat,
+    choices: featPickChoices,
+    charClass: character.char_class,
+    characterData: character.character_data ?? {},
+    proficientSkills: character.character_data?.skill_proficiencies ?? [],
+    saveProficiencies,
+  });
+  const featAbilityChoice = featModel.abilityChoice;
+  const featSpellSpec = featModel.spellSpec;
+  const featManeuverSpec = featModel.maneuverSpec;
+  const selectFeat = (f) => { setFeatPick(f); setFeatAbilityPick(''); setFeatProfChoices({}); setFeatSpellGrant(null); setFeatManeuverPicks([]); };
   // Combined ability-score increases written this level: the ASI step's allocation plus any
   // fixed/chosen increase from a half-feat, capped at 20. (Half-feats permanently raise a score.)
   const combinedScoreUpdates = () => {
     const inc = {};
     if (wantsAsiStep) ABILITIES.forEach((a) => { if (asiAlloc[a.key]) inc[a.key] = (inc[a.key] || 0) + asiAlloc[a.key]; });
     if (wantsFeatStep && pickedFeat) {
-      featFixedAbilityScores(pickedFeat).forEach(({ ability, amount }) => { inc[ability] = (inc[ability] || 0) + amount; });
-      if (featAbilityChoice && featAbilityPick) inc[featAbilityPick] = (inc[featAbilityPick] || 0) + featAbilityChoice.amount;
+      // Fixed half-feat increases plus the chosen one (featModel.asi).
+      Object.entries(featModel.asi).forEach(([ability, amount]) => { inc[ability] = (inc[ability] || 0) + amount; });
     }
     const out = {};
     ABILITIES.forEach((a) => {
@@ -692,7 +674,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
   // no Constitution). This level-up adds one die result; Constitution is layered on dynamically at
   // display time, so raising CON here (via an ASI or half-feat) increases max HP retroactively
   // across every level automatically — no retroactive bookkeeping, no CON baked into storage.
-  const conAfter = conMod(combinedScoreUpdates().constitution ?? (character.constitution ?? 10));
+  const conAfter = abilityMod(combinedScoreUpdates().constitution ?? (character.constitution ?? 10));
   const oldLevel = character.level ?? 1;
   const oldRollBase = hpRollBase(character.character_data ?? {}, { level: oldLevel, conMod: con });
   const newRolls = oldRollBase != null && hpDieResult != null ? oldRollBase + hpDieResult : null;
@@ -731,7 +713,7 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     }
     if (STEPS[step] === 'asi') return asiTotal === ASI_POINTS;
     if (STEPS[step] === 'asi_choice') return asiChoice === 'asi' || asiChoice === 'feat';
-    if (STEPS[step] === 'feat') return !!featPick && (!featAbilityChoice || !!featAbilityPick) && featProfComplete && featSpellComplete && featManeuverComplete;
+    if (STEPS[step] === 'feat') return !!featPick && featModel.complete.all;
     if (STEPS[step] === 'maneuvers') return maneuverPicks.length === maneuverTarget;
     if (STEPS[step] === 'level-choices') {
       return levelChoices.every((c) => (levelChoicePicks[c.key]?.length || 0) >= levelChoiceRequired(c));
@@ -774,34 +756,14 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
     }
     // Feat count-choice proficiency picks (Skilled / Linguist / Weapon Master) merge into
     // their character_data fields (skills→skill_proficiencies, tools→feat_tool_proficiencies, …).
-    let featProfPatch = {};
-    if (wantsFeatStep && pickedFeat) {
-      for (const g of featProfGrants) {
-        featProfPatch = {
-          ...featProfPatch,
-          ...applyFeatProficiencyChoice(g.prof_type, featProfChoices[g.prof_type] || [], { ...(character.character_data ?? {}), ...featProfPatch }),
-        };
-      }
-    }
+    const featProfPatch = (wantsFeatStep && pickedFeat) ? featModel.profPatch(character.character_data ?? {}) : {};
     // A feat chosen this level-up is appended to character_data.feats. We snapshot the feat's
     // structured `effects` onto the instance (inventory pattern) so the sheet's resolvers
     // (initiative, action economy, unarmed die) work without re-fetching the catalogue, and
     // record any half-feat ability choice.
     const existingFeats = character.character_data?.feats ?? [];
-    const featChoices = {
-      ...(featAbilityChoice && featAbilityPick ? { ability: featAbilityPick } : {}),
-      ...(featSkillPicks.length ? { skills: featSkillPicks } : {}),
-      ...(featSpellSpec ? { spell_grant: resolveSpellGrantValue(featSpellSpec, featSpellGrant) } : {}),
-      ...(featManeuverSpec ? { maneuvers: featManeuverPicks } : {}),
-    };
-    const featAddition = (wantsFeatStep && featPick)
-      ? [...existingFeats, {
-          id: featPick.id,
-          name: featPick.name,
-          level: newLevel,
-          ...(pickedFeat?.effects ? { effects: pickedFeat.effects } : {}),
-          ...(Object.keys(featChoices).length ? { choices: featChoices } : {}),
-        }]
+    const featAddition = (wantsFeatStep && featPick && pickedFeat)
+      ? [...existingFeats, featModel.entry({ level: newLevel })]
       : null;
 
     // Class-wide pool selections (Metamagic, Eldritch Invocations, …) merge into their
@@ -1098,14 +1060,14 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                           so <span className="font-medium">{p.source}</span> lets you choose Intelligence or Charisma saving throws instead — you'll pick on a later step.</>
                       ) : (
                         <><span className="font-medium capitalize">{p.ability}</span> saving throws: you become proficient
-                          ({p.source}) — your save is now <span className="font-medium">{signed(p.total)}</span>
-                          <span className="text-muted-foreground"> ({signed(p.abilityMod)} {p.ability.slice(0, 3).toUpperCase()}, {signed(p.pb)} proficiency)</span>.</>
+                          ({p.source}) — your save is now <span className="font-medium">{formatBonus(p.total)}</span>
+                          <span className="text-muted-foreground"> ({formatBonus(p.abilityMod)} {p.ability.slice(0, 3).toUpperCase()}, {formatBonus(p.pb)} proficiency)</span>.</>
                       )}
                     </li>
                   ))}
                   {autoEffects.skillBonuses.map((b) => (
                     <li key={`skill-${b.key}-${b.skill}`} data-testid={`auto-effect-skill-${b.skill}`}>
-                      <span className="font-medium">{b.skill}</span> checks: <span className="font-medium">{signed(b.amount)}</span>
+                      <span className="font-medium">{b.skill}</span> checks: <span className="font-medium">{formatBonus(b.amount)}</span>
                       <span className="text-muted-foreground"> ({b.label ?? b.source})</span>, added to the skill on your sheet.
                     </li>
                   ))}
@@ -1218,101 +1180,17 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
               />
             )}
 
-            {/* Half-feat ability-score choice (e.g. Tavern Brawler: +1 Strength or Constitution) */}
-            {featAbilityChoice && (
-              <div className="space-y-2 rounded-md border bg-muted/30 p-3" data-testid="feat-ability-choice">
-                <p className="text-sm font-medium">
-                  This feat increases an ability score by {featAbilityChoice.amount}. Choose one:
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {featAbilityOptions.map((ab) => (
-                    <button
-                      key={ab}
-                      type="button"
-                      onClick={() => setFeatAbilityPick(ab)}
-                      data-testid={`feat-ability-${ab}`}
-                      className={cn(
-                        'rounded-md border px-3 py-1.5 text-sm transition-colors',
-                        featAbilityPick === ab ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
-                      )}
-                    >
-                      +{featAbilityChoice.amount} {ABILITY_LABEL[ab] || ab}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Count-choice proficiency grants (Skilled / Linguist / Weapon Master) */}
-            {featProfGrants.map((g) => {
-              const opts = availableFeatOptions(g, featProfCtx);
-              if (opts.length === 0) return null; // nothing left to pick (e.g. no proficient skills to expertise)
-              const chosen = featProfChoices[g.prof_type] || [];
-              return (
-                <div key={g.key} className="space-y-2 rounded-md border bg-muted/30 p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{g.label}</span>
-                    <span className={cn('text-xs', chosen.length === g.count ? 'text-muted-foreground' : 'text-amber-600')}>
-                      {chosen.length}/{g.count}
-                    </span>
-                  </div>
-                  <div className="max-h-56 overflow-y-auto pr-1 space-y-2" data-testid={`feat-prof-grant-${g.prof_type}`}>
-                    {groupFeatProfOptions(g.prof_type, opts).map(({ category, options }) => (
-                      <div key={category || '_'} className="space-y-1.5">
-                        {category && (
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{category}</div>
-                        )}
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {options.map((o) => {
-                            const isSel = chosen.includes(o);
-                            const atLimit = chosen.length >= g.count && !isSel;
-                            return (
-                              <button
-                                key={o}
-                                type="button"
-                                disabled={atLimit}
-                                onClick={() => toggleFeatProf(g.prof_type, o, g.count)}
-                                data-testid={`feat-prof-opt-${g.prof_type}-${o}`}
-                                className={cn(
-                                  'rounded-md border px-2 py-1.5 text-xs text-left transition-colors',
-                                  isSel ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
-                                  atLimit && 'opacity-40 cursor-not-allowed',
-                                )}
-                              >
-                                {o}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Spell-grant picker (Magic Initiate): choose a list + cantrips + a 1st-level spell */}
-            {featSpellSpec && (
-              <FeatSpellGrantPicker
-                spec={featSpellSpec}
-                value={featSpellGrant}
-                onChange={setFeatSpellGrant}
-                campaignId={campaign?.id}
-                testIdPrefix="lvl-feat-spell"
-              />
-            )}
-
-            {/* Maneuver-grant picker (Martial Adept): pick N maneuvers, excluding any already known */}
-            {featManeuverSpec && (
-              <FeatManeuverPicker
-                spec={featManeuverSpec}
-                value={featManeuverPicks}
-                onChange={setFeatManeuverPicks}
-                edition={edition}
-                knownManeuvers={knownManeuvers}
-                testIdPrefix="lvl-feat-maneuver"
-              />
-            )}
+            {/* The feat's follow-up choices: ability score, proficiencies, spells, maneuvers. */}
+            <FeatChoiceFields
+              model={featModel}
+              onChange={setFeatPickChoices}
+              campaignId={campaign?.id}
+              edition={edition}
+              knownManeuvers={knownManeuvers}
+              testIdPrefix="feat"
+              spellTestIdPrefix="lvl-feat-spell"
+              maneuverTestIdPrefix="lvl-feat-maneuver"
+            />
           </div>
         )}
 
@@ -1720,13 +1598,13 @@ export default function LevelUpWizard({ character, campaign, onComplete, onClose
                 {autoEffects.saveProficiencies.filter((p) => !p.alreadyHeld).map((p) => (
                   <div key={`save-${p.ability}`} className="flex justify-between" data-testid={`confirm-auto-save-${p.ability}`}>
                     <span className="text-muted-foreground">Save proficiency</span>
-                    <span className="font-medium"><span className="capitalize">{p.ability}</span> {signed(p.total)} <span className="text-muted-foreground font-normal">({p.source})</span></span>
+                    <span className="font-medium"><span className="capitalize">{p.ability}</span> {formatBonus(p.total)} <span className="text-muted-foreground font-normal">({p.source})</span></span>
                   </div>
                 ))}
                 {autoEffects.skillBonuses.map((b) => (
                   <div key={`skill-${b.key}-${b.skill}`} className="flex justify-between" data-testid={`confirm-auto-skill-${b.skill}`}>
                     <span className="text-muted-foreground">{b.skill} bonus</span>
-                    <span className="font-medium">{signed(b.amount)} <span className="text-muted-foreground font-normal">({b.label ?? b.source})</span></span>
+                    <span className="font-medium">{formatBonus(b.amount)} <span className="text-muted-foreground font-normal">({b.label ?? b.source})</span></span>
                   </div>
                 ))}
                 {needsSubclassGrants && (

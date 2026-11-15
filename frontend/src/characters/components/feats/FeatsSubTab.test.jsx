@@ -256,3 +256,176 @@ describe('FeatsSubTab', () => {
     expect(chips).toHaveTextContent('Trip Attack, Riposte');
   });
 });
+
+// ── Adding a feat runs the same follow-up choices as level-up and creation ───────────────
+// The GM's Add Feat used to store a bare {id, name, effects}: a feat that asks for an ability
+// score, proficiencies, spells or maneuvers was added with none of them, so Skilled granted no
+// skills and Martial Adept no maneuvers. It now goes through featAcquisition + FeatChoiceFields.
+describe('FeatsSubTab — Add Feat asks for the feat\'s choices', () => {
+  const TAVERN_BRAWLER = {
+    id: 20, name: 'Tavern Brawler', prerequisites: {}, repeatable: false, description: 'Brawl.',
+    effects: [{ kind: 'ability_choice', abilities: ['strength', 'constitution'], amount: 1 }],
+  };
+  const LINGUIST = {
+    id: 21, name: 'Linguist', prerequisites: {}, repeatable: false, description: 'Tongues.',
+    effects: [{ kind: 'proficiency', prof_type: 'language', count: 2 }],
+  };
+  const MARTIAL_ADEPT = {
+    id: 22, name: 'Martial Adept', prerequisites: {}, repeatable: false, description: 'Maneuvers.',
+    effects: [{ kind: 'maneuver_grant', count: 2, die: 'd6' }],
+  };
+  const ACTOR = {
+    id: 23, name: 'Actor', prerequisites: {}, repeatable: false, description: 'Mimic.',
+    effects: [{ kind: 'ability_score', ability: 'charisma', amount: 1 }],
+  };
+  const RESILIENT = {
+    id: 24, name: 'Resilient', prerequisites: {}, repeatable: false, description: 'Tough mind.',
+    effects: [
+      { kind: 'ability_choice', abilities: ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'], amount: 1 },
+      { kind: 'proficiency', prof_type: 'saving_throw', from_ability_choice: true },
+    ],
+  };
+
+  beforeEach(() => {
+    featService.getFeats.mockResolvedValue([...CATALOGUE, TAVERN_BRAWLER, LINGUIST, MARTIAL_ADEPT, ACTOR, RESILIENT]);
+  });
+
+  const openAndPick = async (id, props = {}) => {
+    const onChange = vi.fn();
+    const onAddFeat = vi.fn();
+    render(
+      <MemoryRouter>
+        <FeatsSubTab feats={[]} campaignId={1} edition="5e" canManage onChange={onChange} onAddFeat={onAddFeat} {...props} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByTestId('feats-add-btn'));
+    fireEvent.click(await screen.findByTestId(`add-pick-${id}`));
+    return { onChange, onAddFeat };
+  };
+
+  it('a feat with nothing to ask is still added at once', async () => {
+    const { onAddFeat } = await openAndPick(10); // Alert
+    expect(screen.queryByTestId('add-feat-choices')).toBeNull();
+    expect(onAddFeat).toHaveBeenCalledWith({
+      patch: { feats: [{ id: 10, name: 'Alert', effects: CATALOGUE[0].effects }] },
+      asi: {},
+    });
+  });
+
+  it('a half-feat holds until its ability is chosen, then records the choice and reports the +1', async () => {
+    const { onAddFeat } = await openAndPick(20);
+    expect(screen.getByTestId('add-feat-choices')).toHaveTextContent('Adding Tavern Brawler');
+    expect(onAddFeat).not.toHaveBeenCalled();
+    expect(screen.getByTestId('add-feat-confirm')).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('add-feat-ability-constitution'));
+    expect(screen.getByTestId('add-feat-confirm')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('add-feat-confirm'));
+
+    expect(onAddFeat).toHaveBeenCalledWith({
+      patch: { feats: [{ id: 20, name: 'Tavern Brawler', effects: TAVERN_BRAWLER.effects, choices: { ability: 'constitution' } }] },
+      asi: { constitution: 1 },
+    });
+    expect(screen.queryByTestId('add-feat-choices')).toBeNull();
+  });
+
+  it('a FIXED ability increase needs no picker but is still handed to the page', async () => {
+    const { onAddFeat } = await openAndPick(23); // Actor: +1 Charisma
+    expect(screen.queryByTestId('add-feat-choices')).toBeNull();
+    expect(onAddFeat.mock.calls[0][0].asi).toEqual({ charisma: 1 });
+  });
+
+  it('proficiency picks are written into the character, merged with what is already there', async () => {
+    const { onAddFeat } = await openAndPick(21, { characterData: { feat_languages: ['Orc'] } });
+    expect(screen.getByTestId('add-feat-confirm')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('add-feat-prof-opt-language-Elvish'));
+    expect(screen.getByTestId('add-feat-confirm')).toBeDisabled(); // 1 of 2
+    fireEvent.click(screen.getByTestId('add-feat-prof-opt-language-Giant'));
+    fireEvent.click(screen.getByTestId('add-feat-confirm'));
+
+    const { patch } = onAddFeat.mock.calls[0][0];
+    expect(patch.feat_languages).toEqual(['Orc', 'Elvish', 'Giant']);
+    expect(patch.feats).toEqual([{ id: 21, name: 'Linguist', effects: LINGUIST.effects }]);
+  });
+
+  it('does not offer a language the character already speaks', async () => {
+    await openAndPick(21, { characterData: { race_languages: ['Elvish'] } });
+    expect(screen.queryByTestId('add-feat-prof-opt-language-Elvish')).toBeNull();
+    expect(screen.getByTestId('add-feat-prof-opt-language-Giant')).toBeInTheDocument();
+  });
+
+  it('Martial Adept asks for its maneuvers and stores them on the feat', async () => {
+    const { onAddFeat } = await openAndPick(22, { characterData: { subclass: 'Champion' } });
+    expect(screen.getByTestId('add-feat-confirm')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('add-feat-maneuver-Riposte'));
+    fireEvent.click(screen.getByTestId('add-feat-maneuver-Parry'));
+    fireEvent.click(screen.getByTestId('add-feat-confirm'));
+
+    const { patch } = onAddFeat.mock.calls[0][0];
+    expect(patch.feats[0].choices).toEqual({ maneuvers: ['Riposte', 'Parry'] });
+    expect(patch).not.toHaveProperty('maneuvers'); // not a Battle Master
+  });
+
+  it('a Battle Master gets the feat maneuvers folded into the shared known list', async () => {
+    const { onAddFeat } = await openAndPick(22, { characterData: { subclass: 'Battle Master', maneuvers: ['Rally'] } });
+    // A maneuver already known is not offered again.
+    expect(screen.queryByTestId('add-feat-maneuver-Rally')).toBeNull();
+    fireEvent.click(screen.getByTestId('add-feat-maneuver-Riposte'));
+    fireEvent.click(screen.getByTestId('add-feat-maneuver-Parry'));
+    fireEvent.click(screen.getByTestId('add-feat-confirm'));
+    expect(onAddFeat.mock.calls[0][0].patch.maneuvers).toEqual(['Rally', 'Riposte', 'Parry']);
+  });
+
+  it('Resilient does not offer a save the character already has', async () => {
+    await openAndPick(24, { saveProficiencies: ['strength', 'constitution'] });
+    expect(screen.queryByTestId('add-feat-ability-strength')).toBeNull();
+    expect(screen.queryByTestId('add-feat-ability-constitution')).toBeNull();
+    expect(screen.getByTestId('add-feat-ability-wisdom')).toBeInTheDocument();
+  });
+
+  it('cancelling the choices adds nothing and returns to the picker', async () => {
+    const { onAddFeat, onChange } = await openAndPick(20);
+    fireEvent.click(screen.getByTestId('add-feat-ability-strength'));
+    fireEvent.click(screen.getByTestId('add-feat-cancel'));
+    expect(onAddFeat).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('add-feat-choices')).toBeNull();
+    expect(screen.getByTestId('feat-picker')).toBeInTheDocument();
+  });
+
+  it('choices made for one feat do not leak into the next feat picked', async () => {
+    await openAndPick(20);
+    fireEvent.click(screen.getByTestId('add-feat-ability-strength'));
+    fireEvent.click(screen.getByTestId('add-feat-cancel'));
+    fireEvent.click(screen.getByTestId('add-pick-20'));
+    expect(screen.getByTestId('add-feat-confirm')).toBeDisabled();
+  });
+
+  it('appends to the feats the character already has', async () => {
+    const { onAddFeat } = await openAndPick(20, { feats: [{ id: 12, name: 'Tough' }] });
+    fireEvent.click(screen.getByTestId('add-feat-ability-strength'));
+    fireEvent.click(screen.getByTestId('add-feat-confirm'));
+    expect(onAddFeat.mock.calls[0][0].patch.feats.map((f) => f.name)).toEqual(['Tough', 'Tavern Brawler']);
+  });
+
+  it('without onAddFeat the patch still goes through onChange', async () => {
+    const onChange = vi.fn();
+    render(<MemoryRouter><FeatsSubTab feats={[]} campaignId={1} edition="5e" canManage onChange={onChange} /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('feats-add-btn'));
+    fireEvent.click(await screen.findByTestId('add-pick-21'));
+    fireEvent.click(screen.getByTestId('add-feat-prof-opt-language-Elvish'));
+    fireEvent.click(screen.getByTestId('add-feat-prof-opt-language-Giant'));
+    fireEvent.click(screen.getByTestId('add-feat-confirm'));
+    expect(onChange).toHaveBeenCalledWith({
+      feats: [{ id: 21, name: 'Linguist', effects: LINGUIST.effects }],
+      feat_languages: ['Elvish', 'Giant'],
+    });
+  });
+
+  it('a player (not managing) is offered none of it', async () => {
+    render(<MemoryRouter><FeatsSubTab feats={[]} campaignId={1} edition="5e" canManage={false} /></MemoryRouter>);
+    await screen.findByTestId('feats-empty');
+    expect(screen.queryByTestId('feats-add-btn')).toBeNull();
+    expect(screen.queryByTestId('add-feat-choices')).toBeNull();
+  });
+});

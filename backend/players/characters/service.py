@@ -777,7 +777,8 @@ def _compute_initiative_patch(
     return patch, changes
 
 
-# Racial / subracial rest resources — mirrors frontend racialRestResources.js.
+# Racial / subracial rest resources — mirrors frontend racialRestResources.js (the two are
+# checked against each other through tests/fixtures/rest_resources_contract.json).
 # Each tuple: (trait_name, character_data_key, recharge, min_level).
 # recharge 'short' recovers on a short OR long rest; 'long' on a long rest only.
 _RACIAL_REST_RESOURCES = [
@@ -796,15 +797,12 @@ def _feat_freecast_used_key(spell_name: str) -> str:
     slug = re.sub(r'[^a-z0-9]+', '_', (spell_name or '').lower()).strip('_')
     return f"feat_freecast_{slug}_used"
 
-# Divination Wizard subclasses (5e "School of Divination", 2024 "Diviner")
-_DIVINATION_SUBCLASSES = {'School of Divination', 'Diviner'}
-
 
 # Rune Knight Channel Rune keys, one per rune. Each rune recharges INDEPENDENTLY — RAW is
 # "you can't use it again until you finish a short or long rest" per rune — so they cannot share
-# a pool. Mirrors CHANNEL_RUNE_KEYS in frontend runesData.js; the pool SIZE (1, or 2 from Master
-# of Runes at 15th) stays a frontend concern like every other Fighter pool, so this only zeroes
-# the spent counts. Runes the character hasn't carved simply have no stored count to clear.
+# a pool. Mirrors CHANNEL_RUNE_KEYS in frontend runesData.js. The reset is unconditional rather
+# than per-carved-rune: which runes are carved is frontend state, so a rune moved between rests
+# can't keep a stale count.
 _CHANNEL_RUNE_KEYS = [
     'channel_rune_cloud_used',
     'channel_rune_fire_used',
@@ -815,66 +813,219 @@ _CHANNEL_RUNE_KEYS = [
 ]
 
 
+# ── Rest resources ────────────────────────────────────────────────────────────
+#
+# Every class/subclass counter a short or long rest resets is ONE ROW here. This table is the
+# single source of truth for what a rest recovers: the GM's rest dialog shows what a dry run of
+# this returned (RestRequest.dry_run) instead of predicting it from a second copy, the same call
+# the initiative flow made. Adding a feature's pool is a one-row change.
+#
+#   keys       — the character_data counters the row resets.
+#   recharge   — 'short' recovers on a short OR long rest (a long rest is also a short one);
+#                'long' recovers on a long rest only.
+#   char_class — a class name, a tuple of them, or None for "any class".
+#   subclass   — a subclass name, a tuple of them, or None for "any".
+#   edition    — '5e' / '5.5e', or None for either.
+#   min_level  — the level the FEATURE is gained, so a rest never promises a pool the character
+#                doesn't have.
+#   value      — what "unspent" looks like: 0 for a counter (default), False for a once-per-rest
+#                flag, [] for a rolled list.
+#   only_if_spent — report the row only when something was actually spent (the reset still
+#                happens). For rows where "recovered" would read oddly on an untouched resource.
+#
+# Pool SIZES stay a frontend concern (class config `restResources`): a reset only zeroes the
+# spent count, so the backend never needs to know that a Cavalier's pool is their STR modifier.
+# The frontend rows are checked against this table by restResourceContract.test.js through
+# tests/fixtures/rest_resources_contract.json — a frontend tracker with no row here would be a
+# counter no rest ever resets.
+def _rest(message, keys, recharge, char_class, min_level=1, subclass=None, edition=None,
+          value=0, only_if_spent=False):
+    return {
+        'message': message, 'keys': list(keys), 'recharge': recharge, 'char_class': char_class,
+        'subclass': subclass, 'edition': edition, 'min_level': min_level, 'value': value,
+        'only_if_spent': only_if_spent,
+    }
+
+
+_REST_RESOURCES = [
+    # ── Fighter ──
+    _rest('Second Wind recovered', ['second_wind_used'], 'short', 'Fighter'),
+    _rest('Action Surge recovered', ['action_surge_used'], 'short', 'Fighter', min_level=2),
+    _rest('Indomitable recovered', ['indomitable_used'], 'long', 'Fighter', min_level=9),
+    _rest('Superiority Dice recovered', ['superiority_dice_used'], 'short', 'Fighter',
+          min_level=3, subclass='Battle Master'),
+    _rest('Arcane Shot recovered', ['arcane_shot_used'], 'short', 'Fighter',
+          min_level=3, subclass='Arcane Archer'),
+    _rest('Fighting Spirit recovered', ['fighting_spirit_used'], 'long', 'Fighter',
+          min_level=3, subclass='Samurai'),
+    _rest('Strength Before Death recovered', ['strength_before_death_used'], 'long', 'Fighter',
+          min_level=18, subclass='Samurai'),
+    _rest('Unwavering Mark recovered', ['unwavering_mark_used'], 'long', 'Fighter',
+          min_level=3, subclass='Cavalier'),
+    _rest('Warding Maneuver recovered', ['warding_maneuver_used'], 'long', 'Fighter',
+          min_level=7, subclass='Cavalier'),
+    _rest('Unleash Incarnation recovered', ['unleash_incarnation_used'], 'long', 'Fighter',
+          min_level=3, subclass='Echo Knight'),
+    # The only Echo Knight pool that comes back on a short rest.
+    _rest('Shadow Martyr recovered', ['shadow_martyr_used'], 'short', 'Fighter',
+          min_level=10, subclass='Echo Knight'),
+    _rest('Reclaim Potential recovered', ['reclaim_potential_used'], 'long', 'Fighter',
+          min_level=15, subclass='Echo Knight'),
+    # The Psionic Energy POOL is long-rest only. What a short rest returns are the two
+    # once-per-rest charges: the bonus action that regains one die, and the free use of
+    # Telekinetic Movement. (Psi-Powered Leap / Bulwark of Force free uses are long-rest.)
+    _rest('Psionic Energy dice recovered', ['psionic_energy_used'], 'long', 'Fighter',
+          min_level=3, subclass='Psi Warrior'),
+    _rest('Psionic Energy die regain & Telekinetic Movement recovered',
+          ['psionic_energy_regain_used', 'telekinetic_movement_used'], 'short', 'Fighter',
+          min_level=3, subclass='Psi Warrior'),
+    _rest('Psi-Powered Leap recovered', ['psi_powered_leap_used'], 'long', 'Fighter',
+          min_level=7, subclass='Psi Warrior'),
+    _rest('Bulwark of Force recovered', ['bulwark_of_force_used'], 'long', 'Fighter',
+          min_level=15, subclass='Psi Warrior'),
+    # Giant's Might is also an ACTIVE EFFECT — a rest resets the charge but deliberately leaves
+    # `active_effects` alone: a 1-minute effect ended long before the rest, and clearing it
+    # would imply a duration the app doesn't model.
+    _rest("Giant's Might recovered", ['giants_might_used'], 'long', 'Fighter',
+          min_level=3, subclass='Rune Knight'),
+    _rest('Runic Shield recovered', ['runic_shield_used'], 'long', 'Fighter',
+          min_level=7, subclass='Rune Knight'),
+    # The only Rune Knight resource that returns on a short rest.
+    _rest('Channel Rune uses recovered', _CHANNEL_RUNE_KEYS, 'short', 'Fighter',
+          min_level=3, subclass='Rune Knight'),
+
+    # ── Other classes ──
+    _rest('Rages recovered', ['rages_used'], 'long', 'Barbarian'),
+    _rest('Bardic Inspiration recovered', ['bardic_inspiration_used'], 'long', 'Bard'),
+    # Font of Inspiration: a 5e Bard gets it back on a short rest from 5th; 2024 from 1st.
+    _rest('Bardic Inspiration recovered', ['bardic_inspiration_used'], 'short', 'Bard',
+          min_level=5, edition='5e'),
+    _rest('Bardic Inspiration recovered', ['bardic_inspiration_used'], 'short', 'Bard',
+          edition='5.5e'),
+    _rest('Channel Divinity recovered', ['channel_divinity_used'], 'long', ('Cleric', 'Paladin')),
+    _rest('Channel Divinity recovered', ['channel_divinity_used'], 'short', ('Cleric', 'Paladin'),
+          edition='5.5e'),
+    _rest('Wild Shape recovered', ['wild_shape_used'], 'long', 'Druid'),
+    _rest('Ki points recovered', ['ki_used'], 'short', 'Monk', edition='5e'),
+    _rest('Focus points recovered', ['ki_used'], 'short', 'Monk', edition='5.5e'),
+    # Uncanny Metabolism's own 1/long-rest charge (see _INITIATIVE_RESOURCES).
+    _rest('Uncanny Metabolism recovered', ['uncanny_metabolism_used'], 'long', 'Monk',
+          edition='5.5e', only_if_spent=True),
+    _rest('Lay on Hands & Divine Sense recovered', ['lay_on_hands_used', 'divine_sense_used'],
+          'long', 'Paladin'),
+    _rest('Sorcery points recovered', ['sorcery_points_used'], 'long', 'Sorcerer'),
+    _rest('Innate Sorcery refreshed', ['innate_sorcery_used'], 'long', 'Sorcerer',
+          edition='5.5e', value=False),
+    _rest('Pact magic slots recovered', ['pact_slots_used'], 'short', 'Warlock'),
+    _rest('Magical Cunning refreshed', ['magical_cunning_used'], 'long', 'Warlock',
+          edition='5.5e', value=False),
+    _rest('Arcane Recovery refreshed', ['arcane_recovery_used'], 'short', 'Wizard', value=False),
+    _rest('Memorize Spell refreshed', ['memorize_spell_used'], 'long', 'Wizard',
+          edition='5.5e', value=False),
+    _rest('Flash of Genius recovered', ['flash_of_genius_used'], 'long', 'Artificer'),
+    # Prepare-casters: a long rest unlocks today's committed spell preparation.
+    _rest('Spell preparation unlocked', ['prepared_locked'], 'long',
+          ('Cleric', 'Druid', 'Paladin', 'Ranger', 'Wizard', 'Artificer'), value=False),
+    # Divination Wizard (5e "School of Divination", 2024 "Diviner"): Portent dice are re-rolled
+    # after a long rest, so the stored rolls are cleared.
+    _rest('Portent dice cleared — roll anew', ['portent_rolls'], 'long', None,
+          subclass=('School of Divination', 'Diviner'), value=[], only_if_spent=True),
+]
+
+# Subclasses that cast from `spell_slots` although their class isn't in _SPELLCASTING_CLASSES.
+_SUBCLASS_CASTERS = {('Fighter', 'Eldritch Knight')}
+
+
+def _matches(spec_value, actual) -> bool:
+    """A row field of None matches anything; a tuple matches any member."""
+    if spec_value is None:
+        return True
+    if isinstance(spec_value, (tuple, list, set)):
+        return actual in spec_value
+    return spec_value == actual
+
+
+def _rest_specs_for(char: Character, cd: dict, rest_type: str, edition: str):
+    """The _REST_RESOURCES rows this rest recovers for this character."""
+    level = char.level or 1
+    for spec in _REST_RESOURCES:
+        if spec['recharge'] == 'long' and rest_type != 'long':
+            continue
+        if not _matches(spec['char_class'], char.char_class):
+            continue
+        if not _matches(spec['subclass'], cd.get('subclass')):
+            continue
+        if spec['edition'] and spec['edition'] != edition:
+            continue
+        if level < spec['min_level']:
+            continue
+        yield spec
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _hp_bonus_per_level(char: Character, cd: dict) -> int:
+    """Passive max-HP bonuses that scale with level. Mirrors frontend getHpBonusesPerLevel."""
+    bonus = 0
+    if char.char_class == 'Sorcerer' and cd.get('subclass') in ('Draconic Bloodline', 'Draconic Sorcery'):
+        bonus += 1  # Draconic Resilience
+    if 'Dwarven Toughness' in (cd.get('race_traits') or []):
+        bonus += 1
+    for feat in (cd.get('feats') or []):
+        name = feat if isinstance(feat, str) else (feat or {}).get('name')
+        if name == 'Tough':
+            bonus += 2
+            break
+    return bonus
+
+
+def _effective_max_hp(char: Character, cd: dict) -> int | None:
+    """The character's real maximum HP, or None when the sheet stores no HP at all.
+
+    `character_data.hp_rolls` holds only the hit-die results; Constitution and the per-level
+    bonuses are layered on at read time, so no stored number IS the max. A long rest used to
+    read `hp_max`, which nothing has written since the hp_rolls model shipped — every character
+    created after that silently kept their wounds through a long rest.
+
+    Mirrors frontend combatBonuses.effectiveMaxHp; both run tests/fixtures/max_hp_cases.json,
+    so the two cannot drift. Legacy characters stored `hp_max` with Constitution baked in.
+    """
+    level = char.level or 1
+    con = _ability_mod(char.constitution)
+    rolls, legacy = cd.get('hp_rolls'), cd.get('hp_max')
+    if _is_number(rolls):
+        base = rolls
+    elif _is_number(legacy):
+        base = legacy - level * con
+    else:
+        return None
+    total = base + con * level + _hp_bonus_per_level(char, cd) * level
+    return int(max(level, total))
+
+
+def _reset_spell_slots(cd: dict) -> dict:
+    return {
+        str(sl): {'total': data.get('total', 0), 'used': 0}
+        for sl, data in (cd.get('spell_slots') or {}).items()
+        if isinstance(data, dict)
+    }
+
+
 def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[dict, list]:
     """Return (character_data_patch, human_readable_changes)."""
     cd = char.character_data or {}
     cls = char.char_class
-    level = char.level
+    level = char.level or 1
     patch: dict = {}
     changes: list = []
 
-    if rest_type == 'short':
-        if cls == 'Warlock':
-            patch['pact_slots_used'] = 0
-            changes.append('Pact magic slots recovered')
-        if cls == 'Monk':
-            patch['ki_used'] = 0
-            changes.append('Focus points recovered' if edition == '5.5e' else 'Ki points recovered')
-        if cls == 'Fighter':
-            patch['action_surge_used'] = 0
-            patch['second_wind_used'] = 0
-            changes.append('Action Surge & Second Wind recovered')
-            if cd.get('subclass') == 'Battle Master':
-                patch['superiority_dice_used'] = 0
-                changes.append('Superiority Dice recovered')
-            if cd.get('subclass') == 'Arcane Archer':
-                patch['arcane_shot_used'] = 0
-                changes.append('Arcane Shot recovered')
-            # Shadow Martyr is the only Echo Knight pool that comes back on a short rest;
-            # the other two are long-rest only (see the long branch below).
-            if cd.get('subclass') == 'Echo Knight' and level >= 10:
-                patch['shadow_martyr_used'] = 0
-                changes.append('Shadow Martyr recovered')
-            if cd.get('subclass') == 'Rune Knight':
-                # Channel Rune is the only Rune Knight resource that returns on a SHORT rest —
-                # Giant's Might and Runic Shield are long-rest only (see the long branch).
-                for key in _CHANNEL_RUNE_KEYS:
-                    patch[key] = 0
-                changes.append('Channel Rune uses recovered')
-            if cd.get('subclass') == 'Psi Warrior':
-                # The Psionic Energy POOL itself is long-rest only. What comes back on a short
-                # rest are the two once-per-rest charges: the bonus action that regains one die,
-                # and the free use of Telekinetic Movement. Both are flat single uses, so the
-                # reset just zeroes the spent count. (The free uses of Psi-Powered Leap and
-                # Bulwark of Force are long-rest — see the long branch below.)
-                patch['psionic_energy_regain_used'] = 0
-                patch['telekinetic_movement_used'] = 0
-                changes.append('Psionic Energy die regain & Telekinetic Movement recovered')
-        if cls == 'Bard' and (edition == '5.5e' or level >= 5):
-            patch['bardic_inspiration_used'] = 0
-            changes.append('Bardic Inspiration recovered')
-        if cls in ('Cleric', 'Paladin') and edition == '5.5e':
-            patch['channel_divinity_used'] = 0
-            changes.append('Channel Divinity recovered')
-        if cls == 'Wizard':
-            patch['arcane_recovery_used'] = False
-            changes.append('Arcane Recovery refreshed')
-
-    elif rest_type == 'long':
-        hp_max = cd.get('hp_max')
-        if hp_max is not None:
-            patch['current_hp'] = hp_max
-            changes.append(f'HP restored to {hp_max}')
+    if rest_type == 'long':
+        max_hp = _effective_max_hp(char, cd)
+        if max_hp is not None:
+            patch['current_hp'] = max_hp
+            changes.append(f'HP restored to {max_hp}')
         patch['temp_hp'] = 0
 
         hit_dice_used = cd.get('hit_dice_used', 0)
@@ -885,149 +1036,22 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
         if hit_dice_used > 0:
             changes.append(f'Hit dice recovered (up to {recovered_hd})')
 
-        if cls in _SPELLCASTING_CLASSES:
-            spell_slots = cd.get('spell_slots', {})
-            patch['spell_slots'] = {
-                str(sl): {'total': data.get('total', 0), 'used': 0}
-                for sl, data in spell_slots.items()
-                if isinstance(data, dict)
-            }
+        if cls in _SPELLCASTING_CLASSES or (cls, cd.get('subclass')) in _SUBCLASS_CASTERS:
+            patch['spell_slots'] = _reset_spell_slots(cd)
             changes.append('Spell slots recovered')
 
-        if cls == 'Barbarian':
-            patch['rages_used'] = 0
-            changes.append('Rages recovered')
-        elif cls == 'Bard':
-            patch['bardic_inspiration_used'] = 0
-            changes.append('Bardic Inspiration recovered')
-        elif cls == 'Cleric':
-            patch['channel_divinity_used'] = 0
-            patch['prepared_locked'] = False
-            changes.append('Channel Divinity recovered, spell preparation unlocked')
-        elif cls == 'Druid':
-            patch['wild_shape_used'] = 0
-            patch['prepared_locked'] = False
-            changes.append('Wild Shape recovered, spell preparation unlocked')
-        elif cls == 'Fighter':
-            patch['second_wind_used'] = 0
-            patch['action_surge_used'] = 0
-            patch['indomitable_used'] = 0
-            changes.append('Action Surge, Second Wind & Indomitable recovered')
-            if cd.get('subclass') == 'Battle Master':
-                patch['superiority_dice_used'] = 0
-                changes.append('Superiority Dice recovered')
-            if cd.get('subclass') == 'Arcane Archer':
-                patch['arcane_shot_used'] = 0
-                changes.append('Arcane Shot recovered')
-            if cd.get('subclass') == 'Samurai':
-                patch['fighting_spirit_used'] = 0
-                changes.append('Fighting Spirit recovered')
-                # Strength Before Death (L18) — once per long rest. Level-gated so the summary
-                # never promises a feature the character doesn't have.
-                if level >= 18:
-                    patch['strength_before_death_used'] = 0
-                    changes.append('Strength Before Death recovered')
-            if cd.get('subclass') == 'Cavalier':
-                # Both Cavalier pools hold ability-modifier uses; the reset only zeroes the
-                # spent count, so the pool SIZE stays a frontend concern (config restResources).
-                patch['unwavering_mark_used'] = 0
-                changes.append('Unwavering Mark recovered')
-                if level >= 7:
-                    patch['warding_maneuver_used'] = 0
-                    changes.append('Warding Maneuver recovered')
-            if cd.get('subclass') == 'Echo Knight':
-                # Unleash Incarnation and Reclaim Potential both hold CON-modifier uses; as
-                # with the Cavalier, the pool SIZE stays a frontend concern (config
-                # restResources) and this only zeroes the spent count. Shadow Martyr already
-                # came back on the short-rest branch, but a long rest recovers it too.
-                patch['unleash_incarnation_used'] = 0
-                changes.append('Unleash Incarnation recovered')
-                if level >= 10:
-                    patch['shadow_martyr_used'] = 0
-                    changes.append('Shadow Martyr recovered')
-                if level >= 15:
-                    patch['reclaim_potential_used'] = 0
-                    changes.append('Reclaim Potential recovered')
-            if cd.get('subclass') == 'Psi Warrior':
-                # The whole Psionic Energy pool returns, plus the two short-rest charges (a long
-                # rest is also a short one) and the long-rest free uses. The pool SIZE stays a
-                # frontend concern (config restResources, 2 x proficiency bonus) — this only
-                # zeroes the spent count, as with the Cavalier and Echo Knight pools.
-                patch['psionic_energy_used'] = 0
-                patch['psionic_energy_regain_used'] = 0
-                patch['telekinetic_movement_used'] = 0
-                changes.append('Psionic Energy dice recovered')
-                if level >= 7:
-                    patch['psi_powered_leap_used'] = 0
-                    changes.append('Psi-Powered Leap recovered')
-                if level >= 15:
-                    patch['bulwark_of_force_used'] = 0
-                    changes.append('Bulwark of Force recovered')
-            if cd.get('subclass') == 'Rune Knight':
-                # Both pools hold proficiency-bonus uses; as with the Cavalier and Echo Knight,
-                # the pool SIZE stays a frontend concern (config restResources) and this only
-                # zeroes the spent count. Giant's Might is also an ACTIVE EFFECT — a long rest
-                # does NOT switch it off, because the effect lasts a minute and would have ended
-                # of its own accord long before the rest; the player clears it from the card.
-                patch['giants_might_used'] = 0
-                changes.append("Giant's Might recovered")
-                if level >= 7:
-                    patch['runic_shield_used'] = 0
-                    changes.append('Runic Shield recovered')
-                # A long rest is also a short one, so every Channel Rune use comes back too.
-                for key in _CHANNEL_RUNE_KEYS:
-                    patch[key] = 0
-                changes.append('Channel Rune uses recovered')
-            if cd.get('subclass') == 'Eldritch Knight':
-                # Subclass caster: Fighter isn't in _SPELLCASTING_CLASSES, so reset the
-                # EK's spell slots here (same shape as the class-caster reset above).
-                spell_slots = cd.get('spell_slots', {})
-                patch['spell_slots'] = {
-                    str(sl): {'total': data.get('total', 0), 'used': 0}
-                    for sl, data in spell_slots.items()
-                    if isinstance(data, dict)
-                }
-                changes.append('Spell slots recovered')
-        elif cls == 'Monk':
-            patch['ki_used'] = 0
-            changes.append('Focus points recovered' if edition == '5.5e' else 'Ki points recovered')
-            if edition == '5.5e':
-                # Uncanny Metabolism's own 1/long-rest charge (see _INITIATIVE_RESOURCES).
-                if cd.get('uncanny_metabolism_used'):
-                    changes.append('Uncanny Metabolism recovered')
-                patch['uncanny_metabolism_used'] = 0
-        elif cls == 'Paladin':
-            patch['lay_on_hands_used'] = 0
-            patch['divine_sense_used'] = 0
-            patch['channel_divinity_used'] = 0
-            patch['prepared_locked'] = False
-            changes.append('Lay on Hands, Divine Sense & Channel Divinity recovered, spell preparation unlocked')
-        elif cls == 'Ranger':
-            patch['prepared_locked'] = False
-            changes.append('Spell preparation unlocked')
-        elif cls == 'Sorcerer':
-            patch['sorcery_points_used'] = 0
-            changes.append('Sorcery points recovered')
-            if edition == '5.5e':
-                patch['innate_sorcery_used'] = False
-                changes.append('Innate Sorcery refreshed')
-        elif cls == 'Warlock':
-            patch['pact_slots_used'] = 0
-            changes.append('Pact magic slots recovered')
-            if edition == '5.5e':
-                patch['magical_cunning_used'] = False
-                changes.append('Magical Cunning refreshed')
-        elif cls == 'Wizard':
-            patch['arcane_recovery_used'] = False
-            patch['prepared_locked'] = False
-            changes.append('Arcane Recovery refreshed, spell preparation unlocked')
-            if edition == '5.5e':
-                patch['memorize_spell_used'] = False
-                changes.append('Memorize Spell refreshed')
-        elif cls == 'Artificer':
-            patch['flash_of_genius_used'] = 0
-            patch['prepared_locked'] = False
-            changes.append('Flash of Genius recovered, spell preparation unlocked')
+    # ── Class / subclass pools — one row each in _REST_RESOURCES ──
+    for spec in _rest_specs_for(char, cd, rest_type, edition):
+        spent = any(cd.get(key) for key in spec['keys'])
+        for key in spec['keys']:
+            # Copy the reset value: a list default must not be shared between characters.
+            patch[key] = list(spec['value']) if isinstance(spec['value'], list) else spec['value']
+        if spec['only_if_spent'] and not spent:
+            continue
+        # Two rows can describe one resource (a Bard's Inspiration has a long row and a short
+        # one, and a long rest matches both) — say it once.
+        if spec['message'] not in changes:
+            changes.append(spec['message'])
 
     # ── Racial / subracial rest resources (both rest types) ──
     traits = set(cd.get('race_traits') or [])
@@ -1043,12 +1067,6 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
         patch[key] = 0
     if racial_recovered:
         changes.append('Racial features recovered')
-
-    # ── Subclass: Wizard Portent (Divination) — clears on a long rest ──
-    if rest_type == 'long' and cd.get('subclass') in _DIVINATION_SUBCLASSES:
-        if cd.get('portent_rolls'):
-            changes.append('Portent dice cleared — roll anew')
-        patch['portent_rolls'] = []
 
     # ── Feat resource pools (Lucky, Martial Adept, …) — from snapshotted feat effects ──
     feat_recovered = False
@@ -1093,6 +1111,36 @@ def _compute_rest_patch(char: Character, rest_type: str, edition: str) -> tuple[
     return patch, changes
 
 
+def rest_resources_contract() -> dict:
+    """The parts of the rest tables the FRONTEND also declares, as plain data.
+
+    Committed as tests/fixtures/rest_resources_contract.json and read by the frontend's
+    restResourceContract.test.js, which checks every class-config rest row and the racial table
+    against it. That is what turns "keep the two in sync" from a comment into a failing test."""
+    def as_list(value):
+        if value is None:
+            return None
+        return sorted(value) if isinstance(value, (tuple, list, set)) else [value]
+
+    return {
+        'class_resources': [
+            {
+                'keys': spec['keys'],
+                'recharge': spec['recharge'],
+                'char_class': as_list(spec['char_class']),
+                'subclass': as_list(spec['subclass']),
+                'edition': spec['edition'],
+                'min_level': spec['min_level'],
+            }
+            for spec in _REST_RESOURCES
+        ],
+        'racial_resources': [
+            {'trait': trait, 'key': key, 'recharge': recharge, 'min_level': min_level}
+            for trait, key, recharge, min_level in _RACIAL_REST_RESOURCES
+        ],
+    }
+
+
 def apply_rest(
     db: Session,
     campaign_id: int,
@@ -1127,11 +1175,12 @@ def apply_rest(
             patch, changes = _compute_initiative_patch(char, campaign.edition, opted_in)
         else:
             patch, changes = _compute_rest_patch(char, rest_data.rest_type, campaign.edition)
-        if patch:
+        if patch and not rest_data.dry_run:
             char_data = dict(char.character_data or {})
             char_data.update(patch)
             char.character_data = char_data
         applied_to.append(RestResultItem(character_id=char.id, name=char.name, changes=changes))
 
-    db.commit()
+    if not rest_data.dry_run:
+        db.commit()
     return RestResponse(rest_type=rest_data.rest_type, applied_to=applied_to)

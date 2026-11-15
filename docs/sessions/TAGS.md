@@ -53,6 +53,11 @@ can see whether a problem is shrinking. Mark one only when it actually happened.
 - `skill-bonuses` — `skills/skillBonuses.js` (permanent flat bonus to one skill)
 - `save-proficiencies` — `skills/saveProficiencies.js` (feature-granted save proficiency, `CLASS_SAVE_PROFS`)
 - `auto-effects` — `leveling/levelUpAutoEffects.js` (derived effects announced in the level-up wizard)
+- `feat-acquisition` — `feats/featAcquisition.js` + `FeatChoiceFields` (the one flow for taking a feat)
+- `feature-gate` — `shared/featureGate.js` (`matchesGate`, `normEdition`, `isEdition2024`)
+- `character-context` — `shared/characterContext.js` (`sheetCtx` in CharacterDetail)
+- `ability-math` — `shared/abilityMath.js` (ability modifier, proficiency bonus, signed printers)
+- `max-hp` — effective max HP (`effectiveMaxHp` / backend `_effective_max_hp`, `hp_rolls`)
 
 ## Systems and surfaces
 
@@ -64,6 +69,7 @@ can see whether a problem is shrinking. Mark one only when it actually happened.
 - `narrative-tab` — Narrative tab
 - `level-up-wizard` — LevelUpWizard
 - `character-create` — CharacterCreate
+- `character-list` — CharacterList (party list, GM rest dialog)
 - `encyclopedia` — encyclopedia pages and tabs
 - `mechanics-page` — an encyclopedia Mechanics reference page
 - `encounters` — the GM encounters / initiative page

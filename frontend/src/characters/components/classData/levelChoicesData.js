@@ -39,10 +39,10 @@ import {
 import {
   RUNE_OPTIONS, runesKnownAtLevel, runeSaveDcParts, channelRuneUses,
 } from '@/characters/components/classData/runesData';
+import { normEdition, isEdition2024 } from '@/characters/components/shared/featureGate';
 
 const lc = (s) => (s || '').toLowerCase();
 const dedup = (arr) => [...new Set((arr || []).filter(Boolean))];
-const normEdition = (edition) => (edition === '5.5e' || edition === '2024' ? '5.5e' : '5e');
 
 // ── Sorcerer Metamagic ────────────────────────────────────────────────────────
 // Canonical option list + count (previously duplicated inside both SorcererSheets).
@@ -140,7 +140,7 @@ export const ELDRITCH_INVOCATIONS_2024 = [
 /** Eldritch Invocations known at a level (5e: none until L2; 2024: 1 from L1). */
 export function eldritchInvocationsKnownAtLevel(level, edition) {
   const l = Number(level) || 0;
-  const is2024 = edition === '5.5e' || edition === '2024';
+  const is2024 = isEdition2024(edition);
   if (l >= 15) return 8;
   if (l >= 12) return 7;
   if (l >= 9) return 6;

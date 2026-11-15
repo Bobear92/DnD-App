@@ -15,8 +15,8 @@
  *      It does NOT change the distance formulas.
  */
 
-const mod = (score) => Math.floor(((score ?? 10) - 10) / 2);
 
+import { abilityMod } from '@/characters/components/shared/abilityMath';
 /** Feet of movement needed before a running long/high jump (Athlete halves it). */
 export function runningStartFeet(athlete = false) {
   return athlete ? 5 : 10;
@@ -30,7 +30,7 @@ export function longJump(strength) {
 
 /** High jump distances in feet: running = 3 + STR mod, standing = half (min 0). */
 export function highJump(strength) {
-  const running = Math.max(0, 3 + mod(strength));
+  const running = Math.max(0, 3 + abilityMod(strength));
   return { running, standing: Math.floor(running / 2) };
 }
 
@@ -67,11 +67,11 @@ export const JUMP_MULTIPLIER_SOURCES = [
 export function computeJump(strength, { athlete = false, multiplier = 1, remarkableAthlete = false } = {}) {
   const long = longJump(strength);
   const high = highJump(strength);
-  const raLongJumpBonus = remarkableAthlete ? mod(strength) : 0;
+  const raLongJumpBonus = remarkableAthlete ? abilityMod(strength) : 0;
   const scale = (v) => Math.floor(v * multiplier);
   return {
     strength: strength ?? 10,
-    strMod: mod(strength),
+    strMod: abilityMod(strength),
     athlete,
     multiplier,
     remarkableAthlete,

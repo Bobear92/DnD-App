@@ -25,11 +25,11 @@
  */
 
 import { isRuneActive } from '@/characters/components/inventory/runeCarving';
+import { matchesGate, normEdition } from '@/characters/components/shared/featureGate';
 
 /** Sizes, smallest first — so a consumer can compare two of them. */
 export const SIZE_ORDER = ['Tiny', 'Small', 'Medium', 'Large', 'Huge', 'Gargantuan'];
 
-const normEdition = (edition) => (edition === '5.5e' || edition === '2024' ? '5.5e' : '5e');
 
 /**
  * Rune Knight "Giant's Might" (Fighter, L3, 5e only — there is no 2024 Rune Knight).
@@ -232,16 +232,10 @@ export const ACTIVE_EFFECTS = [
 export function getActiveEffectDefs({
   charClass, subclass, level = 1, edition = '5e', characterData = {},
 } = {}) {
-  const ed = normEdition(edition);
-  return ACTIVE_EFFECTS.filter((e) => (
-    (!e.charClass || e.charClass === charClass)
-    && (!e.subclass || e.subclass === subclass)
-    && (!e.edition || e.edition === ed)
-    && (Number(level) || 1) >= (e.minLevel ?? 1)
-    // Escape hatch for a gate the declarative keys cannot express — a rune effect depends on
-    // whether the rune is carved onto an EQUIPPED item, which is character_data state.
-    && (!e.applies || e.applies({ charClass, subclass, level, edition: ed, characterData }))
-  ));
+  // `applies` on an entry is the escape hatch for a gate the declarative keys cannot express —
+  // a rune effect depends on whether the rune is carved onto an EQUIPPED item.
+  const ctx = { charClass, subclass, level, edition: normEdition(edition), characterData };
+  return ACTIVE_EFFECTS.filter((e) => matchesGate(e, ctx));
 }
 
 /**

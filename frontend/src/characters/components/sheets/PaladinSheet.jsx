@@ -22,6 +22,7 @@ import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
 import { cn } from '@/lib/utils';
 import Field from '@/characters/components/sheets/Field';
+import { abilityMod } from '@/characters/components/shared/abilityMath';
 
 // Paladin spell slot table (half-caster)
 const PALADIN_SLOTS = {
@@ -51,7 +52,6 @@ function slotsForLevel(level) {
   return entry ?? [0, 0, 0, 0, 0];
 }
 
-const abMod = score => Math.floor(((score ?? 10) - 10) / 2);
 
 export default function PaladinSheet({ data = {}, onChange, readOnly = false, level = 1, creation = false, backgroundSkills = [], raceSkills = [], section = 'all', abilityScores = {}, campaignId, isGm = false, acExtra = null, maxHpNode = null }) {
   const set = (key, value) => onChange?.({ [key]: value });
@@ -62,7 +62,7 @@ export default function PaladinSheet({ data = {}, onChange, readOnly = false, le
 
   const [spellSubTab, setSpellSubTab] = useState('prepared');
 
-  const chaMod = abMod(abilityScores.charisma);
+  const chaMod = abilityMod(abilityScores.charisma);
   const prepareLimit = Math.max(1, Math.floor(level / 2) + chaMod);
 
   const slots = slotsForLevel(level);

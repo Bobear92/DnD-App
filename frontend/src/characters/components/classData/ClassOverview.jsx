@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import SubclassOverview from '@/characters/components/subclass/SubclassOverview';
-import { CLASS_PROGRESSION, profBonus, ordinal } from '@/characters/components/classData/classProgressionTables';
+import { CLASS_PROGRESSION, ordinal } from '@/characters/components/classData/classProgressionTables';
 import {
   BARBARIAN_SUBCLASSES_5E,  BARBARIAN_SUBCLASSES_2024,
   BARD_SUBCLASSES_5E,       BARD_SUBCLASSES_2024,
@@ -19,6 +19,7 @@ import {
   WARLOCK_SUBCLASSES_5E,    WARLOCK_SUBCLASSES_2024,
   WIZARD_SUBCLASSES_5E,     WIZARD_SUBCLASSES_2024,
 } from '@/characters/components/classData/classChoicesData';
+import { profBonus } from '@/characters/components/shared/abilityMath';
 
 // ─── Maps: subclass level + options per class × edition ──────────────────────
 

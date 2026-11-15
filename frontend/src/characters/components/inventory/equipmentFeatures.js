@@ -25,12 +25,13 @@
  */
 
 import { hasFeat, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
-import { profBonus } from '@/characters/components/inventory/inventoryData';
 import { getFeatDamageReductions } from '@/characters/components/feats/featEffects';
 import { SAVAGE_ATTACKS_NOTE, hasSavageAttacks } from '@/characters/components/race/raceCombatNotes';
 import {
   eldritchStrikeNote, remarkableAthleteMoveNote,
 } from '@/characters/components/subclass/subclassCombatNotes';
+import { profBonus } from '@/characters/components/shared/abilityMath';
+import { matchesGate } from '@/characters/components/shared/featureGate';
 
 const lc = (v) => (v || '').toLowerCase();
 
@@ -61,13 +62,22 @@ export const ITEM_SCOPES = {
  */
 
 /** @type {EquipmentFeature[]} */
+// `attackScope` — a row that sets it ALSO rides on the matching attack cards in the Action Economy
+// tab, as an ordinary rider (see `attackCardFeatures` below and ATTACK_RIDERS). These are features
+// that fire when you attack WITH the item, so the note belongs both on the item and on the swing.
+// It used to be authored twice: once here, and once as a bespoke field on every weapon entry with
+// its own render branch in the tab. The scope names mean the same thing on both surfaces
+// ('weapon' = a real weapon, not an unarmed strike; 'meleeWeapon' = a real melee weapon).
+// A row without it (Warding Maneuver — a reaction with its own card; Heavy Armor Master — armor)
+// stays an Items-tab note only.
 export const EQUIPMENT_FEATURES = [
   {
     source: 'Warding Maneuver',
     testId: 'warding-maneuver',
     scopes: ['meleeWeapon', 'shield'],
-    applies: ({ charClass, subclass, level }) =>
-      charClass === 'Fighter' && subclass === 'Cavalier' && (level ?? 1) >= 7,
+    charClass: 'Fighter',
+    subclass: 'Cavalier',
+    minLevel: 7,
     // RAW requires wielding a melee weapon OR a shield, which is exactly why it belongs on
     // these rows: the item IS the prerequisite. The uses (CON modifier, long rest) live on the
     // Action Economy reaction card that spends them — repeating a counter here would be a
@@ -104,6 +114,7 @@ export const EQUIPMENT_FEATURES = [
     source: 'Savage Attacks',
     testId: 'savage-attacks',
     scopes: ['meleeWeapon'],
+    attackScope: 'meleeWeapon',
     applies: ({ characterData }) => hasSavageAttacks(characterData?.race_traits),
     text: () => SAVAGE_ATTACKS_NOTE,
   },
@@ -111,6 +122,7 @@ export const EQUIPMENT_FEATURES = [
     source: 'Great Weapon Master',
     testId: 'gwm-bonus',
     scopes: ['meleeWeapon'],
+    attackScope: 'meleeWeapon',
     applies: ({ feats }) => hasFeat(feats, 'Great Weapon Master'),
     text: ({ feats }) => greatWeaponMasterNote(feats),
   },
@@ -118,6 +130,7 @@ export const EQUIPMENT_FEATURES = [
     source: 'Eldritch Strike',
     testId: 'eldritch-strike',
     scopes: ['weapon'],
+    attackScope: 'weapon',
     applies: ({ charClass, subclass, level }) =>
       !!eldritchStrikeNote({ charClass, subclass, level }),
     text: ({ charClass, subclass, level }) => eldritchStrikeNote({ charClass, subclass, level }),
@@ -127,6 +140,7 @@ export const EQUIPMENT_FEATURES = [
     source: 'Remarkable Athlete',
     testId: 'remarkable-move',
     scopes: ['weapon'],
+    attackScope: 'weapon',
     applies: ({ charClass, subclass, level, edition }) =>
       !!remarkableAthleteMoveNote({ charClass, subclass, level, edition }),
     text: ({ charClass, subclass, level, edition }) =>
@@ -146,8 +160,28 @@ export function getEquipmentFeatures(entry, ctx = {}) {
   const full = { ...ctx, feats: ctx.characterData?.feats ?? ctx.feats ?? [] };
   return EQUIPMENT_FEATURES
     .filter((f) => f.scopes.some((s) => ITEM_SCOPES[s]?.(entry)))
-    .filter((f) => f.applies(full))
+    .filter((f) => matchesGate(f, full))
     .map((f) => ({ source: f.source, testId: f.testId, text: f.text(full), tone: f.tone || 'emerald' }))
     // A feature whose note resolver returned nothing contributes no empty row.
     .filter((f) => !!f.text);
+}
+
+/**
+ * The equipment features that also ride on attack cards, in the ATTACK_RIDERS row shape
+ * (`{source, scope, …gate keys, applies, text}`). One definition, two surfaces.
+ */
+export function attackCardFeatures() {
+  return EQUIPMENT_FEATURES
+    .filter((f) => f.attackScope)
+    .map((f) => ({
+      source: f.source,
+      scope: f.attackScope,
+      ...(f.charClass ? { charClass: f.charClass } : {}),
+      ...(f.subclass ? { subclass: f.subclass } : {}),
+      ...(f.minLevel ? { minLevel: f.minLevel } : {}),
+      ...(f.edition ? { edition: f.edition } : {}),
+      ...(f.applies ? { applies: f.applies } : {}),
+      text: f.text,
+      fromEquipmentFeature: true,
+    }));
 }

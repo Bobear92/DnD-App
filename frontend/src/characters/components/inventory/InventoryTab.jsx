@@ -21,13 +21,35 @@ import WeaponPropertyBadges from '@/characters/components/inventory/WeaponProper
 import { weaponBadges, weaponFacets } from '@/characters/components/inventory/weaponPropertyData';
 import ItemPickerDialog from '@/characters/components/inventory/ItemPickerDialog';
 import {
-  buildEntry, removeEntry, setQuantity, getByCategory, normalizeWeapons, migrateHands,
-  toggleEquipped, toggleAttuned, attunedCount, computeArmorClass, getAttacks,
-  isWeaponProficient, isArmorProficient, creatureSize, weaponAttackWarning, weaponLoadingNote,
-  armorStrengthNote, armorStealthNote, nonProficientEquippedArmor, armorNonProficiencyNote,
-  assignHand, handContents, isShieldEntry, isHandCapable, isTwoHandedWeapon, isVersatileWeapon,
-  abilityMod, profBonus, formatSigned,
-  EQUIPPABLE_CATEGORIES, ATTUNABLE_CATEGORIES, MAX_ATTUNED,
+  buildEntry,
+  removeEntry,
+  setQuantity,
+  getByCategory,
+  normalizeWeapons,
+  migrateHands,
+  toggleEquipped,
+  toggleAttuned,
+  attunedCount,
+  computeArmorClass,
+  getAttacks,
+  isWeaponProficient,
+  isArmorProficient,
+  creatureSize,
+  weaponAttackWarning,
+  weaponLoadingNote,
+  armorStrengthNote,
+  armorStealthNote,
+  nonProficientEquippedArmor,
+  armorNonProficiencyNote,
+  assignHand,
+  handContents,
+  isShieldEntry,
+  isHandCapable,
+  isTwoHandedWeapon,
+  isVersatileWeapon,
+  EQUIPPABLE_CATEGORIES,
+  ATTUNABLE_CATEGORIES,
+  MAX_ATTUNED,
 } from '@/characters/components/inventory/inventoryData';
 import {
   weaponBondCapacity, bondedWeaponUids, isWeaponBonded, toggleBondedWeapon, WEAPON_BOND_NOTE,
@@ -43,6 +65,7 @@ import { critRange, critRangeLabel } from '@/characters/components/combat/combat
 import { getFeatUnarmedDice } from '@/characters/components/feats/featEffects';
 import { getEquipmentFeatures } from '@/characters/components/inventory/equipmentFeatures';
 import FeatureNote from '@/characters/components/shared/FeatureNote';
+import { abilityMod, profBonus, formatSigned } from '@/characters/components/shared/abilityMath';
 
 // Tools are stored as adventuring-gear entries but get their own sub-tab (inserted
 // right after Gear). It isn't a real encyclopedia category — the Add picker reuses

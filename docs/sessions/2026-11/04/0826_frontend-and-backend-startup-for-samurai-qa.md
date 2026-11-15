@@ -3,14 +3,14 @@ session_id: 1c2a3f70-e77c-4bf1-bcb9-ea11648ba330
 title: Samurai QA and Fighter retro update
 date: 2026-11-04
 started: 08:26
-branch: feature/wizard-prework-todos
+branch: main
 area: character-system
 tags: [qa, docs, retro, tooling, fighter, samurai, elegant-courtier, tireless-spirit, rapid-strike, strength-before-death, starting-equipment, race-traits, save-features, save-proficiencies, auto-effects, character-create, level-up-wizard, stats-tab, encounters, theme, claude-md, 5e]
 issues: [computed-not-shown, presentation, mechanism-extended]
 summary: Samurai QA (no mechanic bugs); equipment picker, racial save traits, wizard auto-effects, save provenance; dark: on
-turns: 17
+turns: 18
 stepped_in: true
-last_uuid: e370043f-1d3f-4699-965f-b0bc20060d05
+last_uuid: 8ada297f-ad1a-402f-8a34-385aa5fb8d8d
 ---
 
 # Samurai QA and Fighter retro update
@@ -343,3 +343,18 @@ last_uuid: e370043f-1d3f-4699-965f-b0bc20060d05
 > - [ ] **Feat-spell key warning:* …
 
 **Files edited:** `docs/tickets/wizard-subclasses.md`, `docs/fighter-subclass-retro.md` · **Commands run:** 2
+
+### 18. 2026-11-04 12:54
+
+**Robert:**
+> /ship
+
+**Claude:**
+> Shipped. The Wizard to-do list is on `main` at **`4a54f0a`** and pushed, and the `feature/wizard-prework-todos` branch is deleted.
+> 
+> - It was docs only, so I skipped the runtime check and the test run. No code changed since the last green run of all 3,562 tests.
+> - I added a line to the session log saying the open items now live in `docs/tickets/wizard-subclasses.md`.
+> 
+> When you start the Wizard, begin with the four pre-work items at the top of that file: concentration, the spell-cast event, the proving school and the size estimates.
+
+**Files edited:** `docs/sessions/2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md` · **Commands run:** 2

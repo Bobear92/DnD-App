@@ -11,7 +11,7 @@ import { useCampaign } from '@/campaigns/CampaignContext';
 import characterService from '@/characters/characterService';
 import encounterService from '@/encounters/encounterService';
 import { initiativeForCharacter, rollInitiative } from '@/characters/components/combat/initiativeData';
-import { profBonus } from '@/characters/components/classData/classProgressionTables';
+import { profBonus } from '@/characters/components/shared/abilityMath';
 
 /**
  * The GM's encounter page (V1): pick who's in the fight, roll or type their initiative, read the

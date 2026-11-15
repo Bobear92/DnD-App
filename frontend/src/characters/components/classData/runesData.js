@@ -18,8 +18,8 @@
 //     does nothing on its own, so every consumer gates on `activeRunes()` — carved AND the
 //     bearing item equipped — rather than on `character_data.runes`. See runeCarving.js.
 
-import { abilityMod, profBonus } from '@/characters/components/inventory/inventoryData';
 import { buildBreakdown } from '@/characters/components/skills/skillMath';
+import { abilityMod, profBonus } from '@/characters/components/shared/abilityMath';
 
 /** Level from which Master of Runes doubles every rune's Channel Rune uses. */
 export const MASTER_OF_RUNES_LEVEL = 15;

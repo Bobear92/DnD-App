@@ -24,8 +24,8 @@
 //   • Applying an option costs no action — it rides on an arrow fired from a shortbow or
 //     longbow as part of the Attack action, one option per attack.
 
-import { abilityMod, profBonus } from '@/characters/components/inventory/inventoryData';
 import { buildBreakdown } from '@/characters/components/skills/skillMath';
+import { abilityMod, profBonus } from '@/characters/components/shared/abilityMath';
 
 /** Resolve one authored option into { name, description, improvedDescription }. */
 function withImprovedText({ improvedDice, improvedText, ...option }) {

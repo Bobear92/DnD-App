@@ -47,6 +47,7 @@ import { getFeatDamageReductions } from '@/characters/components/feats/featEffec
 import { isRuneActive } from '@/characters/components/inventory/runeCarving';
 import { getRune } from '@/characters/components/classData/runesData';
 import { activeEffectResistances } from '@/characters/components/effects/activeEffects';
+import { matchesGate } from '@/characters/components/shared/featureGate';
 
 /** The three things a defense can do to incoming damage. */
 export const DEFENSE_KINDS = ['resistance', 'immunity', 'reduction'];
@@ -526,19 +527,14 @@ function lookupDescription(entry, edition) {
   return entry.description ?? null;
 }
 
-/** True when every gate the entry declares is satisfied by this character. */
+/**
+ * True when every gate the entry declares is satisfied by this character: the shared
+ * class/subclass/level/edition/`applies` gate, plus this table's own `race` key (a racial
+ * trait the character must have).
+ */
 function matches(entry, ctx) {
-  const { charClass, subclass, level, edition, raceTraits } = ctx;
-  if (entry.charClass && entry.charClass !== charClass) return false;
-  if (entry.subclass && entry.subclass !== subclass) return false;
-  if (entry.race && !hasRaceTrait(raceTraits, entry.race)) return false;
-  if ((level ?? 1) < (entry.minLevel ?? 1)) return false;
-  if (entry.editions && !entry.editions.includes(edition)) return false;
-  // `applies` is the escape hatch for a gate the declarative keys cannot express — the Hill
-  // Rune depends on whether a rune is carved onto an EQUIPPED item, which is character_data
-  // state rather than class/level/edition. Entries without one are unaffected.
-  if (entry.applies && !entry.applies(ctx)) return false;
-  return true;
+  if (entry.race && !hasRaceTrait(ctx.raceTraits, entry.race)) return false;
+  return matchesGate(entry, ctx);
 }
 
 const titleCase = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);

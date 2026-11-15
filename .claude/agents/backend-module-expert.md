@@ -244,6 +244,6 @@ Always:
    - If the migration creates a table with an existing PG enum, replace `op.create_table()` with raw `op.execute("""CREATE TABLE...""")`
    - If adding a new SQLAlchemy Enum column, manually add `op.execute("CREATE TYPE ...")` before the column
 4. Write tests in `backend/tests/test_<module>.py` — tests ship with the feature, never deferred
-5. Update `CLAUDE.md`: schema table count, backend structure tree, API endpoints table, test file listing
+5. Update the docs: `CLAUDE.md` gets the schema table count + COMPACT column listing, backend structure tree and API endpoints table; the reasoning behind a column goes to `docs/schema-notes.md`; the new test file is listed in `docs/backend-tests.md`. CLAUDE.md is rules + compact reference only and is capped at 100 KB by `src/test/claudeMdBudget.test.js` — see its "Docs index" for which file owns what.
 6. **Restart the backend server yourself** after any backend change (new models, schema edits, new routes, migrations) — do not ask the user. The running uvicorn process caches the old code and will not pick up changes until restarted. Use the kill-first script (it terminates the stale python/uvicorn instance before starting a fresh one):
    > `bash scripts/restart-backend.sh`

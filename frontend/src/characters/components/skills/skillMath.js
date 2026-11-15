@@ -1,3 +1,4 @@
+import { abilityMod, formatBonus } from '@/characters/components/shared/abilityMath';
 // Skill arithmetic, kept in one place so the number on the sheet and the breakdown
 // shown when you click it can never disagree — the breakdown IS the calculation.
 
@@ -41,12 +42,6 @@ export const SKILL_MAP = [
 export function skillsForAbility(ability) {
   return SKILL_MAP.filter((s) => s.ability === ability).map((s) => s.skill);
 }
-
-/** A D&D ability modifier: (score − 10) halved, rounded down. */
-export const abilityMod = (score) => Math.floor(((Number(score) || 10) - 10) / 2);
-
-/** "+3" / "−1" — a signed bonus with a real minus sign. */
-export const formatBonus = (n) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 
 /**
  * The generic shape every "click the number to see the math" surface uses:

@@ -29,6 +29,7 @@
  * mechanical state). Adding a field here is a frontend-only change — that is why it is one column.
  */
 
+import { matchesGate } from '@/characters/components/shared/featureGate';
 /** `kind: 'long'` renders a textarea; everything else is a one-line input. */
 export const APPEARANCE_GROUPS = [
   {
@@ -217,21 +218,14 @@ export const APPEARANCE_FEATURE_NOTES = [
   },
 ];
 
-const normEdition = (edition) => (edition === '5.5e' || edition === '2024' ? '5.5e' : '5e');
 
 /**
  * The notes that apply to one field for this character. Returns [] for almost everybody, which is
  * why the card renders nothing rather than an empty row when there are none.
  */
 export function appearanceNotesFor(fieldKey, { charClass, subclass, level = 1, edition = '5e' } = {}) {
-  const ed = normEdition(edition);
-  return APPEARANCE_FEATURE_NOTES.filter((n) => (
-    n.field === fieldKey
-    && (!n.charClass || n.charClass === charClass)
-    && (!n.subclass || n.subclass === subclass)
-    && (!n.edition || n.edition === ed)
-    && (Number(level) || 1) >= (n.minLevel ?? 1)
-  ));
+  const ctx = { charClass, subclass, level, edition };
+  return APPEARANCE_FEATURE_NOTES.filter((n) => n.field === fieldKey && matchesGate(n, ctx));
 }
 
 /** True when the character has written anything at all — drives the card's empty state. */

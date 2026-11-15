@@ -1,3 +1,4 @@
+import { isEdition2024 } from '@/characters/components/shared/featureGate';
 // Weapon designation model (pure) — features that mark a specific weapon in the
 // character's inventory:
 //
@@ -63,7 +64,7 @@ export function toggleBondedWeapon(characterData = {}, uid, capacity = WEAPON_BO
 
 /** Does this character have the Hex Warrior feature? (5e Hexblade Warlock; L1 feature.) */
 export function isHexWarrior({ charClass, subclass, edition = '5e' } = {}) {
-  if (edition === '5.5e' || edition === '2024') return false; // no Hexblade in 2024
+  if (isEdition2024(edition)) return false; // no Hexblade in 2024
   return charClass === 'Warlock' && subclass === 'The Hexblade';
 }
 

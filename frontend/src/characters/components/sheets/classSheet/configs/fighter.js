@@ -10,13 +10,13 @@ import {
   FIGHTER_SUBCLASSES_5E, FIGHTER_SUBCLASSES_2024,
 } from '@/characters/components/classData/classChoicesData';
 import { ARCANE_SHOT_USES } from '@/characters/components/classData/arcaneShotData';
-import { profBonus } from '@/characters/components/classData/classProgressionTables';
 import { psionicDie, psionicDiceTotal } from '@/characters/components/classData/psiWarriorData';
 import { RUNE_OPTIONS, channelRuneKey, channelRuneUses } from '@/characters/components/classData/runesData';
 import { isRuneActive } from '@/characters/components/inventory/runeCarving';
 import BattleMasterPanel from '@/characters/components/subclass/BattleMasterPanel';
 import WeaponBondPanel from '@/characters/components/subclass/WeaponBondPanel';
 import PsionicEnergyPanel from '@/characters/components/subclass/PsionicEnergyPanel';
+import { profBonus, abilityMod } from '@/characters/components/shared/abilityMath';
 
 // Interactive per-subclass panels (maneuver picker + superiority dice, bonded weapons, etc.).
 const FIGHTER_SUBCLASS_PANELS = {
@@ -34,7 +34,7 @@ const FIGHTER_SKILLS = [
 // the three Echo Knight ones) — hence the `ctx` argument useRestResource passes in. RAW floors
 // them at one use, so a dump-stat modifier still gets the feature rather than an empty tracker.
 const abilityModUses = (ability) => (_level, { scores = {} } = {}) =>
-  Math.max(1, Math.floor(((scores[ability] ?? 10) - 10) / 2));
+  Math.max(1, abilityMod(scores[ability]));
 
 // Both Rune Knight pools are sized by the proficiency bonus (Giant's Might, Runic Shield).
 const pbUses = (level) => profBonus(level);

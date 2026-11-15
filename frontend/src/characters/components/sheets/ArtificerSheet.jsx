@@ -18,6 +18,7 @@ import ClassSpellBrowser, { maxCastableLevel } from '@/characters/components/spe
 import SpellSlotTracker from '@/characters/components/spells/SpellSlotTracker';
 import { useSlotCaster } from '@/characters/components/sheets/classSheet/hooks/useSlotCaster';
 import { cn } from '@/lib/utils';
+import { abilityMod } from '@/characters/components/shared/abilityMath';
 
 // Half-caster spell slots starting at level 1 (same as 2024 Paladin)
 const ARTIFICER_SLOTS = {
@@ -48,7 +49,6 @@ function attunementForLevel(level) {
 
 const ASI_LEVELS = [4, 8, 12, 16, 19];
 
-function mod(score) { return Math.floor((score - 10) / 2); }
 
 function Field({ label, children }) {
   return (
@@ -208,7 +208,7 @@ export default function ArtificerSheet({
 
   const infusions = infusionsForLevel(level);
   const infusedCount = data.infusions_infused ?? 0;
-  const intMod    = mod(abilityScores.intelligence ?? 10);
+  const intMod    = abilityMod(abilityScores.intelligence ?? 10);
   const flashMax  = Math.max(1, intMod);
   const flashUsed = data.flash_of_genius_used ?? 0;
 

@@ -19,17 +19,16 @@
  * is authored — expand CLASS_FEATURE_ACTIONS_* class-by-class.
  */
 import { mightDie, sizeAt, isEffectActive, activeEffectChoice, activeEffectGrants, fightingSpiritTempHp } from '@/characters/components/effects/activeEffects';
-import { abilityMod, profBonus, formatSigned, freeHandCount, isHeavyWeapon, nonProficientEquippedArmor, creatureSize, isShieldEntry, weaponReach, characterReachBonus } from '@/characters/components/inventory/inventoryData';
+import { freeHandCount, isHeavyWeapon, nonProficientEquippedArmor, creatureSize, isShieldEntry, weaponReach, characterReachBonus } from '@/characters/components/inventory/inventoryData';
 import { hasFightingStyle } from '@/characters/components/combat/fightingStyles';
 import { specialAttackEntries } from '@/characters/components/combat/specialAttacksData';
 import { CLASS_FEATURES_5E } from '@/characters/components/classData/classFeatures5e';
 import { CLASS_FEATURES_2024 } from '@/characters/components/classData/classFeatures2024';
 import { getFeatActions, getFeatUnarmedDice, getFeatProficiencyGrants } from '@/characters/components/feats/featEffects';
-import { hasFeat, critRange, critRangeLabel, greatWeaponMasterNote } from '@/characters/components/combat/combatBonuses';
-import { hasSavageAttacks, SAVAGE_ATTACKS_NOTE } from '@/characters/components/race/raceCombatNotes';
+import { hasFeat, critRange, critRangeLabel } from '@/characters/components/combat/combatBonuses';
+import { attackCardFeatures } from '@/characters/components/inventory/equipmentFeatures';
 import { bondedWeapons } from '@/characters/components/inventory/weaponBondData';
 import { weaponNeedsAmmo } from '@/characters/components/inventory/ammunitionData';
-import { remarkableAthleteMoveNote, eldritchStrikeNote } from '@/characters/components/subclass/subclassCombatNotes';
 import { SUBCLASS_DATA } from '@/characters/components/classData/subclassData';
 import {
   isArcaneShotBow, getArcaneShotOptions, arcaneShotSaveDc, arcaneShotSaveDcBreakdown,
@@ -45,6 +44,8 @@ import { computeRaceGrantedCantrips } from '@/characters/components/race/raceCan
 import { getRacialSpellResources } from '@/characters/components/race/racialRestResources';
 import { getSubclassGrantedSpells } from '@/characters/components/classData/subclassSpells';
 import { getFeatGrantedSpells } from '@/characters/components/feats/featEffects';
+import { abilityMod, profBonus, formatSigned } from '@/characters/components/shared/abilityMath';
+import { matchesGate, normEdition, isEdition2024 } from '@/characters/components/shared/featureGate';
 
 // Display label for a bucket key, used as an entry's `cost` badge.
 const ECONOMY_COST_LABEL = {
@@ -528,9 +529,10 @@ const giantsMightRider = {
   // read mid-swing; carrying a paragraph on every attack card for a feature that is switched
   // off is clutter on the surface a player scans fastest. Switch it on and the block appears
   // with its die — which is also the moment the damage below becomes real.
-  applies: ({ charClass, subclass, level, characterData }) =>
-    charClass === 'Fighter' && subclass === 'Rune Knight' && (level ?? 1) >= 3
-    && isEffectActive(characterData, 'giants_might'),
+  charClass: 'Fighter',
+  subclass: 'Rune Knight',
+  minLevel: 3,
+  applies: ({ characterData }) => isEffectActive(characterData, 'giants_might'),
   // The one damage rider the app can confirm: `active_effects` is tracked, and the rider only
   // exists while it is on, so the term is always real.
   // Folded into the card's printed damage (the effect is switched ON, so it is confirmed),
@@ -546,8 +548,9 @@ export const ATTACK_RIDERS = [
   {
     source: 'Unwavering Mark',
     scope: 'melee',
-    applies: ({ charClass, subclass, level }) =>
-      charClass === 'Fighter' && subclass === 'Cavalier' && (level ?? 1) >= 3,
+    charClass: 'Fighter',
+    subclass: 'Cavalier',
+    minLevel: 3,
     text: 'On a hit you can mark the creature until the end of your next turn. While it is'
       + " within 5 ft of you, it has disadvantage on any attack roll that doesn't target"
       + ' you. Marking costs nothing and there is no limit on how many creatures you mark.',
@@ -592,9 +595,10 @@ export const ATTACK_RIDERS = [
     // model the app doesn't have, so the rider is always shown and SAYS when it can confirm.
     source: 'Rapid Strike',
     scope: 'all',
-    applies: ({ charClass, subclass, level, edition }) =>
-      charClass === 'Fighter' && subclass === 'Samurai' && (level ?? 1) >= 15
-      && edition !== '5.5e' && edition !== '2024',
+    charClass: 'Fighter',
+    subclass: 'Samurai',
+    minLevel: 15,
+    edition: '5e',
     text: ({ characterData }) => (isEffectActive(characterData, 'fighting_spirit')
       ? 'You have advantage now (Fighting Spirit). On one attack, forgo it to make one additional'
         + ' weapon attack against the same target as part of this Attack action. Once per turn.'
@@ -602,6 +606,11 @@ export const ATTACK_RIDERS = [
         + ' can forgo it on that roll to make one additional weapon attack against that target'
         + ' as part of the same action. Once per turn.'),
   },
+  // Features that fire when you attack WITH a weapon you hold — Savage Attacks, Great Weapon
+  // Master's bonus attack, Eldritch Strike, Remarkable Athlete's move. Defined ONCE, in
+  // EQUIPMENT_FEATURES (where the same note shows on the item's row in the Items tab); a row
+  // there opts onto the attack cards with `attackScope`.
+  ...attackCardFeatures(),
 ];
 
 /**
@@ -686,9 +695,15 @@ export const ATTACHED_FEATURES = [
 ];
 
 /** Does this weapon attack entry fall inside a rider's scope? */
+// Which attack cards a rider (or attached feature) lands on.
+//   'melee' / 'ranged' / 'all' — by the kind of ATTACK; an unarmed strike is a melee attack.
+//   'weapon' / 'meleeWeapon'   — only an attack made with a real weapon, never an unarmed strike.
+//                                 Same names, same meaning as ITEM_SCOPES in equipmentFeatures.js.
 function matchesRiderScope(entry, scope) {
   if (scope === 'melee') return !!entry.melee;
   if (scope === 'ranged') return !entry.melee;
+  if (scope === 'weapon') return !!entry.weaponUid;
+  if (scope === 'meleeWeapon') return !!entry.meleeWeapon;
   return true;
 }
 
@@ -712,15 +727,17 @@ export const ENTRY_RIDERS = [
   {
     source: 'Arcane Charge',
     entryKey: 'feature:Action Surge',
-    applies: ({ charClass, subclass, level }) =>
-      charClass === 'Fighter' && subclass === 'Eldritch Knight' && (level ?? 1) >= 15,
+    charClass: 'Fighter',
+    subclass: 'Eldritch Knight',
+    minLevel: 15,
     text: 'When you use Action Surge, you can teleport up to 30 ft to an unoccupied space you can see, before or after the extra action.',
   },
   {
     source: 'Hold the Line',
     entryKey: 'universal:Opportunity Attack',
-    applies: ({ charClass, subclass, level }) =>
-      charClass === 'Fighter' && subclass === 'Cavalier' && (level ?? 1) >= 10,
+    charClass: 'Fighter',
+    subclass: 'Cavalier',
+    minLevel: 10,
     text: 'Creatures also provoke your opportunity attacks when they move 5 ft or more while'
       + ' within your reach, and a creature you hit with one has its speed reduced to 0 for the'
       + ' rest of the turn.',
@@ -755,7 +772,8 @@ export const ENTRY_RIDERS = [
   {
     source: 'Grappler',
     entryKey: 'universal:Grapple',
-    applies: ({ feats, edition }) => hasFeat(feats, 'Grappler') && (edition === '5.5e' || edition === '2024'),
+    edition: '5.5e',
+    applies: ({ feats }) => hasFeat(feats, 'Grappler'),
     text: ({ size = 'Medium' }) => 'Punch and Grab: once per turn, when you hit with an Unarmed'
       + ' Strike as part of the Attack action, you can use BOTH the Damage and the Grapple option.'
       + ' Fast Wrestler: dragging a creature you have grappled costs no extra movement if it is'
@@ -773,7 +791,7 @@ export const ENTRY_RIDERS = [
 
 /** Subclass feature names earned at or below `level`, from the SUBCLASS_DATA tables. */
 export function subclassFeaturesKnownAtLevel(charClass, edition, subclass, level = 1) {
-  const ed = edition === '5.5e' || edition === '2024' ? '5.5e' : '5e';
+  const ed = normEdition(edition);
   const features = SUBCLASS_DATA[charClass]?.[ed]?.[subclass]?.features || [];
   const seen = new Set();
   const names = [];
@@ -974,7 +992,7 @@ const isPolearm = (e) =>
 const isPolearmReachWeapon = (edition) => (e) => {
   if (e.category !== 'weapons') return false;
   const name = (e.name || '').toLowerCase();
-  if (edition === '5.5e' || edition === '2024') {
+  if (isEdition2024(edition)) {
     const props = (e.properties || '').toLowerCase();
     return /\b(quarterstaff|spear)\b/.test(name)
       || (props.includes('heavy') && props.includes('reach'));
@@ -1017,7 +1035,7 @@ const ATTACK_ACTION_COMBO_GATES = {
   'Polearm Master': {
     // RAW lists differ by edition: 5e glaive/halberd/quarterstaff/spear; 2024 quarterstaff, spear,
     // or any Heavy + Reach weapon — which is exactly the reach predicate's 2024 list.
-    opener: (item, edition) => (edition === '5.5e' || edition === '2024'
+    opener: (item, edition) => (isEdition2024(edition)
       ? isPolearmReachWeapon(edition)(item) : isPolearm(item)),
     hideWithoutOpener: true,
   },
@@ -1240,7 +1258,7 @@ export function applyDamageAdditions({ damage, damageBreakdown } = {}, additions
  * `pb` is required for the 2024 shape and ignored by the 2014 one.
  */
 export function powerAttackVariant(attackRow = {}, source = 'Great Weapon Master', { edition = '5e', pb = 2 } = {}) {
-  const is2024 = edition === '5.5e' || edition === '2024';
+  const is2024 = isEdition2024(edition);
   if (is2024) {
     // No to-hit change: the 2024 feat trades the gamble for a smaller, reliable bonus.
     return {
@@ -1283,7 +1301,7 @@ export function buildActionEconomy({
   race,
   subrace,
 } = {}) {
-  const is2024 = edition === '5.5e' || edition === '2024';
+  const is2024 = isEdition2024(edition);
   const buckets = { no_action: [], action: [], bonus: [], 'action+bonus': [], reaction: [] };
   const push = (tab, entry) => { if (buckets[tab]) buckets[tab].push(entry); };
 
@@ -1291,12 +1309,6 @@ export function buildActionEconomy({
   // attacks, so it rides on each real weapon Action entry. Null for everyone else.
   const crit = critRange({ charClass, subclass, level });
   const critLabel = critRangeLabel(crit);
-  // 2024 Champion Remarkable Athlete's post-crit free move — crit-triggered, so it rides on
-  // each real weapon Action entry next to the crit range. Null for 5e / non-Champions.
-  const remarkableMove = remarkableAthleteMoveNote({ charClass, subclass, level, edition });
-  // Eldritch Knight's Eldritch Strike (L10) — an on-hit weapon-attack rider, so it rides on
-  // each real weapon Action entry. Null for everyone else.
-  const eldritchStrike = eldritchStrikeNote({ charClass, subclass, level });
 
   // Weapon attacks (Action). Show an unarmed strike when nothing is equipped, or whenever a
   // feat upgrades the unarmed die (e.g. Tavern Brawler's 1d4) so the upgrade is visible.
@@ -1314,9 +1326,6 @@ export function buildActionEconomy({
   const meleeFiringSource = hasFeat(feats, 'Crossbow Expert') ? 'Crossbow Expert'
     : (is2024 && hasFeat(feats, 'Sharpshooter')) ? 'Sharpshooter'
     : null;
-  // GWM's crit/kill bonus-attack reminder (both editions) — co-located on melee weapon rows,
-  // so it sits next to the power attack rather than off in the Bonus Actions list.
-  const gwmBonusNote = greatWeaponMasterNote(feats);
   const weaponRows = [...attacks];
   if (unarmedDice || weaponRows.length === 0) {
     const ua = unarmedAttack(scores, level, unarmedDice);
@@ -1406,24 +1415,12 @@ export function buildActionEconomy({
             ? `No disadvantage firing while an enemy is within 5 ft (${meleeFiringSource}).`
             : 'Ranged attacks have disadvantage while an enemy is within 5 ft.')
         : null,
-      // Half-Orc Savage Attacks: extra damage die on a melee weapon crit. Shown on melee
-      // weapon attacks (not unarmed strikes, which aren't weapons, nor ranged weapons).
-      savageAttacksNote: (weapon && isMelee(weapon) && hasSavageAttacks(characterData.race_traits))
-        ? SAVAGE_ATTACKS_NOTE : null,
       // Great Weapon Master / Sharpshooter −5/+10 variant (5e), toggled in the UI. Null when N/A.
       powerAttack,
-      // Great Weapon Master's other benefit (both editions): a crit or kill with a melee
-      // weapon grants a bonus melee attack. Shown on melee weapon entries only.
-      greatWeaponMasterNote: (weapon && isMelee(weapon)) ? gwmBonusNote : null,
       // Champion expanded crit range on real weapon attacks (not the unarmed fallback, which
       // has no uid and isn't a weapon attack for Improved Critical).
       critRange: atk.uid && crit ? critLabel : null,
       critSource: atk.uid && crit ? crit.source : null,
-      // 2024 Champion Remarkable Athlete post-crit free move — on real weapon attacks only.
-      remarkableMoveNote: atk.uid ? remarkableMove : null,
-      // Eldritch Knight Eldritch Strike on-hit rider — on real weapon attacks only (an
-      // unarmed strike isn't a weapon attack for this feature).
-      eldritchStrikeNote: atk.uid ? eldritchStrike : null,
       // Hexblade Hex Warrior — this attack's numbers actually used Charisma.
       hexNote: atk.hexNote || null,
       // A weapon with the Ammunition property fires from a stack in the inventory. The uid +
@@ -1435,6 +1432,8 @@ export function buildActionEconomy({
       // entry, hence the null-weapon branch) — features keyed on "when you hit with a melee
       // weapon attack" apply to it. Consumed by the Cavalier's Unwavering Mark rider.
       melee: weapon ? isMelee(weapon) : true,
+      // A real melee WEAPON (not an unarmed strike) — the 'meleeWeapon' rider scope.
+      meleeWeapon: !!(weapon && isMelee(weapon)),
       // The raw damage string, kept structured so a feature can fold its own bonus into it
       // without re-parsing `detail`, plus the term-by-term breakdown behind it.
       damage: atk.damage || null,
@@ -1981,10 +1980,11 @@ export function buildActionEconomy({
   // which is what creates the entries they attach to.
   for (const rider of ATTACK_RIDERS) {
     const riderCtx = { charClass, subclass, level, edition, feats, characterData };
-    if (!rider.applies(riderCtx)) continue;
+    if (!matchesGate(rider, riderCtx)) continue;
     // `text` may be a FUNCTION of the same context, not just a string: Giant's Might's die
     // scales with level (1d6 → 1d8 → 1d10), which a static string could not state.
     const text = typeof rider.text === 'function' ? rider.text(riderCtx) : rider.text;
+    if (!text) continue; // a resolver with nothing to say contributes no empty rider
     for (const row of buckets.action.filter((e) => e.source === 'Weapon' && matchesRiderScope(e, rider.scope))) {
       row.riders = [...(row.riders || []), { source: rider.source, text }];
       // A rider that ADDS damage and is confirmed live contributes a term to the "on a hit"
@@ -2214,7 +2214,7 @@ export function buildActionEconomy({
   const allEntries = Object.values(buckets).flat();
   for (const rider of ENTRY_RIDERS) {
     const entryCtx = { charClass, subclass, level, edition, feats, characterData, inventory, size: bodySize };
-    if (!rider.applies(entryCtx)) continue;
+    if (!matchesGate(rider, entryCtx)) continue;
     const target = allEntries.find((e) => e.key === rider.entryKey);
     if (!target) continue;
     // `text` may be a function of the context (Grappler's Fast Wrestler names your own size).
@@ -2236,7 +2236,7 @@ export function normalizeFeatureName(name) {
 
 /** Distinct (normalized) feature names a character knows at its level, in order gained. */
 export function featuresKnownAtLevel(charClass, level = 1, edition = '5e') {
-  const table = (edition === '5.5e' || edition === '2024' ? CLASS_FEATURES_2024 : CLASS_FEATURES_5E)[charClass];
+  const table = (isEdition2024(edition) ? CLASS_FEATURES_2024 : CLASS_FEATURES_5E)[charClass];
   if (!table) return [];
   const seen = new Set();
   const names = [];

@@ -19,6 +19,7 @@
  */
 
 import { getFeatSaveProficiencies } from '@/characters/components/feats/featEffects';
+import { matchesGate } from '@/characters/components/shared/featureGate';
 
 /** Each class's own saving-throw proficiencies — the defaults for the stored `*_save_prof` flags. */
 export const CLASS_SAVE_PROFS = {
@@ -41,7 +42,6 @@ export const SAVE_ABILITIES = ['strength', 'dexterity', 'constitution', 'intelli
 /** character_data field holding chosen fallback save proficiencies ('Intelligence', …). */
 export const CHOSEN_SAVE_FIELD = 'subclass_save_proficiencies';
 
-const normEdition = (edition) => (edition === '5.5e' || edition === '2024' ? '5.5e' : '5e');
 const abbr = (ability) => ability.slice(0, 3);
 
 export const FEATURE_SAVE_PROFICIENCIES = [
@@ -62,12 +62,9 @@ export const FEATURE_SAVE_PROFICIENCIES = [
 export function featureSaveProficiencies({
   charClass, subclass, level = 1, edition = '5e', characterData = {},
 } = {}) {
-  const ed = normEdition(edition);
   const out = [];
   for (const row of FEATURE_SAVE_PROFICIENCIES) {
-    if (row.charClass !== charClass || row.subclass !== subclass) continue;
-    if ((Number(level) || 1) < row.minLevel) continue;
-    if (row.editions && !row.editions.includes(ed)) continue;
+    if (!matchesGate(row, { charClass, subclass, level, edition })) continue;
     for (const ability of row.abilities) out.push({ ability, source: row.name });
     // The fallback pick belongs to the same feature, so it shares its gate and its name.
     for (const picked of characterData?.[CHOSEN_SAVE_FIELD] ?? []) {

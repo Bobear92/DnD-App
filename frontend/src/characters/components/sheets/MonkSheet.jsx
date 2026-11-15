@@ -14,6 +14,7 @@ import { MONK_SUBCLASSES_5E } from '@/characters/components/classData/classChoic
 import HitDiceTracker from '@/characters/components/combat/HitDiceTracker';
 import { RestUseSteppers } from '@/characters/components/sheets/classSheet/RestResourceTracker';
 import Field from '@/characters/components/sheets/Field';
+import { abilityMod } from '@/characters/components/shared/abilityMath';
 
 function martialArtsDie(level) {
   if (level >= 17) return 'd10';
@@ -102,8 +103,8 @@ export default function MonkSheet({ data = {}, onChange, readOnly = false, isGm 
   const kiTotal = level;
   const kiUsed = data.ki_used ?? 0;
 
-  const dexMod = Math.floor(((scores.dexterity ?? 10) - 10) / 2);
-  const wisMod = Math.floor(((scores.wisdom ?? 10) - 10) / 2);
+  const dexMod = abilityMod(scores.dexterity);
+  const wisMod = abilityMod(scores.wisdom);
   const unarmoredAC = 10 + dexMod + wisMod;
   const dexStr = dexMod >= 0 ? `+${dexMod}` : `${dexMod}`;
   const wisStr = wisMod >= 0 ? `+${wisMod}` : `${wisMod}`;

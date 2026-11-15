@@ -142,6 +142,10 @@ class RestRequest(BaseModel):
     # mode 'opt_in' (Monk 2024 Uncanny Metabolism) do nothing unless named here, because they
     # cost a limited charge and the choice is the player's. Keys arrive as JSON strings.
     opt_ins: Optional[Dict[str, List[str]]] = None
+    # Compute and return the changes WITHOUT saving them. The GM's rest dialog uses this to show
+    # what the rest will do before confirming — the real answer from the same table that applies
+    # it, rather than a frontend prediction that can disagree.
+    dry_run: bool = False
 
 
 class InitiativeOption(BaseModel):

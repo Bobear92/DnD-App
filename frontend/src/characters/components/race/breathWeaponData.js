@@ -1,3 +1,4 @@
+import { abilityMod, profBonus } from '@/characters/components/shared/abilityMath';
 /**
  * Dragonborn Breath Weapon — the computed numbers behind the trait.
  *
@@ -14,7 +15,6 @@
  * long rest, a different progression) — the app has no 2024 race data yet, so a 2024
  * campaign currently gets these 2014 numbers like every other racial trait.
  */
-import { abilityMod, profBonus } from '@/characters/components/inventory/inventoryData';
 
 /** Damage dice by character level: 2d6, then 3d6 at 6th, 4d6 at 11th, 5d6 at 16th. */
 export function breathWeaponDamage(level = 1) {

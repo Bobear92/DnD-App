@@ -346,10 +346,6 @@ export const CLASS_PROGRESSION = {
   },
 };
 
-export function profBonus(level) {
-  return Math.ceil(level / 4) + 1;
-}
-
 export function ordinal(n) {
   const s = ['th','st','nd','rd'];
   const v = n % 100;

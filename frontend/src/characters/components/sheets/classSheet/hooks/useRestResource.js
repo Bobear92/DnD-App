@@ -32,10 +32,11 @@
  * @param {object} opts.scores     ability scores, for ability-derived pool sizes
  * @returns {Array<{ key, label, recharge, total, used, remaining, fallbackKey, restoresKey }>}  visible rows only
  */
+import { matchesGate } from '@/characters/components/shared/featureGate';
 export function useRestResource({ resources = [], level = 1, data = {}, scores = {} }) {
   return resources
-    .filter((r) => level >= (r.minLevel ?? 1))
-    .filter((r) => !r.subclass || r.subclass === data.subclass)
+    // Rows gate on `minLevel` and (for a subclass pool) `subclass` — the shared feature gate.
+    .filter((r) => matchesGate(r, { level, subclass: data.subclass }))
     .filter((r) => !r.hidden || !r.hidden({ level, data, scores }))
     .map((r) => {
       const total = typeof r.total === 'function' ? r.total(level, { scores, data }) : r.total;

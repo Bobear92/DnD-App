@@ -15,12 +15,11 @@ import classService from '../classService';
 import ClassOverview from '@/characters/components/classData/ClassOverview';
 import FeatPicker from '@/characters/components/feats/FeatPicker';
 import { checkFeatPrerequisite } from '@/characters/components/feats/featPrerequisites';
-import { featAbilityChoices, featFixedAbilityScores, getSpellGrantSpecs, getFeatGrantedSpells, featGrantRedundant, featAbilityChoiceOptions, getManeuverGrantSpec, maneuverGrantComplete, getFeatStatMods, getFeatStatModSources } from '@/characters/components/feats/featEffects';
-import FeatSpellGrantPicker, { spellGrantComplete, resolveSpellGrantValue } from '@/characters/components/feats/FeatSpellGrantPicker';
-import FeatManeuverPicker from '@/characters/components/feats/FeatManeuverPicker';
-import { getFeatProficiencyChoices, availableFeatOptions, applyFeatProficiencyChoice, groupFeatProfOptions, FEAT_SKILL_OPTIONS } from '@/characters/components/feats/featProficiencyData';
+import { getFeatGrantedSpells, featGrantRedundant, getFeatStatMods, getFeatStatModSources } from '@/characters/components/feats/featEffects';
+import { resolveSpellGrantValue } from '@/characters/components/feats/FeatSpellGrantPicker';
+import FeatChoiceFields from '@/characters/components/feats/FeatChoiceFields';
+import { resolveFeatAcquisition } from '@/characters/components/feats/featAcquisition';
 
-const FEAT_SKILL_NAME_SET = new Set(FEAT_SKILL_OPTIONS.map(s => s.toLowerCase()));
 import { useCampaign } from '../../campaigns/CampaignContext';
 import {
   ArtificerSheet,
@@ -56,6 +55,7 @@ import { SUBCLASS_UNLOCK_LEVEL_5E, SUBCLASS_UNLOCK_LEVEL_2024 } from '@/characte
 import { startingGoldForBackground, EMPTY_WALLET } from '@/characters/components/inventory/currencyData';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
 import StartingEquipmentStep from '@/characters/components/inventory/StartingEquipmentStep';
+import { abilityMod } from '@/characters/components/shared/abilityMath';
 
 // ─── Ability score validation constants ──────────────────────────────────────
 
@@ -692,7 +692,7 @@ function BgDetail({ bg }) {
   );
 }
 
-function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [], backgroundGrants = null, backgroundSkills = [], feats = [], featDisabledReason = null, proficientSkills = [], featProfCharacterData = {}, charClass = null, campaignId = null, edition = '5e' }) {
+function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages = [], backgroundGrants = null, backgroundSkills = [], feats = [], featDisabledReason = null, featModel = null, campaignId = null, edition = '5e' }) {
   const isDragonborn = race?.name === 'Dragonborn';
   const isHighElf    = subrace?.name === 'High Elf';
   const isHalfElf    = race?.name === 'Half-Elf';
@@ -1028,124 +1028,21 @@ function RaceChoicesSection({ race, subrace, choices, onChange, knownLanguages =
               getDisabledReason={featDisabledReason}
             />
           )}
-          {/* Half-feat ability-score choice (e.g. Tavern Brawler / Resilient at level 1) */}
-          {(() => {
-            const picked = feats.find(f => f.id === choices.human_feat?.id);
-            const ac = featAbilityChoices(picked)[0];
-            if (!ac) return null;
-            // Resilient: only offer abilities whose saving throw the class doesn't already grant.
-            const classSaves = (CLASS_PROFICIENCIES_5E[charClass]?.saving_throws ?? []).map(s => s.toLowerCase());
-            const abilityOptions = featAbilityChoiceOptions(picked, ac, { saveProficiencies: classSaves });
-            return (
-              <div className="space-y-1.5 rounded-md border bg-muted/30 p-2" data-testid="human-feat-ability-choice">
-                <p className="text-xs font-medium">This feat increases an ability score by {ac.amount}. Choose one:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {abilityOptions.map(ab => (
-                    <button
-                      key={ab}
-                      type="button"
-                      data-testid={`human-feat-ability-${ab}`}
-                      onClick={() => onChange({ ...choices, human_feat_ability: ab })}
-                      className={cn(
-                        'rounded-md border px-2 py-1 text-xs',
-                        choices.human_feat_ability === ab ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
-                      )}
-                    >
-                      +{ac.amount} {ab.charAt(0).toUpperCase() + ab.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-          {/* Count-choice proficiency picks (Skilled / Linguist / Weapon Master) at level 1 */}
-          {(() => {
-            const picked = feats.find(f => f.id === choices.human_feat?.id);
-            const grants = getFeatProficiencyChoices(picked, { proficientSkills });
-            if (grants.length === 0) return null;
-            const profChoices = choices.human_feat_prof || {};
-            const toggle = (profType, name, max) => {
-              const cur = profChoices[profType] || [];
-              const next = cur.includes(name)
-                ? cur.filter(n => n !== name)
-                : (cur.length >= max ? cur : [...cur, name]);
-              onChange({ ...choices, human_feat_prof: { ...profChoices, [profType]: next } });
-            };
-            return grants.map(g => {
-              const chosen = profChoices[g.prof_type] || [];
-              const opts = availableFeatOptions(g, { charClass, characterData: featProfCharacterData });
-              if (opts.length === 0) return null; // nothing pickable (e.g. Expertise pre-skills)
-              return (
-                <div key={g.key} className="space-y-1.5 rounded-md border bg-muted/30 p-2" data-testid={`human-feat-prof-grant-${g.prof_type}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">{g.label}</span>
-                    <span className={cn('text-xs', chosen.length === g.count ? 'text-muted-foreground' : 'text-amber-600')}>{chosen.length}/{g.count}</span>
-                  </div>
-                  <div className="max-h-48 overflow-y-auto pr-1 space-y-2">
-                    {groupFeatProfOptions(g.prof_type, opts).map(({ category, options }) => (
-                      <div key={category || '_'} className="space-y-1">
-                        {category && (
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{category}</div>
-                        )}
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {options.map(o => {
-                            const isSel = chosen.includes(o);
-                            const atLimit = chosen.length >= g.count && !isSel;
-                            return (
-                              <button
-                                key={o}
-                                type="button"
-                                disabled={atLimit}
-                                onClick={() => toggle(g.prof_type, o, g.count)}
-                                data-testid={`human-feat-prof-opt-${g.prof_type}-${o}`}
-                                className={cn(
-                                  'rounded-md border px-2 py-1 text-xs text-left',
-                                  isSel ? 'border-primary bg-primary/5 font-medium' : 'border-border hover:border-primary/50',
-                                  atLimit && 'opacity-40 cursor-not-allowed',
-                                )}
-                              >
-                                {o}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            });
-          })()}
-          {/* Spell-grant picker (Magic Initiate): choose a list + cantrips + a 1st-level spell */}
-          {(() => {
-            const picked = feats.find(f => f.id === choices.human_feat?.id);
-            const spec = getSpellGrantSpecs(picked)[0] || null;
-            if (!spec) return null;
-            return (
-              <FeatSpellGrantPicker
-                spec={spec}
-                value={choices.human_feat_spell}
-                onChange={v => onChange({ ...choices, human_feat_spell: v })}
-                campaignId={campaignId}
-                testIdPrefix="human-feat-spell"
-              />
-            );
-          })()}
-          {/* Maneuver-grant picker (Martial Adept): choose 2 Battle Master maneuvers + a d6 die */}
-          {(() => {
-            const picked = feats.find(f => f.id === choices.human_feat?.id);
-            const spec = getManeuverGrantSpec(picked);
-            if (!spec) return null;
-            return (
-              <FeatManeuverPicker
-                spec={spec}
-                value={choices.human_feat_maneuvers}
-                onChange={v => onChange({ ...choices, human_feat_maneuvers: v })}
-                edition={edition}
-                testIdPrefix="human-feat-maneuver"
-              />
-            );
-          })()}
+          {/* The feat's follow-up choices (ability score, proficiencies, spells, maneuvers) — the
+              same component the level-up wizard and the GM's Add Feat use. */}
+          <FeatChoiceFields
+            model={featModel}
+            onChange={c => onChange({
+              ...choices,
+              human_feat_ability: c.ability, human_feat_prof: c.prof,
+              human_feat_spell: c.spell, human_feat_maneuvers: c.maneuvers,
+            })}
+            campaignId={campaignId}
+            edition={edition}
+            testIdPrefix="human-feat"
+            spellTestIdPrefix="human-feat-spell"
+            maneuverTestIdPrefix="human-feat-maneuver"
+          />
         </div>
       )}
 
@@ -1476,22 +1373,6 @@ export default function CharacterCreate() {
   const humanFeatObj = (isVariantHuman && raceChoices.human_feat)
     ? (apiFeats.find(f => f.id === raceChoices.human_feat.id) ?? null)
     : null;
-  const humanFeatAbilityChoice = featAbilityChoices(humanFeatObj)[0] || null;
-  // Skills the character is proficient in when the Variant Human feat is chosen (Identity step) —
-  // the Expertise (Skill Expert) pool. Class skills are picked later (Features step) so they're not
-  // available here; the player expertises a background/race/feat-granted skill (incl. the skill this
-  // very feat grants — Skill Expert grants 1 skill then expertises one you're proficient in).
-  const humanFeatOwnSkills = [
-    ...((raceChoices.human_feat_prof?.skill) || []),
-    ...((raceChoices.human_feat_prof?.skill_or_tool) || []).filter(s => FEAT_SKILL_NAME_SET.has(String(s).toLowerCase())),
-  ];
-  const humanProficientSkills = [...new Set([
-    ...backgroundSkills, ...raceSkills,
-    ...(raceChoices.half_elf_skills ?? []),
-    ...(isVariantHuman && raceChoices.human_variant_skill ? [raceChoices.human_variant_skill] : []),
-    ...humanFeatOwnSkills,
-  ])];
-  const humanFeatProfGrants = getFeatProficiencyChoices(humanFeatObj, { proficientSkills: humanProficientSkills });
   // The proficiencies the character already has from race/background/class choices at the Identity
   // step — passed to the feat proficiency picker (via availableFeatOptions) so a feat (Skilled,
   // Linguist, …) can't re-grant a skill / tool / language already chosen elsewhere (no double-dip).
@@ -1509,26 +1390,37 @@ export default function CharacterCreate() {
     background_tool_choice: bgChoices.tool_choice || null,
     tool_choice: classData.tool_choice || null,
   };
-  // required = min(count, available) so a grant with no pickable options (e.g. Expertise with no
-  // proficient skills assembled yet at creation) auto-completes instead of blocking Next.
-  const humanFeatProfComplete = humanFeatProfGrants.every(
-    g => (raceChoices.human_feat_prof?.[g.prof_type]?.length || 0) >= Math.min(g.count, availableFeatOptions(g, { charClass: selectedClass, characterData: featProfCharacterData }).length),
-  );
-  // Spell-grant spec (Magic Initiate) the chosen Variant Human feat asks the player to fulfil.
-  const humanFeatSpellSpec = getSpellGrantSpecs(humanFeatObj)[0] || null;
-  const humanFeatSpellComplete = !humanFeatSpellSpec || spellGrantComplete(humanFeatSpellSpec, raceChoices.human_feat_spell);
-  // Maneuver-grant spec (Martial Adept) the chosen Variant Human feat asks the player to fulfil.
-  const humanFeatManeuverSpec = getManeuverGrantSpec(humanFeatObj);
-  const humanFeatManeuverComplete = maneuverGrantComplete(humanFeatManeuverSpec, raceChoices.human_feat_maneuvers);
-  const humanFeatAsi = (() => {
-    if (!humanFeatObj) return {};
-    const out = {};
-    featFixedAbilityScores(humanFeatObj).forEach(({ ability, amount }) => { out[ability] = (out[ability] || 0) + amount; });
-    if (humanFeatAbilityChoice && raceChoices.human_feat_ability) {
-      out[raceChoices.human_feat_ability] = (out[raceChoices.human_feat_ability] || 0) + humanFeatAbilityChoice.amount;
-    }
-    return out;
-  })();
+  // Everything the Variant Human feat asks of the player and writes — resolved by the shared
+  // acquisition model (also used by the level-up wizard and the GM's Add Feat).
+  //   • proficientSkills: the Expertise (Skill Expert) pool at the Identity step. Class skills are
+  //     picked later, so the player expertises a background/race/feat-granted skill; the model
+  //     adds the skill this very feat grants.
+  //   • a grant with nothing pickable auto-completes instead of blocking Next.
+  const humanFeat = resolveFeatAcquisition({
+    feat: humanFeatObj,
+    choices: {
+      ability: raceChoices.human_feat_ability, prof: raceChoices.human_feat_prof,
+      spell: raceChoices.human_feat_spell, maneuvers: raceChoices.human_feat_maneuvers,
+    },
+    charClass: selectedClass,
+    characterData: featProfCharacterData,
+    proficientSkills: [
+      ...backgroundSkills, ...raceSkills,
+      ...(raceChoices.half_elf_skills ?? []),
+      ...(isVariantHuman && raceChoices.human_variant_skill ? [raceChoices.human_variant_skill] : []),
+    ],
+    // Resilient: only offer abilities whose saving throw the class doesn't already grant.
+    saveProficiencies: (CLASS_PROFICIENCIES_5E[selectedClass]?.saving_throws ?? []).map(x => x.toLowerCase()),
+  });
+  const humanFeatAbilityChoice = humanFeat.abilityChoice;
+  const humanFeatProfComplete = humanFeat.complete.prof;
+  const humanFeatSpellSpec = humanFeat.spellSpec;
+  const humanFeatSpellComplete = humanFeat.complete.spell;
+  const humanFeatManeuverSpec = humanFeat.maneuverSpec;
+  const humanFeatManeuverComplete = humanFeat.complete.maneuvers;
+  // A half-feat's ability bump (fixed, e.g. Actor; or chosen, e.g. Tavern Brawler) folds into the
+  // racial ASI so it reaches the final scores at submit.
+  const humanFeatAsi = humanFeat.asi;
   const combinedRaceAsi = mergeAsi(baseRaceAsi, selectedSubraceObj?.asiBonus, halfElfExtraAsi, humanVariantAsi, humanFeatAsi);
 
   // Per-stat breakdown of where each ability bonus comes from, so the ability-score
@@ -1556,14 +1448,7 @@ export default function CharacterCreate() {
 
   // Variant Human count-choice proficiency picks (Skilled/Linguist/Weapon Master). Skill picks
   // merge into the final skill_proficiencies set; languages/tools/weapons go to their own fields.
-  const humanFeatProfPatch = (() => {
-    let patch = {};
-    if (!isVariantHuman) return patch;
-    for (const g of humanFeatProfGrants) {
-      patch = { ...patch, ...applyFeatProficiencyChoice(g.prof_type, raceChoices.human_feat_prof?.[g.prof_type] || [], patch) };
-    }
-    return patch;
-  })();
+  const humanFeatProfPatch = isVariantHuman ? humanFeat.profPatch({}) : {};
   const { skill_proficiencies: humanFeatSkillPicks = [], ...humanFeatProfRest } = humanFeatProfPatch;
 
   // Skills the class picker must treat as already-granted (non-clickable) so a Variant Human's
@@ -1602,7 +1487,7 @@ export default function CharacterCreate() {
   // Stored HP = hit die + CON only (floored at 1) — matches the LevelUpWizard. The effective
   // starting HP shown to the player (review + features-step preview) adds the passive bonus.
   const creationHitDie = (is2024 ? HIT_DICE_2024 : HIT_DICE_5E)[selectedClass] ?? 8;
-  const creationConMod = Math.floor(((form.constitution + (combinedRaceAsi.constitution ?? 0)) - 10) / 2);
+  const creationConMod = abilityMod(form.constitution + (combinedRaceAsi.constitution ?? 0));
   const creationBaseHp = Math.max(1, creationHitDie + Math.max(0, creationConMod));
   const creationStartingHp = creationBaseHp + creationHpBonus;
   // HP breakdown shown under the value, e.g. "d10 + 1 + 2".
@@ -1762,21 +1647,9 @@ export default function CharacterCreate() {
           // the ASI level it was chosen (LevelUpWizard tags those). Record the level, snapshot
           // the feat's structured effects, and store any half-feat ability choice (its +1 is
           // already folded into the scores via humanFeatAsi/combinedRaceAsi).
-          feats: raceChoices.human_feat ? [{
-            ...raceChoices.human_feat,
-            level: 1,
-            ...(humanFeatObj?.effects ? { effects: humanFeatObj.effects } : {}),
-            ...(() => {
-              // Record the feat's ability + skill + spell-grant picks so the sheet/Stats panel can attribute them.
-              const c = {
-                ...(humanFeatAbilityChoice && raceChoices.human_feat_ability ? { ability: raceChoices.human_feat_ability } : {}),
-                ...(humanFeatSkillPicks.length ? { skills: humanFeatSkillPicks } : {}),
-                ...(humanFeatSpellSpec ? { spell_grant: resolveSpellGrantValue(humanFeatSpellSpec, raceChoices.human_feat_spell) } : {}),
-                ...(humanFeatManeuverSpec ? { maneuvers: raceChoices.human_feat_maneuvers || [] } : {}),
-              };
-              return Object.keys(c).length ? { choices: c } : {};
-            })(),
-          }] : [],
+          feats: raceChoices.human_feat
+            ? [humanFeat.entry({ level: 1 }) ?? { ...raceChoices.human_feat, level: 1 }]
+            : [],
         } : {}),
       },
     });
@@ -2132,9 +2005,7 @@ export default function CharacterCreate() {
                 backgroundSkills={selectedBgObj?.skills ?? []}
                 feats={apiFeats}
                 featDisabledReason={featDisabledReason}
-                proficientSkills={humanProficientSkills}
-                featProfCharacterData={featProfCharacterData}
-                charClass={selectedClass}
+                featModel={humanFeat}
                 campaignId={campaignId}
                 edition={edition}
               />
@@ -2321,7 +2192,7 @@ export default function CharacterCreate() {
                         {Object.entries(combinedRaceAsi).map(([stat, bonus]) => {
                           const base = form[stat] ?? 0;
                           const total = base + bonus;
-                          const totalMod = Math.floor((total - 10) / 2);
+                          const totalMod = abilityMod(total);
                           const totalModStr = totalMod >= 0 ? `+${totalMod}` : `${totalMod}`;
                           const sources = asiSourceMap[stat] ?? [{ label: '', amount: bonus }];
                           return (
@@ -2468,8 +2339,8 @@ export default function CharacterCreate() {
             wisdom:       form.wisdom       + (combinedRaceAsi.wisdom       ?? 0),
             charisma:     form.charisma     + (combinedRaceAsi.charisma     ?? 0),
           };
-          const dexMod = Math.floor((finalScores.dexterity - 10) / 2);
-          const wisMod = Math.floor((finalScores.wisdom - 10) / 2);
+          const dexMod = abilityMod(finalScores.dexterity);
+          const wisMod = abilityMod(finalScores.wisdom);
           // Feats acquired at creation (Variant Human's free feat) contribute stat_mod bonuses
           // — Alert → +5 initiative, Observant → +5 passive perception — matching CharacterDetail.
           const creationFeats = humanFeatObj ? [humanFeatObj] : [];
@@ -2747,7 +2618,7 @@ export default function CharacterCreate() {
                     const total = finalScores[stat];
                     const racial = combinedRaceAsi[stat] ?? 0;
                     const base = form[stat] ?? 10;
-                    const mod = Math.floor((total - 10) / 2);
+                    const mod = abilityMod(total);
                     const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
                     return (
                       <div key={stat} className="flex flex-col items-center gap-0.5 rounded-lg border bg-muted/30 p-2">

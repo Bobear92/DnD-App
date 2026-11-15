@@ -201,6 +201,21 @@ const characterService = {
     }
   },
 
+  // What a rest WOULD do, without doing it: the same endpoint with `dry_run`, so the dialog shows
+  // the backend's own answer instead of a frontend prediction.
+  previewRest: async (campaignId, restType, characterIds) => {
+    try {
+      const response = await api.post(`/campaign/${campaignId}/rest`, {
+        rest_type: restType,
+        character_ids: characterIds,
+        dry_run: true,
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Failed to preview rest' };
+    }
+  },
+
   /** Which of these characters have an initiative feature they must opt into, and is it still
    *  available. Read-only; the encounter page asks rather than mirroring the backend table. */
   getInitiativeOptions: async (campaignId, characterIds = []) => {

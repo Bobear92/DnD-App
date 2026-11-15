@@ -1,0 +1,20 @@
+{
+  "_about": "Maximum-HP cases run by BOTH backend/tests/test_rest_resources.py (service._effective_max_hp) and frontend combatBonuses.maxHpParity.test.js (effectiveMaxHp). The backend needs the number to restore HP on a long rest; the frontend needs it to display the sheet. One fixture, two runners, so the two implementations cannot drift.",
+  "cases": [
+    { "name": "hp_rolls with no Constitution modifier", "char_class": "Fighter", "level": 5, "constitution": 10, "character_data": { "hp_rolls": 34 }, "expected": 34 },
+    { "name": "hp_rolls plus Constitution per level", "char_class": "Fighter", "level": 5, "constitution": 16, "character_data": { "hp_rolls": 34 }, "expected": 49 },
+    { "name": "odd Constitution rounds the modifier down", "char_class": "Fighter", "level": 4, "constitution": 15, "character_data": { "hp_rolls": 28 }, "expected": 36 },
+    { "name": "negative Constitution modifier lowers the max", "char_class": "Wizard", "level": 4, "constitution": 8, "character_data": { "hp_rolls": 15 }, "expected": 11 },
+    { "name": "never below one hit point per level", "char_class": "Wizard", "level": 5, "constitution": 3, "character_data": { "hp_rolls": 10 }, "expected": 5 },
+    { "name": "Tough feat adds two per level", "char_class": "Fighter", "level": 5, "constitution": 14, "character_data": { "hp_rolls": 34, "feats": [{ "id": 1, "name": "Tough" }] }, "expected": 54 },
+    { "name": "Hill Dwarf Dwarven Toughness adds one per level", "char_class": "Fighter", "level": 3, "constitution": 14, "character_data": { "hp_rolls": 22, "race_traits": ["Darkvision", "Dwarven Toughness"] }, "expected": 31 },
+    { "name": "Draconic Bloodline sorcerer adds one per level", "char_class": "Sorcerer", "level": 6, "constitution": 14, "character_data": { "hp_rolls": 26, "subclass": "Draconic Bloodline" }, "expected": 44 },
+    { "name": "Draconic Sorcery (2024 name) adds one per level", "char_class": "Sorcerer", "level": 6, "constitution": 14, "character_data": { "hp_rolls": 26, "subclass": "Draconic Sorcery" }, "expected": 44 },
+    { "name": "a draconic subclass name on another class grants nothing", "char_class": "Fighter", "level": 6, "constitution": 14, "character_data": { "hp_rolls": 40, "subclass": "Draconic Bloodline" }, "expected": 52 },
+    { "name": "every bonus stacks", "char_class": "Sorcerer", "level": 4, "constitution": 16, "character_data": { "hp_rolls": 18, "subclass": "Draconic Bloodline", "race_traits": ["Dwarven Toughness"], "feats": [{ "id": 1, "name": "Tough" }] }, "expected": 46 },
+    { "name": "legacy hp_max already has Constitution baked in", "char_class": "Fighter", "level": 5, "constitution": 16, "character_data": { "hp_max": 50 }, "expected": 50 },
+    { "name": "legacy hp_max still gains the per-level bonuses", "char_class": "Fighter", "level": 5, "constitution": 16, "character_data": { "hp_max": 50, "feats": [{ "id": 1, "name": "Tough" }] }, "expected": 60 },
+    { "name": "hp_rolls wins when a legacy hp_max is also stored", "char_class": "Fighter", "level": 5, "constitution": 14, "character_data": { "hp_rolls": 34, "hp_max": 99 }, "expected": 44 },
+    { "name": "no stored HP at all means no maximum", "char_class": "Fighter", "level": 5, "constitution": 14, "character_data": {}, "expected": null }
+  ]
+}
