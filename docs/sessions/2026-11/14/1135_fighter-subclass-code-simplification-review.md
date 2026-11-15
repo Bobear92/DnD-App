@@ -3,14 +3,14 @@ session_id: 287a44bd-214e-406f-a4f6-12ae4e512444
 title: Fighter and shared-systems consolidation pass
 date: 2026-11-14
 started: 11:35
-branch: feature/fighter-retro-learnings
+branch: feature/world-building-only-toggle
 area: character-system
 tags: [consolidation, bugfix, docs, tooling, fighter, rest-endpoint, rest-resources, max-hp, feat-acquisition, feat-effects, feature-gate, character-context, ability-math, attack-riders, entry-riders, equipment-features, active-effects, defenses, save-features, save-proficiencies, companions, action-economy, features-tab, level-up-wizard, character-create, character-list, claude-md, great-weapon-master, guard-test, retro]
 issues: [rework]
 summary: Audited Fighter + shared systems; fixed long-rest HP, consolidated 6 duplications, CLAUDE.md 240→95 KB; lessons index
-turns: 20
+turns: 22
 stepped_in: true
-last_uuid: 5ea4fe12-2f1a-44eb-9bb4-165e0ecd3c7b
+last_uuid: 389c5070-f30f-4ca8-a812-5cf5bb8abcde
 ---
 
 # Fighter and shared-systems consolidation pass
@@ -473,3 +473,43 @@ in the agreed order. Shipped as one commit on `feature/fighter-consolidation-rev
 > - The other session's changes stay uncommitted and untouched, since nothing in my commit overlaps them.
 > 
 > **One thing to settle first:** after the merge I'd normally switch back to `main` and delete this branch. That would …
+
+### 21. 2026-11-15 17:31
+
+**Robert:**
+> okay /ship
+
+**Claude:**
+> Shipped. `main` is at **`63bd96a`** and pushed, and `feature/fighter-retro-learnings` is deleted.
+> 
+> **What went in:** the retro (extended through Nov 15), the new `docs/learnings.md`, the CLAUDE.md Docs-index row, the `/retro` skill step, and this session's log. Before shipping, the full frontend suite passed (3912 tests, including the other session's in-progress code); there was nothing runtime to check, since it's all docs.
+> 
+> **What didn't go in:**
+> - **`docs/sessions/INDEX.md`.** The hook rebuilt it with the world-building session's row, which links to a log that isn't committed yet. It goes in with that session's ship.
+> - **All of the world-building-toggle work,** untouched and still uncommitted. The working tree is now on **`feature/world-building-only-toggle`**, branched from the new `main`, so that session can commit and `/ship` normally.
+> 
+> **Tell the other session it's on `feature/wor …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/287a44bd-214e-406f-a4f6-12ae4e512444/scratchpad/log_part2.py` · **Commands run:** 4
+
+### 22. 2026-11-15 17:37
+
+**Robert:**
+> Give me what i should paste in the other session
+
+**Claude:**
+> Written for: the other Claude Code session (the world-building-only toggle), which doesn't know its git state changed.
+> 
+> ```
+> Heads-up from a parallel session that shares this working tree (2026-11-15):
+> 
+> 1. Your uncommitted work is now on branch `feature/world-building-only-toggle`, not `main`.
+>    I branched it from the new `main` (63bd96a) so you can commit and /ship normally.
+>    Run `git branch --show-current` to confirm.
+> 
+> 2. None of your files were committed, staged or edited. Everything you had in progress is
+>    still uncommitted: backend/gm/campaigns/{models,schemas,service}.py,
+>    backend/tests/test_campaigns.py, the new migration b7c8d9e0f1a2_add_campaign_mode_to_campaigns.py,
+>    the frontend changes (App.jsx, CampaignSettingsPage, NPCDetail, SessionDetail, MainLayout,
+>    Sidebar, campaignFeatures.js, FeatureRoute.jsx and their tests), and your session log
+>    under docs/sessions/202 …

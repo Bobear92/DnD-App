@@ -8,6 +8,7 @@ that gets learned twice.
 - **Planning a feature, a subclass or a class:** read *Reading rules text*, *Where a feature appears*
   and *Shared mechanisms*.
 - **Before handing work to Robert for QA:** read *How it reads at the table*.
+- **Before a release, or writing a migration or seed script:** read *Production and data safety*.
 - **Writing tests or guards:** read *Testing*.
 - **When a retro or `/log` names a new lesson:** add a row here in the same change (the `/retro` skill says so).
 
@@ -38,6 +39,9 @@ These are the lessons most likely to be learned again. Each is a candidate for a
 | Verify CLAUDE.md / doc claims about other subclasses before relying on them | Reading rules text | a Phase 0 step in `/subclass-features` |
 | Assert against what is actually rendered (a true minus sign, CSS `capitalize`, read-only text) | Testing | a note in the `test-writer` agent |
 | A whole-system pass after each class, before the next one starts | Workflow | a step in the class ticket template (retro §7g #13) |
+| An autogenerate "rename" is a drop + add that deletes the column's data | Production and data safety | the `/release` destructive-migration stop (first-deploy T9) |
+| Back up and rehearse on a restored prod copy before any migration release | Production and data safety | the `/release` skill (first-deploy T9) |
+| `character_data` is replaced whole on save, so a frontend bug that drops a key erases it silently | Production and data safety | merge-on-save with tests (first-deploy T5a) |
 | Background servers can die mid-session; re-check before relying on them | Tooling | a status check in `restart-*.sh` callers |
 
 ---
@@ -99,6 +103,22 @@ These are the lessons most likely to be learned again. Each is a candidate for a
 | A missing score counts as **10**; "5.5e" and "2024" are **the same edition** everywhere | guard test (`noDuplicateHelpers`, `featureGate.test.js`) | Retro §7a |
 | **A player never restores a resource** (except the Psi Warrior die regain); stocking weapons and ammo is GM-only | rule | Retro §1b |
 | Every panel on the sheet reads **the same version of the character** (the unsaved draft, via `sheetCtx`); five panels once read the saved one | rule ("Extending"), guard test (`characterContext.test.js`, at the helper level only) | Retro §7a |
+
+## Production and data safety
+
+Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](deployment.md).
+
+| Lesson | Enforced by | Source |
+|---|---|---|
+| **A deploy replaces code, never data.** The database is a separate server; nothing is pulled down or reseeded | none (documented in `docs/deployment.md`) | Session 2026-11-15 |
+| **Data never flows dev → prod**; prod → dev only on purpose, to debug or rehearse, and the copy is dropped afterwards | none (documented) | Session 2026-11-15 |
+| **A backup is the only real undo.** `downgrade()` can recreate a dropped column, not its data | none until `/release` exists (first-deploy T9) | Session 2026-11-15 |
+| **Rolling back code doesn't roll back the schema**, so migrations go expand → contract: add first, drop or rename only in a later release | none until `/release` exists (first-deploy T9) | Session 2026-11-15 |
+| **An autogenerate rename is a drop + add**; read every migration and stop on `drop_`, `alter_column`, `UPDATE`, `DELETE` | none until `/release` exists (first-deploy T9) | Session 2026-11-15 |
+| **A failed migration is safe, a wrong one isn't.** Postgres rolls back a failed migration; one that succeeds while doing the wrong thing is the danger, so rehearse on real data | none until `/release` exists (first-deploy T9) | Session 2026-11-15 |
+| **Whole-blob writes lose data silently**: `character_data` is replaced on save, so a dropped key spreads as players save | none until merge-on-save lands (first-deploy T5a) | Session 2026-11-15 |
+| **Seed scripts are the source of truth for system rows** and must upsert, not skip; they never touch campaign rows | none until first-deploy T5b | Session 2026-11-15 |
+| **Releases are tags, not branches**: tags can't move, so they stay accurate rollback points | none (documented in `docs/deployment.md`) | Session 2026-11-15 |
 
 ## Shared mechanisms and duplication
 

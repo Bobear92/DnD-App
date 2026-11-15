@@ -33,6 +33,7 @@ load when needed rather than every turn. **They are not optional reading: open t
 | Why a column or `character_data` key is shaped the way it is; seeding history | [docs/schema-notes.md](docs/schema-notes.md) |
 | What each backend test file covers | [docs/backend-tests.md](docs/backend-tests.md) |
 | Multi-session worklists | `docs/tickets/` (see its README) |
+| Hosting, env vars, branches/releases/rollback, rollback-safe migrations | [docs/deployment.md](docs/deployment.md) |
 | Planning a feature or class, before QA hand-off, or writing a retro — every lesson learned, by category, with what enforces it | [docs/learnings.md](docs/learnings.md) |
 
 **Where new documentation goes:** a new or changed system description → its `docs/systems/` file (create one and add a row

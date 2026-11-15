@@ -84,6 +84,8 @@ can see whether a problem is shrinking. Mark one only when it actually happened.
 - `seed-data` — seed scripts (`seed_feats.py`, `seed_items.py`, …)
 - `rest-endpoint` — the rest / initiative endpoint (`_compute_rest_patch`, `_INITIATIVE_RESOURCES`)
 - `snapshot-backfill` — fixing data snapshotted onto stored characters
+- `deployment` — production hosting, releases, rollback, environments (`docs/deployment.md`)
+- `data-safety` — protecting stored user data across deploys (migrations, backups, whole-blob writes)
 - `5e` — the session was specifically about 2014 rules
 - `2024` — the session was specifically about 2024 rules
 

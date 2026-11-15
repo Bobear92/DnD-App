@@ -3,14 +3,14 @@ session_id: 7478825a-3da6-4e38-a3ea-4dbe238539cb
 title: World-building-only campaign mode
 date: 2026-11-15
 started: 12:57
-branch: feature/world-building-only-toggle
+branch: main
 area: campaign-tools
 tags: [build, campaign-mode, campaign-settings, campaign-tools, encounters, encyclopedia, character-list, migration, claude-md]
 issues: []
 summary: GM toggle hides character sheets, encounters, encyclopedia, rules settings and NPC stats; Settings moved to nav top
-turns: 5
+turns: 6
 stepped_in: true
-last_uuid: 31b9d909-74f0-4274-a3a2-ad2b541a6bb4
+last_uuid: c76286e3-1d13-4ecc-9457-c1bc8d78db77
 ---
 
 # World-building-only campaign mode
@@ -143,3 +143,21 @@ last_uuid: 31b9d909-74f0-4274-a3a2-ad2b541a6bb4
 > - The dev server should pick it up on its own; refresh the page if it doesn't.
 
 **Commands run:** 3
+
+### 6. 2026-11-15 17:44
+
+**Robert:**
+> okay lets /ship and merge to main
+
+**Claude:**
+> World-building mode is merged into `main` and pushed (`69f4f1b`).
+> 
+> - **Tests:** all 3,913 frontend tests and the 42 backend campaign tests pass, and the feat-coverage check and production build pass. I didn't run the whole backend suite, because the other session shares this checkout and two backend test runs at once wreck each other's test database.
+> - **Checked in the running app:**
+>   - The live API switched a test campaign to world-building and back, and rejected a made-up mode value.
+>   - In a real browser on Yaara, the sidebar starts with Campaign Settings and has no Characters, Encounters or Encyclopedia.
+>   - Typing the `/characters` or `/encyclopedia` address lands on the dashboard.
+>   - Settings hides the rules sections.
+> - **Branches:** `feature/world-building-only-toggle` and the empty `feature/worldbuilding-mode` are deleted, and the working tree is now on `main`. The other sessio …
+
+**Commands run:** 14

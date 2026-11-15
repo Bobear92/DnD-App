@@ -9,7 +9,8 @@ To find every session on a subject, use the **Tags** index at the bottom, or gre
 
 | Date | Start | Session | Area | Tags | Issues | Summary | Turns | ⚠ |
 |---|---|---|---|---|---|---|---|---|
-| 2026-11-15 | 12:57 | [World building only toggle](2026-11/15/1257_world-building-only-toggle.md) | — |  |  | I want to add a feature another toggle. If the GM only wants the world building functionality. So they dont need player … | 5 |  |
+| 2026-11-15 | 17:50 | [First production deployment plan](2026-11/15/1750_first-production-deployment-plan.md) | — |  |  | okay let us now plan our first deployment to production. We are far from done with the app, but lets get some deployment … | 7 |  |
+| 2026-11-15 | 12:57 | [World-building-only campaign mode](2026-11/15/1257_world-building-only-toggle.md) | campaign-tools | build, campaign-mode, campaign-settings, campaign-tools, encounters, encyclopedia, character-list, migration, claude-md |  | GM toggle hides character sheets, encounters, encyclopedia, rules settings and NPC stats; Settings moved to nav top | 6 | ⚠ |
 | 2026-11-14 | 11:35 | [Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md) | character-system | consolidation, bugfix, docs, tooling, fighter, rest-endpoint, rest-resources, max-hp, feat-acquisition, feat-effects, feature-gate, character-context, ability-math, attack-riders, entry-riders, equipment-features, active-effects, defenses, save-features, save-proficiencies, companions, action-economy, features-tab, level-up-wizard, character-create, character-list, claude-md, great-weapon-master, guard-test, retro | rework | Audited Fighter + shared systems; fixed long-rest HP, consolidated 6 duplications, CLAUDE.md 240→95 KB; lessons index | 22 | ⚠ |
 | 2026-11-04 | 08:26 | [Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) | character-system | qa, docs, retro, tooling, fighter, samurai, elegant-courtier, tireless-spirit, rapid-strike, strength-before-death, starting-equipment, race-traits, save-features, save-proficiencies, auto-effects, character-create, level-up-wizard, stats-tab, encounters, theme, claude-md, 5e | computed-not-shown, presentation, mechanism-extended | Samurai QA (no mechanic bugs); equipment picker, racial save traits, wizard auto-effects, save provenance; dark: on | 18 | ⚠ |
 
@@ -33,13 +34,16 @@ To find every session on a subject, use the **Tags** index at the bottom, or gre
 - **battle-master** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **bonus-proficiencies** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **bugfix** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
-- **build** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
+- **build** — [2026-11-15 World-building-only campaign mode](2026-11/15/1257_world-building-only-toggle.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
+- **campaign-mode** — [2026-11-15 World-building-only campaign mode](2026-11/15/1257_world-building-only-toggle.md)
+- **campaign-settings** — [2026-11-15 World-building-only campaign mode](2026-11/15/1257_world-building-only-toggle.md)
+- **campaign-tools** — [2026-11-15 World-building-only campaign mode](2026-11/15/1257_world-building-only-toggle.md)
 - **cavalier** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **champion** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **character-context** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
 - **character-create** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md) · [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
-- **character-list** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
-- **claude-md** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md) · [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
+- **character-list** — [2026-11-15 World-building-only campaign mode](2026-11/15/1257_world-building-only-toggle.md) · [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
+- **claude-md** — [2026-11-15 World-building-only campaign mode](2026-11/15/1257_world-building-only-toggle.md) · [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md) · [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **companions** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
 - **consolidation** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
 - **defenses** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
@@ -47,7 +51,8 @@ To find every session on a subject, use the **Tags** index at the bottom, or gre
 - **echo-knight** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **eldritch-knight** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **elegant-courtier** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
-- **encounters** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
+- **encounters** — [2026-11-15 World-building-only campaign mode](2026-11/15/1257_world-building-only-toggle.md) · [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md)
+- **encyclopedia** — [2026-11-15 World-building-only campaign mode](2026-11/15/1257_world-building-only-toggle.md)
 - **entry-riders** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
 - **equipment-features** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
 - **feat-acquisition** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
@@ -64,6 +69,7 @@ To find every session on a subject, use the **Tags** index at the bottom, or gre
 - **items-tab** — [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **level-up-wizard** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md) · [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md)
 - **max-hp** — [2026-11-14 Fighter and shared-systems consolidation pass](2026-11/14/1135_fighter-subclass-code-simplification-review.md)
+- **migration** — [2026-11-15 World-building-only campaign mode](2026-11/15/1257_world-building-only-toggle.md)
 - **prose-signoff** — [2026-10-28 Samurai subclass built to level 20](2026-10/28/1534_samurai-fighter-subclass-build.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
 - **psi-warrior** — [2026-10-26 Session logs, Fighter retro, Rune Knight plan](2026-10/26/1353_session-logs-and-fighter-retro.md)
 - **qa** — [2026-11-04 Samurai QA and Fighter retro update](2026-11/04/0826_frontend-and-backend-startup-for-samurai-qa.md) · [2026-10-26 Rune Knight finished to level 20](2026-10/26/1428_rune-knight-subclass-qa.md)
