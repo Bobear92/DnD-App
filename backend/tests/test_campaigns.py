@@ -216,6 +216,59 @@ class TestCampaignAsiFeatMode:
         assert resp[0]["asi_feat_mode"] == "asi_only"
 
 
+class TestCampaignMode:
+    """World-building mode hides the rules features in the frontend; the backend only stores it."""
+
+    def test_defaults_to_full(self, client):
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        detail = client.get(f"/api/gm/campaigns/{campaign_id}", headers=headers).json()
+        assert detail["campaign_mode"] == "full"
+
+    def test_can_create_in_worldbuilding_mode(self, client):
+        headers, _ = make_user(client, 1)
+        resp = client.post("/api/gm/campaigns", json={"name": "Lore", "campaign_mode": "worldbuilding"}, headers=headers)
+        assert resp.status_code in (200, 201)
+        assert resp.json()["campaign_mode"] == "worldbuilding"
+
+    def test_gm_can_toggle_back_and_forth(self, client):
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        for mode in ("worldbuilding", "full", "worldbuilding"):
+            resp = client.put(f"/api/gm/campaigns/{campaign_id}", json={"campaign_mode": mode}, headers=headers)
+            assert resp.status_code == 200
+            assert resp.json()["campaign_mode"] == mode
+
+    def test_toggle_preserves_rules_settings(self, client):
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        client.put(f"/api/gm/campaigns/{campaign_id}", json={"asi_feat_mode": "asi_only"}, headers=headers)
+        client.put(f"/api/gm/campaigns/{campaign_id}", json={"campaign_mode": "worldbuilding"}, headers=headers)
+        resp = client.put(f"/api/gm/campaigns/{campaign_id}", json={"campaign_mode": "full"}, headers=headers)
+        assert resp.json()["asi_feat_mode"] == "asi_only"
+
+    def test_rejects_unknown_mode(self, client):
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        resp = client.put(f"/api/gm/campaigns/{campaign_id}", json={"campaign_mode": "bogus"}, headers=headers)
+        assert resp.status_code == 422
+
+    def test_player_cannot_change_mode(self, client):
+        gm_headers, _ = make_user(client, 1)
+        player_headers, player_id = make_user(client, 2)
+        campaign_id = create_campaign(client, gm_headers).json()["id"]
+        client.post(f"/api/gm/campaigns/{campaign_id}/players", json={"user_id": player_id}, headers=gm_headers)
+        resp = client.put(f"/api/gm/campaigns/{campaign_id}", json={"campaign_mode": "worldbuilding"}, headers=player_headers)
+        assert resp.status_code == 403
+
+    def test_in_list(self, client):
+        headers, _ = make_user(client, 1)
+        campaign_id = create_campaign(client, headers).json()["id"]
+        client.put(f"/api/gm/campaigns/{campaign_id}", json={"campaign_mode": "worldbuilding"}, headers=headers)
+        resp = client.get("/api/gm/campaigns", headers=headers).json()
+        assert resp[0]["campaign_mode"] == "worldbuilding"
+
+
 # ---------------------------------------------------------------------------
 # Deleting campaigns
 # ---------------------------------------------------------------------------

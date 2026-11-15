@@ -9,6 +9,7 @@ def create_campaign(campaign_data: CampaignCreate, creator_id: int, db: Session)
         name=campaign_data.name,
         description=campaign_data.description,
         edition=campaign_data.edition,
+        campaign_mode=campaign_data.campaign_mode,
         created_by=creator_id
     )
     db.add(new_campaign)
@@ -74,6 +75,8 @@ def update_campaign(campaign_id: int, campaign_data: CampaignUpdate, db: Session
         campaign.starting_equipment = campaign_data.starting_equipment
     if campaign_data.asi_feat_mode is not None:
         campaign.asi_feat_mode = campaign_data.asi_feat_mode
+    if campaign_data.campaign_mode is not None:
+        campaign.campaign_mode = campaign_data.campaign_mode
 
     db.commit()
     db.refresh(campaign)

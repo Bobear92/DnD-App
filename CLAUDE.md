@@ -286,6 +286,8 @@ campaigns
   currency_type (String(20), default "standard"),           ← "standard" (cp/sp/gp/pp) | "full" (adds electrum); drives which coins the character Wallet shows
   starting_equipment (String(20), default "equipment"),     ← "equipment" (grant class+background gear) | "equipment_or_gold" (also allow swapping class gear for class starting gold) | "none" (no starting gear or gold); drives the CharacterCreate Equipment step
   asi_feat_mode (String(20), default "asi_or_feat"),        ← "asi_only" | "asi_or_feat" (RAW 5e choice) | "asi_and_feat"; what a character gets at ASI levels; drives the LevelUpWizard ASI-or-Feat / Feat steps
+  campaign_mode (String(20), default "full"),               ← "full" | "worldbuilding"; world-building HIDES (frontend-only, data kept) sheets, encounters, encyclopedia,
+                                                              rules settings, NPC combat stats, session Characters Present. Read it ONLY via campaigns/campaignFeatures.js
   created_by (FK→users), created_at, updated_at
 
 campaign_members
@@ -684,7 +686,7 @@ Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs`
 | DELETE | /api/gm/campaigns/{id}/players/{user_id} | Yes (GM of campaign) |
 
 Campaign creation uses `get_current_user` (any authenticated user). Member management uses `require_campaign_gm`.
-Campaign PUT accepts all settings fields: `use_alignment`, `ability_score_method`, `allow_reroll_ones`, `leveling_type`, `currency_type`, `starting_equipment`, `asi_feat_mode`. `currency_type` ("standard" | "full"), `starting_equipment` ("equipment" | "equipment_or_gold" | "none"), and `asi_feat_mode` ("asi_only" | "asi_or_feat" | "asi_and_feat") are in `CampaignResponse` + `CampaignListItem` so they reach the frontend CampaignContext. (Like the other settings, `asi_feat_mode` is set only via PUT — `create_campaign` relies on the column default.)
+Campaign PUT accepts all settings fields: `use_alignment`, `ability_score_method`, `allow_reroll_ones`, `leveling_type`, `currency_type`, `starting_equipment`, `asi_feat_mode`, `campaign_mode` (also accepted on POST; unknown value → 422). `currency_type` ("standard" | "full"), `starting_equipment` ("equipment" | "equipment_or_gold" | "none"), and `asi_feat_mode` ("asi_only" | "asi_or_feat" | "asi_and_feat") are in `CampaignResponse` + `CampaignListItem` so they reach the frontend CampaignContext. (Like the other settings, `asi_feat_mode` is set only via PUT — `create_campaign` relies on the column default.)
 
 ### Characters
 | Method | Endpoint | Auth Required |
@@ -1069,6 +1071,7 @@ Only what is genuinely missing or deferred. Descriptions of what IS built live i
 - Multiclassing support (deferred — will be its own feature after both editions complete)
 - **Character personality (traits / ideals / bonds / flaws) — NOT BUILT.** The same gap the Appearance section just closed for physical description: NPCs have `personality_traits`, `ideals`, `bonds` and `flaws` columns; player characters have none, even though backgrounds carry a `characteristics` JSON the creation flow never turns into stored character state. The shape is already proven — a sibling JSONB column plus a catalog module beside `appearance/appearanceData.js`, rendered as a second Narrative-tab card — and the background's suggested traits would make good datalist suggestions. Deliberately left out of the appearance pass to keep its scope honest.
 - Loot table UI
+- **World items for world-building campaigns** — agreed with the user (Nov 2026), not built: a lore list of the world's notable items (description, picture, linked NPCs) that stays visible in world-building mode while the item's stat block hides. Items today are encyclopedia rows with no image or NPC link, so this is a new module. Also: the create-campaign modal does not offer `campaign_mode` yet (the API accepts it; Settings can switch it).
 - Encyclopedia browsing UI — Classes, Skills, Spells, Items (Weapons/Armor/Gear/Potions/Magic Items/Food & Drink — system browse + GM override + campaign homebrew + edit), Feats, and **Mechanics** (game-mechanic reference pages — see below) tabs exist; Monsters tab not yet built. Items are not yet integrated into the character sheet (Weapons & Armor tab inventory is the next step)
 - Campaign spell override/homebrew management — built (SpellsTab override button, CampaignSpellsTab, SpellEditPage); admin panels for base compendium not yet built
 - Admin panels (manage base compendium: races, backgrounds, feats, spells, items, creatures)

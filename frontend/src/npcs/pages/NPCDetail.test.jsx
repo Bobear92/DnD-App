@@ -333,3 +333,20 @@ describe('NPCDetail — Timeline Events link/create/remove', () => {
     expect(screen.queryByTestId('unlink-event-5')).toBeNull();
   });
 });
+
+describe('NPCDetail — campaign mode', () => {
+  it('shows the GM the Combat Stats card in a full campaign', async () => {
+    useCampaign.mockReturnValue({ campaign: { ...GM_CAMPAIGN, campaign_mode: 'full' } });
+    renderDetail();
+    await screen.findByText('Prince Thep');
+    expect(screen.getByText('Combat Stats')).toBeInTheDocument();
+  });
+
+  it('hides the Combat Stats card in world-building mode but keeps the narrative', async () => {
+    useCampaign.mockReturnValue({ campaign: { ...GM_CAMPAIGN, campaign_mode: 'worldbuilding' } });
+    renderDetail();
+    await screen.findByText('Prince Thep');
+    expect(screen.queryByText('Combat Stats')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Timeline Events').length).toBeGreaterThan(0);
+  });
+});

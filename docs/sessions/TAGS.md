@@ -76,6 +76,7 @@ can see whether a problem is shrinking. Mark one only when it actually happened.
 - `campaign-tools` — NPCs, locations, calendar, timeline, sessions
 - `session-logs` — the session-log system itself
 - `theme` — app theming / Tailwind colours (index.css, the `dark` class, palette choices)
+- `campaign-settings` — the Campaign Settings page and sidebar/nav structure
 
 ## Risk and backend
 
@@ -151,4 +152,5 @@ Open-ended: add a feat, named feature or pool option when a session does real wo
 - `strength-before-death` — Samurai Strength Before Death
 - `tireless-spirit` — Samurai Tireless Spirit (initiative regain)
 - `starting-equipment` — character-creation starting equipment / weapon picker
+- `campaign-mode` — world-building-only mode (`campaign_mode`, `campaignFeatures.js`, `FeatureRoute`)
 - `race-traits` — racial traits and where they surface (`raceTraitsData.js`)

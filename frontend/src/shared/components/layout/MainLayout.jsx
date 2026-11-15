@@ -11,25 +11,30 @@ const MainLayout = ({ children }) => {
   const { user, logout } = useAuth();
   const { campaign, enterCampaign } = useCampaign();
 
-  // Heal stale userRole. If created_by is missing from the stored campaign
-  // (saved before the schema fix), fetch it from the API so the role can be
-  // computed correctly without requiring the user to re-enter the campaign.
+  // Heal stale context. The stored campaign can be out of date in two ways:
+  //  - userRole: computed from created_by, which campaigns saved before the
+  //    schema fix lack;
+  //  - campaign_mode: the GM can switch world-building mode at any time, and a
+  //    player's localStorage copy would otherwise keep the old feature set.
+  // So the campaign is re-fetched on mount and the context updated if either differs.
   useEffect(() => {
     if (!user || !campaign) return;
 
     const heal = async () => {
-      let createdBy = campaign.created_by;
+      const result = await campaignService.getCampaignById(campaign.id);
+      const fresh = result?.success ? result.data : null;
 
-      if (createdBy === undefined) {
-        const result = await campaignService.getCampaignById(campaign.id);
-        if (result.success) createdBy = result.data.created_by;
-      }
-
+      const createdBy = campaign.created_by ?? fresh?.created_by;
       if (createdBy === undefined) return;
 
       const correctRole = createdBy === user.id ? 'gm' : 'player';
-      if (campaign.created_by === undefined || campaign.userRole !== correctRole) {
-        enterCampaign({ ...campaign, created_by: createdBy, userRole: correctRole });
+      const mode = fresh?.campaign_mode ?? campaign.campaign_mode;
+      if (
+        campaign.created_by === undefined ||
+        campaign.userRole !== correctRole ||
+        mode !== campaign.campaign_mode
+      ) {
+        enterCampaign({ ...campaign, created_by: createdBy, userRole: correctRole, campaign_mode: mode });
       }
     };
 

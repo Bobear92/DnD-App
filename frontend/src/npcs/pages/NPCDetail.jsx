@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import { useCampaign } from '../../campaigns/CampaignContext';
+import { campaignFeatures } from '../../campaigns/campaignFeatures';
 import npcService, { mapNpcImageUrl } from '../npcService';
 import MusicPlayer from '../../shared/components/MusicPlayer';
 import locationService from '../../locations/locationService';
@@ -103,6 +104,8 @@ export default function NPCDetail() {
   const { campaignId, npcId } = useParams();
   const { campaign } = useCampaign();
   const isGm = campaign?.userRole === 'gm';
+  // The stat block is rules content; world-building campaigns hide it (the data is kept).
+  const showCombatStats = campaignFeatures(campaign).npcCombatStats;
 
   const [npc, setNpc] = useState(null);
   const [allNpcs, setAllNpcs] = useState([]);
@@ -963,8 +966,8 @@ export default function NPCDetail() {
               </Card>
             )}
 
-            {/* Combat Stats — GM only */}
-            {isGm && !playerView && (
+            {/* Combat Stats — GM only, and only when the campaign uses the rules */}
+            {isGm && !playerView && showCombatStats && (
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">

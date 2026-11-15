@@ -510,3 +510,21 @@ describe('SessionDetail — Locations Visited create new', () => {
     expect(createBtn.closest('button')).toHaveProperty('disabled', true);
   });
 });
+
+describe('SessionDetail — campaign mode', () => {
+  it('hides Characters Present and skips the character fetch in world-building mode', async () => {
+    useCampaign.mockReturnValue({ campaign: { ...GM_CAMPAIGN, campaign_mode: 'worldbuilding' } });
+    renderDetail();
+    // Wait for the loaded state before asserting the absence
+    await screen.findByText('NPCs Featured');
+    expect(screen.queryByText('Characters Present')).not.toBeInTheDocument();
+    expect(characterService.getCharactersByCampaign).not.toHaveBeenCalled();
+  });
+
+  it('keeps Characters Present in a full campaign', async () => {
+    useCampaign.mockReturnValue({ campaign: { ...GM_CAMPAIGN, campaign_mode: 'full' } });
+    renderDetail();
+    await screen.findByText('Characters Present');
+    expect(characterService.getCharactersByCampaign).toHaveBeenCalled();
+  });
+});

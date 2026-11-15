@@ -165,6 +165,9 @@ All campaign-scoped pages are wrapped in `<MainLayout>` via the parent route —
 
 ### Sidebar Navigation
 New routes visible to users must be added to `frontend/src/shared/components/layout/Sidebar.jsx`.
+If the page is a D&D-RULES feature (not world-building lore), give its nav item a `feature` key, add that key to
+`campaigns/campaignFeatures.js`, and wrap its route in `<FeatureRoute feature="...">` in App.jsx — world-building
+campaigns hide it. Never compare `campaign.campaign_mode` directly.
 - GM-only items: inside the `{isGm && (...)}` block with appropriate icon
 - Player + GM items: in the shared nav section
 - Icon from `lucide-react`, label matching the page title

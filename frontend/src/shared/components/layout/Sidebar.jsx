@@ -1,6 +1,7 @@
 import { NavLink, useParams } from 'react-router-dom';
 import { useCampaign } from '../../../campaigns/CampaignContext';
 import { cn } from '@/lib/utils';
+import { campaignFeatures } from '../../../campaigns/campaignFeatures';
 import {
   LayoutDashboard, Users, Drama, Map, Clock, BookOpen, Menu, ChevronLeft, GitBranch, Settings, Library, Swords,
 } from 'lucide-react';
@@ -12,29 +13,31 @@ const Sidebar = ({ collapsed, toggleSidebar }) => {
   const isGm = campaign?.userRole === 'gm';
 
   const gmNavItems = [
+    { path: `/campaigns/${campaignId}/settings`, icon: Settings, label: 'Campaign Settings' },
     { path: `/campaigns/${campaignId}/dashboard`, icon: LayoutDashboard, label: 'Dashboard' },
-    { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'Characters' },
+    { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'Characters', feature: 'characters' },
     // GM-only by design — the encounters API 403s players on reads as well as writes.
-    { path: `/campaigns/${campaignId}/encounters`, icon: Swords, label: 'Encounters' },
+    { path: `/campaigns/${campaignId}/encounters`, icon: Swords, label: 'Encounters', feature: 'encounters' },
     { path: `/campaigns/${campaignId}/npcs`, icon: Drama, label: 'NPCs' },
     { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
     { path: `/campaigns/${campaignId}/timeline`, icon: GitBranch, label: 'Timeline' },
     { path: `/campaigns/${campaignId}/campaign-time`, icon: Clock, label: 'Calendar' },
     { path: `/campaigns/${campaignId}/sessions`, icon: BookOpen, label: 'Session Notes' },
-    { path: `/campaigns/${campaignId}/settings`, icon: Settings, label: 'Campaign Settings' },
-    { path: `/campaigns/${campaignId}/encyclopedia`, icon: Library, label: 'Encyclopedia' },
+    { path: `/campaigns/${campaignId}/encyclopedia`, icon: Library, label: 'Encyclopedia', feature: 'encyclopedia' },
   ];
 
   const playerNavItems = [
-    { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'My Characters' },
+    { path: `/campaigns/${campaignId}/characters`, icon: Users, label: 'My Characters', feature: 'characters' },
     { path: `/campaigns/${campaignId}/npcs`, icon: Drama, label: 'NPCs' },
     { path: `/campaigns/${campaignId}/locations`, icon: Map, label: 'Locations' },
     { path: `/campaigns/${campaignId}/timeline`, icon: GitBranch, label: 'Timeline' },
     { path: `/campaigns/${campaignId}/sessions`, icon: BookOpen, label: 'Session Notes' },
-    { path: `/campaigns/${campaignId}/encyclopedia`, icon: Library, label: 'Encyclopedia' },
+    { path: `/campaigns/${campaignId}/encyclopedia`, icon: Library, label: 'Encyclopedia', feature: 'encyclopedia' },
   ];
 
-  const navItems = isGm ? gmNavItems : playerNavItems;
+  // World-building campaigns drop the rules features (see campaignFeatures).
+  const features = campaignFeatures(campaign);
+  const navItems = (isGm ? gmNavItems : playerNavItems).filter(item => !item.feature || features[item.feature]);
 
   return (
     <div className={cn(

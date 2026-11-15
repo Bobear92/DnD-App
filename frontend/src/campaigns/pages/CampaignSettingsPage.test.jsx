@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import CampaignSettingsPage from './CampaignSettingsPage';
 
@@ -25,6 +25,7 @@ vi.mock('react-router-dom', async () => ({
 }));
 
 import { useCampaign } from '../CampaignContext';
+import campaignService from '../campaignService';
 
 function setCampaign(overrides = {}) {
   useCampaign.mockReturnValue({
@@ -98,5 +99,57 @@ describe('CampaignSettingsPage — ASI / feat mode', () => {
     setCampaign({ userRole: 'player', asi_feat_mode: 'asi_and_feat' });
     render(<CampaignSettingsPage />);
     expect(screen.getByTestId('asi-feat-mode-readonly')).toHaveTextContent('Ability score increase and a feat');
+  });
+});
+
+describe('CampaignSettingsPage — campaign mode', () => {
+  it('shows the mode select and the rules settings to the GM of a full campaign', () => {
+    setCampaign({ userRole: 'gm', campaign_mode: 'full' });
+    render(<CampaignSettingsPage />);
+    expect(screen.getByTestId('campaign-mode-select')).toHaveTextContent('Full D&D campaign');
+    expect(screen.getByText('Ability Score Assignment')).toBeInTheDocument();
+    expect(screen.getByTestId('asi-feat-mode-select')).toBeInTheDocument();
+    expect(screen.getByText('Edition')).toBeInTheDocument();
+  });
+
+  it('hides every rules setting from the GM in world-building mode', () => {
+    setCampaign({ userRole: 'gm', campaign_mode: 'worldbuilding' });
+    render(<CampaignSettingsPage />);
+    expect(screen.getByTestId('campaign-mode-select')).toHaveTextContent('World-building only');
+    ['Edition', 'Roleplaying Options', 'Ability Score Assignment', 'Leveling', 'Currency', 'Starting Equipment']
+      .forEach(t => expect(screen.queryByText(t)).not.toBeInTheDocument());
+    // Campaign identity stays
+    expect(screen.getByText('Campaign Identity')).toBeInTheDocument();
+  });
+
+  it('saves the mode with the other settings', async () => {
+    const enterCampaign = vi.fn();
+    useCampaign.mockReturnValue({
+      campaign: { id: 1, name: 'Old', userRole: 'gm', campaign_mode: 'worldbuilding', asi_feat_mode: 'asi_only' },
+      enterCampaign,
+    });
+    campaignService.updateCampaign.mockResolvedValue({ success: true, data: { name: 'New', campaign_mode: 'worldbuilding' } });
+    render(<CampaignSettingsPage />);
+    fireEvent.change(screen.getByDisplayValue('Old'), { target: { value: 'New' } });
+    fireEvent.click(screen.getByText('Save Changes'));
+    await waitFor(() => expect(campaignService.updateCampaign).toHaveBeenCalledWith('1', expect.objectContaining({
+      name: 'New', campaign_mode: 'worldbuilding', asi_feat_mode: 'asi_only',
+    })));
+    await waitFor(() => expect(enterCampaign).toHaveBeenCalledWith(expect.objectContaining({ campaign_mode: 'worldbuilding' })));
+  });
+
+  it('shows players the mode and hides the rules rows in world-building mode', () => {
+    setCampaign({ userRole: 'player', campaign_mode: 'worldbuilding' });
+    render(<CampaignSettingsPage />);
+    expect(screen.getByTestId('campaign-mode-readonly')).toHaveTextContent('World-building only');
+    expect(screen.queryByTestId('asi-feat-mode-readonly')).not.toBeInTheDocument();
+    expect(screen.queryByText('Edition')).not.toBeInTheDocument();
+  });
+
+  it('shows players the rules rows in a full campaign', () => {
+    setCampaign({ userRole: 'player' });
+    render(<CampaignSettingsPage />);
+    expect(screen.getByTestId('campaign-mode-readonly')).toHaveTextContent('Full D&D campaign');
+    expect(screen.getByTestId('asi-feat-mode-readonly')).toBeInTheDocument();
   });
 });

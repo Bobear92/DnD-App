@@ -19,6 +19,10 @@ campaigns
   currency_type (String(20), default "standard"),           ← "standard" (cp/sp/gp/pp) | "full" (adds electrum); drives which coins the character Wallet shows
   starting_equipment (String(20), default "equipment"),     ← "equipment" (grant class+background gear) | "equipment_or_gold" (also allow swapping class gear for class starting gold) | "none" (no starting gear or gold); drives the CharacterCreate Equipment step
   asi_feat_mode (String(20), default "asi_or_feat"),        ← "asi_only" | "asi_or_feat" (RAW 5e choice) | "asi_and_feat"; what a character gets at ASI levels; drives the LevelUpWizard ASI-or-Feat / Feat steps
+  campaign_mode (String(20), default "full"),               ← "full" | "worldbuilding" (Literal-validated). ONE mode column rather than a boolean per feature: the
+                                                              frontend expands it in campaignFeatures.js, so finer per-feature toggles later change one file.
+                                                              HIDE-ONLY by the user's choice (Nov 2026): the API does not block characters/encounters in a
+                                                              world-building campaign, and switching modes never deletes data — switching back restores everything.
   created_by (FK→users), created_at, updated_at
 
 campaign_members

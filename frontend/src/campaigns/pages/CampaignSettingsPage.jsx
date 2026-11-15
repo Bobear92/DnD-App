@@ -13,6 +13,7 @@ import MainLayout from '../../shared/components/layout/MainLayout';
 import campaignService from '../campaignService';
 import { useCampaign } from '../CampaignContext';
 import { useAuth } from '../../auth/AuthContext';
+import { campaignFeatures } from '../campaignFeatures';
 
 // ─── General Tab ─────────────────────────────────────────────────────────────
 
@@ -31,6 +32,7 @@ function GeneralTab({ campaignId }) {
     currency_type: campaign?.currency_type ?? 'standard',
     starting_equipment: campaign?.starting_equipment ?? 'equipment',
     asi_feat_mode: campaign?.asi_feat_mode ?? 'asi_or_feat',
+    campaign_mode: campaign?.campaign_mode ?? 'full',
   });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -46,7 +48,13 @@ function GeneralTab({ campaignId }) {
     settings.leveling_type !== (campaign?.leveling_type ?? 'milestone') ||
     settings.currency_type !== (campaign?.currency_type ?? 'standard') ||
     settings.starting_equipment !== (campaign?.starting_equipment ?? 'equipment') ||
-    settings.asi_feat_mode !== (campaign?.asi_feat_mode ?? 'asi_or_feat');
+    settings.asi_feat_mode !== (campaign?.asi_feat_mode ?? 'asi_or_feat') ||
+    settings.campaign_mode !== (campaign?.campaign_mode ?? 'full');
+
+  // The rules settings only affect character sheets; a world-building campaign has none,
+  // so they are hidden (never cleared — switching back to full restores them as they were).
+  // The GM's DRAFT mode drives it, so picking world-building previews the trimmed page.
+  const showRules = campaignFeatures({ campaign_mode: settings.campaign_mode }).ruleSettings;
 
   const handleSave = async () => {
     setSaving(true);
@@ -74,13 +82,19 @@ function GeneralTab({ campaignId }) {
       currency_type: campaign?.currency_type ?? 'standard',
       starting_equipment: campaign?.starting_equipment ?? 'equipment',
       asi_feat_mode: campaign?.asi_feat_mode ?? 'asi_or_feat',
+      campaign_mode: campaign?.campaign_mode ?? 'full',
     });
     setError('');
   };
 
   if (!isGm) {
+    const playerShowsRules = campaignFeatures(campaign).ruleSettings;
     return (
       <div className="space-y-4">
+        <SettingRow label="Campaign Mode">
+          <span className="text-sm" data-testid="campaign-mode-readonly">{campaignModeLabel(campaign?.campaign_mode)}</span>
+        </SettingRow>
+        {playerShowsRules && <>
         <SettingRow label="Edition">
           <span className="text-sm">{campaign?.edition === '5.5e' ? 'D&D 2024 (5.5e)' : 'D&D 5th Edition (5e)'}</span>
         </SettingRow>
@@ -106,6 +120,7 @@ function GeneralTab({ campaignId }) {
         <SettingRow label="Ability Score Improvements">
           <span className="text-sm" data-testid="asi-feat-mode-readonly">{asiFeatModeLabel(campaign?.asi_feat_mode)}</span>
         </SettingRow>
+        </>}
       </div>
     );
   }
@@ -129,6 +144,32 @@ function GeneralTab({ campaignId }) {
             placeholder="Optional campaign description"
           />
         </SettingRow>
+      </Section>
+
+      {/* Campaign Mode */}
+      <Section title="Campaign Mode">
+        <SettingRow
+          label="Mode"
+          description="World-building only hides character sheets, encounters, the encyclopedia, NPC combat stats and these rules settings. Nothing is deleted — switch back any time to bring it all back."
+        >
+          <Select
+            value={settings.campaign_mode}
+            onValueChange={v => setSettings(s => ({ ...s, campaign_mode: v }))}
+          >
+            <SelectTrigger className="w-60" data-testid="campaign-mode-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="full">Full D&amp;D campaign</SelectItem>
+              <SelectItem value="worldbuilding">World-building only</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingRow>
+      </Section>
+
+      {showRules && <>
+      {/* Rules */}
+      <Section title="Rules">
         <SettingRow label="Edition">
           <Select
             value={settings.edition}
@@ -294,6 +335,7 @@ function GeneralTab({ campaignId }) {
           </Select>
         </SettingRow>
       </Section>
+      </>}
 
       {/* Save bar */}
       {isDirty && (
@@ -590,6 +632,10 @@ export default function CampaignSettingsPage() {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function campaignModeLabel(mode) {
+  return mode === 'worldbuilding' ? 'World-building only' : 'Full D&D campaign';
+}
 
 function Section({ title, children }) {
   return (

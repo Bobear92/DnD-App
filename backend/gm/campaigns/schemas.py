@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
+
+CampaignMode = Literal["full", "worldbuilding"]
 
 
 class CampaignCreate(BaseModel):
@@ -14,6 +16,7 @@ class CampaignCreate(BaseModel):
     currency_type: str = "standard"
     starting_equipment: str = "equipment"
     asi_feat_mode: str = "asi_or_feat"
+    campaign_mode: CampaignMode = "full"
 
 
 class CampaignUpdate(BaseModel):
@@ -27,6 +30,7 @@ class CampaignUpdate(BaseModel):
     currency_type: Optional[str] = None
     starting_equipment: Optional[str] = None
     asi_feat_mode: Optional[str] = None
+    campaign_mode: Optional[CampaignMode] = None
 
 
 class UserInfo(BaseModel):
@@ -61,6 +65,7 @@ class CampaignResponse(BaseModel):
     currency_type: str
     starting_equipment: str
     asi_feat_mode: str
+    campaign_mode: str
     created_by: int
     created_at: datetime
     updated_at: Optional[datetime]
@@ -82,6 +87,7 @@ class CampaignListItem(BaseModel):
     currency_type: str
     starting_equipment: str
     asi_feat_mode: str
+    campaign_mode: str
     created_by: int
     created_at: datetime
 

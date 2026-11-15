@@ -20,9 +20,11 @@ frontend/src/
 ├── campaigns/
 │   ├── pages/CampaignSelection.jsx  # List campaigns, create modal, enter → sets CampaignContext ✅
 │   ├── pages/CampaignMembers.jsx    # Member list + invite (search → select → add) + remove; GM-only controls ✅
-│   ├── pages/CampaignSettingsPage.jsx # /settings route — General tab (edition, alignment, ability score method, leveling, currency coin-types) + Members tab ✅
-│   ├── pages/CampaignSettingsPage.test.jsx # currency setting (GM sees currency-type-select, player read-only "CP, SP, GP, PP" / "CP, SP, EP, GP, PP") + starting-equipment setting (GM sees starting-equipment-select, player read-only "None") + asi-feat-mode setting (GM sees asi-feat-mode-select, player read-only "Ability score increase or a feat" / "...and a feat") (8 tests)
+│   ├── pages/CampaignSettingsPage.jsx # /settings route — General tab (Campaign Mode select `campaign-mode-select`; edition, alignment, ability score method, leveling, currency coin-types, starting equipment, ASI — the rules settings are HIDDEN (never cleared) when the GM's draft mode is world-building; players see a read-only `campaign-mode-readonly` row) + Members tab ✅
+│   ├── pages/CampaignSettingsPage.test.jsx # currency setting (GM sees currency-type-select, player read-only "CP, SP, GP, PP" / "CP, SP, EP, GP, PP") + starting-equipment setting (GM sees starting-equipment-select, player read-only "None") + asi-feat-mode setting (GM sees asi-feat-mode-select, player read-only "Ability score increase or a feat" / "...and a feat") + campaign mode (GM full shows rules sections, world-building hides all six, save sends campaign_mode, player read-only mode + hidden rules rows) (13 tests)
 │   ├── CampaignContext.jsx      # {campaign, enterCampaign, leaveCampaign}; persisted to localStorage
+│   ├── campaignFeatures.js      # campaignFeatures(campaign) → {characters, encounters, encyclopedia, ruleSettings, npcCombatStats, sessionCharacters}; isWorldbuilding(). THE one place `campaign_mode` is read — every surface asks it
+│   ├── campaignFeatures.test.js # full = all on, world-building = all off, missing mode = full (3 tests)
 │   └── campaignService.js       # getAllCampaigns, getCampaignById, createCampaign, updateCampaign, deleteCampaign,
 │                                #   addPlayer(campaignId, userId), removePlayer(campaignId, userId),
 │                                #   searchUsers(q) → GET /api/auth/users/search
@@ -321,15 +323,18 @@ frontend/src/
 └── shared/
     └── components/
         ├── ProtectedRoute.jsx   # Redirects to /login if AuthContext user is null
+        ├── FeatureRoute.jsx     # <FeatureRoute feature="characters"> — redirects to the campaign dashboard when campaignFeatures says the feature is off; wraps every characters/encounters/encyclopedia route in App.jsx
         ├── ErrorBoundary.jsx    # Class component; wraps all routes in App.jsx; shows render error instead of blank page
         ├── MusicPlayer.jsx      # Shared inline music player; takes `src` (a pasted URL or an uploaded `uploads/...` path), auto-detects type, renders the right element: HTML5 <audio>/<video> for files, YouTube IFrame embed, Spotify embed (with Premium-required note), or a link fallback for unknown sources; exports detectSource/parseYouTubeId/parseSpotifyEmbed helpers; used in CharacterDetail, NPCDetail, SessionDetail
         ├── MusicPlayer.test.jsx # parseYouTubeId (youtu.be/watch/embed/shorts/null), parseSpotifyEmbed (track/playlist/locale/null), detectSource (empty/uploaded audio+video/direct file/YouTube/Spotify/link fallback), rendering (empty→nothing, audio, video, YouTube iframe src, Spotify iframe src + Premium note, link fallback) (18 tests)
         └── layout/
-            ├── MainLayout.jsx   # Wraps pages with Sidebar + Header; reads from contexts
+            ├── MainLayout.jsx   # Wraps pages with Sidebar + Header; re-fetches the campaign on mount to heal a stale userRole AND sync campaign_mode (a player's stored copy would otherwise keep the old feature set)
             ├── Header.jsx       # Campaign name (from CampaignContext) + user menu (from AuthContext)
             └── Sidebar.jsx      # Campaign-aware nav: uses useParams().campaignId for paths;
                                  #   GM vs player items from campaign.userRole; "Switch Campaign" link
+                                 #   GM list opens with Campaign Settings (above Dashboard) — the user moved it to the top
                                  #   Encounters sits in the GM list ONLY — the API 403s players on reads too
+                                 #   items with a `feature` key are filtered through campaignFeatures (world-building hides Characters/Encounters/Encyclopedia)
 ```
 
 ## UI — Key Behaviours
@@ -645,11 +650,13 @@ frontend/src/
     └── components/
         ├── ProtectedRoute.jsx
         ├── ProtectedRoute.test.jsx   # loading/null/authenticated cases (3 tests)
+        ├── FeatureRoute.test.jsx     # renders when on, redirects to dashboard in world-building mode (2 tests)
         ├── MusicPlayer.jsx
         ├── MusicPlayer.test.jsx      # parseYouTubeId/parseSpotifyEmbed/detectSource helpers + rendering per source type (audio/video/YouTube/Spotify/link) (18 tests)
         └── layout/
             ├── MainLayout.jsx
-            └── MainLayout.test.jsx   # userRole healing: stale player→gm, correct unchanged, player for non-creator, null guards (5 tests)
+            ├── MainLayout.test.jsx   # userRole healing: stale player→gm, correct unchanged, player for non-creator, null guards + campaign_mode sync (picks up a GM switch, no rewrite when unchanged)
+            └── Sidebar.test.jsx      # campaign mode: GM full shows all, world-building hides Characters/Encounters/Encyclopedia, player hides My Characters/Encyclopedia, missing mode = full + GM nav order starts with Campaign Settings (5 tests)
 ```
 
 ## Routes — full notes

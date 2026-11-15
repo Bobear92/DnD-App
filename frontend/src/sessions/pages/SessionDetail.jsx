@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import MainLayout from '../../shared/components/layout/MainLayout';
 import RichTextEditor from '../components/RichTextEditor';
 import { useCampaign } from '../../campaigns/CampaignContext';
+import { campaignFeatures } from '../../campaigns/campaignFeatures';
 import sessionService, { mapSessionImageUrl } from '../sessionService';
 import MusicPlayer from '../../shared/components/MusicPlayer';
 import npcService from '../../npcs/npcService';
@@ -896,6 +897,8 @@ export default function SessionDetail() {
   const { campaignId, sessionId } = useParams();
   const { campaign } = useCampaign();
   const isGm = campaign?.userRole === 'gm';
+  // World-building campaigns have no character sheets, so there is no one to mark present.
+  const showCharacters = campaignFeatures(campaign).sessionCharacters;
 
   const [playerView, setPlayerView] = useState(false);
 
@@ -964,8 +967,8 @@ export default function SessionDetail() {
     npcService.getNpcs(campaignId).then(data => setAllNpcs(Array.isArray(data) ? data : [])).catch(() => {});
     locationService.getLocations(campaignId).then(data => setAllLocations(Array.isArray(data) ? data : [])).catch(() => {});
     settingsService.getEvents(campaignId).then(data => setAllEvents(Array.isArray(data) ? data.map(e => ({ id: e.id, name: e.title })) : [])).catch(() => {});
-    characterService.getCharactersByCampaign(campaignId).then(res => setAllCharacters(res?.data || [])).catch(() => {});
-  }, [isGm, campaignId]);
+    if (showCharacters) characterService.getCharactersByCampaign(campaignId).then(res => setAllCharacters(res?.data || [])).catch(() => {});
+  }, [isGm, campaignId, showCharacters]);
 
   // Load calendar for all users — needed for month names in the date header
   useEffect(() => {
@@ -1542,21 +1545,23 @@ export default function SessionDetail() {
 
         {/* Linked content grid */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <LinkCard
-            title="Characters Present"
-            icon={Users}
-            items={characterLinks}
-            isGm={isGm && !playerView}
-            allOptions={allCharacters}
-            optionLabel="character"
-            onAdd={addCharacter}
-            onRemove={removeCharacter}
-            renderItem={item => (
-              <span className="text-sm">{item.character_name}
-                {item.description && <span className="text-xs text-muted-foreground ml-1">— {item.description}</span>}
-              </span>
-            )}
-          />
+          {showCharacters && (
+            <LinkCard
+              title="Characters Present"
+              icon={Users}
+              items={characterLinks}
+              isGm={isGm && !playerView}
+              allOptions={allCharacters}
+              optionLabel="character"
+              onAdd={addCharacter}
+              onRemove={removeCharacter}
+              renderItem={item => (
+                <span className="text-sm">{item.character_name}
+                  {item.description && <span className="text-xs text-muted-foreground ml-1">— {item.description}</span>}
+                </span>
+              )}
+            />
+          )}
           <NpcLinkCard
             items={npcLinks}
             isGm={isGm && !playerView}

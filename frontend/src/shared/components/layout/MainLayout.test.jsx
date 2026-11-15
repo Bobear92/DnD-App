@@ -163,3 +163,31 @@ describe('MainLayout — healing skipped when context is incomplete', () => {
     expect(enterCampaign).not.toHaveBeenCalled();
   });
 });
+
+describe('MainLayout — campaign_mode sync', () => {
+  it('picks up a world-building switch the GM made after the player stored the campaign', async () => {
+    const enterCampaign = vi.fn();
+    const stored = { id: 1, created_by: 99, userRole: 'player', campaign_mode: 'full' };
+    useCampaign.mockReturnValue({ campaign: stored, enterCampaign });
+    campaignService.getCampaignById.mockResolvedValue({
+      success: true, data: { id: 1, created_by: 99, campaign_mode: 'worldbuilding' },
+    });
+    renderLayout();
+    await waitFor(() => expect(enterCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({ campaign_mode: 'worldbuilding', userRole: 'player' }),
+    ));
+  });
+
+  it('does not rewrite context when the mode is unchanged', async () => {
+    const enterCampaign = vi.fn();
+    useCampaign.mockReturnValue({
+      campaign: { id: 1, created_by: 99, userRole: 'player', campaign_mode: 'full' }, enterCampaign,
+    });
+    campaignService.getCampaignById.mockResolvedValue({
+      success: true, data: { id: 1, created_by: 99, campaign_mode: 'full' },
+    });
+    renderLayout();
+    await waitFor(() => expect(campaignService.getCampaignById).toHaveBeenCalledWith(1));
+    expect(enterCampaign).not.toHaveBeenCalled();
+  });
+});

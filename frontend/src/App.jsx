@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './auth/AuthContext';
 import { CampaignProvider } from './campaigns/CampaignContext';
 import ProtectedRoute from './shared/components/ProtectedRoute';
+import FeatureRoute from './shared/components/FeatureRoute';
 import ErrorBoundary from './shared/components/ErrorBoundary';
 import Login from './auth/pages/Login';
 import CampaignSelection from './campaigns/pages/CampaignSelection';
@@ -48,9 +49,9 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/campaigns" element={<ProtectedRoute><CampaignSelection /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/characters" element={<ProtectedRoute><CharacterList /></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/characters/create" element={<ProtectedRoute><CharacterCreate /></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/characters/:characterId" element={<ProtectedRoute><CharacterDetail /></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/characters" element={<ProtectedRoute><FeatureRoute feature="characters"><CharacterList /></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/characters/create" element={<ProtectedRoute><FeatureRoute feature="characters"><CharacterCreate /></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/characters/:characterId" element={<ProtectedRoute><FeatureRoute feature="characters"><CharacterDetail /></FeatureRoute></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/locations" element={<ProtectedRoute><LocationList /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/locations/:locationId" element={<ProtectedRoute><LocationDetail /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/npcs" element={<ProtectedRoute><NPCList /></ProtectedRoute>} />
@@ -62,23 +63,23 @@ function App() {
             <Route path="/campaigns/:campaignId/members" element={<ProtectedRoute><CampaignMembers /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/settings" element={<ProtectedRoute><CampaignSettingsPage /></ProtectedRoute>} />
             {/* EncountersPage renders its own MainLayout (it needs the full-height flex body). */}
-            <Route path="/campaigns/:campaignId/encounters" element={<ProtectedRoute><EncountersPage /></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia" element={<ProtectedRoute><MainLayout><EncyclopediaPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/maneuvers" element={<ProtectedRoute><MainLayout><ManeuversPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/classes/:className" element={<ProtectedRoute><MainLayout><ClassPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/classes/:className/:subclassName" element={<ProtectedRoute><MainLayout><SubclassPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/jump" element={<ProtectedRoute><MainLayout><JumpPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/armor-class" element={<ProtectedRoute><MainLayout><ArmorClassPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/action-economy" element={<ProtectedRoute><MainLayout><ActionEconomyPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/hit-dice" element={<ProtectedRoute><MainLayout><HitDicePage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/loading" element={<ProtectedRoute><MainLayout><LoadingPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/object-interaction" element={<ProtectedRoute><MainLayout><ObjectInteractionPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/spacing" element={<ProtectedRoute><MainLayout><SpacingPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/special-attacks" element={<ProtectedRoute><MainLayout><SpecialAttacksPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/magical-attacks" element={<ProtectedRoute><MainLayout><MagicalAttacksPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/damage-mitigation" element={<ProtectedRoute><MainLayout><DamageMitigationPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/spells/:spellId" element={<ProtectedRoute><MainLayout><SpellEditPage /></MainLayout></ProtectedRoute>} />
-            <Route path="/campaigns/:campaignId/encyclopedia/items/:category/:itemId" element={<ProtectedRoute><MainLayout><ItemEditPage /></MainLayout></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encounters" element={<ProtectedRoute><FeatureRoute feature="encounters"><EncountersPage /></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><EncyclopediaPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/maneuvers" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><ManeuversPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/classes/:className" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><ClassPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/classes/:className/:subclassName" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><SubclassPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/jump" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><JumpPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/armor-class" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><ArmorClassPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/action-economy" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><ActionEconomyPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/hit-dice" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><HitDicePage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/loading" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><LoadingPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/object-interaction" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><ObjectInteractionPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/spacing" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><SpacingPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/special-attacks" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><SpecialAttacksPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/magical-attacks" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><MagicalAttacksPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/mechanics/damage-mitigation" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><DamageMitigationPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/spells/:spellId" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><SpellEditPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/encyclopedia/items/:category/:itemId" element={<ProtectedRoute><FeatureRoute feature="encyclopedia"><MainLayout><ItemEditPage /></MainLayout></FeatureRoute></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/campaigns" replace />} />
           </Routes>
           </ErrorBoundary>
