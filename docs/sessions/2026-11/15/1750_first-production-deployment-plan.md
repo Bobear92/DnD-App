@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy plan and T1
+title: First production deploy plan, T1 and T2
 date: 2026-11-15
 started: 17:50
-branch: feature/api-base-url
+branch: feature/env-cors-settings
 area: tooling
 tags: [docs, build, deployment, data-safety, migration, seed-data, user-rule, guard-test]
 issues: []
-summary: Planned first prod deploy (Render, production+tags, data-safety, 12 tickets); T1 one API base URL + guard
-turns: 9
+summary: Planned first prod deploy (Render, tags, data-safety, 12 tickets); T1 one API base URL; T2 CORS from env
+turns: 12
 stepped_in: true
-last_uuid: da6ed6c7-4ba7-4520-a917-6f87eb25a939
+last_uuid: 3eeac977-40b1-4bb8-9f6c-d9f7d8d48123
 ---
 
-# First production deploy plan and T1
+# First production deploy plan, T1 and T2
 
 ## Summary
 
@@ -30,6 +30,9 @@ last_uuid: da6ed6c7-4ba7-4520-a917-6f87eb25a939
   match-exactly-once codemod; guard `noHardcodedApiUrl.test.js` + `api.test.js` (9 tests); `.env.example`; agent updated.
   Verified: prod build with `VITE_API_URL` set bakes it in with no `localhost:8000`; Playwright drive hit every service
   family (68 calls, 0 failures, uploads render).
+- **T2:** `config.py` `allowed_origins` (env `ALLOWED_ORIGINS`) + parsed `cors_origins`; `main.py` uses it; `debug`
+  defaults False (read nowhere). `tests/test_cors.py` (9); backend 997 / frontend 3923 green; live preflight: dev origin 200,
+  unknown origin 400. security-reviewer agent + CLAUDE.md env block updated.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -57,7 +60,8 @@ last_uuid: da6ed6c7-4ba7-4520-a917-6f87eb25a939
 
 ## Open threads
 
-- **Next: T2** (CORS origins + `debug` default from env in `backend/main.py` / `config.py`), fresh branch off `main`.
+- **Next: T3** (prod start command, Python pin, requirements split, and the new item: decide whether `main.py`'s
+  `Base.metadata.create_all()` at import is removed or dev-only, since alembic owns the prod schema).
 - Follow-up: one shared axios client (every service repeats the token interceptor); natural with token-expiry work.
 - Open decisions: uploads (Render disk vs Cloudflare R2, needed by T4); tier (free vs ~$13/mo paid, needed by T6).
 - CLAUDE.md Development Workflow still calls `main` "the deployable trunk"; rewrite in T9 once `production` exists.
@@ -239,3 +243,47 @@ last_uuid: da6ed6c7-4ba7-4520-a917-6f87eb25a939
 > - **Guard test:** [noHardcodedApiUrl.test.js](frontend/src/test/noHardcodedApiUrl.test.js) fails the build if the addres …
 
 **Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t1-codemod.mjs`, `frontend/src/lib/api.js`, `frontend/src/test/noHardcodedApiUrl.test.js`, `frontend/src/lib/api.test.js`, `docs/frontend-map.md`, `.claude/agents/frontend-page-expert.md`, `frontend/.env.example`, `docs/tickets/first-production-deploy.md`, `docs/learnings.md`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/feedback_vitest_drive_letter.md` · **Commands run:** 22
+
+### 10. 2026-11-15 20:25
+
+**Robert:**
+> /ship
+
+**Claude:**
+> T1 is on `main` as commit `8e12151` and pushed. `feature/api-base-url` is deleted, and the working tree is clean.
+> 
+> - **Tests:** all 172 test files and 3,923 tests pass.
+> - **Real-app check:** I started both servers, logged in as the test GM in a scripted browser, and opened characters, a character sheet, NPCs, locations, sessions, encounters, every encyclopedia tab, a class page and character creation. All 68 calls to the backend succeeded, across every group of API endpoints (auth, campaigns, characters, encyclopedia, classes and feats). There were no console errors, and the uploaded portrait and NPC images loaded. Separately, a production build with `VITE_API_URL` set contains that URL and no `localhost:8000`.
+> - **Docs and agent:** `frontend-map.md`, the `frontend-page-expert` agent and the ticket list (now 1 of 12 done) were updated before shipping. CLAUDE.md didn't need changes.
+> - **S …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/verify-t1.cjs` · **Commands run:** 10
+
+### 11. 2026-11-16 10:33
+
+**Robert:**
+> <task-notification>
+> <task-id>bo21rob9z</task-id>
+> <tool-use-id>toolu_01Nk3LqYpqUAkYBnSQ27MJyR</tool-use-id>
+> <status>stopped</status>
+> <summary>Background shell command didn't finish before the previous session ended</summary>
+> <note>No completion record was found for it in the previous session. It may have been stopped (via the UI, Monitor timeout, or agent teardown — these leave no transcript marker), or it may have been running when the previous Claude Code process exited. Check the output file for partial results before assuming it completed.</note>
+> </task-notification>
+
+**Claude:**
+> _(no text reply)_
+
+### 12. 2026-11-16 10:33
+
+**Robert:**
+> okay lets continue with T2
+
+**Claude:**
+> T2 is done on the branch `feature/env-cors-settings`, not committed yet. The backend now reads which websites may call it from an environment variable, so production can name the real frontend without a code change.
+> 
+> - **[backend/config.py](backend/config.py):** new `allowed_origins` setting, read from `ALLOWED_ORIGINS` as a comma-separated list. It defaults to the two local dev addresses, so nothing changes on your machine. Stray spaces and trailing slashes are trimmed, because a browser never sends a trailing slash and the match would silently fail otherwise.
+> - **`debug` now defaults to `False`.** I checked, and nothing in the code reads `debug`, so this only makes the default safe and changes no behaviour.
+> - **[backend/main.py](backend/main.py):** uses that setting instead of the hardcoded list.
+> - **Tests:** the new [backend/tests/test_cors.py](backend/tests/test_cors.py) has 9 tests. …
+
+**Files edited:** `backend/config.py`, `backend/main.py`, `backend/tests/test_cors.py`, `docs/backend-tests.md`, `CLAUDE.md`, `.claude/agents/security-reviewer.md` · **Commands run:** 11

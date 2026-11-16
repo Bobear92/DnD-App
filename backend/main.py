@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from config import settings
 from shared.database import engine, Base
 from auth.routes import router as auth_router
 from gm import campaigns_router, npcs_router, loot_tables_router, locations_router, calendar_router, timeline_router, session_notes_router, encounters_router
@@ -17,10 +18,11 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="D&D RPG API")
 
-# CORS middleware for frontend
+# CORS middleware for frontend — origins come from ALLOWED_ORIGINS (config.py), defaulting to the
+# local dev frontends. Never "*": with allow_credentials that would be rejected by browsers anyway.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1326,7 +1326,11 @@ The running process caches old modules and silently serves stale responses (miss
 ```
 DATABASE_URL=postgresql://postgres:PASSWORD@localhost:5432/dnd_app_dev
 SECRET_KEY=your-secret-key-change-this-in-production
+# Optional (production sets these — see docs/deployment.md):
+# ALLOWED_ORIGINS=https://app.example.com   ← comma-separated CORS origins; default = localhost:3000,5173
+# DEBUG=false                               ← defaults to false
 ```
+Frontend: `VITE_API_URL` (build time) is read ONLY by `frontend/src/lib/api.js`; never hardcode the backend URL.
 
 ---
 

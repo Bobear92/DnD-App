@@ -110,6 +110,7 @@ return [i for i in items if i.is_visible_to_players or member.role == "gm"]
 
 ### 9. CORS / Network
 - FastAPI CORS middleware should allow only the known frontend origin in production — flag if `allow_origins=["*"]` is present outside dev
+- Origins come from `settings.cors_origins` (env `ALLOWED_ORIGINS`, `backend/config.py`); flag any hardcoded origin list in `main.py`, and a production `ALLOWED_ORIGINS` that includes `localhost` or `*` (`backend/tests/test_cors.py` pins the behaviour)
 
 ### 10. Mass Assignment
 - `MyModel(**data.model_dump())` is safe when `data` is a Pydantic schema with explicit fields

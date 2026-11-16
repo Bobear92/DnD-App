@@ -4,7 +4,7 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 1/12 done (T1). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** 2/12 done (T1, T2). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
 **Decisions still open (settle before the ticket that needs them):**
@@ -29,15 +29,21 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [x] Update `.claude/agents/frontend-page-expert.md`, which tells new services to hardcode `localhost:8000`.
 - done: `npm test` green; the app works locally without `VITE_API_URL` set.
 
-## T2 — CORS and settings from the environment
-- [ ] `backend/main.py` hardcodes `allow_origins=["http://localhost:3000", "http://localhost:5173"]`. Read
+## T2 — CORS and settings from the environment ✅
+- **Landed 2026-11-16.** `config.py` has `allowed_origins` (string env var `ALLOWED_ORIGINS`) + a parsed `cors_origins`
+  list (trims spaces and trailing slashes); `main.py` reads it. `debug` defaults to `False` — it turned out to be read
+  nowhere, so this is a safe default only. Tests: `backend/tests/test_cors.py` (9).
+- [x] `backend/main.py` hardcodes `allow_origins=["http://localhost:3000", "http://localhost:5173"]`. Read
   `allowed_origins` from `config.py` (comma-separated env var; default to the two localhost origins).
-- [ ] `config.py`: change the `debug` default to `False` (`.env` sets it true locally); check where `debug` is read.
+- [x] `config.py`: change the `debug` default to `False` (`.env` sets it true locally); check where `debug` is read.
 - guard: backend test that a configured origin gets CORS headers and an unlisted one doesn't.
 
 ## T3 — Production start command and Python version
 - [ ] Pin the Python version for Render (`.python-version` or `PYTHON_VERSION` = 3.12).
 - [ ] Decide whether `pytest`/`httpx` stay in `requirements.txt` (harmless) or move to a `requirements-dev.txt`.
+- [ ] `main.py` runs `Base.metadata.create_all()` at import. In prod the start command runs `alembic upgrade head` first, so
+  it is a no-op there, but if the app ever starts against an empty DB before alembic, it creates tables that alembic then
+  fails on. Decide: remove it (alembic owns the schema) or guard it to dev only.
 - [ ] Confirm `alembic upgrade head` works on an **empty** database (CI already does this; run it once locally against a scratch DB).
 
 ## T4 — Uploads that survive a deploy (needs the uploads decision)

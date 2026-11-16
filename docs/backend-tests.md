@@ -6,6 +6,10 @@ What each backend test file covers, with counts. Moved out of CLAUDE.md on 2026-
 backend/tests/
 ├── conftest.py                     # shared fixtures + helpers
 ├── test_auth.py                    # auth module
+├── test_cors.py                    # 9 tests: CORS origins come from settings (ALLOWED_ORIGINS) — TestCorsMiddleware (each configured
+                                    #   origin passes a preflight with credentials; an unlisted origin gets 400 and no allow-origin header;
+                                    #   never "*") + TestAllowedOriginsParsing (dev default, comma/space/trailing-slash parsing, read from env,
+                                    #   debug defaults off). Deploy ticket T2
 ├── test_campaigns.py               # campaign CRUD + member management + TestUserSearch (search by username/email, excludes self, min 2 chars, auth required, response shape) + TestCampaignCurrency (currency_type defaults to "standard", GM can set "full", present in list response) + TestCampaignStartingEquipment (defaults to "equipment", GM can set equipment_or_gold/none, present in list) + TestCampaignAsiFeatMode (defaults to "asi_or_feat", GM can set asi_only/asi_and_feat, present in list) + TestCampaignMode (defaults to "full", create in world-building, toggle back and forth, toggle preserves rules settings, unknown mode → 422, player → 403, present in list)
 ├── test_calendar_timeline.py       # calendar (6+2+3+4+8+8), timeline events (13), event links (6), location filter (5) = 57 tests
                                     #   TestCalendarCRUD(6), TestSeasons(2), TestMonths(3), TestMonthOptionalName(4),
