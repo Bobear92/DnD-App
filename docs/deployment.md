@@ -187,12 +187,13 @@ In order of danger for this app:
    overwrites real values.
 2. **Data migrations with a bug.** An `UPDATE` with the wrong `WHERE`, or a backfill (like
    `backfill_inventory_snapshots.py`) that rewrites JSON, changes every row it matches.
-3. **A frontend that saves bad data. This is the silent one.** `update_character`
-   (`backend/players/characters/service.py`) **replaces `character_data` whole**; the frontend sends back the
-   entire blob. A deployed frontend bug that drops a key (`inventory`, `feats`, `spell_slots`) runs no
-   migration and looks fine at deploy time. Then each character loses that key the next time its player saves.
-   The damage spreads over days. The same whole-blob write means two people saving one character at once
-   (GM and player, or two tabs) lose whichever save landed first.
+3. **A frontend that saves bad data. This is the silent one.** The sheet sends back the whole `character_data`
+   blob on every save. Until 2026-11-16 the backend **replaced** the stored blob with it, so a deployed frontend bug
+   that dropped a key (`inventory`, `feats`, `spell_slots`) erased it from each character the next time its player
+   saved, with no migration and nothing visible at deploy time. **Fixed (T5a): the backend now merges** — a missing key
+   is kept, and deleting a key takes an explicit `character_data_remove` list. Still true: a bug that sends a *wrong
+   value* for a key overwrites it, and two people saving one character at once (GM and player, or two tabs) still
+   lose the earlier save, because each sends its own full copy. Sending only the changed keys would fix that; it is not built.
 4. **Seed scripts that update.** `seed_feats.py` rewrites feat snapshots on every character that has a feat.
 5. **Cascade deletes.** Many foreign keys are `ON DELETE CASCADE`. That's correct, but a bug that deletes the
    wrong campaign takes its characters, NPCs and sessions with it.
@@ -207,8 +208,10 @@ In order of danger for this app:
 - **Rehearse on real data.** Tests run on empty tables; a restored prod backup has the NULLs, odd JSON shapes and
   old characters that break migrations (release step 3).
 - **Expand → contract** (the migration rule below), so nothing is dropped while code still reads it.
-- **Merge `character_data` on save instead of replacing it** (ticket), so a missing key means "unchanged",
-  not "delete". This needs an explicit way to delete a key, for the flows that remove one on purpose.
+- **`character_data` is merged on save** (`update_character`), so a missing key means "unchanged", not "delete".
+  Deleting is explicit: `character_data_remove: [keys]`. The frontend turns a key the sheet set to `undefined` into
+  that list (`characterService.toUpdatePayload`), so every deliberate "clear this" keeps working. Guarded by
+  `backend/tests/test_character_data_merge.py`.
 
 ---
 

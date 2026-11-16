@@ -41,7 +41,6 @@ These are the lessons most likely to be learned again. Each is a candidate for a
 | A whole-system pass after each class, before the next one starts | Workflow | a step in the class ticket template (retro §7g #13) |
 | An autogenerate "rename" is a drop + add that deletes the column's data | Production and data safety | the `/release` destructive-migration stop (first-deploy T9) |
 | Back up and rehearse on a restored prod copy before any migration release | Production and data safety | the `/release` skill (first-deploy T9) |
-| `character_data` is replaced whole on save, so a frontend bug that drops a key erases it silently | Production and data safety | merge-on-save with tests (first-deploy T5a) |
 | Background servers can die mid-session; re-check before relying on them | Tooling | a status check in `restart-*.sh` callers |
 
 ---
@@ -116,7 +115,8 @@ Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](
 | **Rolling back code doesn't roll back the schema**, so migrations go expand → contract: add first, drop or rename only in a later release | none until `/release` exists (first-deploy T9) | Session 2026-11-15 |
 | **An autogenerate rename is a drop + add**; read every migration and stop on `drop_`, `alter_column`, `UPDATE`, `DELETE` | none until `/release` exists (first-deploy T9) | Session 2026-11-15 |
 | **A failed migration is safe, a wrong one isn't.** Postgres rolls back a failed migration; one that succeeds while doing the wrong thing is the danger, so rehearse on real data | none until `/release` exists (first-deploy T9) | Session 2026-11-15 |
-| **Whole-blob writes lose data silently**: `character_data` is replaced on save, so a dropped key spreads as players save | none until merge-on-save lands (first-deploy T5a) | Session 2026-11-15 |
+| **Whole-blob writes lose data silently**: `character_data` was replaced on save, so a dropped key spread as players saved. Now merged; deleting a key is explicit (`character_data_remove`) | guard test (`test_character_data_merge.py`, `characterService.test.js`) | Session 2026-11-15, fixed 2026-11-16 |
+| **Merging is not concurrency control**: each save still carries a full, possibly stale copy, so simultaneous saves still overwrite each other. Only sending changed keys fixes that | none | Session 2026-11-16 |
 | **Seed scripts are the source of truth for system rows** and must upsert, not skip; they never touch campaign rows | none until first-deploy T5b | Session 2026-11-15 |
 | **Releases are tags, not branches**: tags can't move, so they stay accurate rollback points | none (documented in `docs/deployment.md`) | Session 2026-11-15 |
 | **Run the real start path against an EMPTY database before trusting it.** Doing so found `env.py` crashing on a `%` in DATABASE_URL (ConfigParser interpolation) — every deploy would have failed | guard test (`test_schema_ownership.py`), CI (`alembic upgrade head` + `alembic check` from scratch) | Session 2026-11-16 |

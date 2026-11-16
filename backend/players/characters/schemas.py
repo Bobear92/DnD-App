@@ -46,7 +46,11 @@ class CharacterUpdate(BaseModel):
     wisdom: Optional[int] = None
     charisma: Optional[int] = None
 
+    # MERGED into the stored blob (top-level keys), never a replacement: a key missing from the
+    # request is left as it is. To delete keys, list them in character_data_remove. See
+    # update_character and docs/deployment.md › How a deploy can lose data.
     character_data: Optional[Dict[str, Any]] = None
+    character_data_remove: Optional[List[str]] = None
     appearance: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
     backstory: Optional[str] = None

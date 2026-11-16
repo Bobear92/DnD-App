@@ -155,6 +155,19 @@ def update_character(character_id: int, character_data: CharacterUpdate | Charac
 
     update_fields = character_data.model_dump(exclude_unset=True)
 
+    # character_data is MERGED into what is stored, never replaced. The sheet sends the whole blob,
+    # so under replace semantics a frontend bug that dropped a key (inventory, feats, spell_slots…)
+    # erased it from every character the next time its player saved — silently, spreading over days.
+    # Now a missing key is left alone; deleting one is explicit, via character_data_remove. The merge
+    # is shallow: a nested value (inventory list, rune_items map) is still replaced whole.
+    incoming = update_fields.pop("character_data", None)
+    remove = update_fields.pop("character_data_remove", None) or []
+    if incoming is not None or remove:
+        merged = {**(character.character_data or {}), **(incoming or {})}
+        for key in remove:
+            merged.pop(key, None)
+        update_fields["character_data"] = merged  # a new dict, so SQLAlchemy sees the JSONB change
+
     # XP tops out at the level-20 threshold. Past it XP means nothing — there is no level 21
     # to earn — so an over-award is clamped rather than left to run away. Clamped HERE, not
     # only in the UI, so it holds for any caller (the frontend clamps too, so the GM never

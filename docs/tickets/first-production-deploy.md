@@ -4,7 +4,7 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 4/12 done (T1–T4). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** 5/12 done (T1–T4, T5a). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
 **Decisions:**
@@ -78,17 +78,27 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [ ] Raise `access_token_expire_minutes` for production (via env var) so a game session doesn't log players
   out. The real expiry handling stays on the "Not Yet Built" list.
 
-## T5a — Merge `character_data` on save instead of replacing it
-- [ ] `update_character` (`backend/players/characters/service.py`) assigns the incoming `character_data` whole,
+## T5a — Merge `character_data` on save instead of replacing it ✅
+- **Landed 2026-11-16.** `update_character` merges incoming top-level keys into the stored blob (shallow: nested
+  values are still replaced whole); new optional `character_data_remove: [keys]` deletes explicitly (and wins over a
+  value sent in the same request); `null` is still stored as `null`. Frontend `characterService.toUpdatePayload` turns
+  top-level keys set to `undefined` (which JSON would silently drop — the old way to clear a key) into
+  `character_data_remove`, so existing "clear it" writes keep their meaning. Audit: every frontend writer spreads the
+  stored blob; no top-level removal by omission or rest-destructuring exists (the only removals are nested). Backend
+  writers (rest, initiative, seeds) assign directly and are unaffected. Tests: `test_character_data_merge.py` (13),
+  `characterService.test.js` (7).
+- **Correction to the plan:** merging does *not* reduce "GM and player save at once" losses — the sheet sends its
+  whole (possibly stale) copy, so the later save still overwrites the earlier one's values. Fixing that means sending
+  only changed keys (`autoSaveClassPatch` could send just its patch now that the backend merges). Not done; follow-up.
+- [x] `update_character` (`backend/players/characters/service.py`) assigns the incoming `character_data` whole,
   so a frontend bug that drops a key wipes it for every character as players save, silently and over days
   (see [deployment.md › How a deploy can lose data](../deployment.md#how-a-deploy-can-lose-data)). Merge the
   incoming top-level keys into the stored blob instead.
-- [ ] Find every flow that removes a key **on purpose** and give it an explicit delete (e.g. a key set to `null`
+- [x] Find every flow that removes a key **on purpose** and give it an explicit delete (e.g. a key set to `null`
   means delete, or a `remove_keys` list). Audit the frontend's `character_data` writers first; this is where the
   design risk is.
 - guard: backend tests: a save missing a key keeps it; an explicit delete removes it; the rest/initiative/level-up
   paths still produce the same results.
-- Also reduces the "GM and player save at once, last write wins" loss, though it doesn't eliminate it for the same key.
 
 ## T5b — Seed scripts upsert
 - [ ] Make every seed script treat its file as the source of truth for `owner_type='system'` rows: update an existing

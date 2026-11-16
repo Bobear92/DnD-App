@@ -15,6 +15,10 @@ backend/tests/
                                     #   (so `alembic check` sees every model) and escapes "%" in DATABASE_URL; start.sh migrates before
                                     #   uvicorn with set -euo pipefail and no --reload; requirements.txt has no pytest but keeps httpx;
                                     #   .python-version matches CI's python-version. Deploy ticket T3
+├── test_character_data_merge.py    # 13 tests: PUT merges character_data (a save missing keys keeps them — the T5a bug; sent keys overwrite;
+                                    #   shallow: nested values replaced whole; null stored as null; full-blob round trip; GM saves merge) +
+                                    #   character_data_remove (deletes listed keys, works alone, missing key harmless, wins over a sent value,
+                                    #   not echoed, 403 for non-owner, must be a list → 422). Deploy ticket T5a
 ├── test_cors.py                    # 9 tests: CORS origins come from settings (ALLOWED_ORIGINS) — TestCorsMiddleware (each configured
                                     #   origin passes a preflight with credentials; an unlisted origin gets 400 and no allow-origin header;
                                     #   never "*") + TestAllowedOriginsParsing (dev default, comma/space/trailing-slash parsing, read from env,

@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy plan, T1–T4
+title: First production deploy plan, T1–T5a
 date: 2026-11-15
 started: 17:50
-branch: feature/r2-uploads
+branch: feature/character-data-merge
 area: tooling
 tags: [docs, build, consolidation, deployment, data-safety, migration, seed-data, user-rule, guard-test]
 issues: []
-summary: First prod deploy plan + T1 API URL, T2 CORS env, T3 start.sh/alembic owns schema, T4 uploads to Cloudflare R2
-turns: 19
+summary: Prod deploy plan + T1 API URL, T2 CORS, T3 start.sh/alembic, T4 R2 uploads, T5a merge-on-save character_data
+turns: 24
 stepped_in: true
-last_uuid: f9d1e48a-d131-4eb3-aecc-af4fc4b0a08c
+last_uuid: 7101fca8-0038-4397-9da3-13844d30e7a0
 ---
 
-# First production deploy plan, T1–T4
+# First production deploy plan, T1–T5a
 
 ## Summary
 
@@ -42,6 +42,9 @@ last_uuid: f9d1e48a-d131-4eb3-aecc-af4fc4b0a08c
   on missing R2 creds; frontend `VITE_UPLOADS_URL`; fixed session-image delete path traversal; tests use a temp uploads dir.
   `test_file_storage.py` (25, R2 via fake client). Backend 1027 / frontend 3925 green; live dev round-trip (upload, serve,
   replace removes old, delete, gif refused). Not yet proven against real R2 (needs Robert's bucket; T6 step).
+- **T5a:** PUT merges `character_data` (shallow) + explicit `character_data_remove`; frontend `toUpdatePayload` maps
+  top-level `undefined` keys to removals. Audit found no top-level removal by omission. Backend 1040 / frontend 3932 green;
+  live API check and a real browser autosave (inspiration +1) both kept untouched keys.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -60,6 +63,8 @@ last_uuid: f9d1e48a-d131-4eb3-aecc-af4fc4b0a08c
   output (stayed local); later scratch scripts redact URLs.
 - T4: the fake S3 client's offset-based pagination failed the folder-delete test; real S3 tokens survive deletes, but the
   code was restructured to list-then-batch-delete so it doesn't depend on cursor semantics.
+- T5a: the plan said merging "reduces last-write-wins"; building it showed it doesn't (each save carries a full stale
+  copy). Corrected in the ticket/docs/learnings. Browser check first missed that the sheet opens on Narrative.
 - The first Playwright pass missed encyclopedia/feats because the tabs are buttons, not ARIA tabs; fixed in the script.
 
 ## Decisions
@@ -76,7 +81,9 @@ last_uuid: f9d1e48a-d131-4eb3-aecc-af4fc4b0a08c
 
 ## Open threads
 
-- **Next: T5a** (merge-on-save for `character_data`) or T5 (token lifetime stopgap).
+- **Next: T5** (token lifetime stopgap), then T5b (seed upserts). T6/T7 need Robert's Render + Cloudflare accounts.
+- Follow-up from T5a: send only changed keys (e.g. `autoSaveClassPatch` sends just its patch) to stop concurrent saves
+  overwriting each other.
 - R2 follow-ups: prove against the real bucket in T6; R2 has no automatic backups (versioning/periodic copy later);
   hidden maps' file URLs stay reachable to anyone holding them (signed URLs if that ever matters).
 - Local venv is Python 3.14 while CI/prod pin 3.12; works today, worth aligning eventually.
@@ -421,3 +428,90 @@ last_uuid: f9d1e48a-d131-4eb3-aecc-af4fc4b0a08c
 > - **No data migration needed.** The database still stores `uploads/characters/3/<uuid>.png`, and in R2 that same string is the file's name in the bucket. In production the frontend just loads files from the bucket's public address (` …
 
 **Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/upload_roundtrip.py` · **Commands run:** 4
+
+### 20. 2026-11-16 13:34
+
+**Robert:**
+> /ship
+
+**Claude:**
+> T4 is on `main` as commit `195f8ef` and pushed. `feature/r2-uploads` is deleted, and the working tree is clean.
+> 
+> - **Before shipping:** backend 1,027 and frontend 3,925 tests passed. The feat-coverage gate passed, and the real upload round-trip worked on the dev server.
+> - **In the commit:** the new storage module and its tests, the five old storage modules deleted, the frontend `VITE_UPLOADS_URL` change, and all the docs plus the session log.
+> - **Still running:** the CI check for this push. It's the first time CI installs `boto3`, and I'll report the result when it finishes.
+> 
+> Four of the 12 deploy tickets are done. Next is either:
+> - **T5a, merge-on-save for `character_data`:** the fix that stops a frontend bug from silently erasing saved character data. It's the more important one.
+> - **T5, the login-lifetime stopgap:** a small setting change, so players aren't logged out mid-session.
+
+**Commands run:** 4
+
+### 21. 2026-11-16 13:36
+
+**Robert:**
+> Lets go forward with T5a
+
+**Claude:**
+> The docs are updated, and no agent or command describes the old save behaviour. I'm waiting for the backend suite, which tells us whether any existing test relied on "replace". Then I'll restart the backend and run the scenario against the live server.
+
+**Files edited:** `backend/players/characters/schemas.py`, `backend/players/characters/service.py`, `frontend/src/characters/characterService.js`, `backend/tests/test_character_data_merge.py`, `frontend/src/characters/characterService.test.js`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t5a-docs.mjs` · **Commands run:** 20
+
+### 22. 2026-11-16 13:45
+
+**Robert:**
+> <task-notification>
+> <task-id>b790wxowc</task-id>
+> <tool-use-id>toolu_01YbPEkYK1PfNBXbZm5uY5LN</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\b790wxowc.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for CI on the T4 push" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> CI for the T4 push (`195f8ef`) passed: both jobs succeeded with `boto3` installed. The T5a backend suite is still running locally.
+
+**Commands run:** 1
+
+### 23. 2026-11-16 13:51
+
+**Robert:**
+> what next?
+
+**Claude:**
+> T5a isn't finished yet. Two steps are left before it's ready to ship:
+> 
+> 1. **The full backend suite is still running.** It's the important check here, because it shows whether any existing test depended on the old "replace the whole blob" behaviour. I'll get a notification when it finishes.
+> 2. **A live check:** restart the backend, then on the real server save a character with a key missing, confirm the key survives, and confirm an explicit remove deletes it.
+> 
+> After that it's ready for `/ship`.
+> 
+> **Then the remaining tickets, in order:**
+> - **T5, the login-lifetime stopgap.** Small: logins expire after 30 minutes and the app doesn't handle it, so players get kicked out mid-session. The fix makes the lifetime a setting with a longer value in production.
+> - **T5b, seed scripts update existing rows.** Today `seed_spells.py` and possibly others skip rows that already exist, so a corrected spell …
+
+### 24. 2026-11-16 13:54
+
+**Robert:**
+> <task-notification>
+> <task-id>be62zpv6k</task-id>
+> <tool-use-id>toolu_01624mRYwx7V8w47DYYRRdEo</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\be62zpv6k.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> T5a is done on the branch `feature/character-data-merge`, not committed yet. Saving a character no longer erases fields the save didn't include.
+> 
+> - **Backend:** all 1,040 tests pass (1 skipped: a check that only runs in CI). No existing test depended on the old "replace the whole blob" behaviour.
+> - **Frontend:** all 3,932 tests pass.
+> - **Live server:** on a temporary character, I saved only `current_hp`. `inventory` and `feats` survived, an explicit remove of `feats` deleted only `feats`, and a re-read from the database matched. I deleted the temporary character afterwards.
+> 
+> The "failed" notice that just came in is the previous server instance being stopped by the restart, as before. The dev backend is up.
+> 
+> When you run `/ship`, it will also drive a real character-sheet save in the browser, since `characterService` changed.
+> 
+> After that, T5 (login lifetime) and T5b (seed scripts update ex …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/merge_live.py` · **Commands run:** 3

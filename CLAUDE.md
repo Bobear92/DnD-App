@@ -301,6 +301,7 @@ characters
   id, name, race, char_class, level, background, alignment,
   strength, dexterity, constitution, intelligence, wisdom, charisma,
   character_data (JSONB),   ← class-specific MECHANICAL state; shape varies by class. Per-key rationale: docs/schema-notes.md
+                              PUT MERGES top-level keys (a missing key is kept); delete with `character_data_remove: [keys]`
       hp_rolls (int)        ← CON-independent max-HP base. Effective max = hp_rolls + level×CON-mod + per-level bonuses, computed
                               at read time (frontend combatBonuses.effectiveMaxHp, backend _effective_max_hp — one shared fixture).
                               Legacy characters stored hp_max (CON baked in) instead.
@@ -696,7 +697,7 @@ Campaign PUT accepts all settings fields: `use_alignment`, `ability_score_method
 | POST | /api/characters | Yes |
 | GET | /api/characters/campaign/{id} | Yes (member) |
 | GET | /api/characters/{id} | Yes (owner or GM) |
-| PUT | /api/characters/{id} | Yes (owner or GM); accepts `appearance` (the physical-description JSONB; a write REPLACES the object, which is what lets a cleared field clear); uses `CharacterGmUpdate` — only GM can set `gm_notes`/`is_visible_to_players`; GM cannot overwrite `personal_notes`; `experience_points` is clamped to [0, 355_000] |
+| PUT | /api/characters/{id} | Yes (owner or GM); `character_data` is MERGED into the stored blob (top-level, shallow) — `character_data_remove: [keys]` deletes; accepts `appearance` (the physical-description JSONB; a write REPLACES the object, which is what lets a cleared field clear); uses `CharacterGmUpdate` — only GM can set `gm_notes`/`is_visible_to_players`; GM cannot overwrite `personal_notes`; `experience_points` is clamped to [0, 355_000] |
 | DELETE | /api/characters/{id} | Yes (owner or GM) |
 | PATCH | /api/characters/{id}/visibility | Yes (GM of campaign) |
 | POST | /api/characters/{id}/image | Yes (owner or GM, multipart) |

@@ -3,6 +3,26 @@ import { API_BASE, uploadUrl } from '@/lib/api';
 
 const API_URL = `${API_BASE}/characters`;
 
+/**
+ * The backend MERGES character_data into what is stored: a key missing from the request is left
+ * alone (so a draft that lost a key can't erase it). Deleting a key must be explicit. The sheet
+ * clears a key by setting it to `undefined`, which JSON.stringify would silently drop — so those
+ * keys are turned into `character_data_remove` here, keeping every existing "clear it" write working.
+ * Exported for tests.
+ */
+export function toUpdatePayload(update) {
+  const cd = update?.character_data;
+  if (!cd || typeof cd !== 'object') return update;
+  const remove = Object.keys(cd).filter((k) => cd[k] === undefined);
+  if (!remove.length) return update;
+  const kept = Object.fromEntries(Object.entries(cd).filter(([, v]) => v !== undefined));
+  return {
+    ...update,
+    character_data: kept,
+    character_data_remove: [...new Set([...(update.character_data_remove ?? []), ...remove])],
+  };
+}
+
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
@@ -47,7 +67,7 @@ const characterService = {
 
   updateCharacter: async (characterId, characterData) => {
     try {
-      const response = await api.put(`/${characterId}`, characterData);
+      const response = await api.put(`/${characterId}`, toUpdatePayload(characterData));
       return { success: true, data: response.data };
     } catch (error) {
       return { success: false, error: error.response?.data?.detail || 'Failed to update character' };
