@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE, uploadUrl } from '@/lib/api';
 
-const BASE_URL = 'http://localhost:8000/api/gm/campaigns';
+const BASE_URL = `${API_BASE}/gm/campaigns`;
 
 const api = axios.create({ baseURL: BASE_URL });
 
@@ -143,6 +144,5 @@ const sessionService = {
 export default sessionService;
 
 export function mapSessionImageUrl(imagePath) {
-  if (!imagePath) return null;
-  return `http://localhost:8000/${imagePath}`;
+  return uploadUrl(imagePath);
 }

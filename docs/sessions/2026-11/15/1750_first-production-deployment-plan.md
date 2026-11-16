@@ -1,23 +1,23 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deployment plan
+title: First production deploy plan and T1
 date: 2026-11-15
 started: 17:50
-branch: feature/production-deploy-plan
+branch: feature/api-base-url
 area: tooling
-tags: [docs, deployment, data-safety, migration, seed-data, user-rule]
+tags: [docs, build, deployment, data-safety, migration, seed-data, user-rule, guard-test]
 issues: []
-summary: Planned the first prod deploy: Render, main→production+tags release flow, data-safety rules, 12-ticket worklist
-turns: 7
+summary: Planned first prod deploy (Render, production+tags, data-safety, 12 tickets); T1 one API base URL + guard
+turns: 9
 stepped_in: true
-last_uuid: 79023811-f723-4b16-abf5-e570f5399624
+last_uuid: da6ed6c7-4ba7-4520-a917-6f87eb25a939
 ---
 
-# First production deployment plan
+# First production deploy plan and T1
 
 ## Summary
 
-- Discussion-only session planning the app's first production deploy; no product code changed.
+- Planned the app's first production deploy (docs shipped as c463eba), then built T1.
 - New `docs/deployment.md`: Render hosting (Static Site + Python Web Service + managed Postgres), env vars,
   `main` → `production` + `vX.Y.Z` tag release/rollback/hotfix flow, rollback-safe (expand → contract) migrations,
   how data persists between deploys, how a deploy can lose data, data operations.
@@ -26,6 +26,10 @@ last_uuid: 79023811-f723-4b16-abf5-e570f5399624
 - `docs/learnings.md`: new "Production and data safety" category + 3 unenforced-lesson rows. CLAUDE.md: one docs-index row.
 - Codebase findings that shaped the plan: 22 hardcoded `localhost:8000` URLs; CORS hardcoded in `main.py`;
   uploads on local disk; `update_character` replaces `character_data` whole; `seed_spells.py` skips existing rows.
+- **T1:** `frontend/src/lib/api.js` (`API_ORIGIN`/`API_BASE` from `VITE_API_URL`, `uploadUrl`); 17 files rewired by a
+  match-exactly-once codemod; guard `noHardcodedApiUrl.test.js` + `api.test.js` (9 tests); `.env.example`; agent updated.
+  Verified: prod build with `VITE_API_URL` set bakes it in with no `localhost:8000`; Playwright drive hit every service
+  family (68 calls, 0 failures, uploads render).
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -37,6 +41,9 @@ last_uuid: 79023811-f723-4b16-abf5-e570f5399624
 - Claude made a self-referential edit in `deployment.md` (a line pointing to its own section) and had to revert it.
 - The `character_data` whole-blob replacement was found only when asked "can data be lost?". It belonged in the
   first pre-deploy list.
+- **Mass vitest failure was the shell, not the code.** Every suite failed with "reading 'config'" after the cwd became
+  lowercase `c:/`; took a stash-everything run to prove it, then PowerShell (`C:/`) passed. Now in learnings + memory.
+- The first Playwright pass missed encyclopedia/feats because the tabs are buttons, not ARIA tabs; fixed in the script.
 
 ## Decisions
 
@@ -46,11 +53,12 @@ last_uuid: 79023811-f723-4b16-abf5-e570f5399624
 - Migrations must be rollback-safe (expand → contract); back up and rehearse on a prod copy before any migration release.
 - Data never flows dev → prod; prod → dev only deliberately.
 - Merge-on-save for `character_data` is a pre-launch fix (T5a), not a nice-to-have.
+- T1 kept narrow: the per-service duplicated axios + token interceptor was NOT consolidated (follow-up, pairs with token expiry).
 
 ## Open threads
 
-- **Next: T1** (one `API_BASE` module from `VITE_API_URL`, guard test against `localhost:8000`, update
-  `frontend-page-expert` agent) on a fresh `feature/api-base-url` branch.
+- **Next: T2** (CORS origins + `debug` default from env in `backend/main.py` / `config.py`), fresh branch off `main`.
+- Follow-up: one shared axios client (every service repeats the token interceptor); natural with token-expiry work.
 - Open decisions: uploads (Render disk vs Cloudflare R2, needed by T4); tier (free vs ~$13/mo paid, needed by T6).
 - CLAUDE.md Development Workflow still calls `main` "the deployable trunk"; rewrite in T9 once `production` exists.
 - Robert can create the Render account and connect GitHub any time.
@@ -200,3 +208,34 @@ last_uuid: 79023811-f723-4b16-abf5-e570f5399624
 > - **It's small and safe.** One new module (`API_BASE` from `VITE_API_URL`, falling back to localhost), every caller imports it, and a guard test stops `localhost:8000` from creeping back. Locally nothing changes, so it can go to `main` on its own long before any deploy.
 > 
 > **Before T1, ship the planning docs.** They're on `feature/production-deploy-plan` and uncommitted. Run `/ship` to get them onto `main`, then I'll branch `feature/api-base-url` from the fresh `main` for T1. T …
+
+### 8. 2026-11-15 18:20
+
+**Robert:**
+> yep lets ship the docs now. /ship
+
+**Claude:**
+> The deployment plan is on `main` as commit `c463eba` and pushed. `feature/production-deploy-plan` is deleted, and the working tree is clean.
+> 
+> - **Checks:** all 3,914 frontend tests passed. I skipped the backend coverage gate and the run-the-app check because no code changed.
+> - **Commit contents:** `docs/deployment.md`, the 12-ticket worklist, the new "Production and data safety" section in `docs/learnings.md`, the docs-index line in CLAUDE.md, and the filled-in session log.
+> - **Also in the commit:** two new session tags in TAGS.md (`deployment` and `data-safety`), and log updates left uncommitted by two earlier sessions.
+> - **Agents:** `frontend-page-expert.md` still tells new services to hardcode `localhost:8000`. That's correct until T1 changes it, so I added updating it to the T1 checklist.
+> 
+> Next is T1, the single API base URL, on a fresh `feature/api-base-url` branch. Say when to star …
+
+**Files edited:** `docs/tickets/first-production-deploy.md`, `docs/sessions/TAGS.md`, `docs/sessions/2026-11/15/1750_first-production-deployment-plan.md` · **Commands run:** 5
+
+### 9. 2026-11-15 19:11
+
+**Robert:**
+> Lets start T1
+
+**Claude:**
+> T1 is done and on the branch `feature/api-base-url`, not committed yet. The frontend now gets the backend's address from one place, so a deployed build will call the deployed backend instead of `localhost:8000`.
+> 
+> - **One shared module:** the new [frontend/src/lib/api.js](frontend/src/lib/api.js) reads `VITE_API_URL` when the app is built and falls back to `http://localhost:8000` when it isn't set. Locally nothing changes. It also has `uploadUrl(path)`, which builds the address for uploaded images and audio.
+> - **17 files updated:** every service and component that had the address typed in now imports it from that module. That includes the seven separate bits of code that each built upload URLs themselves. When uploads move to a disk or R2 (T4), only `uploadUrl` changes.
+> - **Guard test:** [noHardcodedApiUrl.test.js](frontend/src/test/noHardcodedApiUrl.test.js) fails the build if the addres …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t1-codemod.mjs`, `frontend/src/lib/api.js`, `frontend/src/test/noHardcodedApiUrl.test.js`, `frontend/src/lib/api.test.js`, `docs/frontend-map.md`, `.claude/agents/frontend-page-expert.md`, `frontend/.env.example`, `docs/tickets/first-production-deploy.md`, `docs/learnings.md`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/feedback_vitest_drive_letter.md` · **Commands run:** 22

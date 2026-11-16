@@ -9,7 +9,10 @@ frontend/src/
 ├── App.jsx                      # Router: providers (AuthProvider, CampaignProvider) + all routes
 ├── index.css                    # Tailwind import + shadcn CSS variables (light/dark)
 ├── lib/
-│   └── utils.js                 # cn() helper for class merging
+│   ├── utils.js                 # cn() helper for class merging
+│   ├── api.js                   # THE backend address: API_ORIGIN / API_BASE from VITE_API_URL (dev fallback :8000),
+│   │                            #   uploadUrl(path) for every uploads/... image/audio URL. Tested by api.test.js;
+│   │                            #   src/test/noHardcodedApiUrl.test.js fails on a backend URL hardcoded anywhere else
 ├── components/
 │   └── ui/                      # shadcn/ui components: Button, Card, Dialog, Input, Label,
 │                                #   Badge, Textarea, Select, Tabs (do not edit)

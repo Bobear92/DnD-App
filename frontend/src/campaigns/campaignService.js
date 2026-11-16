@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_BASE } from '@/lib/api';
 
-const API_URL = 'http://localhost:8000/api/gm/campaigns';
-const AUTH_API_URL = 'http://localhost:8000/api/auth';
+const API_URL = `${API_BASE}/gm/campaigns`;
+const AUTH_API_URL = `${API_BASE}/auth`;
 
 const authConfig = () => {
   const token = localStorage.getItem('token');

@@ -1,7 +1,7 @@
 import axios from 'axios';
+import { API_BASE, uploadUrl } from '@/lib/api';
 
-const BASE_URL = 'http://localhost:8000/api/gm/campaigns';
-const UPLOADS_URL = 'http://localhost:8000';
+const BASE_URL = `${API_BASE}/gm/campaigns`;
 
 const api = axios.create({ baseURL: BASE_URL });
 
@@ -12,8 +12,7 @@ api.interceptors.request.use((config) => {
 });
 
 export function mapNpcImageUrl(imagePath) {
-  if (!imagePath) return null;
-  return `${UPLOADS_URL}/${imagePath}`;
+  return uploadUrl(imagePath);
 }
 
 const npcService = {

@@ -23,8 +23,9 @@ You are an expert on this D&D app's frontend architecture. You build new fronten
 ### Service Layer (`<module>Service.js`)
 ```js
 import axios from 'axios';
-
-const API_BASE = 'http://localhost:8000/api';
+// NEVER hardcode the backend URL — it comes from VITE_API_URL via @/lib/api
+// (noHardcodedApiUrl.test.js fails the build otherwise). Upload paths → uploadUrl(path).
+import { API_BASE } from '@/lib/api';
 
 // Always attach the JWT from localStorage
 axios.interceptors.request.use(config => {

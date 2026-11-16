@@ -23,8 +23,7 @@ import {
   Calendar, FileText, Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const BACKEND = 'http://localhost:8000';
+import { uploadUrl } from '@/lib/api';
 
 // Returns { prefix: string|null, visibleEras: EraDate[] }
 // Uses month_name from era_dates (backend-computed) so player-hidden eras don't leak month names.
@@ -1055,7 +1054,7 @@ export default function SessionDetail() {
 
   async function uploadImage(file) {
     const { image_url } = await sessionService.uploadImage(campaignId, sessionId, file);
-    return `${BACKEND}/${image_url}`;
+    return uploadUrl(image_url);
   }
 
   async function handleMusicUpload(file) {

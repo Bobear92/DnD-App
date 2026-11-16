@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE } from '@/lib/api';
 
-const BASE_URL = 'http://localhost:8000/api/gm/campaigns';
+const BASE_URL = `${API_BASE}/gm/campaigns`;
 
 const api = axios.create({
   baseURL: BASE_URL,

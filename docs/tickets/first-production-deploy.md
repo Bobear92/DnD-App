@@ -4,7 +4,7 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 0/12 done. Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** 1/12 done (T1). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
 **Decisions still open (settle before the ticket that needs them):**
@@ -13,8 +13,12 @@ one code change here that protects real players' data, so don't drop it to save 
 
 Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 onward is setup on Render and GitHub.
 
-## T1 — One API base URL for the frontend
-- [ ] The API URL is hardcoded as `'http://localhost:8000/...'` **22 times** across the service files and a few
+## T1 — One API base URL for the frontend ✅
+- **Landed 2026-11-15.** `src/lib/api.js` exports `API_ORIGIN`, `API_BASE` and `uploadUrl(path)`; all 17 files
+  import it (the 7 hand-written upload-URL builders now go through `uploadUrl`, which is the seam T4 will swap).
+  Guard: `src/test/noHardcodedApiUrl.test.js` (with self-tests); unit tests: `src/lib/api.test.js`. A production
+  build with `VITE_API_URL` set bakes that URL in and contains no `localhost:8000`. `frontend/.env.example` added.
+- [x] The API URL is hardcoded as `'http://localhost:8000/...'` **22 times** across the service files and a few
   components (`authService.js`, `campaignService.js`, `characterService.js`, `classService.js`,
   `referenceService.js`, `encounterService.js`, `encyclopediaService.js`, `featService.js`, `SpellList.jsx`,
   `CharacterDetail.jsx`, …). Add one module, e.g. `src/lib/api.js`, exporting
@@ -22,7 +26,7 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
   (`characterService.js:236` builds `http://localhost:8000/${path}`). Every caller imports it.
 - guard: a test that fails if `localhost:8000` appears in `src/` outside that module (same style as
   `noLevelAnnotations.test.js`), so it can't creep back.
-- [ ] Update `.claude/agents/frontend-page-expert.md`, which tells new services to hardcode `localhost:8000`.
+- [x] Update `.claude/agents/frontend-page-expert.md`, which tells new services to hardcode `localhost:8000`.
 - done: `npm test` green; the app works locally without `VITE_API_URL` set.
 
 ## T2 — CORS and settings from the environment

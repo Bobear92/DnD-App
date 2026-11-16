@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { API_BASE, uploadUrl } from '@/lib/api';
 
-const API_URL = 'http://localhost:8000/api/characters';
+const API_URL = `${API_BASE}/characters`;
 
 const api = axios.create({
   baseURL: API_URL,
@@ -232,5 +233,4 @@ const characterService = {
 
 export default characterService;
 
-export const mapCharacterImageUrl = (path) =>
-  path ? `http://localhost:8000/${path}` : null;
+export const mapCharacterImageUrl = (path) => uploadUrl(path);

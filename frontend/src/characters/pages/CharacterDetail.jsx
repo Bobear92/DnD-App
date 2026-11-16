@@ -97,6 +97,7 @@ import {
 import { cn } from '@/lib/utils';
 import { formatBonus, formatAbilityMod } from '@/characters/components/shared/abilityMath';
 import { buildCharacterContext } from '@/characters/components/shared/characterContext';
+import { uploadUrl } from '@/lib/api';
 
 // Racial rest-resource keys that are HP mechanics — tracked in the HP & Movement
 // sub-tab, between Max HP and Hit Dice.
@@ -1168,7 +1169,7 @@ export default function CharacterDetail() {
                     characterNpcs.map(link => (
                       <div key={link.id} className="flex items-center gap-3 rounded-md border bg-muted/20 p-3">
                         {link.npc_image_path ? (
-                          <img src={`http://localhost:8000/${link.npc_image_path}`} alt={link.npc_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                          <img src={uploadUrl(link.npc_image_path)} alt={link.npc_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
                         ) : (
                           <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
                             <User className="h-5 w-5 text-muted-foreground" />

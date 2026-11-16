@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useSpellFocus } from '@/characters/components/spells/SpellFocusContext';
 import { useCampaign } from '@/campaigns/CampaignContext';
 import { summarizeUpcast, summarizeCantrip } from '@/characters/components/spells/spellUpcast';
+import { API_BASE } from '@/lib/api';
 
 const LEVEL_LABELS = {
   0: 'Cantrips',
@@ -44,7 +45,7 @@ async function fetchSpellCatalog(campaignId, edition) {
     if (campaignId) params.set('campaign_id', campaignId);
     if (edition) params.set('edition', edition);
     const qs = params.toString() ? `?${params}` : '';
-    const res = await fetch(`http://localhost:8000/api/encyclopedia/spells${qs}`, {
+    const res = await fetch(`${API_BASE}/encyclopedia/spells${qs}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) return [];

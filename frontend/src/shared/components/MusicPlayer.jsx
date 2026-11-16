@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { Music, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const BACKEND_URL = 'http://localhost:8000';
+import { uploadUrl } from '@/lib/api';
 
 const AUDIO_EXT = /\.(mp3|ogg|wav|m4a|aac|flac)(\?.*)?$/i;
 const VIDEO_EXT = /\.(mp4|webm|mov)(\?.*)?$/i;
@@ -55,7 +54,7 @@ export function detectSource(src) {
 
   // Uploaded file persisted relative to the backend.
   if (value.startsWith('uploads/')) {
-    const url = `${BACKEND_URL}/${value}`;
+    const url = uploadUrl(value);
     return VIDEO_EXT.test(value) ? { type: 'video', url } : { type: 'audio', url };
   }
 

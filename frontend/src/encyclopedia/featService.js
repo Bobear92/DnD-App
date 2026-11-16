@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_ORIGIN } from '@/lib/api';
 
 // Feats are mounted at /feats (no /api prefix) in the backend.
-const api = axios.create({ baseURL: 'http://localhost:8000' });
+const api = axios.create({ baseURL: API_ORIGIN });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
