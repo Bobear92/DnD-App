@@ -3,20 +3,26 @@ Seed script: fetches all 5e spells from the D&D 5e API and populates the spells 
 
 Run: python seed_spells.py
 
-Uses httpx (already in requirements). Skips spells that already exist (by name +
-owner_type=system). Safe to re-run.
+UPSERTS (deploy ticket T5b): a spell already in the database is brought in line with the API —
+description, level, school, range, components and the rest — so a corrected text reaches an
+already-seeded database. Only system rows are touched (shared/seeding.py); campaign overrides are
+never matched. The Artificer tag (seed_artificer_spells.py's list) is applied here too, so a re-run
+doesn't strip it. Safe to re-run.
 """
 import sys
 import os
 import time
+from collections import Counter
 sys.path.insert(0, os.path.dirname(__file__))
 
 import httpx
 from shared.database import SessionLocal
 from shared.encyclopedia.spells.models import Spell
-from shared.enums import OwnerType
+from shared.seeding import upsert_system_row, summary
+from seed_artificer_spells import ARTIFICER_SPELLS
 
 API_BASE = "https://www.dnd5eapi.co"
+_ARTIFICER = set(ARTIFICER_SPELLS)
 
 
 def _fmt_components(spell_data: dict) -> str:
@@ -38,79 +44,57 @@ def _fetch_spell_detail(client: httpx.Client, index: str) -> dict | None:
         return None
 
 
-def seed_spells():
+def spell_values(data: dict) -> dict:
+    """The columns a system spell gets from its API record (everything but name/edition)."""
+    classes = [c["name"] for c in data.get("classes", [])]
+    if data["name"] in _ARTIFICER and "Artificer" not in classes:
+        classes.append("Artificer")  # the SRD never tags Artificer; see seed_artificer_spells.py
+    higher_level_parts = data.get("higher_level", [])
+    return {
+        "level": data["level"],
+        "school": data["school"]["name"],
+        "casting_time": data.get("casting_time", ""),
+        "range": data.get("range", ""),
+        "components": _fmt_components(data),
+        "duration": data.get("duration", ""),
+        "description": "\n\n".join(data.get("desc", [])),
+        "higher_level": "\n\n".join(higher_level_parts) if higher_level_parts else None,
+        "ritual": data.get("ritual", False),
+        "concentration": data.get("concentration", False),
+        "classes": ", ".join(classes) or "Unknown",
+    }
+
+
+def seed_spells(client=None, delay=0.05):
     db = SessionLocal()
+    own_client = client is None
+    client = client or httpx.Client(timeout=15, follow_redirects=True)
     try:
-        with httpx.Client(timeout=15, follow_redirects=True) as client:
-            print("Fetching spell list from D&D 5e API...")
-            r = client.get(f"{API_BASE}/api/spells")
-            r.raise_for_status()
-            spell_list = r.json().get("results", [])
-            print(f"Found {len(spell_list)} spells.")
+        print("Fetching spell list from D&D 5e API...")
+        r = client.get(f"{API_BASE}/api/spells")
+        r.raise_for_status()
+        spell_list = r.json().get("results", [])
+        print(f"Found {len(spell_list)} spells.")
 
-            created = 0
-            skipped = 0
+        counts = Counter()
+        for i, entry in enumerate(spell_list, start=1):
+            data = _fetch_spell_detail(client, entry["index"])
+            if not data:
+                counts["skipped"] += 1
+                continue
+            _, status = upsert_system_row(db, Spell, {"name": data["name"], "edition": "5e"}, spell_values(data))
+            counts[status] += 1
+            if i % 25 == 0:
+                db.commit()
+                print(f"  ...{i} spells processed")
+            time.sleep(delay)  # be polite to the API
 
-            for i, entry in enumerate(spell_list):
-                index = entry["index"]
-                name = entry["name"]
-
-                existing = db.query(Spell).filter(
-                    Spell.name == name,
-                    Spell.edition == "5e",
-                    Spell.owner_type == OwnerType.system,
-                    Spell.owner_id.is_(None),
-                ).first()
-
-                data = _fetch_spell_detail(client, index)
-                if not data:
-                    skipped += 1
-                    continue
-
-                classes = ", ".join(c["name"] for c in data.get("classes", []))
-                description = "\n\n".join(data.get("desc", []))
-                higher_level_parts = data.get("higher_level", [])
-                higher_level = "\n\n".join(higher_level_parts) if higher_level_parts else None
-
-                if existing:
-                    # Update fields that may be missing from earlier seed runs
-                    existing.higher_level = higher_level
-                    existing.ritual = data.get("ritual", False)
-                    existing.concentration = data.get("concentration", False)
-                    existing.components = _fmt_components(data)
-                    skipped += 1
-                else:
-                    spell = Spell(
-                        name=data["name"],
-                        edition="5e",
-                        level=data["level"],
-                        school=data["school"]["name"],
-                        casting_time=data.get("casting_time", ""),
-                        range=data.get("range", ""),
-                        components=_fmt_components(data),
-                        duration=data.get("duration", ""),
-                        description=description,
-                        higher_level=higher_level,
-                        ritual=data.get("ritual", False),
-                        concentration=data.get("concentration", False),
-                        classes=classes or "Unknown",
-                        owner_type=OwnerType.system,
-                        owner_id=None,
-                    )
-                    db.add(spell)
-                    created += 1
-
-                if created % 25 == 0:
-                    db.commit()
-                    print(f"  Committed {created} spells so far...")
-
-                # Small delay to be polite to the API
-                time.sleep(0.05)
-
-            db.commit()
-            print(f"\nDone. Created {created} new spells, updated {skipped} existing.")
-
+        db.commit()
+        print(f"\nDone. Spells: {summary(counts)}.")
+        return counts
     finally:
+        if own_client:
+            client.close()
         db.close()
 
 

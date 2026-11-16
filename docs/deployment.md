@@ -170,10 +170,15 @@ the app server, and a deploy replaces it.
   database. That copies real users' emails and password hashes onto a laptop, so do it on purpose, and
   drop the copy afterwards.
 
-**Seed scripts must be the source of truth for system rows.** They aren't all yet: `seed_feats.py` updates
-existing rows (and refreshes character feat snapshots), but `seed_spells.py` **skips** a spell that already
-exists, so a corrected spell text never reaches a database that already has the spell. Every seed script
-should upsert. This is a ticket in the first-deploy worklist.
+**Seed scripts are the source of truth for system rows** (T5b). Every production seed **upserts** through
+`backend/shared/seeding.py`: re-running one brings existing rows in line with the file or API, so a corrected
+spell text or item weight reaches an already-seeded database. Only `owner_type=system` rows are matched — campaign
+overrides and homebrew are never touched. Two consequences to know:
+- **An admin's API edit to a system row is overwritten** on the next seed run. Fix the seed file instead.
+- **Character inventories are snapshots**, so an updated item row does not change items characters already carry.
+
+`seed_starting_items.py` and `seed_items.py` produce 14 of the same gear names; each row has one owner (decided by
+its category), so the two don't overwrite each other.
 
 ---
 
@@ -218,10 +223,13 @@ In order of danger for this app:
 
 ## Data operations
 
-- **Seeding a fresh database** (once, from the Render shell, after `alembic upgrade head`): `seed_classes.py`,
-  `seed_spells.py` (downloads from dnd5eapi.co), `seed_artificer_spells.py`, `seed_phb_spells.py`, `seed_feats.py`,
-  `seed_items.py`, `seed_starting_items.py`, plus `seed_data.py` if still needed. All are idempotent (they don't
-  duplicate rows when re-run). Re-run `seed_feats.py` after a release that changes feat effects.
+- **Seeding** (from the Render shell, after `alembic upgrade head`; in this order, and safe to re-run any time):
+  `seed_classes.py`, `seed_spells.py` (downloads from dnd5eapi.co), `seed_artificer_spells.py`, `seed_phb_spells.py`,
+  `seed_feats.py`, `seed_items.py` (downloads), `seed_starting_items.py` (after `seed_items.py`). All upsert. Re-run the
+  matching script after a release that changes its file (`seed_feats.py` also re-syncs character feat snapshots).
+- **Never in production:** `seed_data.py` creates an **admin with a known password** (`admin@dndapp.com` / `admin123`)
+  and test users; it now refuses any non-local database. `scripts/seed_5e_srd.py` is a legacy dev seeder whose
+  `--clear` flag wipes system records.
 - **Admin account:** register through the live app, then `UPDATE users SET is_admin = true WHERE email = '…';`.
 - **Backups:** Render Postgres paid tier takes daily backups with point-in-time restore. Also take a manual
   `pg_dump` before any release with a migration.

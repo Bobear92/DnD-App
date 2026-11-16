@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 """
+LEGACY / DEV ONLY — not part of production seeding (docs/deployment.md › Data operations lists the
+seeds production runs). It overlaps seed_spells.py / seed_items.py, still uses skip-if-exists, and
+its --clear flag WIPES system records. It is kept only because it is the one script that seeds
+creatures (the Bestiary has no UI yet).
+
 Seed the database with official D&D 5e SRD data from the D&D 5e API.
 
 Usage (run from the backend/ directory):

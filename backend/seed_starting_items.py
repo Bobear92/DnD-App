@@ -7,15 +7,18 @@ Names here must match the refs in the frontend startingEquipmentData.js so the
 starting-equipment resolver maps them to real (statted) encyclopedia items instead
 of plain entries.
 
-Run: python seed_starting_items.py   (idempotent — skips existing by name + owner_type=system)
+Run: python seed_starting_items.py   (after seed_items.py)
+
+UPSERTS (deploy ticket T5b) the rows it owns — see OWN_CATEGORIES below. Safe to re-run.
 """
 import sys
 import os
+from collections import Counter
 sys.path.insert(0, os.path.dirname(__file__))
 
 from shared.database import SessionLocal
-from shared.enums import OwnerType
 from shared.encyclopedia.items.adventuring_gear.models import AdventuringGear
+from shared.seeding import upsert_system_row, summary
 
 # (name, category, cost, weight, quantity, description)
 ITEMS = [
@@ -70,32 +73,34 @@ ITEMS = [
 ]
 
 
+# This seed only FILLS GAPS the SRD seed (seed_items.py) leaves, but 14 names exist in both —
+# the equipment packs, the kits, Spellbook, Staff, Shovel, Vestments. A row is this seed's to
+# update only if it carries one of the categories THIS file uses; the SRD names the same things
+# differently ("Equipment Packs", "Kits", "Standard Gear", "Arcane Foci"). Without this, each seed
+# would overwrite the other's version of those rows on every run.
+OWN_CATEGORIES = frozenset(item[1] for item in ITEMS)
+
+
+def _owned(row) -> bool:
+    return row.category in OWN_CATEGORIES
+
+
 def main():
     db = SessionLocal()
-    created = skipped = updated = 0
+    counts = Counter()
     try:
         for name, category, cost, weight, quantity, description in ITEMS:
-            exists = db.query(AdventuringGear).filter(
-                AdventuringGear.name == name,
-                AdventuringGear.owner_type == OwnerType.system,
-                AdventuringGear.owner_id.is_(None),
-            ).first()
-            if exists:
-                # Backfill a missing description (e.g. packs seeded earlier without one)
-                # so the creation Equipment step can show their contents.
-                if description and not (exists.description or "").strip():
-                    exists.description = description
-                    updated += 1
-                else:
-                    skipped += 1
-                continue
-            db.add(AdventuringGear(
-                name=name, category=category, cost=cost, weight=weight,
-                quantity=quantity, description=description, owner_type=OwnerType.system,
-            ))
-            created += 1
+            _, status = upsert_system_row(
+                db, AdventuringGear, {"name": name},
+                {"category": category, "cost": cost, "weight": weight,
+                 "quantity": quantity, "description": description},
+                owns=_owned,
+            )
+            counts[status] += 1
         db.commit()
-        print(f"Done. Created {created} starting-equipment items, updated {updated} descriptions, skipped {skipped} existing.")
+        print(f"Done. Starting-equipment items: {summary(counts)} "
+              "(not owned = an SRD row with the same name, left to seed_items.py).")
+        return counts
     finally:
         db.close()
 

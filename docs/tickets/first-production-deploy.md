@@ -4,7 +4,7 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 6/12 done (T1–T5a). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** 7/12 done (T1–T5b). All code tickets are done; T6 onward needs Robert's accounts. Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
 **Decisions:**
@@ -105,11 +105,21 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - guard: backend tests: a save missing a key keeps it; an explicit delete removes it; the rest/initiative/level-up
   paths still produce the same results.
 
-## T5b — Seed scripts upsert
-- [ ] Make every seed script treat its file as the source of truth for `owner_type='system'` rows: update an existing
+## T5b — Seed scripts upsert ✅
+- **Landed 2026-11-16.** One helper, `backend/shared/seeding.py` › `upsert_system_row` (matches only
+  `owner_type=system, owner_id=NULL`; created / updated / unchanged / not_owned), used by `seed_spells.py`,
+  `seed_phb_spells.py`, `seed_classes.py` (columns + the whole feature list, rebuilt only when it differs),
+  `seed_items.py` (equipment, magic items, curated; `backfill_weapon_ranges` removed — the upsert writes ranges) and
+  `seed_starting_items.py`. `seed_feats.py` already upserted (docstring fixed; now also syncs `repeatable`/`source`).
+  Ownership conflicts handled: `seed_spells.py` applies the Artificer tag itself (no flip-flop with the tagger);
+  `seed_starting_items.py` only updates rows with ITS categories — 14 names are SRD rows owned by `seed_items.py`.
+  **Found:** `seed_data.py` (listed for production!) creates an admin `admin@dndapp.com` / `admin123` and ran
+  `create_all`; it now refuses non-local databases and no longer creates tables, and is off the production list.
+  Tests: `backend/tests/test_seeding.py` (network seeds via a fake API client).
+- [x] Make every seed script treat its file as the source of truth for `owner_type='system'` rows: update an existing
   row instead of skipping it. Today `seed_spells.py` (and possibly others; check all eight) skips spells that
   already exist, so a corrected text never reaches prod. `seed_feats.py` already updates.
-- [ ] Never touch `owner_type='campaign'` rows.
+- [x] Never touch `owner_type='campaign'` rows.
 - guard: a backend test per script: run twice, change a value in between, the row is updated and not duplicated;
   a campaign override with the same name is unchanged.
 
@@ -132,6 +142,7 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 
 ## T8 — Seed production and create the admin
 - [ ] From the Render shell, run the seed scripts in the order in [deployment.md › Data operations](../deployment.md#data-operations).
+  **Not `seed_data.py`** (it refuses a remote database anyway).
 - [ ] Register through the live app; flip `is_admin` with SQL.
 - done: the Encyclopedia shows classes, spells, feats and items; character creation works end to end.
 

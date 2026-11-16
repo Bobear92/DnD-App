@@ -3,8 +3,10 @@ Seed script: populates the feats table with the 2014 PHB feats (edition "5e")
 and the 2024 PHB feats (edition "5.5e").
 
 The D&D 5e API only exposes a single SRD feat (Grappler), so this data is
-hardcoded. Idempotent: skips feats that already exist by (name, edition,
-owner_type=system). Safe to re-run.
+hardcoded. UPSERTS: a feat already seeded by (name, edition, owner_type=system) gets this file's
+description, prerequisites, effects, repeatable and source, then every character's feat snapshot is
+re-synced (sync_character_feat_snapshots). This file is the source of truth for system feats.
+Safe to re-run.
 
 Run: python seed_feats.py
 """
@@ -776,6 +778,12 @@ def _seed_list(db, feats, edition, source, effects_map=None):
             new_prereq = _prereq(prereq_text)
             if existing.prerequisites != new_prereq:
                 existing.prerequisites = new_prereq
+                changed = True
+            if existing.repeatable != repeatable:
+                existing.repeatable = repeatable
+                changed = True
+            if existing.source != source:
+                existing.source = source
                 changed = True
             if changed:
                 updated += 1

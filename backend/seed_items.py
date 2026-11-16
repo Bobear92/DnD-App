@@ -5,17 +5,20 @@ gear, magic items) from the D&D 5e API, plus a curated set of potions and food/d
 
 Run: python seed_items.py
 
-Uses httpx (already in requirements). Skips entries that already exist (by name +
-owner_type=system). Safe to re-run.
+UPSERTS (deploy ticket T5b): an item already seeded by name is brought in line with the API /
+curated lists, so a fix reaches existing databases. Only system rows are touched
+(shared/seeding.py). Character inventories hold SNAPSHOTS of items, so an updated row does not
+change items characters already carry. Safe to re-run.
 """
 import sys
 import os
 import time
+from collections import Counter
 sys.path.insert(0, os.path.dirname(__file__))
 
 import httpx
 from shared.database import SessionLocal
-from shared.enums import OwnerType
+from shared.seeding import upsert_system_row, summary
 from shared.encyclopedia.items.weapons.models import Weapon
 from shared.encyclopedia.items.armor.models import Armor
 from shared.encyclopedia.items.adventuring_gear.models import AdventuringGear
@@ -60,18 +63,6 @@ def _weapon_range(data: dict) -> tuple[int | None, int | None]:
     return normal, long
 
 
-def _srd_index(name: str) -> str:
-    """
-    A weapon name as the SRD API indexes it. The DB stores display names ("Crossbow, light")
-    while the API uses "crossbow-light" — punctuation is DROPPED, not dashed, so a naive
-    space-to-dash swap yields "crossbow,-light" and 404s every crossbow.
-    """
-    slug = name.lower()
-    for ch in (",", "'", "(", ")", "."):
-        slug = slug.replace(ch, "")
-    return "-".join(slug.split())
-
-
 def _fetch(client: httpx.Client, path: str) -> dict | None:
     try:
         r = client.get(f"{API_BASE}{path}", timeout=10)
@@ -82,138 +73,117 @@ def _fetch(client: httpx.Client, path: str) -> dict | None:
         return None
 
 
-def _exists(db, model, name: str) -> bool:
-    return db.query(model).filter(
-        model.name == name,
-        model.owner_type == OwnerType.system,
-        model.owner_id.is_(None),
-    ).first() is not None
+def _equipment_row(data: dict):
+    """(Model, values) for an /api/equipment record, or None for a category we don't store."""
+    cat = (data.get("equipment_category") or {}).get("index")
+    if cat == "weapon":
+        damage = data.get("damage") or {}
+        props = ", ".join(p["name"] for p in data.get("properties", []) or [])
+        range_normal, range_long = _weapon_range(data)
+        return Weapon, {
+            "weapon_category": data.get("weapon_category") or "—",
+            "weapon_type": data.get("weapon_range") or "—",
+            "damage": damage.get("damage_dice") or "—",
+            "damage_type": (damage.get("damage_type") or {}).get("name") or "—",
+            "properties": props or None,
+            "range_normal": range_normal,
+            "range_long": range_long,
+            "cost": _cost(data),
+            "weight": _weight(data),
+            "description": _desc(data) or None,
+        }
+    if cat == "armor":
+        ac = data.get("armor_class") or {}
+        str_min = data.get("str_minimum") or 0
+        return Armor, {
+            "armor_type": data.get("armor_category") or "—",
+            "armor_class": ac.get("base") or 10,
+            "cost": _cost(data),
+            "weight": _weight(data),
+            "strength_requirement": str_min if str_min else None,
+            "stealth_disadvantage": bool(data.get("stealth_disadvantage")),
+            "description": _desc(data) or None,
+        }
+    if cat == "adventuring-gear":
+        return AdventuringGear, {
+            "category": (data.get("gear_category") or {}).get("name") or "Adventuring Gear",
+            "cost": _cost(data),
+            "weight": _weight(data),
+            "quantity": None,
+            "description": _desc(data) or None,
+        }
+    return None
 
 
-def seed_equipment(db, client) -> tuple[int, int]:
+def seed_equipment(db, client, delay=0.03) -> Counter:
     """Weapons, armor, and adventuring gear all come from /api/equipment."""
-    created = skipped = 0
+    counts = Counter()
     listing = _fetch(client, "/api/equipment")
     if not listing:
-        return 0, 0
+        return counts
     entries = listing.get("results", [])
     print(f"Found {len(entries)} equipment entries.")
 
-    for entry in entries:
+    seen = set()
+    for i, entry in enumerate(entries, start=1):
         data = _fetch(client, f"/api/equipment/{entry['index']}")
-        time.sleep(0.03)
-        if not data:
-            skipped += 1
+        time.sleep(delay)
+        row = _equipment_row(data) if data else None
+        if not row or (row[0], data["name"]) in seen:  # first record for a name wins (see magic items)
+            counts["skipped"] += 1
             continue
-
-        cat = (data.get("equipment_category") or {}).get("index")
-        name = data["name"]
-
-        if cat == "weapon":
-            if _exists(db, Weapon, name):
-                skipped += 1
-                continue
-            damage = data.get("damage") or {}
-            props = ", ".join(p["name"] for p in data.get("properties", []) or [])
-            range_normal, range_long = _weapon_range(data)
-            db.add(Weapon(
-                name=name,
-                weapon_category=data.get("weapon_category") or "—",
-                weapon_type=data.get("weapon_range") or "—",
-                damage=(damage.get("damage_dice") or "—"),
-                damage_type=((damage.get("damage_type") or {}).get("name") or "—"),
-                properties=props or None,
-                range_normal=range_normal,
-                range_long=range_long,
-                cost=_cost(data),
-                weight=_weight(data),
-                description=_desc(data) or None,
-                owner_type=OwnerType.system,
-            ))
-            created += 1
-
-        elif cat == "armor":
-            if _exists(db, Armor, name):
-                skipped += 1
-                continue
-            ac = data.get("armor_class") or {}
-            str_min = data.get("str_minimum") or 0
-            db.add(Armor(
-                name=name,
-                armor_type=data.get("armor_category") or "—",
-                armor_class=ac.get("base") or 10,
-                cost=_cost(data),
-                weight=_weight(data),
-                strength_requirement=(str_min if str_min else None),
-                stealth_disadvantage=bool(data.get("stealth_disadvantage")),
-                description=_desc(data) or None,
-                owner_type=OwnerType.system,
-            ))
-            created += 1
-
-        elif cat == "adventuring-gear":
-            if _exists(db, AdventuringGear, name):
-                skipped += 1
-                continue
-            gear_cat = (data.get("gear_category") or {}).get("name") or "Adventuring Gear"
-            db.add(AdventuringGear(
-                name=name,
-                category=gear_cat,
-                cost=_cost(data),
-                weight=_weight(data),
-                quantity=None,
-                description=_desc(data) or None,
-                owner_type=OwnerType.system,
-            ))
-            created += 1
-        else:
-            skipped += 1
-
-        if created and created % 25 == 0:
+        seen.add((row[0], data["name"]))
+        model, values = row
+        _, status = upsert_system_row(db, model, {"name": data["name"]}, values)
+        counts[status] += 1
+        if i % 25 == 0:
             db.commit()
-            print(f"  Committed {created} equipment so far...")
+            print(f"  ...{i} equipment entries processed")
 
     db.commit()
-    return created, skipped
+    return counts
 
 
-def seed_magic_items(db, client) -> tuple[int, int]:
-    created = skipped = 0
+def seed_magic_items(db, client, delay=0.03) -> Counter:
+    counts = Counter()
     listing = _fetch(client, "/api/magic-items")
     if not listing:
-        return 0, 0
+        return counts
     entries = listing.get("results", [])
     print(f"Found {len(entries)} magic items.")
 
-    for entry in entries:
+    seen = set()
+    for i, entry in enumerate(entries, start=1):
         name = entry["name"]
-        if _exists(db, MagicItem, name):
-            skipped += 1
+        # The API lists some names twice ("Potion of Healing": potion-of-healing and
+        # potion-of-healing-common). Rows are keyed by name, so a second record would overwrite the
+        # first on every run and the row would never settle. The first record wins.
+        if name in seen:
+            counts["skipped"] += 1
             continue
+        seen.add(name)
         data = _fetch(client, f"/api/magic-items/{entry['index']}")
-        time.sleep(0.03)
+        time.sleep(delay)
         if not data:
-            skipped += 1
+            counts["skipped"] += 1
             continue
         effect = _desc(data)
-        db.add(MagicItem(
-            name=name,
-            item_type=(data.get("equipment_category") or {}).get("name") or "Wondrous Item",
-            rarity=(data.get("rarity") or {}).get("name") or "Unknown",
-            attunement_required=("requires attunement" in effect.lower()),
-            effect=effect or name,
-            cost=None,
-            weight=None,
-            description=None,
-            owner_type=OwnerType.system,
-        ))
-        created += 1
-        if created % 25 == 0:
+        _, status = upsert_system_row(db, MagicItem, {"name": name}, {
+            "item_type": (data.get("equipment_category") or {}).get("name") or "Wondrous Item",
+            "rarity": (data.get("rarity") or {}).get("name") or "Unknown",
+            "attunement_required": "requires attunement" in effect.lower(),
+            "effect": effect or name,
+            "cost": None,
+            "weight": None,
+            "description": None,
+        })
+        counts[status] += 1
+        if i % 25 == 0:
             db.commit()
-            print(f"  Committed {created} magic items so far...")
+            print(f"  ...{i} magic items processed")
 
     db.commit()
-    return created, skipped
+    return counts
 
 
 # Curated sets — the SRD API does not cleanly expose these.
@@ -264,93 +234,40 @@ FOOD_DRINK = [
 ]
 
 
-def backfill_weapon_ranges(db, client) -> tuple[int, int]:
-    """
-    Fill `range_normal`/`range_long` on system weapons that predate those columns.
+# (backfill_weapon_ranges was removed: it existed only because the create path skipped existing
+# weapons, leaving rows seeded before range_normal/range_long with a NULL band. The upsert now
+# writes the band on every run.)
 
-    The create path SKIPS an existing weapon, so a plain re-run would leave every weapon seeded
-    before this column with a NULL band forever. Same shape as seed_feats.py backfilling
-    `effects` onto already-seeded feats.
 
-    Only ever writes a band it actually found onto a row that is missing one — it never nulls an
-    existing value, so a GM's hand-edited range survives a re-seed.
-    """
-    filled = checked = 0
-    # A curated weapon is not in the SRD API at all, so its band comes from WEAPONS_CURATED —
-    # which the create path skipped for any row that already existed.
-    curated = {
-        w["name"]: (w.get("range_normal"), w.get("range_long"))
-        for w in WEAPONS_CURATED if w.get("range_normal") is not None
-    }
-    rows = db.query(Weapon).filter(
-        Weapon.owner_type == OwnerType.system,
-        Weapon.range_normal.is_(None),
-    ).all()
-    for w in rows:
-        checked += 1
-        if w.name in curated:
-            w.range_normal, w.range_long = curated[w.name]
-            filled += 1
-            continue
-        data = _fetch(client, f"/api/2014/equipment/{_srd_index(w.name)}")
-        if not data:
-            continue
-        normal, long = _weapon_range(data)
-        if normal is None:
-            continue
-        w.range_normal, w.range_long = normal, long
-        filled += 1
-        time.sleep(0.05)
+def seed_curated(db) -> Counter:
+    counts = Counter()
+    for model, rows in ((Weapon, WEAPONS_CURATED), (Potion, POTIONS), (FoodDrink, FOOD_DRINK)):
+        for item in rows:
+            values = {k: v for k, v in item.items() if k != "name"}
+            _, status = upsert_system_row(db, model, {"name": item["name"]}, values)
+            counts[status] += 1
     db.commit()
-    return filled, checked
+    return counts
 
 
-def seed_curated(db) -> tuple[int, int]:
-    created = skipped = 0
-    for w in WEAPONS_CURATED:
-        if _exists(db, Weapon, w["name"]):
-            skipped += 1
-            continue
-        db.add(Weapon(**w, owner_type=OwnerType.system))
-        created += 1
-    for p in POTIONS:
-        if _exists(db, Potion, p["name"]):
-            skipped += 1
-            continue
-        db.add(Potion(**p, owner_type=OwnerType.system))
-        created += 1
-    for f in FOOD_DRINK:
-        if _exists(db, FoodDrink, f["name"]):
-            skipped += 1
-            continue
-        db.add(FoodDrink(**f, owner_type=OwnerType.system))
-        created += 1
-    db.commit()
-    return created, skipped
-
-
-def main():
+def main(client=None):
     db = SessionLocal()
+    own_client = client is None
+    client = client or httpx.Client(timeout=15, follow_redirects=True)
     try:
-        with httpx.Client(timeout=15, follow_redirects=True) as client:
-            print("Seeding equipment (weapons, armor, adventuring gear)...")
-            ec, es = seed_equipment(db, client)
-            print(f"  Equipment: {ec} created, {es} skipped.\n")
+        print("Seeding equipment (weapons, armor, adventuring gear)...")
+        print(f"  Equipment: {summary(seed_equipment(db, client))}.\n")
 
-            print("Seeding magic items...")
-            mc, ms = seed_magic_items(db, client)
-            print(f"  Magic items: {mc} created, {ms} skipped.\n")
-
-            print("Backfilling weapon ranges...")
-            bf, bc = backfill_weapon_ranges(db, client)
-            print(f"  Weapon ranges: {bf} filled of {bc} missing one.\n")
+        print("Seeding magic items...")
+        print(f"  Magic items: {summary(seed_magic_items(db, client))}.\n")
 
         print("Seeding curated weapons + potions + food/drink...")
-        cc, cs = seed_curated(db)
-        print(f"  Curated: {cc} created, {cs} skipped.\n")
+        print(f"  Curated: {summary(seed_curated(db))}.\n")
 
         print("Done.")
     finally:
+        if own_client:
+            client.close()
         db.close()
 
 

@@ -379,9 +379,8 @@ weapons
                                Seeded from the SRD `range` (ranged weapons) / `throw_range` (thrown);
                                seed_items.py previously DISCARDED both. 16 of 38 system weapons carry
                                a band (9 ranged + 7 thrown); the other 22 are melee and correctly NULL.
-                               `backfill_weapon_ranges()` fills rows that predate the columns, since
-                               the create path skips existing weapons (same shape as seed_feats.py
-                               backfilling `effects`); it never nulls a value a GM set.
+                               Re-running seed_items.py writes the band onto existing rows (it upserts
+                               since 2026-11-16, deploy T5b; the old `backfill_weapon_ranges()` is gone).
   description, owner_type (ENUM), owner_id, created_at, updated_at
 
 armor

@@ -581,6 +581,8 @@ spells
   EDITION FALLBACK (get_all_spells): `?edition=5e` returns only 5e rows; `?edition=5.5e` returns 5.5e rows SHADOWING 5e rows of
     the same name (campaign beats system; within a tier the exact edition beats the fallback). No filter = every edition listed.
   Seeding (seed_spells.py — 319 SRD 5e spells; seed_artificer_spells.py; seed_phb_spells.py for non-SRD spells): docs/schema-notes.md
+  ALL seed scripts UPSERT system rows via shared/seeding.py (the file is the source of truth; campaign rows never touched).
+  seed_data.py is DEV ONLY (known-password admin; refuses non-local DBs).
 
 creatures
   id, name, size, type, alignment, challenge_rating, armor_class,
@@ -736,7 +738,7 @@ Campaign PUT accepts all settings fields: `use_alignment`, `ability_score_method
 
 Response includes nested `features: List[ClassFeatureResponse]` (all levels 1–20).
 When `?campaign_id=N` is provided, campaign-scoped classes with the same `name+edition` shadow system entries (same deduplication pattern as races/backgrounds).
-System classes are seeded via `backend/seed_classes.py` (run once; 25 entries: 12 classes × 2 editions + Artificer 5e only; uses `CLASSES_5E_ONLY = {"Artificer"}` guard to skip 5.5e creation).
+System classes are seeded via `backend/seed_classes.py` (upserts — re-run to apply edits; 25 entries: 12 classes × 2 editions + Artificer 5e only; uses `CLASSES_5E_ONLY = {"Artificer"}` guard to skip 5.5e creation).
 
 ### NPCs
 | Method | Endpoint | Auth Required |

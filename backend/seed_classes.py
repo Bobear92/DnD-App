@@ -3,14 +3,19 @@ Seed script: populates character_classes and class_features tables
 for all 12 classes in both 5e (2014) and 5.5e (2024) editions.
 
 Run: python seed_classes.py
+
+UPSERTS (deploy ticket T5b): an already-seeded class is brought in line with this file — its
+columns and its whole feature list — so edits here reach existing databases. Only system rows are
+touched (shared/seeding.py). Safe to re-run.
 """
 import sys
 import os
+from collections import Counter
 sys.path.insert(0, os.path.dirname(__file__))
 
 from shared.database import SessionLocal
 from players.classes.models import CharacterClass, ClassFeature
-from shared.enums import OwnerType
+from shared.seeding import UNCHANGED, UPDATED, upsert_system_row, summary
 
 # ---------------------------------------------------------------------------
 # Flavor text (same lore for both editions)
@@ -992,8 +997,7 @@ EDITIONS = [("5e", FEATURES_5E), ("5.5e", FEATURES_2024)]
 def seed():
     db = SessionLocal()
     try:
-        created = 0
-        skipped = 0
+        counts = Counter()
         for class_name in CLASSES:
             prof = PROFICIENCY_DATA[class_name]
             flavor = FLAVOR_TEXTS[class_name]
@@ -1002,46 +1006,39 @@ def seed():
                 if edition == "5.5e" and class_name in CLASSES_5E_ONLY:
                     continue
 
-                existing = (
-                    db.query(CharacterClass)
-                    .filter_by(name=class_name, edition=edition, owner_type=OwnerType.system)
-                    .first()
+                cls, status = upsert_system_row(
+                    db, CharacterClass, {"name": class_name, "edition": edition},
+                    {
+                        "flavor_text": flavor,
+                        "hit_die": prof["hit_die"],
+                        "primary_ability": prof["primary_ability"],
+                        "spellcasting_ability": prof["spellcasting_ability"],
+                        "saving_throws": prof["saving_throws"],
+                        "armor_proficiencies": prof["armor_proficiencies"],
+                        "weapon_proficiencies": prof["weapon_proficiencies"],
+                        "tool_proficiencies": prof["tool_proficiencies"],
+                        "skill_count": prof["skill_count"],
+                        "skills_available": prof["skills_available"],
+                    },
                 )
-                if existing:
-                    skipped += 1
-                    continue
 
-                cls = CharacterClass(
-                    name=class_name,
-                    edition=edition,
-                    flavor_text=flavor,
-                    hit_die=prof["hit_die"],
-                    primary_ability=prof["primary_ability"],
-                    spellcasting_ability=prof["spellcasting_ability"],
-                    saving_throws=prof["saving_throws"],
-                    armor_proficiencies=prof["armor_proficiencies"],
-                    weapon_proficiencies=prof["weapon_proficiencies"],
-                    tool_proficiencies=prof["tool_proficiencies"],
-                    skill_count=prof["skill_count"],
-                    skills_available=prof["skills_available"],
-                    owner_type=OwnerType.system,
-                    owner_id=None,
-                )
-                db.add(cls)
-                db.flush()  # get cls.id before adding features
-
-                for (level, fname, fdesc) in feature_map.get(class_name, []):
-                    db.add(ClassFeature(
-                        class_id=cls.id,
-                        level=level,
-                        feature_name=fname,
-                        feature_description=fdesc,
-                    ))
-
-                created += 1
+                # Features: the file's list (in order) is the truth. Nothing references a
+                # class_features row by id, so when the stored list differs it is rebuilt —
+                # that picks up edited text, added features and removed ones alike.
+                wanted = [tuple(f) for f in feature_map.get(class_name, [])]
+                stored = [(f.level, f.feature_name, f.feature_description) for f in cls.features]
+                if stored != wanted:
+                    cls.features = [
+                        ClassFeature(level=level, feature_name=fname, feature_description=fdesc)
+                        for (level, fname, fdesc) in wanted
+                    ]
+                    if status == UNCHANGED:
+                        status = UPDATED
+                counts[status] += 1
 
         db.commit()
-        print(f"Done. Created {created} classes, skipped {skipped} already-existing.")
+        print(f"Done. Classes: {summary(counts)}.")
+        return counts
     except Exception as e:
         db.rollback()
         raise e

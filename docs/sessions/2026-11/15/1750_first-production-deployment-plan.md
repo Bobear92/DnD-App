@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy plan, T1–T5
+title: First production deploy plan, T1–T5b (all code tickets)
 date: 2026-11-15
 started: 17:50
-branch: feature/token-lifetime
+branch: feature/seed-upsert
 area: tooling
 tags: [docs, build, consolidation, deployment, data-safety, migration, seed-data, user-rule, guard-test]
 issues: []
-summary: Prod deploy plan + T1 API URL, T2 CORS, T3 start.sh/alembic, T4 R2, T5a merge-on-save, T5 token lifetime
-turns: 28
+summary: Prod deploy plan + all code tickets: API URL, CORS, start.sh/alembic, R2 uploads, merge-on-save, token TTL, seed upserts
+turns: 31
 stepped_in: true
-last_uuid: 669c69a5-c968-4d5d-9a00-88f2f2af6fc1
+last_uuid: baa45d10-3f2e-4514-b8b4-a2885554ea6b
 ---
 
-# First production deploy plan, T1–T5
+# First production deploy plan, T1–T5b (all code tickets)
 
 ## Summary
 
@@ -47,6 +47,10 @@ last_uuid: 669c69a5-c968-4d5d-9a00-88f2f2af6fc1
   live API check and a real browser autosave (inspiration +1) both kept untouched keys.
 - **T5:** token lifetime was already env-configurable; added tests + docs (production 720 min), switched `security.py` to
   timezone-aware UTC. Backend 1045 / frontend 3932 green; real logins: 30 min default, 720 with the env var.
+- **T5b:** `shared/seeding.py` `upsert_system_row` used by spells/phb/classes/items/starting-items seeds; ownership rules
+  for shared rows (Artificer tag in seed_spells; starting items own their categories; API duplicate names: first wins);
+  `seed_data.py` (known-password admin, was on the prod list) now refuses non-local DBs and no longer create_all's.
+  Real API + dev DB: spells/classes/feats exact; items normalised legacy-format rows once, then stable. Backend 1061 green.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -65,6 +69,9 @@ last_uuid: 669c69a5-c968-4d5d-9a00-88f2f2af6fc1
   output (stayed local); later scratch scripts redact URLs.
 - T4: the fake S3 client's offset-based pagination failed the folder-delete test; real S3 tokens survive deletes, but the
   code was restructured to list-then-batch-delete so it doesn't depend on cursor semantics.
+- T5b: first real run showed magic items "updating" every run — the API lists Potion of Healing twice; fixed with
+  first-wins + regression test. Claude also ran a targeted pytest while the full suite ran in the background, colliding
+  on the test DB (the CLAUDE.md warning); stopped it, checked no stray process, re-ran alone. Check for a running suite first.
 - T5a: the plan said merging "reduces last-write-wins"; building it showed it doesn't (each save carries a full stale
   copy). Corrected in the ticket/docs/learnings. Browser check first missed that the sheet opens on Narrative.
 - The first Playwright pass missed encyclopedia/feats because the tabs are buttons, not ARIA tabs; fixed in the script.
@@ -77,6 +84,7 @@ last_uuid: 669c69a5-c968-4d5d-9a00-88f2f2af6fc1
 - Migrations must be rollback-safe (expand → contract); back up and rehearse on a prod copy before any migration release.
 - Data never flows dev → prod; prod → dev only deliberately.
 - Merge-on-save for `character_data` is a pre-launch fix (T5a), not a nice-to-have.
+- Seed files are the source of truth for system rows; admin API edits to system rows get overwritten by a re-seed.
 - Production token lifetime 720 minutes (12 h) — Claude's recommendation, a Render env var, easy to change.
 - Uploads: Cloudflare R2 over a Render disk (Robert); consolidate the storage modules first, then add R2 behind one API.
 - Removed `create_all` (alembic owns the schema everywhere) rather than guarding it to dev — Claude's call, flagged in the summary.
@@ -84,7 +92,7 @@ last_uuid: 669c69a5-c968-4d5d-9a00-88f2f2af6fc1
 
 ## Open threads
 
-- **Next: T5b** (seed scripts upsert) — last code ticket. T6/T7 need Robert's Render + Cloudflare accounts.
+- **Next: T6** (Render DB + backend) and T7 (frontend) — need Robert's Render and Cloudflare accounts and the tier decision. T6/T7 need Robert's Render + Cloudflare accounts.
 - Follow-up from T5a: send only changed keys (e.g. `autoSaveClassPatch` sends just its patch) to stop concurrent saves
   overwriting each other.
 - R2 follow-ups: prove against the real bucket in T6; R2 has no automatic backups (versioning/periodic copy later);
@@ -583,3 +591,57 @@ last_uuid: 669c69a5-c968-4d5d-9a00-88f2f2af6fc1
 > - **Small fix:** `security.py` used `datetime.utcnow()`, which is deprecated from Python 3.12, the version we pin. It now uses a timezone-aware time. The auth tests pa …
 
 **Commands run:** 4
+
+### 29. 2026-11-16 14:21
+
+**Robert:**
+> /ship
+
+**Claude:**
+> T5 is on `main` as commit `35babca` and pushed. Production logins can now last 12 hours. `feature/token-lifetime` is deleted, and the working tree is clean.
+> 
+> Before the commit, the backend (1,045) and frontend (3,932) tests passed and so did the feat-coverage gate. Real logins got a 30-minute token by default and a 720-minute one with the environment variable set. The GitHub CI run for this push is still going, and I'll report the result.
+> 
+> Six of 12 tickets are done. **T5b is the last code ticket:** make the seed scripts update existing compendium rows instead of skipping them, so a corrected spell or item reaches production on the next re-seed.
+> 
+> After T5b, the remaining tickets need you:
+> - **T6–T7:** create the Render services and the R2 bucket.
+> - **T8:** seed the production database and create your admin account.
+> - **T9:** set up the release flow.
+> - **T10:** a security review and a liv …
+
+**Commands run:** 2
+
+### 30. 2026-11-16 14:23
+
+**Robert:**
+> okay lets do the last code ticket T5b
+
+**Claude:**
+> `seed_items` now settles. The first run moved "Potion of Healing" back to the first API record; the second run changed nothing at all, so every seed is stable on the real API and the dev database.
+> 
+> The seeds use the dev database and pytest uses the separate test database, so that run didn't interfere. I'll wait for the full backend suite, then restart the dev backend.
+
+**Files edited:** `backend/shared/seeding.py`, `backend/seed_spells.py`, `backend/seed_phb_spells.py`, `backend/seed_classes.py`, `backend/seed_items.py`, `backend/seed_starting_items.py`, `backend/seed_feats.py`, `backend/seed_data.py`, `backend/scripts/seed_5e_srd.py`, `backend/tests/test_seeding.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t5b-docs.mjs`, `docs/backend-tests.md` · **Commands run:** 41
+
+### 31. 2026-11-16 14:46
+
+**Robert:**
+> <task-notification>
+> <task-id>b9rkij3kt</task-id>
+> <tool-use-id>toolu_01XtULNuPNgf8oDEwjUy22wz</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\b9rkij3kt.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend suite alone" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> T5b is done on the branch `feature/seed-upsert`, not committed yet. That was the last code ticket.
+> 
+> **What changed:**
+> - **One shared upsert helper,** [backend/shared/seeding.py](backend/shared/seeding.py). It only ever matches base-compendium (system) rows, so campaign overrides and homebrew are never touched. `seed_spells`, `seed_phb_spells`, `seed_classes` (including each class's feature list), `seed_items` and `seed_starting_items` all use it. `seed_feats` already updated existing rows; its docstring wrongly said it skipped, and it now also syncs `repeatable` and `source`.
+> - **Two writers of the same rows, each now with one owner:**
+>   - The spell seed applies the Artificer tag itself, so it no longer fights the tagger script over a spell's class list.
+>   - `seed_starting_items` and `seed_items` share 14 gear names. Each of those rows is now owned by exactly one script, decided by its c …
+
+**Commands run:** 3

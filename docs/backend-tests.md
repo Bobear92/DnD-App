@@ -12,6 +12,12 @@ backend/tests/
                                     #   ".." filenames; R2Storage against a fake S3 client (put key/content-type/cache header, delete reports
                                     #   existence, folder delete paginates and spares "1/20" when deleting "1/2", non-404 errors raised);
                                     #   backend selection (tests on local temp storage, r2 fails fast naming missing creds). Deploy ticket T4
+├── test_seeding.py                 # 16 tests: seed scripts UPSERT system rows (deploy T5b) — upsert_system_row (create/update/
+                                    #   unchanged; never matches a campaign row; owns=False leaves it); seed_spells (re-run fixes text,
+                                    #   no duplicate; Artificer tag applied and stable — fake API); seed_phb_spells; seed_classes
+                                    #   (restores columns + rebuilds features in place, clean re-run changes nothing); seed_items
+                                    #   (equipment updated in place via fake API; a name the API lists twice settles, first record wins; curated idempotent); seed_starting_items (SRD-owned
+                                    #   rows untouched, own rows restored); seed_data refuses non-local databases
 ├── test_schema_ownership.py        # 6 tests (1 CI-only): alembic owns the schema — main.py has no create_all; env.py imports main
                                     #   (so `alembic check` sees every model) and escapes "%" in DATABASE_URL; start.sh migrates before
                                     #   uvicorn with set -euo pipefail and no --reload; requirements.txt has no pytest but keeps httpx;

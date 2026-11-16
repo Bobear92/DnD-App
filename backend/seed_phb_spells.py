@@ -10,12 +10,15 @@ editions are seeded as separate rows (the spells table is keyed on name + editio
 owner scope). A spell with no 5.5e row here falls back to its 5e text for 2024
 campaigns — see get_all_spells in shared/encyclopedia/spells/service.py.
 
-Idempotent: skips a spell that already exists with the same name + edition +
-owner_type=system. Safe to re-run.
+UPSERTS (deploy ticket T5b): a spell already seeded with the same name + edition is brought in
+line with this file, so a text fix here reaches existing databases. Only system rows are touched
+(shared/seeding.py). Safe to re-run.
 """
+from collections import Counter
+
 from shared.database import SessionLocal
 from shared.encyclopedia.spells.models import Spell
-from shared.enums import OwnerType
+from shared.seeding import upsert_system_row, summary
 
 CASTER_CANTRIP_CLASSES = "Bard, Sorcerer, Warlock, Wizard"
 
@@ -78,33 +81,20 @@ PHB_SPELLS = [
 
 def seed_phb_spells():
     db = SessionLocal()
-    created = 0
-    skipped = 0
+    counts = Counter()
     try:
         for data in PHB_SPELLS:
-            existing = db.query(Spell).filter(
-                Spell.name == data["name"],
-                Spell.edition == data["edition"],
-                Spell.owner_type == OwnerType.system,
-                Spell.owner_id.is_(None),
-            ).first()
-            if existing:
-                print(f"  skip  {data['name']} ({data['edition']}) — already seeded")
-                skipped += 1
-                continue
-
-            db.add(Spell(
-                **data,
-                higher_level=None,
-                ritual=False,
-                owner_type=OwnerType.system,
-                owner_id=None,
-            ))
-            print(f"  add   {data['name']} ({data['edition']})")
-            created += 1
+            match = {"name": data["name"], "edition": data["edition"]}
+            values = {k: v for k, v in data.items() if k not in match}
+            values.setdefault("higher_level", None)
+            values.setdefault("ritual", False)
+            _, status = upsert_system_row(db, Spell, match, values)
+            counts[status] += 1
+            print(f"  {status:9} {data['name']} ({data['edition']})")
 
         db.commit()
-        print(f"\nDone. Created {created} spells, skipped {skipped} existing.")
+        print(f"\nDone. PHB spells: {summary(counts)}.")
+        return counts
     finally:
         db.close()
 

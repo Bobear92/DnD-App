@@ -1,10 +1,31 @@
-from sqlalchemy.orm import Session
-from shared.database import SessionLocal, engine, Base
+"""DEV ONLY: creates test users with KNOWN passwords, including an ADMIN (admin@dndapp.com /
+admin123). Never run against production — refuse_non_local_database() enforces that. Production's
+admin is a normal registration with is_admin flipped by hand (docs/deployment.md › Data operations).
+
+The schema comes from `alembic upgrade head`; this script no longer creates tables.
+"""
+from sqlalchemy.engine import make_url
+
+from config import settings
+from shared.database import SessionLocal
 from auth.models import User
 from shared.security import hash_password
 
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def refuse_non_local_database(database_url: str = None) -> None:
+    host = make_url(database_url or settings.database_url).host or "localhost"
+    if host not in LOCAL_HOSTS:
+        raise SystemExit(
+            f"seed_data.py creates an admin with a known password and is DEV ONLY; refusing to run "
+            f"against database host {host!r}. Use the normal registration flow instead."
+        )
+
+
 def create_test_users():
     """Create test users for development"""
+    refuse_non_local_database()
     db = SessionLocal()
     
     try:
@@ -65,9 +86,7 @@ def create_test_users():
         db.close()
 
 if __name__ == "__main__":
-    print("Creating database tables...")
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created!")
-    
+    refuse_non_local_database()
+
     print("\nCreating test users...")
     create_test_users()
