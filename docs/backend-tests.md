@@ -5,7 +5,8 @@ What each backend test file covers, with counts. Moved out of CLAUDE.md on 2026-
 ```
 backend/tests/
 ├── conftest.py                     # shared fixtures + helpers
-├── test_auth.py                    # auth module
+├── test_auth.py                    # auth module + TestTokenLifetime (exp matches ACCESS_TOKEN_EXPIRE_MINUTES; env var overrides;
+                                    #   default 30; expired token → 401; unexpired works). Deploy ticket T5
 ├── test_file_storage.py            # 25 tests: shared/file_storage.py — key shape is backend-independent; per-kind type/size validation;
                                     #   LocalStorage save/delete/delete-folder + root escape refused; delete_upload_file rejects "/", "\\",
                                     #   ".." filenames; R2Storage against a fake S3 client (put key/content-type/cache header, delete reports

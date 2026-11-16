@@ -88,7 +88,8 @@ return [i for i in items if i.is_visible_to_players or member.role == "gm"]
 
 ### 5. JWT / Auth Handling
 - `sub` in the JWT payload must be a user ID string (`str(user.id)`) — never email or username
-- Token expiry is 30 minutes — no refresh token mechanism exists yet; any "remember me" logic is a red flag
+- Token expiry is `ACCESS_TOKEN_EXPIRE_MINUTES` (default 30; production 720 = 12 h, docs/deployment.md) — no refresh token or revocation exists, so flag a production value much past a day, and any "remember me" logic
+- `create_access_token` must use timezone-aware UTC (`datetime.now(timezone.utc)`), not deprecated `utcnow()`
 - `get_current_user` decodes the token and queries the DB — verify it actually validates expiry
 - Never log or return the raw JWT token in a response body
 

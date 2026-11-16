@@ -44,6 +44,7 @@ the backend plus about $6/mo for Postgres; check current pricing before you sign
 | backend | `SECRET_KEY` | long random value, generated once (`python -c "import secrets; print(secrets.token_urlsafe(64))"`), never the dev value |
 | backend | `ALLOWED_ORIGINS` | comma-separated frontend origin(s) for CORS |
 | backend | `DEBUG` | `false` |
+| backend | `ACCESS_TOKEN_EXPIRE_MINUTES` | `720` (12 h: a long game night, a fresh login each day). Default 30. Longer = a stolen token works longer, and tokens can't be revoked, so don't go far past a day |
 | backend | `STORAGE_BACKEND` | `r2` (default `local`, which production must not use) |
 | backend | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | from the Cloudflare dashboard; the backend refuses to start with `STORAGE_BACKEND=r2` if any is missing |
 | frontend | `VITE_API_URL` | the backend's public URL. Vite bakes it in at **build** time, so changing it needs a rebuild |
@@ -231,7 +232,9 @@ In order of danger for this app:
 
 ## Known production gaps (not blockers for a first deploy with friends)
 
-- **No token-expiry handling.** Tokens last 30 minutes and the frontend doesn't notice when one expires, so
-  players get logged out mid-session. Short term: raise `access_token_expire_minutes`. Real fix: refresh tokens or an expiry → re-login flow.
+- **No token-expiry handling.** Production tokens last 12 hours (`ACCESS_TOKEN_EXPIRE_MINUTES=720`, ticket T5),
+  which covers a session. When one does expire, the frontend doesn't notice: every request fails with "Could not
+  validate credentials" while the player stays on the page, and only a reload sends them to login (losing unsaved
+  sheet edits). Real fix: a 401 → re-login flow (one shared axios client would make that one change, not ~15), or refresh tokens.
 - **Open registration.** Anyone with the URL can sign up.
 - **No error monitoring** (Sentry or similar) and no uptime check.

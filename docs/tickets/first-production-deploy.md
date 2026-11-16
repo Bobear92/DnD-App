@@ -4,7 +4,7 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 5/12 done (T1–T4, T5a). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** 6/12 done (T1–T5a). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
 **Decisions:**
@@ -74,8 +74,13 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
   storage modules means consolidate first, then swap); files are served from R2's public URL instead of `/uploads`.
 - guard: existing upload tests stay green; a test that the configured root is respected.
 
-## T5 — Token lifetime stopgap
-- [ ] Raise `access_token_expire_minutes` for production (via env var) so a game session doesn't log players
+## T5 — Token lifetime stopgap ✅
+- **Landed 2026-11-16.** It was already configurable (`access_token_expire_minutes` is a settings field, so
+  `ACCESS_TOKEN_EXPIRE_MINUTES` overrides it) — just untested and undocumented. Added tests (lifetime matches the
+  setting, env var overrides, default 30, expired token → 401) and documented **720** for production. Also switched
+  `security.py` from deprecated `datetime.utcnow()` to timezone-aware UTC. Expiry behaviour on the frontend is
+  documented in deployment.md › Known production gaps.
+- [x] Raise `access_token_expire_minutes` for production (via env var) so a game session doesn't log players
   out. The real expiry handling stays on the "Not Yet Built" list.
 
 ## T5a — Merge `character_data` on save instead of replacing it ✅
@@ -115,7 +120,8 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
   (create it from `main` first: `git branch production main && git push origin production`).
 - [ ] Create the R2 bucket, API token and public URL ([deployment.md › Uploads](../deployment.md#uploads-cloudflare-r2)).
 - [ ] Set env vars: `DATABASE_URL`, `SECRET_KEY` (freshly generated), `ALLOWED_ORIGINS` (fill in after T7), `DEBUG=false`,
-  `STORAGE_BACKEND=r2`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
+  `STORAGE_BACKEND=r2`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`,
+  `ACCESS_TOKEN_EXPIRE_MINUTES=720`.
 - done: `https://<backend>/docs` loads.
 
 ## T7 — Render: frontend

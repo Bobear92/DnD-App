@@ -631,7 +631,7 @@ per edition.
 
 ### JWT Tokens
 - Store user_id as **STRING** in token: `data={'sub': str(user.id)}`
-- Expiration: 30 minutes (configured in config.py)
+- Expiration: `ACCESS_TOKEN_EXPIRE_MINUTES` (default 30; production 720). No refresh/re-login flow exists, so this is how long a player stays logged in
 - Import: use `HTTPAuthorizationCredentials` from `fastapi.security` (NOT `HTTPAuthCredentials`)
 
 ### bcrypt Version
@@ -1333,6 +1333,7 @@ SECRET_KEY=your-secret-key-change-this-in-production
 # Optional (production sets these — see docs/deployment.md):
 # ALLOWED_ORIGINS=https://app.example.com   ← comma-separated CORS origins; default = localhost:3000,5173
 # DEBUG=false                               ← defaults to false
+# ACCESS_TOKEN_EXPIRE_MINUTES=720          ← default 30
 ```
 Frontend: `VITE_API_URL` (build time) is read ONLY by `frontend/src/lib/api.js`; never hardcode the backend URL.
 

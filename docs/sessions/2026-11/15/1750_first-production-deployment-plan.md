@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy plan, T1–T5a
+title: First production deploy plan, T1–T5
 date: 2026-11-15
 started: 17:50
-branch: feature/character-data-merge
+branch: feature/token-lifetime
 area: tooling
 tags: [docs, build, consolidation, deployment, data-safety, migration, seed-data, user-rule, guard-test]
 issues: []
-summary: Prod deploy plan + T1 API URL, T2 CORS, T3 start.sh/alembic, T4 R2 uploads, T5a merge-on-save character_data
-turns: 24
+summary: Prod deploy plan + T1 API URL, T2 CORS, T3 start.sh/alembic, T4 R2, T5a merge-on-save, T5 token lifetime
+turns: 28
 stepped_in: true
-last_uuid: 7101fca8-0038-4397-9da3-13844d30e7a0
+last_uuid: 669c69a5-c968-4d5d-9a00-88f2f2af6fc1
 ---
 
-# First production deploy plan, T1–T5a
+# First production deploy plan, T1–T5
 
 ## Summary
 
@@ -45,6 +45,8 @@ last_uuid: 7101fca8-0038-4397-9da3-13844d30e7a0
 - **T5a:** PUT merges `character_data` (shallow) + explicit `character_data_remove`; frontend `toUpdatePayload` maps
   top-level `undefined` keys to removals. Audit found no top-level removal by omission. Backend 1040 / frontend 3932 green;
   live API check and a real browser autosave (inspiration +1) both kept untouched keys.
+- **T5:** token lifetime was already env-configurable; added tests + docs (production 720 min), switched `security.py` to
+  timezone-aware UTC. Backend 1045 / frontend 3932 green; real logins: 30 min default, 720 with the env var.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -75,13 +77,14 @@ last_uuid: 7101fca8-0038-4397-9da3-13844d30e7a0
 - Migrations must be rollback-safe (expand → contract); back up and rehearse on a prod copy before any migration release.
 - Data never flows dev → prod; prod → dev only deliberately.
 - Merge-on-save for `character_data` is a pre-launch fix (T5a), not a nice-to-have.
+- Production token lifetime 720 minutes (12 h) — Claude's recommendation, a Render env var, easy to change.
 - Uploads: Cloudflare R2 over a Render disk (Robert); consolidate the storage modules first, then add R2 behind one API.
 - Removed `create_all` (alembic owns the schema everywhere) rather than guarding it to dev — Claude's call, flagged in the summary.
 - T1 kept narrow: the per-service duplicated axios + token interceptor was NOT consolidated (follow-up, pairs with token expiry).
 
 ## Open threads
 
-- **Next: T5** (token lifetime stopgap), then T5b (seed upserts). T6/T7 need Robert's Render + Cloudflare accounts.
+- **Next: T5b** (seed scripts upsert) — last code ticket. T6/T7 need Robert's Render + Cloudflare accounts.
 - Follow-up from T5a: send only changed keys (e.g. `autoSaveClassPatch` sends just its patch) to stop concurrent saves
   overwriting each other.
 - R2 follow-ups: prove against the real bucket in T6; R2 has no automatic backups (versioning/periodic copy later);
@@ -515,3 +518,68 @@ last_uuid: 7101fca8-0038-4397-9da3-13844d30e7a0
 > After that, T5 (login lifetime) and T5b (seed scripts update ex …
 
 **Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/merge_live.py` · **Commands run:** 3
+
+### 25. 2026-11-16 13:57
+
+**Robert:**
+> /ship
+
+**Claude:**
+> T5a is on `main` as commit `bc5f351` and pushed. Saving a character now keeps any field the save didn't include, instead of erasing it. `feature/character-data-merge` is deleted, and the working tree is clean.
+> 
+> **Checks:**
+> - **Tests:** backend 1,040 and frontend 3,932, all passing. The feat-coverage gate passed and the production build succeeded.
+> - **Real browser save:** on a temporary character, I clicked "Increase inspiration" in the sheet. One save went out, inspiration was stored as 1, and the character's inventory and feats were untouched. I deleted the character afterwards.
+> - **Console errors:** the browser showed two 404s, both for the calendar of a campaign that has no calendar set up. That predates this change and doesn't affect the sheet.
+> - **CI:** the GitHub run for this push is still going. I'll report when it finishes.
+> 
+> **One correction to the earlier plan:** I'd said mergin …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/verify-t5a.cjs` · **Commands run:** 12
+
+### 26. 2026-11-16 14:01
+
+**Robert:**
+> Okay lets continue with T5
+
+**Claude:**
+> The frontend suite passes (3,932 tests) and the `security-reviewer` agent is updated. Once the backend suite finishes, I'll restart the server and confirm a real login gets a 30-minute token, the dev default.
+
+**Files edited:** `backend/shared/security.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t5-docs.mjs`, `.claude/agents/security-reviewer.md` · **Commands run:** 11
+
+### 27. 2026-11-16 14:13
+
+**Robert:**
+> <task-notification>
+> <task-id>bp9qzsv4x</task-id>
+> <tool-use-id>toolu_01KiBeNfSpwmukx4zYCXjKEc</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\bp9qzsv4x.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for CI on the T5a push" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> CI for the T5a push (`bc5f351`) passed on both jobs. The T5 backend suite is still running locally.
+
+**Commands run:** 1
+
+### 28. 2026-11-16 14:17
+
+**Robert:**
+> <task-notification>
+> <task-id>bqyqzz4vr</task-id>
+> <tool-use-id>toolu_01Gz9CJiT8ZnpgPUXTDuw15C</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\bqyqzz4vr.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> T5 is done on the branch `feature/token-lifetime`, not committed yet. Production logins can now last 12 hours.
+> 
+> - **It was already configurable.** The token lifetime is read from settings, so an `ACCESS_TOKEN_EXPIRE_MINUTES` environment variable already overrode the 30-minute default. Nothing tested or documented that, so this ticket adds the proof and the docs.
+> - **Real server check:** a login on the dev server gets a 30-minute token. A second server started with `ACCESS_TOKEN_EXPIRE_MINUTES=720`, the production value, issues a 720-minute (12-hour) token.
+> - **New tests:** a token lasts as long as the setting says, the environment variable overrides it, the default is 30, an expired token is refused, and a valid one works.
+> - **Small fix:** `security.py` used `datetime.utcnow()`, which is deprecated from Python 3.12, the version we pin. It now uses a timezone-aware time. The auth tests pa …
+
+**Commands run:** 4
