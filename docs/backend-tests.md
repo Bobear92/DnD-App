@@ -6,6 +6,10 @@ What each backend test file covers, with counts. Moved out of CLAUDE.md on 2026-
 backend/tests/
 ├── conftest.py                     # shared fixtures + helpers
 ├── test_auth.py                    # auth module
+├── test_schema_ownership.py        # 6 tests (1 CI-only): alembic owns the schema — main.py has no create_all; env.py imports main
+                                    #   (so `alembic check` sees every model) and escapes "%" in DATABASE_URL; start.sh migrates before
+                                    #   uvicorn with set -euo pipefail and no --reload; requirements.txt has no pytest but keeps httpx;
+                                    #   .python-version matches CI's python-version. Deploy ticket T3
 ├── test_cors.py                    # 9 tests: CORS origins come from settings (ALLOWED_ORIGINS) — TestCorsMiddleware (each configured
                                     #   origin passes a preflight with credentials; an unlisted origin gets 400 and no allow-origin header;
                                     #   never "*") + TestAllowedOriginsParsing (dev default, comma/space/trailing-slash parsing, read from env,

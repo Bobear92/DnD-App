@@ -119,6 +119,8 @@ Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](
 | **Whole-blob writes lose data silently**: `character_data` is replaced on save, so a dropped key spreads as players save | none until merge-on-save lands (first-deploy T5a) | Session 2026-11-15 |
 | **Seed scripts are the source of truth for system rows** and must upsert, not skip; they never touch campaign rows | none until first-deploy T5b | Session 2026-11-15 |
 | **Releases are tags, not branches**: tags can't move, so they stay accurate rollback points | none (documented in `docs/deployment.md`) | Session 2026-11-15 |
+| **Run the real start path against an EMPTY database before trusting it.** Doing so found `env.py` crashing on a `%` in DATABASE_URL (ConfigParser interpolation) — every deploy would have failed | guard test (`test_schema_ownership.py`), CI (`alembic upgrade head` + `alembic check` from scratch) | Session 2026-11-16 |
+| **Alembic owns the schema**: no `create_all` in the app, so a model without a migration fails CI, not a deploy | guard test (`test_schema_ownership.py`), CI `alembic check` | Session 2026-11-16 |
 
 ## Shared mechanisms and duplication
 

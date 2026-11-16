@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from config import settings
-from shared.database import engine, Base
 from auth.routes import router as auth_router
 from gm import campaigns_router, npcs_router, loot_tables_router, locations_router, calendar_router, timeline_router, session_notes_router, encounters_router
 from players.characters.routes import router as characters_router
@@ -13,8 +12,11 @@ from players.feats import router as feats_router
 from players.classes import router as classes_router
 from shared.encyclopedia import bestiary_router, spells_router, armor_router, weapons_router, adventuring_gear_router, potions_router, food_drink_router, magic_items_router
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# No Base.metadata.create_all() here: ALEMBIC OWNS THE SCHEMA, in dev and production alike. Creating
+# tables at import let a model ship without a migration (it worked locally, then broke a fresh DB), and
+# a server started against an empty DB before `alembic upgrade head` would create tables alembic then
+# fails on. start.sh and scripts/restart-backend.sh run the migrations first; tests build their own
+# schema in conftest.py. CI's `alembic check` fails if a model and the migrations disagree.
 
 app = FastAPI(title="D&D RPG API")
 

@@ -23,6 +23,10 @@ from shared.encyclopedia.items.adventuring_gear.models import AdventuringGear
 from shared.encyclopedia.items.potions.models import Potion
 from shared.encyclopedia.items.food_drink.models import FoodDrink
 from shared.encyclopedia.items.magic_items.models import MagicItem
+# Importing the app registers EVERY model it uses (the list above is historical and incomplete), so
+# autogenerate and `alembic check` compare against the real schema, not a subset. main.py has no
+# import-time side effects on the database.
+import main  # noqa: F401,E402
 
 # Import database URL
 from config import settings
@@ -30,8 +34,10 @@ from config import settings
 # this is the Alembic Config object
 config = context.config
 
-# Set the database URL from your config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Set the database URL from your config. Alembic's config is a ConfigParser, which treats "%" as
+# interpolation syntax, so a URL with a percent-encoded password character (e.g. "%21" for "!")
+# crashed every `alembic upgrade head` — in production that is every deploy. Escape it.
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:

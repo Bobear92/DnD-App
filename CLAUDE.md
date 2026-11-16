@@ -1299,7 +1299,9 @@ the durable hard gate; the frontend ratchet is *also* enforced every turn locall
 
 **Migrations are only exercised from scratch in CI.** `pytest` builds the test schema with
 `create_all`, so it never runs the alembic chain; the backend job's feat-coverage step creates an
-empty DB and runs `alembic upgrade head`, which is the sole from-scratch migration gate. Autogenerate
+empty DB and runs `alembic upgrade head` then `alembic check` (models must match the migrated schema), the sole from-scratch
+migration gate. **Alembic owns the schema: `main.py` creates no tables** — every new model needs a migration
+(`restart-backend.sh` and the production `start.sh` run `alembic upgrade head` first). Tests install `requirements-dev.txt`. Autogenerate
 run against a dev DB that already has the tables produces an **empty** migration (this is how
 `c54f8b027131` shipped with a `pass` body and broke the chain) — after `alembic revision
 --autogenerate`, open the file and confirm it isn't empty.

@@ -4,7 +4,7 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 2/12 done (T1, T2). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** 3/12 done (T1–T3). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
 **Decisions still open (settle before the ticket that needs them):**
@@ -38,13 +38,21 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [x] `config.py`: change the `debug` default to `False` (`.env` sets it true locally); check where `debug` is read.
 - guard: backend test that a configured origin gets CORS headers and an unlisted one doesn't.
 
-## T3 — Production start command and Python version
-- [ ] Pin the Python version for Render (`.python-version` or `PYTHON_VERSION` = 3.12).
-- [ ] Decide whether `pytest`/`httpx` stay in `requirements.txt` (harmless) or move to a `requirements-dev.txt`.
-- [ ] `main.py` runs `Base.metadata.create_all()` at import. In prod the start command runs `alembic upgrade head` first, so
+## T3 — Production start command and Python version ✅
+- **Landed 2026-11-16.** `backend/start.sh` (migrate, then uvicorn on `$PORT` with `--proxy-headers`); `.python-version`
+  = 3.12 at the repo root (Render defaults to 3.14 unpinned; CI tests 3.12); `pytest` moved to `requirements-dev.txt`
+  (`httpx` stays: the seed scripts download SRD data with it); `main.py` no longer runs `create_all` — every one of the 44
+  model tables is created by migrations alone (checked); `env.py` imports `main` so `alembic check` sees every model, and
+  CI now runs `alembic check` after the from-scratch upgrade; `restart-backend.sh` runs `alembic upgrade head` first.
+  **Found and fixed:** `env.py` crashed on a DATABASE_URL containing `%` (a percent-encoded password) — ConfigParser
+  interpolation — which would have failed every deploy. Smoke test: `bash start.sh` on an empty DB applied 30 migrations,
+  served in 3 s, registered a user. Guards: `backend/tests/test_schema_ownership.py`.
+- [x] Pin the Python version for Render (`.python-version` or `PYTHON_VERSION` = 3.12).
+- [x] Decide whether `pytest`/`httpx` stay in `requirements.txt` (harmless) or move to a `requirements-dev.txt`.
+- [x] `main.py` runs `Base.metadata.create_all()` at import. In prod the start command runs `alembic upgrade head` first, so
   it is a no-op there, but if the app ever starts against an empty DB before alembic, it creates tables that alembic then
   fails on. Decide: remove it (alembic owns the schema) or guard it to dev only.
-- [ ] Confirm `alembic upgrade head` works on an **empty** database (CI already does this; run it once locally against a scratch DB).
+- [x] Confirm `alembic upgrade head` works on an **empty** database (CI already does this; run it once locally against a scratch DB).
 
 ## T4 — Uploads that survive a deploy (needs the uploads decision)
 - [ ] **Disk option:** make the uploads root configurable (`UPLOADS_DIR` env var) in the four storage modules
@@ -80,7 +88,8 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 
 ## T6 — Render: database and backend (needs the tier decision)
 - [ ] Create Render Postgres; note the internal URL.
-- [ ] Create the backend Web Service from the repo, root `backend/`, **deploying from the `production` branch**
+- [ ] Check the build log uses Python 3.12 (see deployment.md › Hosting); if not, set `PYTHON_VERSION` to a full 3.12.x.
+- [ ] Create the backend Web Service from the repo, root `backend/`, start command `bash start.sh`, **deploying from the `production` branch**
   (create it from `main` first: `git branch production main && git push origin production`).
 - [ ] Set env vars: `DATABASE_URL`, `SECRET_KEY` (freshly generated), `ALLOWED_ORIGINS` (fill in after T7), `DEBUG=false`.
 - [ ] Attach the persistent disk (if chosen in T4).

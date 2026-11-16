@@ -1,7 +1,8 @@
 import os
 
 # Override DATABASE_URL before any app code is imported so the test DB is used
-# for engine creation, Base.metadata.create_all in main.py, and all queries.
+# for engine creation and all queries. (main.py creates no tables — the session fixture below
+# builds the test schema itself; alembic owns the real one.)
 from dotenv import load_dotenv
 
 load_dotenv()  # load backend/.env for DATABASE_URL and SECRET_KEY

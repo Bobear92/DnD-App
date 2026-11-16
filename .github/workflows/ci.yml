@@ -54,7 +54,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-dev.txt
       - run: pytest
       # Feat-coverage gate. Uses a seeded DB, so it runs against a fresh dnd_app_dev built here
       # (pytest uses the separate dnd_app_test schema and does not seed feats).
@@ -76,5 +76,8 @@ jobs:
           PY
           # Also the from-scratch migration gate: the chain must upgrade cleanly on an empty DB.
           alembic upgrade head
+          # …and the migrated schema must match the models exactly. main.py no longer creates tables,
+          # so a model without a migration would otherwise only surface as a broken deploy.
+          alembic check
           python seed_feats.py
           python report_feat_effects.py --check

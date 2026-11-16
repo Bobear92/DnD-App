@@ -16,4 +16,8 @@ powershell -NoProfile -Command "
 echo "Starting uvicorn on http://localhost:8000 ..."
 cd "$REPO_ROOT/backend"
 source venv/Scripts/activate
+# Alembic owns the schema (main.py no longer creates tables), so bring the dev DB to head first —
+# the same order as production's start.sh. A failing migration stops here, loudly.
+echo "Applying migrations (alembic upgrade head)..."
+alembic upgrade head
 exec uvicorn main:app --reload

@@ -15,9 +15,18 @@ Agreed with Robert on 2026-11-15. Anything marked **(open)** has not been decide
 | Piece | Render service | Settings |
 |---|---|---|
 | `frontend/` | Static Site | build `npm ci && npm run build`, publish `dist`, rewrite `/*` → `/index.html` (React Router) |
-| `backend/` | Web Service (Python) | build `pip install -r requirements.txt`, start `alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT` (never `--reload` in prod) |
+| `backend/` | Web Service (Python) | root `backend`, build `pip install -r requirements.txt` (production deps only; tests use `requirements-dev.txt`), start `bash start.sh` (runs `alembic upgrade head`, then uvicorn on `$PORT` with proxy headers; never `--reload`) |
 | Postgres | Managed Postgres | paid tier (free databases expire after ~30 days and have no backups) |
 | Uploads | Render persistent disk **or** Cloudflare R2 **(open)** | Render's normal filesystem is wiped on every deploy, so `backend/uploads/` cannot live there |
+
+**Python version:** `.python-version` at the repo root pins **3.12**, the version CI tests (unpinned, Render currently
+defaults to 3.14). Render documents the file at "the root of your repo" without saying how that interacts with a service
+Root Directory, so check the first deploy's build log; if it shows a different version, set `PYTHON_VERSION` to a full
+3.12.x version in the service settings (that takes precedence).
+
+**Alembic owns the schema.** The app never creates tables itself (`main.py` used to run `create_all`); `start.sh` and the
+dev restart script run `alembic upgrade head` before starting, and CI runs `alembic check` so a model without a migration
+fails the build instead of a deploy.
 
 Why Render: three pieces, one dashboard, deploy-on-push, managed HTTPS, no Docker or servers needed.
 Railway and Fly.io are the fallbacks if it doesn't work out.

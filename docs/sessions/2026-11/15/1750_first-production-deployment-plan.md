@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy plan, T1 and T2
+title: First production deploy plan, T1–T3
 date: 2026-11-15
 started: 17:50
-branch: feature/env-cors-settings
+branch: feature/prod-start-command
 area: tooling
 tags: [docs, build, deployment, data-safety, migration, seed-data, user-rule, guard-test]
 issues: []
-summary: Planned first prod deploy (Render, tags, data-safety, 12 tickets); T1 one API base URL; T2 CORS from env
-turns: 12
+summary: Planned first prod deploy (Render, tags, 12 tickets); T1 API base URL; T2 CORS env; T3 start.sh, alembic owns schema
+turns: 15
 stepped_in: true
-last_uuid: 3eeac977-40b1-4bb8-9f6c-d9f7d8d48123
+last_uuid: 9ae5a77b-cd8b-4d58-b388-c587c8d18f74
 ---
 
-# First production deploy plan, T1 and T2
+# First production deploy plan, T1–T3
 
 ## Summary
 
@@ -33,6 +33,10 @@ last_uuid: 3eeac977-40b1-4bb8-9f6c-d9f7d8d48123
 - **T2:** `config.py` `allowed_origins` (env `ALLOWED_ORIGINS`) + parsed `cors_origins`; `main.py` uses it; `debug`
   defaults False (read nowhere). `tests/test_cors.py` (9); backend 997 / frontend 3923 green; live preflight: dev origin 200,
   unknown origin 400. security-reviewer agent + CLAUDE.md env block updated.
+- **T3:** `backend/start.sh` (migrate then uvicorn, proxy headers); `.python-version` 3.12; `requirements-dev.txt` (pytest);
+  removed `create_all` from `main.py` after proving all 44 tables come from migrations; `env.py` imports `main`; CI runs
+  `alembic check`; `restart-backend.sh` migrates first; fixed `env.py` crash on `%` in DATABASE_URL. start.sh smoke on an empty
+  DB: 30 migrations, served in 3 s, register 201. Backend 1002 / frontend 3923 green. Guards: `test_schema_ownership.py`.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -46,6 +50,9 @@ last_uuid: 3eeac977-40b1-4bb8-9f6c-d9f7d8d48123
   first pre-deploy list.
 - **Mass vitest failure was the shell, not the code.** Every suite failed with "reading 'config'" after the cwd became
   lowercase `c:/`; took a stash-everything run to prove it, then PowerShell (`C:/`) passed. Now in learnings + memory.
+- T3 verification harness churn: Windows Python launched WSL bash, then a no-sleep retry loop, then piped-stdout hang;
+  running start.sh from Git Bash directly worked first time. The `%` bug also printed the local DB password into Claude's
+  output (stayed local); later scratch scripts redact URLs.
 - The first Playwright pass missed encyclopedia/feats because the tabs are buttons, not ARIA tabs; fixed in the script.
 
 ## Decisions
@@ -56,12 +63,14 @@ last_uuid: 3eeac977-40b1-4bb8-9f6c-d9f7d8d48123
 - Migrations must be rollback-safe (expand → contract); back up and rehearse on a prod copy before any migration release.
 - Data never flows dev → prod; prod → dev only deliberately.
 - Merge-on-save for `character_data` is a pre-launch fix (T5a), not a nice-to-have.
+- Removed `create_all` (alembic owns the schema everywhere) rather than guarding it to dev — Claude's call, flagged in the summary.
 - T1 kept narrow: the per-service duplicated axios + token interceptor was NOT consolidated (follow-up, pairs with token expiry).
 
 ## Open threads
 
-- **Next: T3** (prod start command, Python pin, requirements split, and the new item: decide whether `main.py`'s
-  `Base.metadata.create_all()` at import is removed or dev-only, since alembic owns the prod schema).
+- **Next: T4** (uploads survive a deploy) — needs Robert's decision: Render persistent disk vs Cloudflare R2.
+- Local venv is Python 3.14 while CI/prod pin 3.12; works today, worth aligning eventually.
+- T6: confirm Render's build log shows 3.12 (`.python-version` at repo root vs service Root Directory is undocumented).
 - Follow-up: one shared axios client (every service repeats the token interceptor); natural with token-expiry work.
 - Open decisions: uploads (Render disk vs Cloudflare R2, needed by T4); tier (free vs ~$13/mo paid, needed by T6).
 - CLAUDE.md Development Workflow still calls `main` "the deployable trunk"; rewrite in T9 once `production` exists.
@@ -287,3 +296,52 @@ last_uuid: 3eeac977-40b1-4bb8-9f6c-d9f7d8d48123
 > - **Tests:** the new [backend/tests/test_cors.py](backend/tests/test_cors.py) has 9 tests. …
 
 **Files edited:** `backend/config.py`, `backend/main.py`, `backend/tests/test_cors.py`, `docs/backend-tests.md`, `CLAUDE.md`, `.claude/agents/security-reviewer.md` · **Commands run:** 11
+
+### 13. 2026-11-16 10:56
+
+**Robert:**
+> /ship
+
+**Claude:**
+> T2 is on `main` as commit `869e920` and pushed. `feature/env-cors-settings` is deleted, and the working tree is clean.
+> 
+> - **Tests:** frontend 3,923 and backend 997, all passing. The feat-coverage gate passed with no change.
+> - **Real-server check:** on the restarted backend, a request from the dev frontend (`localhost:5173`) is allowed and one from an unknown website is refused.
+> - **Docs and agents:** CLAUDE.md's environment-variable section, backend-tests.md, the `security-reviewer` agent and the ticket list (now 2 of 12 done) were updated before shipping. The session log now covers T2 and lists T3 as next.
+> 
+> Next is T3: the production start command, pinning the Python version for Render, deciding whether `pytest` stays in the production requirements, and the new question of what to do with the automatic table creation in `main.py`.
+
+**Commands run:** 2
+
+### 14. 2026-11-16 10:59
+
+**Robert:**
+> Okay lets continue with T3
+
+**Claude:**
+> The backend suite is still running; it takes about 15 minutes and I'll be notified when it finishes. I'm holding the dev-server restart until then, because the restart script kills every Python process, including the test run.
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/migration_check.py`, `backend/migrations/env.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/table_parity.py`, `backend/main.py`, `backend/start.sh`, `.python-version`, `.github/workflows/ci.yml`, `scripts/restart-backend.sh`, `backend/tests/conftest.py`, `backend/tests/test_schema_ownership.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/start_sh_smoke.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/scratch_db.py`, `docs/backend-tests.md`, `.claude/agents/backend-module-expert.md` · **Commands run:** 21
+
+### 15. 2026-11-16 11:28
+
+**Robert:**
+> <task-notification>
+> <task-id>b958qdqci</task-id>
+> <tool-use-id>toolu_01Qh817Wo4s7fLXhAfEHaBoH</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\b958qdqci.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend test suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> T3 is done on the branch `feature/prod-start-command`, not committed yet.
+> 
+> **What changed:**
+> - **[backend/start.sh](backend/start.sh):** the production start command. It runs `alembic upgrade head` first and stops if that fails, then starts uvicorn on Render's port. It also tells uvicorn to trust Render's HTTPS proxy, so any redirects FastAPI generates keep `https`. Render's start command will just be `bash start.sh`.
+> - **[.python-version](.python-version):** pins **3.12**, the version CI tests. Unpinned, Render currently defaults to 3.14.
+>   - Render's docs don't say whether this file is read when the backend lives in a subfolder, so T6 now includes checking the build log for 3.12. If it's wrong, set `PYTHON_VERSION` to a full 3.12 version number in Render's settings.
+>   - Your local venv is 3.14. That works (all tests pass on it), but it isn't the version CI and production use.
+> - **Requi …
+
+**Commands run:** 3
