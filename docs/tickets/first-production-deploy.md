@@ -4,11 +4,13 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 3/12 done (T1–T3). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** 4/12 done (T1–T4). Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
-**Decisions still open (settle before the ticket that needs them):**
-- Uploads: Render persistent disk (simpler, needs a paid instance) or Cloudflare R2 (durable, more code). Needed by T4.
+**Decisions:**
+- Uploads: **Cloudflare R2** (decided 2026-11-16).
+
+**Still open:**
 - Tier: free (cold starts, database expires) or paid (~$13/mo). Needed by T6.
 
 Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 onward is setup on Render and GitHub.
@@ -54,11 +56,21 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
   fails on. Decide: remove it (alembic owns the schema) or guard it to dev only.
 - [x] Confirm `alembic upgrade head` works on an **empty** database (CI already does this; run it once locally against a scratch DB).
 
-## T4 — Uploads that survive a deploy (needs the uploads decision)
-- [ ] **Disk option:** make the uploads root configurable (`UPLOADS_DIR` env var) in the four storage modules
+## T4 — Uploads that survive a deploy ✅ (Cloudflare R2)
+- **Landed 2026-11-16.** The five per-module storage files (`characters/`, `npcs/`, `locations/`, `session_notes/`
+  `storage.py` + `shared/music_storage.py`) were near-identical, so they were consolidated first into
+  `backend/shared/file_storage.py`: each upload kind is an `UploadKind` data row; `local` and `r2` backends sit behind
+  `save_upload` / `delete_upload` / `delete_upload_file` / `delete_upload_folder`. Stored keys are unchanged
+  (`uploads/...`), so no data migration. `main.py` mounts `/uploads` only for local storage and fails fast if `r2` lacks
+  credentials. Frontend `uploadUrl` uses `VITE_UPLOADS_URL`. Also fixed: session-image delete joined a URL `filename` into a
+  path (`../` could reach another session's files); tests no longer write into `backend/uploads` (temp dir via conftest).
+  Tests: `backend/tests/test_file_storage.py` (R2 via a fake client); `test_locations.py` map tests now use real storage.
+- [ ] **Not yet proven against real R2** — needs the bucket and credentials. Do it in T6: upload a portrait on the live
+  site, confirm the object appears in the bucket and the image renders, redeploy, confirm it still renders.
+- [x] ~~**Disk option:** make the uploads root configurable (`UPLOADS_DIR` env var) in the four storage modules
   (`players/characters/storage.py`, `npcs/storage.py`, `locations/storage.py`, `shared/music_storage.py`) and
-  the `StaticFiles` mount, then mount the Render disk there. Session image storage uses the same root.
-- [ ] **R2 option:** one shared storage backend behind those same helpers (a duplication tripwire: four
+  the `StaticFiles` mount, then mount the Render disk there. Session image storage uses the same root.~~ (not chosen)
+- [x] **R2 option:** one shared storage backend behind those same helpers (a duplication tripwire: four
   storage modules means consolidate first, then swap); files are served from R2's public URL instead of `/uploads`.
 - guard: existing upload tests stay green; a test that the configured root is respected.
 
@@ -91,13 +103,14 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [ ] Check the build log uses Python 3.12 (see deployment.md › Hosting); if not, set `PYTHON_VERSION` to a full 3.12.x.
 - [ ] Create the backend Web Service from the repo, root `backend/`, start command `bash start.sh`, **deploying from the `production` branch**
   (create it from `main` first: `git branch production main && git push origin production`).
-- [ ] Set env vars: `DATABASE_URL`, `SECRET_KEY` (freshly generated), `ALLOWED_ORIGINS` (fill in after T7), `DEBUG=false`.
-- [ ] Attach the persistent disk (if chosen in T4).
+- [ ] Create the R2 bucket, API token and public URL ([deployment.md › Uploads](../deployment.md#uploads-cloudflare-r2)).
+- [ ] Set env vars: `DATABASE_URL`, `SECRET_KEY` (freshly generated), `ALLOWED_ORIGINS` (fill in after T7), `DEBUG=false`,
+  `STORAGE_BACKEND=r2`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
 - done: `https://<backend>/docs` loads.
 
 ## T7 — Render: frontend
 - [ ] Create the Static Site, root `frontend/`, build `npm ci && npm run build`, publish `dist`, branch `production`.
-- [ ] Set `VITE_API_URL` to the backend URL; add the rewrite `/*` → `/index.html`.
+- [ ] Set `VITE_API_URL` to the backend URL and `VITE_UPLOADS_URL` to the R2 public URL; add the rewrite `/*` → `/index.html`.
 - [ ] Put the Static Site's URL into the backend's `ALLOWED_ORIGINS`; redeploy the backend.
 - done: the login page loads, and refreshing on a deep link (e.g. `/campaigns/1/characters`) doesn't 404.
 

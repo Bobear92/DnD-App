@@ -9,6 +9,13 @@ load_dotenv()  # load backend/.env for DATABASE_URL and SECRET_KEY
 _dev_url = os.environ.get("DATABASE_URL", "")
 os.environ["DATABASE_URL"] = _dev_url.replace("dnd_app_dev", "dnd_app_test")
 
+# Uploads made by tests go to a throwaway folder, never into backend/uploads (the dev files), and
+# always to local storage even if the shell has STORAGE_BACKEND=r2 set.
+import tempfile  # noqa: E402
+
+os.environ["UPLOADS_DIR"] = tempfile.mkdtemp(prefix="dnd_test_uploads_")
+os.environ["STORAGE_BACKEND"] = "local"
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text

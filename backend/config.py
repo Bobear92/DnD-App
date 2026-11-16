@@ -23,6 +23,16 @@ class Settings(BaseSettings):
     # A plain string, not a list, so the env var is "https://a.com,https://b.com" rather than JSON.
     allowed_origins: str = DEV_ORIGINS
 
+    # Uploaded files (shared/file_storage.py). "local" = disk under UPLOADS_DIR (default backend/uploads),
+    # served at /uploads. "r2" = a Cloudflare R2 bucket — required in production, where the disk is
+    # wiped on every deploy. The frontend then reads files from the bucket's public URL (VITE_UPLOADS_URL).
+    storage_backend: str = "local"
+    uploads_dir: str = ""
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket: str = ""
+
     @property
     def cors_origins(self) -> list[str]:
         """ALLOWED_ORIGINS split into a list. Trailing slashes are dropped because a browser's

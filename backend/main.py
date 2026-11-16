@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from config import settings
+from shared.file_storage import LocalStorage, get_storage
 from auth.routes import router as auth_router
 from gm import campaigns_router, npcs_router, loot_tables_router, locations_router, calendar_router, timeline_router, session_notes_router, encounters_router
 from players.characters.routes import router as characters_router
@@ -30,10 +31,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve uploaded map images
-_uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
-os.makedirs(_uploads_dir, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
+# Uploaded files (shared/file_storage.py). With local storage the API serves them itself at /uploads;
+# with R2 (production) the browser loads them from the bucket's public URL and this mount is absent.
+# get_storage() also fails fast here if STORAGE_BACKEND=r2 is missing its credentials.
+_storage = get_storage()
+if isinstance(_storage, LocalStorage):
+    os.makedirs(_storage.root, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=_storage.root), name="uploads")
 
 # Include routers
 app.include_router(auth_router)

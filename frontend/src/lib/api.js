@@ -15,11 +15,17 @@ export const API_ORIGIN = (import.meta.env.VITE_API_URL || DEV_ORIGIN).replace(/
 export const API_BASE = `${API_ORIGIN}/api`;
 
 /**
+ * Where uploaded files are served from. Locally the backend serves them at /uploads. In production
+ * they live in a Cloudflare R2 bucket (backend/shared/file_storage.py) and VITE_UPLOADS_URL is that
+ * bucket's public URL — the stored key `uploads/...` is the object key, so the same path works on both.
+ */
+export const UPLOADS_ORIGIN = (import.meta.env.VITE_UPLOADS_URL || API_ORIGIN).replace(/\/+$/, '');
+
+/**
  * Turn a stored upload path (`uploads/characters/3/abc.png`) into a URL the browser can load.
- * Returns null for an empty path so callers can render "no image". When uploads move to object
- * storage (deployment ticket T4), this is the one function that changes.
+ * Returns null for an empty path so callers can render "no image".
  */
 export function uploadUrl(path) {
   if (!path) return null;
-  return `${API_ORIGIN}/${String(path).replace(/^\/+/, '')}`;
+  return `${UPLOADS_ORIGIN}/${String(path).replace(/^\/+/, '')}`;
 }

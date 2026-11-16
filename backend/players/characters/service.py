@@ -10,8 +10,7 @@ from players.characters.schemas import (
     CharacterNpcCreate, CharacterNpcResponse,
     RestRequest, RestResponse, RestResultItem, InitiativeOption, InitiativeOptionsItem,
 )
-from players.characters.storage import save_character_image, delete_character_image_file
-from shared.music_storage import save_music_file, delete_music_file
+from shared.file_storage import save_upload, delete_upload, CHARACTER_IMAGE, MUSIC
 from gm.campaigns.models import Campaign, CampaignMember
 from gm.campaigns.campaign_tools.timeline.models import TimelineEvent
 from gm.campaigns.campaign_tools.timeline.service import _compute_era_dates, _resolve_absolute_year
@@ -224,9 +223,9 @@ async def upload_character_image(db: Session, character_id: int, file: UploadFil
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the character owner or GM can upload an image")
 
     if character.image_path:
-        delete_character_image_file(character.image_path)
+        delete_upload(character.image_path)
 
-    image_path = await save_character_image(file, character_id)
+    image_path = await save_upload(file, CHARACTER_IMAGE, character_id)
     character.image_path = image_path
     db.commit()
     db.refresh(character)
@@ -240,7 +239,7 @@ def delete_character_image(db: Session, character_id: int, user_id: int, is_admi
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the character owner or GM can delete the image")
 
     if character.image_path:
-        delete_character_image_file(character.image_path)
+        delete_upload(character.image_path)
         character.image_path = None
         db.commit()
         db.refresh(character)
@@ -255,9 +254,9 @@ async def upload_character_music(db: Session, character_id: int, file: UploadFil
     if not (is_gm or is_owner):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the character owner or GM can upload music")
 
-    delete_music_file(character.theme_music_url)
+    delete_upload(character.theme_music_url)
 
-    character.theme_music_url = await save_music_file(file, f"characters/{character_id}")
+    character.theme_music_url = await save_upload(file, MUSIC, "characters", character_id)
     db.commit()
     db.refresh(character)
     return _strip_private_fields(character, is_gm, is_owner)
@@ -270,7 +269,7 @@ def delete_character_music(db: Session, character_id: int, user_id: int, is_admi
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the character owner or GM can delete music")
 
     if character.theme_music_url:
-        delete_music_file(character.theme_music_url)
+        delete_upload(character.theme_music_url)
         character.theme_music_url = None
         db.commit()
         db.refresh(character)

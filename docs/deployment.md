@@ -17,7 +17,7 @@ Agreed with Robert on 2026-11-15. Anything marked **(open)** has not been decide
 | `frontend/` | Static Site | build `npm ci && npm run build`, publish `dist`, rewrite `/*` → `/index.html` (React Router) |
 | `backend/` | Web Service (Python) | root `backend`, build `pip install -r requirements.txt` (production deps only; tests use `requirements-dev.txt`), start `bash start.sh` (runs `alembic upgrade head`, then uvicorn on `$PORT` with proxy headers; never `--reload`) |
 | Postgres | Managed Postgres | paid tier (free databases expire after ~30 days and have no backups) |
-| Uploads | Render persistent disk **or** Cloudflare R2 **(open)** | Render's normal filesystem is wiped on every deploy, so `backend/uploads/` cannot live there |
+| Uploads | **Cloudflare R2** bucket (decided 2026-11-16) | Render's filesystem is wiped on every deploy, so uploads cannot live on the backend's disk. See [Uploads](#uploads-cloudflare-r2) |
 
 **Python version:** `.python-version` at the repo root pins **3.12**, the version CI tests (unpinned, Render currently
 defaults to 3.14). Render documents the file at "the root of your repo" without saying how that interacts with a service
@@ -44,9 +44,36 @@ the backend plus about $6/mo for Postgres; check current pricing before you sign
 | backend | `SECRET_KEY` | long random value, generated once (`python -c "import secrets; print(secrets.token_urlsafe(64))"`), never the dev value |
 | backend | `ALLOWED_ORIGINS` | comma-separated frontend origin(s) for CORS |
 | backend | `DEBUG` | `false` |
+| backend | `STORAGE_BACKEND` | `r2` (default `local`, which production must not use) |
+| backend | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | from the Cloudflare dashboard; the backend refuses to start with `STORAGE_BACKEND=r2` if any is missing |
 | frontend | `VITE_API_URL` | the backend's public URL. Vite bakes it in at **build** time, so changing it needs a rebuild |
+| frontend | `VITE_UPLOADS_URL` | the R2 bucket's public URL (r2.dev subdomain or custom domain); uploaded images and music load from here |
 
 Nothing secret ever goes into the frontend: anything prefixed `VITE_` ends up in the public JS bundle.
+
+## Uploads (Cloudflare R2)
+
+Portraits, maps, session images and theme music all go through **one module**, `backend/shared/file_storage.py`.
+Each upload is stored under a key like `uploads/characters/3/<uuid>.png`, and **that key is what the database
+stores**. Locally (`STORAGE_BACKEND=local`) the key is a file under `backend/uploads/`, served by the API at `/uploads`.
+In production (`STORAGE_BACKEND=r2`) the same key is an object in the R2 bucket, and the browser loads it from
+`VITE_UPLOADS_URL` (`frontend/src/lib/api.js` › `uploadUrl`). Because the key doesn't change, switching needs no data migration.
+
+**Setting up the bucket (once):**
+1. Cloudflare dashboard → R2 → create a bucket (e.g. `dnd-uploads`). Note the **Account ID**.
+2. R2 → *Manage API tokens* → create a token with **Object Read & Write** on that bucket only. Copy the access key ID
+   and secret (shown once) into the backend's env vars.
+3. Bucket → *Settings* → *Public access*: enable the `r2.dev` subdomain (fine to start; Cloudflare rate-limits it) or
+   connect a custom domain (better for real use). That URL is `VITE_UPLOADS_URL`.
+4. No bucket CORS rule is needed: images and audio load with plain `<img>`/`<audio>` tags.
+
+**What "public" means here:** anyone with a file's URL can open it. The URLs contain a random UUID and aren't listed
+anywhere, so they can't be guessed — the same exposure as today's `/uploads` mount, which also has no login. A map the
+GM hides is hidden in the app, but its file URL still works for anyone who already has it. If that ever matters, the
+fix is short-lived signed URLs, not a different store.
+
+**Backups:** R2 has no automatic snapshots. The bucket is durable, but a bug that deletes objects deletes them. Worth
+revisiting (object versioning or a periodic copy) once real campaigns depend on it.
 
 ---
 

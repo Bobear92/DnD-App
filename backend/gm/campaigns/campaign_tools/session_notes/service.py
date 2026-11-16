@@ -14,8 +14,9 @@ from .schemas import (
     SessionNoteCharacterAdd, SessionNoteCharacterResponse,
     SessionImageResponse,
 )
-from .storage import save_session_image, delete_session_image_file, delete_session_images_dir
-from shared.music_storage import save_music_file, delete_music_file
+from shared.file_storage import (
+    save_upload, delete_upload, delete_upload_file, delete_upload_folder, SESSION_IMAGE, MUSIC,
+)
 from gm.campaigns.models import CampaignMember
 from gm.campaigns.campaign_tools.timeline.schemas import EraDate
 from gm.campaigns.campaign_tools.timeline.service import _compute_era_dates, _resolve_absolute_year
@@ -210,7 +211,7 @@ def update_session(db: Session, campaign_id: int, session_id: int, data: Session
 def delete_session(db: Session, campaign_id: int, session_id: int, user_id: int) -> None:
     _require_gm(db, campaign_id, user_id)
     session = _get_session_or_404(db, campaign_id, session_id)
-    delete_session_images_dir(campaign_id, session_id)
+    delete_upload_folder(SESSION_IMAGE, campaign_id, session_id)
     db.delete(session)
     db.commit()
 
@@ -233,7 +234,7 @@ async def upload_image(
 ) -> SessionImageResponse:
     _require_gm(db, campaign_id, user_id)
     _get_session_or_404(db, campaign_id, session_id)
-    image_path = await save_session_image(file, campaign_id, session_id)
+    image_path = await save_upload(file, SESSION_IMAGE, campaign_id, session_id)
     return SessionImageResponse(image_url=image_path)
 
 
@@ -242,7 +243,7 @@ def delete_image(
 ) -> None:
     _require_gm(db, campaign_id, user_id)
     _get_session_or_404(db, campaign_id, session_id)
-    if not delete_session_image_file(campaign_id, session_id, filename):
+    if not delete_upload_file(SESSION_IMAGE, campaign_id, session_id, filename=filename):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
 
 
@@ -253,8 +254,8 @@ async def upload_music(
 ) -> SessionNote:
     _require_gm(db, campaign_id, user_id)
     session = _get_session_or_404(db, campaign_id, session_id)
-    delete_music_file(session.music_url)
-    session.music_url = await save_music_file(file, f"sessions/{campaign_id}/{session_id}")
+    delete_upload(session.music_url)
+    session.music_url = await save_upload(file, MUSIC, "sessions", campaign_id, session_id)
     db.commit()
     db.refresh(session)
     return _session_to_response(db, session, is_player=False)
@@ -266,7 +267,7 @@ def delete_music(
     _require_gm(db, campaign_id, user_id)
     session = _get_session_or_404(db, campaign_id, session_id)
     if session.music_url:
-        delete_music_file(session.music_url)
+        delete_upload(session.music_url)
         session.music_url = None
         db.commit()
         db.refresh(session)

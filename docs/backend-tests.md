@@ -6,6 +6,11 @@ What each backend test file covers, with counts. Moved out of CLAUDE.md on 2026-
 backend/tests/
 ├── conftest.py                     # shared fixtures + helpers
 ├── test_auth.py                    # auth module
+├── test_file_storage.py            # 25 tests: shared/file_storage.py — key shape is backend-independent; per-kind type/size validation;
+                                    #   LocalStorage save/delete/delete-folder + root escape refused; delete_upload_file rejects "/", "\\",
+                                    #   ".." filenames; R2Storage against a fake S3 client (put key/content-type/cache header, delete reports
+                                    #   existence, folder delete paginates and spares "1/20" when deleting "1/2", non-404 errors raised);
+                                    #   backend selection (tests on local temp storage, r2 fails fast naming missing creds). Deploy ticket T4
 ├── test_schema_ownership.py        # 6 tests (1 CI-only): alembic owns the schema — main.py has no create_all; env.py imports main
                                     #   (so `alembic check` sees every model) and escapes "%" in DATABASE_URL; start.sh migrates before
                                     #   uvicorn with set -euo pipefail and no --reload; requirements.txt has no pytest but keeps httpx;

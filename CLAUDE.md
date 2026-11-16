@@ -176,7 +176,7 @@ campaigns.
 backend/
 ├── auth/                        # Login, register, JWT — routes/service/models/schemas
 ├── players/
-│   ├── characters/              # Character CRUD — routes/service/models/schemas/storage
+│   ├── characters/              # Character CRUD — routes/service/models/schemas
 │   ├── races/                   # D&D races (system + campaign-custom)
 │   ├── backgrounds/             # D&D backgrounds (system + campaign-custom)
 │   ├── feats/                   # D&D feats (system + campaign-custom)
@@ -213,7 +213,8 @@ backend/
 │   ├── dependencies.py          # get_db, get_current_user, require_admin, require_gm
 │   ├── security.py              # Password hashing, JWT functions
 │   ├── enums.py                 # OwnerType enum (system/campaign)
-│   ├── music_storage.py         # Shared audio upload helper: save_music_file(file, subpath)/delete_music_file(path); used by characters/npcs/sessions; uploads/music/<subpath>/uuid.ext; allows mp3/ogg/wav/m4a/aac/flac/mp4/webm/mov, 50 MB limit
+│   ├── file_storage.py          # THE upload store (portraits, maps, session images, music): UploadKind rows + save_upload/delete_upload*;
+│   │                            #   STORAGE_BACKEND local (backend/uploads, served at /uploads) | r2 (Cloudflare, prod). Never add a per-module storage.py
 │   └── exceptions.py
 ├── migrations/                  # Alembic
 ├── main.py                      # FastAPI entry point
@@ -257,7 +258,7 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 - **`gm_notes`** is always stripped from responses returned to players and character owners
 - **`personal_notes`** is visible only to the character owner and the GM; stripped from all other player responses; GM cannot overwrite the owner's personal notes (service pops the field if `is_gm and not is_owner`)
 - **`backstory`** and `notes` (public notes) are visible to all campaign members
-- **Portrait images** stored at `uploads/characters/{character_id}/uuid.ext`; served via StaticFiles
+- **Portrait images** stored at `uploads/characters/{character_id}/uuid.ext` via `shared/file_storage.py` (local disk in dev, R2 in production)
 
 ### Content
 - **Only admin can create/edit/delete system (`owner_type='system'`) content**

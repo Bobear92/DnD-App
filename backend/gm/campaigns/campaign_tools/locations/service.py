@@ -11,7 +11,7 @@ from .schemas import (
     MapPinCreate, MapPinUpdate,
     LocationLinkCreate,
 )
-from .storage import save_map_image, delete_map_image
+from shared.file_storage import save_upload, delete_upload, MAP_IMAGE
 from gm.campaigns.models import CampaignMember
 from gm.campaigns.campaign_tools.npcs.models import NPC
 
@@ -210,7 +210,7 @@ def delete_location(db: Session, campaign_id: int, location_id: int, user_id: in
     if loc.campaign_id != campaign_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
     for m in db.query(LocationMap).filter(LocationMap.location_id == location_id).all():
-        delete_map_image(m.image_path)
+        delete_upload(m.image_path)
     db.delete(loc)
     db.commit()
     return {"message": f"Location '{loc.name}' deleted successfully"}
@@ -353,7 +353,7 @@ async def upload_map(
     if loc.campaign_id != campaign_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
 
-    image_path = await save_map_image(file, campaign_id, location_id)
+    image_path = await save_upload(file, MAP_IMAGE, campaign_id, location_id)
     m = LocationMap(location_id=location_id, name=name, image_path=image_path)
     db.add(m)
     db.commit()
@@ -377,7 +377,7 @@ def delete_map(db: Session, campaign_id: int, location_id: int, map_id: int, use
     m = _get_map_or_404(db, map_id)
     if m.location_id != location_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Map {map_id} not found")
-    delete_map_image(m.image_path)
+    delete_upload(m.image_path)
     db.delete(m)
     db.commit()
     return {"message": f"Map '{m.name}' deleted successfully"}

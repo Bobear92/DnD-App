@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy plan, T1–T3
+title: First production deploy plan, T1–T4
 date: 2026-11-15
 started: 17:50
-branch: feature/prod-start-command
+branch: feature/r2-uploads
 area: tooling
-tags: [docs, build, deployment, data-safety, migration, seed-data, user-rule, guard-test]
+tags: [docs, build, consolidation, deployment, data-safety, migration, seed-data, user-rule, guard-test]
 issues: []
-summary: Planned first prod deploy (Render, tags, 12 tickets); T1 API base URL; T2 CORS env; T3 start.sh, alembic owns schema
-turns: 15
+summary: First prod deploy plan + T1 API URL, T2 CORS env, T3 start.sh/alembic owns schema, T4 uploads to Cloudflare R2
+turns: 19
 stepped_in: true
-last_uuid: 9ae5a77b-cd8b-4d58-b388-c587c8d18f74
+last_uuid: f9d1e48a-d131-4eb3-aecc-af4fc4b0a08c
 ---
 
-# First production deploy plan, T1–T3
+# First production deploy plan, T1–T4
 
 ## Summary
 
@@ -37,6 +37,11 @@ last_uuid: 9ae5a77b-cd8b-4d58-b388-c587c8d18f74
   removed `create_all` from `main.py` after proving all 44 tables come from migrations; `env.py` imports `main`; CI runs
   `alembic check`; `restart-backend.sh` migrates first; fixed `env.py` crash on `%` in DATABASE_URL. start.sh smoke on an empty
   DB: 30 migrations, served in 3 s, register 201. Backend 1002 / frontend 3923 green. Guards: `test_schema_ownership.py`.
+- **T4 (Robert chose Cloudflare R2):** consolidated 5 near-identical storage modules into `shared/file_storage.py`
+  (UploadKind rows; local + r2 backends via boto3); stored keys unchanged (no migration); `/uploads` mount local-only; fail-fast
+  on missing R2 creds; frontend `VITE_UPLOADS_URL`; fixed session-image delete path traversal; tests use a temp uploads dir.
+  `test_file_storage.py` (25, R2 via fake client). Backend 1027 / frontend 3925 green; live dev round-trip (upload, serve,
+  replace removes old, delete, gif refused). Not yet proven against real R2 (needs Robert's bucket; T6 step).
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -53,6 +58,8 @@ last_uuid: 9ae5a77b-cd8b-4d58-b388-c587c8d18f74
 - T3 verification harness churn: Windows Python launched WSL bash, then a no-sleep retry loop, then piped-stdout hang;
   running start.sh from Git Bash directly worked first time. The `%` bug also printed the local DB password into Claude's
   output (stayed local); later scratch scripts redact URLs.
+- T4: the fake S3 client's offset-based pagination failed the folder-delete test; real S3 tokens survive deletes, but the
+  code was restructured to list-then-batch-delete so it doesn't depend on cursor semantics.
 - The first Playwright pass missed encyclopedia/feats because the tabs are buttons, not ARIA tabs; fixed in the script.
 
 ## Decisions
@@ -63,12 +70,15 @@ last_uuid: 9ae5a77b-cd8b-4d58-b388-c587c8d18f74
 - Migrations must be rollback-safe (expand → contract); back up and rehearse on a prod copy before any migration release.
 - Data never flows dev → prod; prod → dev only deliberately.
 - Merge-on-save for `character_data` is a pre-launch fix (T5a), not a nice-to-have.
+- Uploads: Cloudflare R2 over a Render disk (Robert); consolidate the storage modules first, then add R2 behind one API.
 - Removed `create_all` (alembic owns the schema everywhere) rather than guarding it to dev — Claude's call, flagged in the summary.
 - T1 kept narrow: the per-service duplicated axios + token interceptor was NOT consolidated (follow-up, pairs with token expiry).
 
 ## Open threads
 
-- **Next: T4** (uploads survive a deploy) — needs Robert's decision: Render persistent disk vs Cloudflare R2.
+- **Next: T5a** (merge-on-save for `character_data`) or T5 (token lifetime stopgap).
+- R2 follow-ups: prove against the real bucket in T6; R2 has no automatic backups (versioning/periodic copy later);
+  hidden maps' file URLs stay reachable to anyone holding them (signed URLs if that ever matters).
 - Local venv is Python 3.14 while CI/prod pin 3.12; works today, worth aligning eventually.
 - T6: confirm Render's build log shows 3.12 (`.python-version` at repo root vs service Root Directory is undocumented).
 - Follow-up: one shared axios client (every service repeats the token interceptor); natural with token-expiry work.
@@ -345,3 +355,69 @@ last_uuid: 9ae5a77b-cd8b-4d58-b388-c587c8d18f74
 > - **Requi …
 
 **Commands run:** 3
+
+### 16. 2026-11-16 11:30
+
+**Robert:**
+> /ship
+
+**Claude:**
+> T3 is on `main` as commit `e201ef5` and pushed. The branch `feature/prod-start-command` is deleted, and the working tree is clean.
+> 
+> - **Tests:** backend 1,002 pass (1 skipped: the Python-version check, which only runs in CI) and frontend 3,923 pass. The feat-coverage gate passed.
+> - **Real runs:** `bash start.sh` on an empty database migrated it, served the API and registered a user. The dev backend restarted with the new script and logins work.
+> - **Docs:** I added two lessons to `docs/learnings.md`: "run the real start path on an empty database" (it caught the `%` bug) and "Alembic owns the schema". The session log covers T3.
+> 
+> **Still running:** the CI run for this push (`43908436883`). It's the first time CI installs from `requirements-dev.txt` and runs the new `alembic check` step, so I'm waiting for the result and will tell you when it's in.
+> 
+> **Next is T4, uploaded files that survive …
+
+**Files edited:** `docs/learnings.md` · **Commands run:** 6
+
+### 17. 2026-11-16 11:34
+
+**Robert:**
+> Lets do the Cloudflare R2. 
+> 
+> Lets continue with T4
+
+**Claude:**
+> The frontend suite passes (3,925 tests, 2 new). I'm waiting on the backend suite; once it's done I'll restart the dev server and do a real upload round-trip through the refactored path.
+
+**Files edited:** `backend/shared/file_storage.py`, `backend/config.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t4-codemod.mjs`, `backend/main.py`, `backend/tests/conftest.py`, `backend/tests/test_file_storage.py`, `backend/tests/test_locations.py`, `frontend/src/lib/api.js`, `frontend/src/lib/api.test.js`, `frontend/.env.example`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t4-docs.mjs`, `docs/backend-tests.md`, `docs/frontend-map.md`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/project_locations_module.md` · **Commands run:** 20
+
+### 18. 2026-11-16 11:43
+
+**Robert:**
+> <task-notification>
+> <task-id>bz7e4ff03</task-id>
+> <tool-use-id>toolu_01HvNJrbZat6q8F8zRKXG2DS</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\bz7e4ff03.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for CI run and show job results" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> The CI run for T3 (`e201ef5`) passed on GitHub. Both jobs succeeded, including the first runs of `requirements-dev.txt` and the new `alembic check` step. The T4 backend suite is still running locally.
+
+**Commands run:** 1
+
+### 19. 2026-11-16 11:50
+
+**Robert:**
+> <task-notification>
+> <task-id>b84lchchc</task-id>
+> <tool-use-id>toolu_01TvELB6AZZ3kHxCJEKUsYAV</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\b84lchchc.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend test suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> T4 is done on the branch `feature/r2-uploads`, not committed yet. Uploads now go through one storage module that can use Cloudflare R2 in production, and nothing changes for local development.
+> 
+> **What changed:**
+> - **One storage module instead of five.** The four per-feature `storage.py` files and `music_storage.py` were near-copies, so I merged them into [backend/shared/file_storage.py](backend/shared/file_storage.py) before adding R2. Each upload type (character portrait, NPC portrait, map, session image, music) is now one data row with its folder, allowed types and size limit. Two storage backends sit behind the same calls: local disk (the default) and R2.
+> - **No data migration needed.** The database still stores `uploads/characters/3/<uuid>.png`, and in R2 that same string is the file's name in the bucket. In production the frontend just loads files from the bucket's public address (` …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/upload_roundtrip.py` · **Commands run:** 4

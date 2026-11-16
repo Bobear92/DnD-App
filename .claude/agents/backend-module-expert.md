@@ -142,9 +142,21 @@ return query.all()
 ```
 
 ## File Upload Pattern
-When a module needs image/file uploads (e.g. NPC portraits, map images), create a `storage.py` alongside the other module files:
+When a module needs image/file uploads, **do not create a `storage.py`**. Add an `UploadKind` row to
+`backend/shared/file_storage.py` and call its API from the service — it stores to local disk in dev and Cloudflare R2 in
+production, behind the same calls. The stored value is the returned key (`uploads/<folder>/<ids>/<uuid><ext>`).
 ```python
-# backend/gm/.../mymodule/storage.py
+# backend/shared/file_storage.py
+MY_IMAGE = UploadKind("mymodule", 10, content_types=_IMAGE_TYPES, type_error="Only JPEG, PNG, and WebP images are allowed")
+
+# backend/gm/.../mymodule/service.py
+from shared.file_storage import save_upload, delete_upload, MY_IMAGE
+item.image_path = await save_upload(file, MY_IMAGE, campaign_id, item_id)
+delete_upload(item.image_path)   # on replace / delete; no-op for empty or non-upload values
+```
+The old per-module pattern, kept below only so you recognise it in history — **do not copy it**:
+```python
+# (removed) backend/gm/.../mymodule/storage.py
 import os, uuid
 from fastapi import UploadFile, HTTPException, status
 
@@ -172,8 +184,7 @@ def delete_image(image_path: str) -> None:
     full_path = os.path.join(backend_dir, image_path)
     if os.path.exists(full_path): os.remove(full_path)
 ```
-- Store path under `backend/uploads/<module>/` (e.g. `uploads/maps/`, `uploads/npcs/`)
-- Reference implementations: `locations/storage.py` (maps, 100 MB limit) and `npcs/storage.py` (portraits, 10 MB limit)
+- Reference: `shared/file_storage.py` (`MAP_IMAGE` 100 MB, `NPC_IMAGE` 10 MB, `MUSIC` by extension) and its callers in `locations/service.py` / `npcs/service.py`; tests in `tests/test_file_storage.py`
 - Image upload route: `POST /{item_id}/image` with `file: UploadFile = File(...)`, async handler
 
 ## Junction Table / Relationship Pattern

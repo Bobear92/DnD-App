@@ -9,7 +9,7 @@ Tests for the locations module:
   - NPC summary field surfaced in location NPC response
 """
 import io
-from unittest.mock import AsyncMock, patch
+from shared.file_storage import get_storage
 
 from tests.conftest import make_user, make_campaign, invite_player
 
@@ -290,17 +290,13 @@ TINY_PNG = (
 
 
 def _upload_map(client, headers, campaign_id, location_id, *, name="Floor Plan"):
-    """Upload a minimal PNG map. Mocks save_map_image to avoid disk writes."""
-    fake_path = f"uploads/maps/{campaign_id}/{location_id}/fake.png"
-    mock_save = AsyncMock(return_value=fake_path)
-    with patch("gm.campaigns.campaign_tools.locations.service.save_map_image", mock_save):
-        resp = client.post(
-            f"{BASE(campaign_id)}/{location_id}/maps",
-            data={"name": name},
-            files={"file": ("map.png", io.BytesIO(TINY_PNG), "image/png")},
-            headers=headers,
-        )
-    return resp
+    """Upload a minimal PNG map through the real storage path (conftest points uploads at a temp dir)."""
+    return client.post(
+        f"{BASE(campaign_id)}/{location_id}/maps",
+        data={"name": name},
+        files={"file": ("map.png", io.BytesIO(TINY_PNG), "image/png")},
+        headers=headers,
+    )
 
 
 class TestMaps:
@@ -355,9 +351,12 @@ class TestMaps:
         lid = make_location(client, h, cid)
         upload_resp = _upload_map(client, h, cid, lid)
         map_id = upload_resp.json()["id"]
-        with patch("gm.campaigns.campaign_tools.locations.service.delete_map_image"):
-            resp = client.delete(f"{BASE(cid)}/{lid}/maps/{map_id}", headers=h)
+        image_path = upload_resp.json()["image_path"]
+        stored = get_storage().root / image_path[len("uploads/"):]
+        assert stored.read_bytes() == TINY_PNG
+        resp = client.delete(f"{BASE(cid)}/{lid}/maps/{map_id}", headers=h)
         assert resp.status_code == 200
+        assert not stored.exists()  # the file goes with the map
 
 
 # ── Pins ──────────────────────────────────────────────────────────────────────
