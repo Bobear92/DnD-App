@@ -4,7 +4,7 @@ How the app gets from a laptop to production, and how releases and rollbacks wor
 This is the standing reference; the one-time work to get the first deploy out is the worklist in
 [docs/tickets/first-production-deploy.md](tickets/first-production-deploy.md).
 
-Agreed with Robert on 2026-11-15. Anything marked **(open)** has not been decided yet.
+Agreed with Robert on 2026-11-15; first deployed 2026-11-18. Anything marked **(open)** has not been decided yet.
 
 ---
 
@@ -16,13 +16,12 @@ Agreed with Robert on 2026-11-15. Anything marked **(open)** has not been decide
 |---|---|---|
 | `frontend/` | Static Site | build `npm ci && npm run build`, publish `dist`, rewrite `/*` → `/index.html` (React Router) |
 | `backend/` | Web Service (Python) | root `backend`, build `pip install -r requirements.txt` (production deps only; tests use `requirements-dev.txt`), start `bash start.sh` (runs `alembic upgrade head`, then uvicorn on `$PORT` with proxy headers; never `--reload`) |
-| Postgres | Managed Postgres | paid tier (free databases expire after ~30 days and have no backups) |
+| Postgres | Managed Postgres | **free for now** (see [Live services](#live-services)); paid before real players' data goes in — free databases expire ~30 days after creation and have no backups |
 | Uploads | **Cloudflare R2** bucket (decided 2026-11-16) | Render's filesystem is wiped on every deploy, so uploads cannot live on the backend's disk. See [Uploads](#uploads-cloudflare-r2) |
 
-**Python version:** `.python-version` at the repo root pins **3.12**, the version CI tests (unpinned, Render currently
-defaults to 3.14). Render documents the file at "the root of your repo" without saying how that interacts with a service
-Root Directory, so check the first deploy's build log; if it shows a different version, set `PYTHON_VERSION` to a full
-3.12.x version in the service settings (that takes precedence).
+**Python version:** CI tests **3.12**. `.python-version` at the repo root says so, but the backend service's Root
+Directory is `backend/`, so Render may not see that file; the service therefore sets `PYTHON_VERSION=3.12.8` explicitly
+(it takes precedence). Bump both together. The frontend sets `NODE_VERSION=22` the same way.
 
 **Alembic owns the schema.** The app never creates tables itself (`main.py` used to run `create_all`); `start.sh` and the
 dev restart script run `alembic upgrade head` before starting, and CI runs `alembic check` so a model without a migration
@@ -31,8 +30,39 @@ fails the build instead of a deploy.
 Why Render: three pieces, one dashboard, deploy-on-push, managed HTTPS, no Docker or servers needed.
 Railway and Fly.io are the fallbacks if it doesn't work out.
 
-**Tier (open):** the free web service sleeps when idle (~30 s cold start). The plan is about $7/mo for
-the backend plus about $6/mo for Postgres; check current pricing before you sign up.
+**Tier (decided 2026-11-18): free while in development.** The free web service sleeps after ~15 minutes idle (the
+next request waits up to a minute) and has no shell/SSH. Upgrade before real players: about $7/mo for the backend
+(Starter) and $6/mo for Postgres. **Render's create form pre-selects the $7 plan** — pick the plan deliberately on every
+new service.
+
+### Live services
+
+| | Name | URL / detail |
+|---|---|---|
+| Frontend | Static Site `dnd-app` | https://dnd-app-ginj.onrender.com (`dnd-app` was taken, hence the suffix) |
+| Backend | Web Service `dnd-app-api` | https://dnd-app-api.onrender.com (`/docs` for the API docs) |
+| Database | Postgres `dnd-app-db` | free; created 2026-11-18, so it **expires around 2026-12-18** unless upgraded first (Render emails before) |
+| Uploads | R2 bucket `dnd-app-uploads` | public URL `https://pub-a1ce541f177b4225b2ae82461e297fe2.r2.dev` |
+
+All Render services are in **Virginia (US East)**. They must share a region: the backend reaches the database by its
+*internal* URL, which only works inside one region's private network. Every service deploys from the **`production`**
+branch, never `main`.
+
+**Database network access is closed.** The database's Networking › *PostgreSQL Inbound IP Rules* list is empty, so
+nothing outside Render can connect, even with the password; the backend is unaffected because it uses the internal
+URL. To run something from a laptop (seeding, a dump), add that one IP there, do the job, and delete the rule again.
+
+### Accounts and cost guards
+
+- **Two-factor is on** for Render and Cloudflare (Google Authenticator), with backup codes kept off the phone.
+  An account created with "Sign in with GitHub" has **no password of its own**; Cloudflare needed one set through
+  *Forgot password* before it would enable two-factor. A social login is only as safe as the GitHub/Google account.
+- **The Render GitHub app sees only the DnD-App repository.**
+- **Cloudflare budget alert at $1** (Manage account → Notifications; it was auto-created at $10). It only emails —
+  Cloudflare has no hard spending cap for R2. Free allowance: 10 GB, 1M writes, 10M reads a month, Standard class only.
+- **Kill switch** if R2 usage ever runs away: disable the bucket's public URL and delete the API token. Nothing is lost.
+- **Never screenshot a screen that shows a secret**: a two-factor QR code, a database URL, an API key. Twice in the
+  first deploy one went into a chat by screenshot and had to be replaced or locked down.
 
 ---
 
@@ -41,12 +71,14 @@ the backend plus about $6/mo for Postgres; check current pricing before you sign
 | Service | Variable | Notes |
 |---|---|---|
 | backend | `DATABASE_URL` | Render Postgres *internal* URL |
-| backend | `SECRET_KEY` | long random value, generated once (`python -c "import secrets; print(secrets.token_urlsafe(64))"`), never the dev value |
-| backend | `ALLOWED_ORIGINS` | comma-separated frontend origin(s) for CORS |
+| backend | `SECRET_KEY` | long random value, generated once — Render's **Generate** button, or `python -c "import secrets; print(secrets.token_urlsafe(64))"` — never the dev value |
+| backend | `ALLOWED_ORIGINS` | comma-separated frontend origin(s) for CORS. Set **after** the Static Site exists (its URL isn't known before); saving it needs a backend redeploy |
 | backend | `DEBUG` | `false` |
 | backend | `ACCESS_TOKEN_EXPIRE_MINUTES` | `720` (12 h: a long game night, a fresh login each day). Default 30. Longer = a stolen token works longer, and tokens can't be revoked, so don't go far past a day |
 | backend | `STORAGE_BACKEND` | `r2` (default `local`, which production must not use) |
 | backend | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | from the Cloudflare dashboard; the backend refuses to start with `STORAGE_BACKEND=r2` if any is missing |
+| backend | `PYTHON_VERSION` | `3.12.8` (see Hosting) |
+| frontend | `NODE_VERSION` | `22` |
 | frontend | `VITE_API_URL` | the backend's public URL. Vite bakes it in at **build** time, so changing it needs a rebuild |
 | frontend | `VITE_UPLOADS_URL` | the R2 bucket's public URL (r2.dev subdomain or custom domain); uploaded images and music load from here |
 
@@ -61,9 +93,14 @@ In production (`STORAGE_BACKEND=r2`) the same key is an object in the R2 bucket,
 `VITE_UPLOADS_URL` (`frontend/src/lib/api.js` › `uploadUrl`). Because the key doesn't change, switching needs no data migration.
 
 **Setting up the bucket (once):**
-1. Cloudflare dashboard → R2 → create a bucket (e.g. `dnd-uploads`). Note the **Account ID**.
-2. R2 → *Manage API tokens* → create a token with **Object Read & Write** on that bucket only. Copy the access key ID
-   and secret (shown once) into the backend's env vars.
+1. Cloudflare dashboard → *Storage & databases* → R2 (activating it asks for a payment method even on the free plan)
+   → create a bucket (`dnd-app-uploads`, location Automatic with an Eastern North America hint, **Standard** class).
+   Note the **Account ID** (R2 overview → *Account Details*; copy it with the icon, the text is truncated).
+2. R2 overview → *Account Details* → *API Tokens* → **Manage** → **Create Account API token** (account tokens survive a
+   user leaving; user tokens don't) with **Object Read & Write**, applied to that bucket only, TTL forever, **no client
+   IP filter** (Render's outbound IPs change). Copy the access key ID and secret (shown once) into the backend's env
+   vars. Ignore the jurisdiction-specific endpoints: the backend builds the default
+   `https://<account-id>.r2.cloudflarestorage.com` itself.
 3. Bucket → *Settings* → *Public access*: enable the `r2.dev` subdomain (fine to start; Cloudflare rate-limits it) or
    connect a custom domain (better for real use). That URL is `VITE_UPLOADS_URL`.
 4. No bucket CORS rule is needed: images and audio load with plain `<img>`/`<audio>` tags.
@@ -162,7 +199,7 @@ the app server, and a deploy replaces it.
 | **User data** | users, campaigns, characters, NPCs, sessions, GM overrides/homebrew | Nothing. It stays in Postgres. |
 | **Schema** | a new column or table | **Alembic migrations** change the existing tables in place. `alembic upgrade head` at deploy start applies only the migrations prod hasn't had; existing rows stay (a new column arrives as NULL or its default). |
 | **Reference data** | the system compendium: classes, spells, feats, items | **Seed scripts** add or update `owner_type='system'` rows. Run the matching script once after a release that changes them. GM overrides are separate `owner_type='campaign'` rows the seeds never touch. |
-| **Uploaded files** | portraits, maps, music | Persistent disk or R2 **(open)**. Outside both the code and the database. |
+| **Uploaded files** | portraits, maps, music | The Cloudflare R2 bucket. Outside both the code and the database. |
 
 **Data never flows between dev and prod.**
 - **Dev → prod: never.** Prod starts empty, is migrated and seeded, and then fills with real users' data.
@@ -223,7 +260,9 @@ In order of danger for this app:
 
 ## Data operations
 
-- **Seeding** (from the Render shell, after `alembic upgrade head`; in this order, and safe to re-run any time):
+- **Seeding** — the free tier has **no Render shell**, so run the scripts from a laptop: add your IP to the database's
+  inbound rules, set `DATABASE_URL` to the database's **External** URL in that terminal only (never in `backend/.env`),
+  run them, then remove the IP rule. In this order, and safe to re-run any time:
   `seed_classes.py`, `seed_spells.py` (downloads from dnd5eapi.co), `seed_artificer_spells.py`, `seed_phb_spells.py`,
   `seed_feats.py`, `seed_items.py` (downloads), `seed_starting_items.py` (after `seed_items.py`). All upsert. Re-run the
   matching script after a release that changes its file (`seed_feats.py` also re-syncs character feat snapshots).
@@ -231,7 +270,7 @@ In order of danger for this app:
   and test users; it now refuses any non-local database. `scripts/seed_5e_srd.py` is a legacy dev seeder whose
   `--clear` flag wipes system records.
 - **Admin account:** register through the live app, then `UPDATE users SET is_admin = true WHERE email = '…';`.
-- **Backups:** Render Postgres paid tier takes daily backups with point-in-time restore. Also take a manual
+- **Backups:** Render Postgres paid tier takes daily backups with point-in-time restore; **the free tier has none**. Also take a manual
   `pg_dump` before any release with a migration.
 - **Never point a local tool at the production database** unless it is a deliberate, one-off operation.
 - **No ad-hoc SQL against prod** beyond the admin flag; a fix to data goes through a reviewed script.
@@ -246,3 +285,4 @@ In order of danger for this app:
   sheet edits). Real fix: a 401 → re-login flow (one shared axios client would make that one change, not ~15), or refresh tokens.
 - **Open registration.** Anyone with the URL can sign up.
 - **No error monitoring** (Sentry or similar) and no uptime check.
+- **Free-tier cold starts**: the backend sleeps after ~15 idle minutes, so the first request after a break takes up to a minute (until the Starter upgrade).

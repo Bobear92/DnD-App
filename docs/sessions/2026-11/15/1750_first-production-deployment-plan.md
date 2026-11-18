@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy plan, T1–T5b (all code tickets)
+title: First production deploy, plan through live (T1–T7)
 date: 2026-11-15
 started: 17:50
-branch: feature/seed-upsert
+branch: feature/deploy-t6-t7
 area: tooling
 tags: [docs, build, consolidation, deployment, data-safety, migration, seed-data, user-rule, guard-test]
 issues: []
-summary: Prod deploy plan + all code tickets: API URL, CORS, start.sh/alembic, R2 uploads, merge-on-save, token TTL, seed upserts
-turns: 31
+summary: Prod deploy plan, all code tickets (T1–T5b), then live on Render free tier + Cloudflare R2 (T6–T7)
+turns: 85
 stepped_in: true
-last_uuid: baa45d10-3f2e-4514-b8b4-a2885554ea6b
+last_uuid: 226cae3b-283c-4569-81ab-44f8fd61cd86
 ---
 
-# First production deploy plan, T1–T5b (all code tickets)
+# First production deploy, plan through live (T1–T7)
 
 ## Summary
 
@@ -51,6 +51,18 @@ last_uuid: baa45d10-3f2e-4514-b8b4-a2885554ea6b
   for shared rows (Artificer tag in seed_spells; starting items own their categories; API duplicate names: first wins);
   `seed_data.py` (known-password admin, was on the prod list) now refuses non-local DBs and no longer create_all's.
   Real API + dev DB: spells/classes/feats exact; items normalised legacy-format rows once, then stable. Backend 1061 green.
+  Shipped as 1bac949 (CI green).
+- **Accounts (2026-11-18, walked through screen by screen):** Render (GitHub sign-in, 2FA + backup codes, GitHub app limited
+  to DnD-App), Cloudflare (password set via Forgot password, 2FA), R2 activated (payment method on file, $0), budget alert
+  lowered $10 → $1, bucket `dnd-app-uploads`, public r2.dev URL, Account API token scoped to the bucket.
+- **T6:** `production` branch pushed from `main` (1bac949). Postgres `dnd-app-db` + Web Service `dnd-app-api` (free, Virginia,
+  root `backend`, `bash start.sh`, `PYTHON_VERSION=3.12.8`). Verified from outside: `/docs` 200, unknown-user login 401 (DB
+  reached + migrated), `/api/auth/me` 401, `/uploads/*` 404, foreign CORS origin refused. Database inbound IP rules emptied.
+- **T7:** Static Site `dnd-app` → https://dnd-app-ginj.onrender.com (`NODE_VERSION=22`, rewrite `/*` → `/index.html`),
+  `ALLOWED_ORIGINS` set on the backend. Verified: `/` and a deep link 200; bundle has the API + R2 URLs and no localhost;
+  CORS preflight from the site allowed, others 400.
+- Docs: deployment.md (Live services, Accounts and cost guards, free tier, env vars, real R2 steps, no-shell seeding),
+  ticket (T6/T7 done, 9/12; T8 rewritten for the free tier; T10 GitHub 2FA), learnings (7 rows), 2 memories.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -75,6 +87,21 @@ last_uuid: baa45d10-3f2e-4514-b8b4-a2885554ea6b
 - T5a: the plan said merging "reduces last-write-wins"; building it showed it doesn't (each save carries a full stale
   copy). Corrected in the ticket/docs/learnings. Browser check first missed that the sheet opens on Narrative.
 - The first Playwright pass missed encyclopedia/feats because the tabs are buttons, not ARIA tabs; fixed in the script.
+- **Secrets reached the chat by screenshot, three times** (Render 2FA QR, Cloudflare 2FA QR, the database Internal URL with
+  password). Claude warned only after each one. Fixes: QR codes regenerated, database external access closed. Should have
+  said "don't screenshot this screen" in the step itself — now a memory (`feedback_warn_before_secret_screens`).
+- **Robert asked for a slower walkthrough** ("wait what am i doing walk me through it") after Claude dumped the whole Web
+  Service form plus env-var table in one message. Step-by-step with a "what this is" line worked better.
+- Claude's dashboard directions were from memory and often off: 2FA first sent to the workspace (Pro) security page;
+  Cloudflare notifications, the R2 API-token link and Access Control were each in a different place than described. Robert
+  found them via screenshots. Claude also never told Robert to note the R2 Account ID when it said "save the two keys".
+- Cloudflare 2FA needed a password the GitHub-created account didn't have; took several rounds (Forgot password via
+  "Sign in with another profile", saved-profile confusion) before Robert solved it.
+- Claude guessed the site URL (`dnd-app.onrender.com`, taken by someone else) instead of asking; Robert then pasted the
+  backend URL, so the frontend URL needed a third exchange.
+- The docs said to seed "from the Render shell"; the free tier has no shell. Caught while writing up, not before the tier
+  decision. Fixed in deployment.md and T8.
+- Pushing the new `production` branch was blocked pending Robert's explicit OK; asked, he approved.
 
 ## Decisions
 
@@ -89,20 +116,26 @@ last_uuid: baa45d10-3f2e-4514-b8b4-a2885554ea6b
 - Uploads: Cloudflare R2 over a Render disk (Robert); consolidate the storage modules first, then add R2 behind one API.
 - Removed `create_all` (alembic owns the schema everywhere) rather than guarding it to dev — Claude's call, flagged in the summary.
 - T1 kept narrow: the per-service duplicated axios + token interceptor was NOT consolidated (follow-up, pairs with token expiry).
+- Tier: free for both database and backend during development (Robert); upgrade before real players' data.
+- Region: Virginia (US East) for every Render service (Robert is on the east coast; internal DB URL needs one region).
+- Database inbound IP rules empty; open one IP only for laptop jobs (forced by the leaked URL, kept as the standard).
+- Cloudflare budget alert at $1 as the cost guard (no hard cap exists); app-level storage quota offered, not taken.
+- `PYTHON_VERSION`/`NODE_VERSION` pinned as env vars rather than trusting repo-root version files.
 
 ## Open threads
 
-- **Next: T6** (Render DB + backend) and T7 (frontend) — need Robert's Render and Cloudflare accounts and the tier decision. T6/T7 need Robert's Render + Cloudflare accounts.
-- Follow-up from T5a: send only changed keys (e.g. `autoSaveClassPatch` sends just its patch) to stop concurrent saves
-  overwriting each other.
-- R2 follow-ups: prove against the real bucket in T6; R2 has no automatic backups (versioning/periodic copy later);
-  hidden maps' file URLs stay reachable to anyone holding them (signed URLs if that ever matters).
-- Local venv is Python 3.14 while CI/prod pin 3.12; works today, worth aligning eventually.
-- T6: confirm Render's build log shows 3.12 (`.python-version` at repo root vs service Root Directory is undocumented).
+- **Next: T8** — Robert registers his real account on the live site; then add his IP to `dnd-app-db` inbound rules, run the
+  seeds from the laptop with the External URL set in the terminal only (order in deployment.md › Data operations; never
+  `seed_data.py`), flip `is_admin`, remove the IP rule.
+- T9: `/release` skill, `v0.1.0` tag, Render auto-deploy after CI, CLAUDE.md Development Workflow (`main` is no longer
+  "the deployable trunk"), protect `production` in the hooks. T10: GitHub 2FA check, security-reviewer, live smoke test.
+- **R2 not yet proven end to end**: upload a portrait on the live site, see the object in the bucket, redeploy, confirm it renders.
+- **Free database expires around 2026-12-18** — upgrade to paid before then if anything in it matters (no backups on free).
+- Follow-up from T5a: send only changed keys to stop concurrent saves overwriting each other.
+- R2: no automatic backups (versioning/periodic copy later); hidden maps' file URLs stay reachable to anyone holding them.
+- Local venv is Python 3.14 while CI/prod pin 3.12; worth aligning eventually.
 - Follow-up: one shared axios client (every service repeats the token interceptor); natural with token-expiry work.
-- Open decisions: uploads (Render disk vs Cloudflare R2, needed by T4); tier (free vs ~$13/mo paid, needed by T6).
-- CLAUDE.md Development Workflow still calls `main` "the deployable trunk"; rewrite in T9 once `production` exists.
-- Robert can create the Render account and connect GitHub any time.
+- Optional: app-level upload storage quota as a hard cost cap (offered, not requested).
 
 ## Turn log
 
@@ -645,3 +678,1005 @@ last_uuid: baa45d10-3f2e-4514-b8b4-a2885554ea6b
 >   - `seed_starting_items` and `seed_items` share 14 gear names. Each of those rows is now owned by exactly one script, decided by its c …
 
 **Commands run:** 3
+
+### 32. 2026-11-16 16:18
+
+**Robert:**
+> /ship
+
+**Claude:**
+> T5b is on `main` as commit `1bac949` and pushed, so all the code work for the first deploy is now on `main`. `feature/seed-upsert` is deleted, and the working tree is clean.
+> 
+> The backend (1,061, run on its own) and frontend (3,932) tests and the feat-coverage gate passed before the commit. Re-running every seed against the real API and your dev database now changes nothing. CI for the previous push (T5) passed, and the run for this one is still going; I'll report it.
+> 
+> **Seven of the 12 tickets are done.** What changed in the code:
+> - The frontend reads the backend's address from one setting.
+> - CORS (which websites may call the backend) and debug come from environment variables.
+> - There's a production start script, and Alembic is now the only thing that creates tables.
+> - Uploads go through one storage module that can use Cloudflare R2.
+> - Saving a character can no longer erase fields the sa …
+
+**Commands run:** 3
+
+### 33. 2026-11-16 16:29
+
+**Robert:**
+> <task-notification>
+> <task-id>bia00p7qb</task-id>
+> <tool-use-id>toolu_01Cc7YgFRtVj1tvPWRtQdkeu</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\bia00p7qb.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for CI on the T5b push" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> The GitHub CI run for the T5b push (`1bac949`) passed, both frontend and backend. That makes every code ticket for the first deploy merged into `main` and green on CI.
+> 
+> Nothing else is running. Next is your part: a Render account, a Cloudflare R2 bucket, and the tier decision. Then we start on T6.
+
+**Commands run:** 1
+
+### 34. 2026-11-16 17:38
+
+**Robert:**
+> Okay lets go through the Render Account first. Walk me through the steps to setup.
+
+**Claude:**
+> You only need to do this part once. We'll create the actual services in T6, after the R2 bucket exists.
+> 
+> ## 1. Sign up
+> 1. Go to **render.com** and click **Get Started**.
+> 2. Choose **Sign up with GitHub**. That creates the account and links GitHub in one step, and Render deploys straight from the repo.
+> 3. Verify your email if it asks.
+> 
+> ## 2. Give Render access to the repo
+> 1. When GitHub asks you to install the **Render** GitHub app, choose **Only select repositories**. Pick **DnD-App**, not all repositories.
+> 2. If you skip this now, it comes up again the first time you create a service. You can change it later under GitHub → Settings → Applications → Render.
+> 
+> ## 3. Secure the account
+> Turn on two-factor authentication under **Account Settings → Security**. This account will hold the production database and its secrets.
+> 
+> ## 4. Choose a region (don't create anything yet)
+> Pick the region clos …
+
+### 35. 2026-11-16 17:51
+
+**Robert:**
+> /model fable
+
+**Claude:**
+> _(no text reply)_
+
+### 36. 2026-11-16 17:52
+
+**Robert:**
+> This is where i am. 
+> 
+> What next i dont see where i download the github app
+
+**Claude:**
+> You're in the right place. There's nothing to download: the "GitHub app" is just a permission you grant on GitHub's site, and Render only asks for it when you first connect a repo.
+> 
+> To do it now without creating anything:
+> 
+> 1. Click **New Web Service →** (the second card in the top row).
+> 2. On the next screen, under the Git provider section, click **GitHub** (it may say **Connect GitHub** or **Connect account**).
+> 3. GitHub opens and asks where to install Render. Choose your account, then **Only select repositories**, pick **DnD-App**, and click **Install**.
+> 4. You land back on Render with DnD-App in the repo list. **Stop there** and click back to the dashboard without filling in the form. We create the service in T6, once the R2 bucket exists.
+> 
+> I'm going from memory on the exact button labels, so if the screen looks different, send me another screenshot.
+> 
+> Then finish the remaining account …
+
+### 37. 2026-11-16 18:55
+
+**Robert:**
+> I dont have an authernitcator app
+
+**Claude:**
+> **First, click Cancel on that dialog.** The QR code in your screenshot is the secret key for your two-factor codes, and anyone who has the image can generate them. It's now saved in this chat's history, so don't use that one. When you reopen the dialog, Render shows a fresh code; scan that one and don't screenshot it.
+> 
+> An authenticator app is a free phone app that shows a 6-digit code that changes every 30 seconds. To set one up:
+> 
+> 1. **Install one on your phone** from the App Store or Play Store. Any of these work:
+>    - **Google Authenticator**: the simplest, and it can back codes up to your Google account.
+>    - **Microsoft Authenticator**: equally good, if you already use a Microsoft account.
+>    - If you use a password manager like Bitwarden or 1Password, it can do this too.
+> 2. **Open the app** and tap **+** or **Add account**, then **Scan a QR code**.
+> 3. **Reopen the Enable 2FA dialog …
+
+### 38. 2026-11-18 12:04
+
+**Robert:**
+> <task-notification>
+> <task-id>b9b9n3ubk</task-id>
+> <task-id>bsddfan26</task-id>
+> <task-id>__orphan_summary__:shell</task-id>
+> <status>stopped</status>
+> <summary>2 background shell command tasks didn't finish before the previous session ended. Task ids: b9b9n3ubk, bsddfan26.</summary>
+> <note>No completion record was found for them in the previous session. They may have been stopped (via the UI, Monitor timeout, or agent teardown — these leave no transcript marker), or they may have been running when the previous Claude Code process exited. They have been marked stopped. Task ids in this notification …
+
+**Claude:**
+> _(no text reply)_
+
+### 39. 2026-11-18 12:08
+
+**Robert:**
+> okay 2 auth enabled through the google auth app on my phone
+
+**Claude:**
+> Two-factor is on, so the account is secure. Make sure you saved the recovery codes Render showed you somewhere other than your phone.
+> 
+> Three things left before we move on to Cloudflare:
+> 
+> 1. **GitHub connection:** did you install the Render app on the **DnD-App** repo? You'll know it worked if the **New Web Service** screen lists DnD-App when you open it. Back out without filling anything in.
+> 2. **Region:** which one is closest to you and your players? Ohio or Virginia for the US East, Oregon for the West.
+> 3. **Tier:** I'd recommend paid Postgres (about $6 a month) from the start, plus a free backend until real players arrive. Is that okay, or do you want something different? If you go paid, add a card under **Billing**.
+> 
+> Once you've answered, I'll walk you through creating the Cloudflare account and R2 bucket.
+
+### 40. 2026-11-18 12:10
+
+**Robert:**
+> It did not give me recovery codes.
+
+**Claude:**
+> Some sites don't hand out recovery codes, and I'm not sure whether Render does, so here's a quick check and some backups in case it doesn't.
+> 
+> **1. Look for codes in settings.** Go to **Account Settings → Security** and look for something like "Recovery codes" or "Backup codes" next to the two-factor setting. If it's there, generate them and save them in a password manager or on paper, not on your phone.
+> 
+> **2. If there's no such option, protect the phone app instead:**
+> - **Turn on Google Authenticator's cloud backup.** In the app, tap your profile icon and sign in to your Google account. Your codes then sync to Google, so a lost or replaced phone doesn't lock you out. A cloud icon at the top of the app shows it's working.
+> - **Make sure GitHub has two-factor on too.** If you log in to Render with GitHub, that GitHub account is effectively the master key, so it needs protecting as much as R …
+
+### 41. 2026-11-18 12:15
+
+**Robert:**
+> okay i got the codes. 
+> Now how do i know if my dnd app is connected?
+
+**Claude:**
+> To check without creating anything:
+> 
+> 1. Click **+ New** in the top bar, then **Web Service**.
+> 2. Look at the repository list. If you see **Bobear92 / DnD-App**, it's connected. Click back to the dashboard without filling anything in.
+> 
+> If it isn't listed:
+> - **No GitHub connected at all:** you'll see a **GitHub** or **Connect GitHub** button. Click it, choose **Only select repositories**, pick **DnD-App**, and click **Install**.
+> - **GitHub connected but no DnD-App:** look for a link like **Configure account** or **Configure GitHub**, which opens GitHub's settings for the Render app. Add **DnD-App** under **Repository access** and save.
+> 
+> Send a screenshot of that screen if it looks different from this.
+
+### 42. 2026-11-18 12:16
+
+**Robert:**
+> Its here
+
+**Claude:**
+> It's connected. **Bobear92 / DnD-App** is the only repository listed, so Render can see the app and nothing else of yours.
+> 
+> **Don't click it yet.** Leave this page by clicking your workspace name in the top left. We'll come back here in T6 once the R2 bucket exists.
+> 
+> That finishes the Render account. Two answers and we can move on to Cloudflare:
+> 
+> 1. **Region:** where are you and your players? I'd suggest **Ohio** or **Virginia** for the US East and **Oregon** for the West.
+> 2. **Tier:** my recommendation is a **paid Postgres database** (about $6 a month, so the database isn't deleted after 30 days) and a **free backend** until real players arrive. Is that okay? If yes, add a card under **Billing** now. Don't buy anything else; the paid plan is chosen when we create the database in T6.
+
+### 43. 2026-11-18 12:18
+
+**Robert:**
+> 1: We are on the east coast
+> 2: Yes lets start with free while we are still in development. When we get to the point where we dont want stuff deleted then we will go with paid.
+
+**Claude:**
+> Got it: **Virginia (US East)** and the free tier during development.
+> 
+> Two things to know about the free database, so neither surprises you:
+> - **It expires about 30 days after it's created.** Render emails you before that. To keep the data, upgrade it to paid before it expires; as far as I know the upgrade keeps everything, but confirm on Render's pricing page when the time comes. If you let it lapse, we create a new one and re-run the seed scripts, and you lose only test characters.
+> - **It has no backups**, so treat everything in it as throwaway until you upgrade.
+> 
+> When we do T6 I'll record both decisions in the deploy ticket.
+> 
+> ## Next: Cloudflare R2
+> R2 stores uploads: portraits, maps and music.
+> 
+> **1. Create the account**
+> - Sign up at **dash.cloudflare.com** with your email.
+> - Turn on two-factor right away: click the profile icon, then **My Profile → Authentication**, and scan the QR cod …
+
+### 44. 2026-11-18 12:25
+
+**Robert:**
+> I was directed to this page
+> https://developers.cloudflare.com/fundamentals/user-profiles/2fa/
+
+**Claude:**
+> That's Cloudflare's help article on two-factor, so you don't need to read all of it. The steps are:
+> 
+> 1. Go back to **dash.cloudflare.com**.
+> 2. Click the **profile icon** in the top right, then **My Profile**.
+> 3. Open the **Authentication** tab.
+> 4. Under **Two-Factor Authentication**, choose **Mobile App Authentication** (sometimes labelled **Set up**).
+> 5. Scan the QR code with Google Authenticator and type in the 6-digit code.
+> 6. Cloudflare shows **backup codes**. Save them the same way as Render's: off your phone, and not pasted here.
+> 
+> Then carry on with step 2 above: **R2 Object Storage** in the left sidebar.
+
+### 45. 2026-11-18 12:28
+
+**Robert:**
+> I am trying but it wants a password
+> 
+> I signed up with my github is it that password?
+
+**Claude:**
+> **Before anything else: that screenshot shows the QR code again**, so treat that one as exposed. Close the setup and don't use that code. If you do set up two-factor later, start the setup again to get a fresh QR code. Also delete any Cloudflare entry it already added to Google Authenticator.
+> 
+> **About the password:** it isn't your GitHub password. You signed in through GitHub, so your Cloudflare account probably has no password of its own, which is why it says "Invalid password." You have two options:
+> 
+> - **Option A (simplest, and fine):** skip Cloudflare's own two-factor and rely on GitHub's. Every Cloudflare login goes through GitHub, so if GitHub has two-factor on, Cloudflare is protected by it. Check at **github.com → Settings → Password and authentication**. If it's already on, you're done here.
+> - **Option B:** give Cloudflare its own password. Log out of Cloudflare, click **Forgot p …
+
+### 46. 2026-11-18 12:30
+
+**Robert:**
+> Option B
+
+**Claude:**
+> That page only remembers your GitHub sign-in, so the password option is one click further in:
+> 
+> 1. Click **Sign in with another profile**.
+> 2. You should now see an email and password form. Click **Forgot your password?** below it.
+> 3. Enter the same email address shown in your GitHub sign-in, then check your inbox for Cloudflare's reset link.
+> 4. Set a strong password and save it in your password manager.
+> 5. Log in with that email and password. Signing in with GitHub should keep working too.
+> 6. Go to **My Profile → Authentication → Two-Factor Authentication** and start the setup again, so you get a **fresh** QR code. Scan it, enter the 6-digit code and your new password, then save the backup codes. Don't screenshot the QR code this time.
+> 
+> If Cloudflare says no account exists for that email after you click "Forgot password", tell me (no screenshot needed) and we'll fall back to Option A.
+
+### 47. 2026-11-18 12:33
+
+**Robert:**
+> But the first time i clicked the github button not my own email
+
+**Claude:**
+> That's fine. Signing in with GitHub still created a Cloudflare account under your GitHub email. It's the address shown next to the GitHub icon on the "Last used" screen, and you can also see it on **My Profile** once you're signed in. That account just has no password yet.
+> 
+> "Forgot password" is the way to **set** one for the first time. Enter that same email, and Cloudflare emails a link that lets you create a password.
+> 
+> - **If the reset email arrives:** set the password, then start two-factor with a fresh QR code.
+> - **If it says no account exists, or nothing arrives:** go with Option A. Keep signing in with GitHub and make sure GitHub has two-factor on.
+> 
+> Either way, your Cloudflare account ends up protected. Let me know when you're signed in and we'll go to **R2 Object Storage**.
+
+### 48. 2026-11-18 12:35
+
+**Robert:**
+> I know my github email its my gmail we see the cloudflare email there should i put that in and say forgor password?
+
+**Claude:**
+> Yes. Type that Gmail address into the Email box and use **Forgot password** (or go to **dash.cloudflare.com/forgot-password**). The reset link goes to that Gmail inbox and lets you set a Cloudflare password.
+
+### 49. 2026-11-18 12:37
+
+**Robert:**
+> Did all that, reset the password, password in the auth app set up still says invalid
+
+**Claude:**
+> Here are the likely causes, in order:
+> 
+> 1. **You're still in the GitHub sign-in session.** The two-factor form may be checking the password against how you logged in. Log out of Cloudflare completely, then sign back in with **Email and Password** (not the GitHub button) using the new password.
+>    - **If that login works:** the password is good. Start two-factor again, so you get a fresh QR code, and type the password by hand.
+>    - **If that login fails:** the reset didn't take for a GitHub-linked account. Go to Option A.
+> 2. **Browser autofill.** Your browser may be filling in an old saved password. Clear the field and type the password manually.
+> 
+> If it still says invalid after logging in by email and password, **stop here and use Option A**: sign in with GitHub and make sure GitHub's two-factor is on. Your account is just as protected that way, and we shouldn't spend more of today on this …
+
+### 50. 2026-11-18 12:39
+
+**Robert:**
+> Can i delete this profile before?
+
+**Claude:**
+> That depends on which "profile" you mean:
+> 
+> - **The saved sign-in on the login page** (the "Last used" GitHub entry): yes, remove it. It's only a shortcut stored in your browser and doesn't affect your account. Afterwards, sign in with **Email and Password** using the new password.
+> - **The Cloudflare account itself**: you could delete it and sign up again with email and password. The account is empty, so nothing would be lost. I wouldn't, though. Cloudflare may hold onto that email for a while after deletion, and it's more hassle than it saves.
+> 
+> Try this order:
+> 1. Remove the saved profile, then sign in with email and new password.
+> 2. If that works, set up two-factor with a fresh QR code.
+> 3. If it doesn't, sign in with GitHub, use Option A, and we move on to R2.
+
+### 51. 2026-11-18 12:44
+
+**Robert:**
+> okay figured it out. Two factor auth is complete for cloudflare.
+
+**Claude:**
+> Great, two-factor is on. Make sure the backup codes are saved somewhere off your phone.
+> 
+> Now **R2**:
+> 
+> **1. Turn on R2**
+> - In the left sidebar, open **R2 Object Storage** (it may be under **Storage & Databases**).
+> - It may ask for a payment method. The free allowance (10 GB) covers us, so the bill should stay at $0.
+> 
+> **2. Create the bucket**
+> - Click **Create bucket**.
+> - Name: **`dnd-app-uploads`**
+> - Location: **Automatic**, with the hint set to **Eastern North America** if it offers one.
+> - Storage class: **Standard**.
+> 
+> **3. Turn on public access**
+> - Open the bucket and go to **Settings**.
+> - Enable the **Public Development URL** (`r2.dev`).
+> - Copy that URL. It's safe to paste here.
+> 
+> **4. Create the API token**
+> - Go to **R2 overview → Manage API tokens → Create API token**.
+> - Permission: **Object Read & Write**.
+> - Restrict it to the **`dnd-app-uploads`** bucket only.
+> - TTL: **Forever**.
+> - S …
+
+### 52. 2026-11-18 12:50
+
+**Robert:**
+> All looks good?
+
+**Claude:**
+> Yes, that's the right page and it looks fine. Click **Add R2 subscription to my account**.
+> 
+> What you're agreeing to:
+> - **$0 due now and $0 a month** while we stay under the free limits.
+> - **10 GB of storage.** Portraits and maps are a few MB each, so that's thousands of uploads.
+> - **1M Class A operations a month.** These are uploads and deletes. We'll do a handful.
+> - **10M Class B operations a month.** These are file reads, including every time someone views a portrait. Development use won't come close.
+> - Keep the bucket on **Standard** storage. The fine print says other storage classes don't get the free allowance.
+> 
+> You'll only be charged if usage passes those limits. If you'd like a safety net, set up a billing alert under **Billing → Notifications** once you're in. It's optional.
+> 
+> After adding it, carry on with **Create bucket** (`dnd-app-uploads`, Automatic location with an Eastern N …
+
+### 53. 2026-11-18 12:51
+
+**Robert:**
+> To activate i need to add billing info
+
+**Claude:**
+> Yes, that's normal. R2 always asks for a card or PayPal before it activates, even on the free plan. It's how they'd bill usage above the free limits.
+> 
+> - Add the card or PayPal in the billing form. That goes to Cloudflare only, and you don't need to share any of it here.
+> - Cloudflare may run a small temporary hold (often $1 or $0) to check the card. It disappears on its own.
+> - The summary page already showed **$0.00 due now and $0.00 monthly**. With our usage it should stay there.
+> 
+> After that, you're back on the R2 page. Click **Create bucket**:
+> - Name: **`dnd-app-uploads`**
+> - Location: **Automatic**, with the hint set to **Eastern North America** if offered
+> - Storage class: **Standard**
+
+### 54. 2026-11-18 12:53
+
+**Robert:**
+> okay but after can we make sure we add some sort of lock so we dont actually acidentally get billed for anything?
+
+**Claude:**
+> Unfortunately Cloudflare doesn't offer a hard spending cap for R2, at least not one I know of. You can't set "stop at $0." What we can do is put layers in place so a bill is very unlikely, and you'd hear about it early if it happened.
+> 
+> **1. A Cloudflare billing alert (set this up after the bucket)**
+> - Go to **Notifications → Add → Usage Based Billing** (the name may vary slightly).
+> - Set alerts for R2 storage and operations at a level below the free limits, such as 5 GB of storage. You'll get an email long before anything costs money.
+> 
+> **2. Limits already in the app (T4)**
+> - Only logged-in users can upload, and only into their own campaigns.
+> - Every upload has a size cap: 10 MB for portraits and session images, 100 MB for maps, 50 MB for music.
+> - Deleting a character, NPC or map deletes its files, so storage doesn't pile up.
+> 
+> **3. What a worst case would actually cost**
+> - **Storage:** fi …
+
+### 55. 2026-11-18 12:55
+
+**Robert:**
+> Notofications under my profile? I dont see add.
+
+**Claude:**
+> It's not under your profile. Notifications belong to the **account**, not your user profile. Try either of these:
+> 
+> - **Left sidebar:** click your account name to get back to the account home, then look for **Notifications**. It's often under **Manage Account**, near Billing and Members.
+> - **Direct link:** **dash.cloudflare.com/?to=/:account/notifications** jumps to the account's notifications page.
+> 
+> Then click **Add** or **Create**, search for **Usage Based Billing** (or "billing"), and set thresholds for R2.
+> 
+> I'm going from memory on Cloudflare's menus, and they reorganise them often. If you can't find it, send a screenshot of the left sidebar. If this alert type doesn't exist on your plan, the budget alert under **Billing** is the other place to look.
+> 
+> If you haven't created the bucket yet, do that first. It's the part we actually need for T6, and the alert can wait a few minutes.
+
+### 56. 2026-11-18 12:56
+
+**Robert:**
+> Left bar
+
+**Claude:**
+> It's under **Manage account**, at the very bottom of the sidebar.
+> 
+> 1. Click **Manage account** to expand it, then click **Notifications**.
+> 2. Click **Add** (or **Create**).
+> 3. Search for **Usage Based Billing**, or scroll to the **Billing** section, and choose it.
+> 4. Pick the **R2** product, set a threshold well below the free limit (for example **5 GB** for storage), and enter your email.
+> 5. If it lets you, add a second alert for **Class A operations** (writes) at around **500,000**.
+> 
+> If Usage Based Billing isn't in the list, check **Manage account → Billing** for a budget alert instead.
+> 
+> R2 itself (for the bucket) is under **Storage & databases → R2 Object Storage**.
+
+### 57. 2026-11-18 12:58
+
+**Robert:**
+> This one is allready there
+
+**Claude:**
+> Cloudflare already created a budget alert for you, which is the one that matters most. Let's make sure it fires early:
+> 
+> 1. Click **Default budget alert (auto-created)**.
+> 2. Check the dollar amount it triggers at. If it's above **$1**, change it to **$1**, so you get an email as soon as anything costs money.
+> 3. Confirm it's sending to your email, then save.
+> 
+> That's enough. A usage alert for R2 would only be an earlier warning, so skip it unless you want it.
+> 
+> Next is the bucket: **Storage & databases → R2 Object Storage → Create bucket**.
+> - Name: **`dnd-app-uploads`**
+> - Location: **Automatic**, with the hint set to **Eastern North America** if offered
+> - Storage class: **Standard**
+
+### 58. 2026-11-18 13:00
+
+**Robert:**
+> It was at 10 saving to 1 now
+
+**Claude:**
+> That's right: save it at **$1**.
+> 
+> As the note says, the alert only emails you; it doesn't stop spending. Still, a $1 alert means you'd hear about any charge within cents of it starting, and the kill switch (turn off the public URL and delete the API token) is always there if you need it.
+> 
+> Now the bucket: **Storage & databases → R2 Object Storage → Create bucket**.
+> - Name: **`dnd-app-uploads`**
+> - Location: **Automatic**, with the hint set to **Eastern North America** if offered
+> - Storage class: **Standard**
+
+### 59. 2026-11-18 13:02
+
+**Robert:**
+> Okay created. 
+> 
+> One note my sister works for cloudflare. Do you think that could help me with pricing?
+
+**Claude:**
+> At your current scale it probably won't matter, because the bill should be $0. You're far inside the free limits and are likely to stay there for a long time. I don't know whether Cloudflare offers employee perks or credits for family, so that's a question for her rather than something I can answer.
+> 
+> She could be useful in other ways though:
+> - If you go past the free tier one day, she'd know whether any startup or hobbyist credit programmes apply.
+> - She could sanity-check the setup we're doing, such as the bucket permissions and the public URL. That's a useful second pair of eyes.
+> 
+> Now the next step, now that the bucket exists:
+> 
+> **Public URL**
+> - Open **`dnd-app-uploads`**, go to **Settings**, and find **Public Development URL** (`r2.dev`).
+> - Click **Enable** and confirm.
+> - Paste the URL here. It looks like `https://pub-xxxxxxxx.r2.dev` and is safe to share.
+> 
+> **API token**
+> - Go to **R2 ov …
+
+### 60. 2026-11-18 13:04
+
+**Robert:**
+> Dont see any of that here
+
+**Claude:**
+> The bucket is created and empty, and **Public Access: Disabled** is the thing we're about to change.
+> 
+> **Public URL**
+> 1. Click the **Settings** tab, next to Objects and Metrics.
+> 2. Scroll to **Public Development URL**. It may be inside a **Public access** section.
+> 3. Click **Enable**. It may ask you to type `allow` to confirm.
+> 4. Copy the URL it shows (`https://pub-xxxxxxxx.r2.dev`) and paste it here.
+> 
+> **API token** (it isn't on this page)
+> 1. Click **R2 Object Storage** in the breadcrumb at the top left to go back to the R2 overview.
+> 2. Look for **Manage API tokens**. It's usually a button or link on the right, sometimes under an **API** dropdown.
+> 3. **Create API token**: **Object Read & Write**, **this bucket only**, TTL **Forever**.
+> 4. Save the Access Key ID, Secret Access Key and Account ID in your password manager, and don't paste them here.
+
+### 61. 2026-11-18 13:06
+
+**Robert:**
+> https://pub-a1ce541f177b4225b2ae82461e297fe2.r2.dev
+
+**Claude:**
+> I've saved that. It will be the frontend's **`VITE_UPLOADS_URL`** in T7.
+> 
+> I checked that it lines up with the code. The backend stores each file in R2 under a key like `uploads/characters/12/abc.png` and saves that same path on the record. The frontend then builds `https://pub-a1ce…r2.dev/uploads/characters/12/abc.png`, which is exactly where R2 serves it. Nothing needs changing.
+> 
+> Last Cloudflare step: **the API token.**
+> 1. Click **R2 Object Storage** in the breadcrumb to go back to the overview.
+> 2. Click **Manage API tokens**, then **Create API token**:
+>    - Permission: **Object Read & Write**
+>    - Specify bucket: **`dnd-app-uploads`** only
+>    - TTL: **Forever**
+> 3. Save these three values in your password manager, and **don't paste them here**:
+>    - **Access Key ID**
+>    - **Secret Access Key**, which is shown only once
+>    - **Account ID**, on the R2 overview page or in the token's S3 en …
+
+**Commands run:** 1
+
+### 62. 2026-11-18 13:08
+
+**Robert:**
+> I dont see manage api tokens
+
+**Claude:**
+> It's just below the visible area. Scroll down in the **Account Details** box on the right. Under **Account ID** there should be an **S3 API** row and then an **API Tokens** row with a **Manage** button.
+> 
+> Then:
+> 1. Click **Manage**, then **Create API token**. If it asks for a token type, choose an **Account API token**; a **User API token** also works.
+> 2. Permission: **Object Read & Write**
+> 3. Specify bucket(s): **Apply to specific buckets only**, then **`dnd-app-uploads`**
+> 4. TTL: **Forever**
+> 5. Click **Create**, then save the **Access Key ID** and **Secret Access Key** in your password manager. The secret is shown only once. Don't paste them here.
+> 
+> The **Account ID** is in that box too. Copy it with the copy icon into the same place. It isn't secret on its own, since it's useless without the keys, but keep it with them so all three are in one spot for T6.
+
+### 63. 2026-11-18 13:09
+
+**Robert:**
+> First or second
+
+**Claude:**
+> Choose the first one, **Create Account API token**. It's the one Cloudflare recommends for production, and it belongs to the account rather than your personal login, so it keeps working whatever happens to your user.
+> 
+> On the form:
+> - **Token name:** `dnd-app-render-backend`, so you'll know later what it's for
+> - **Permissions:** **Object Read & Write**, not Admin
+> - **Specify bucket(s):** **Apply to specific buckets only**, then **`dnd-app-uploads`**
+> - **TTL:** **Forever**
+> - **Client IP filtering:** leave it empty. Render's outgoing IP addresses can change, and a filter could block the backend.
+> 
+> Click **Create**, then save the **Access Key ID** and **Secret Access Key** in your password manager. Ignore the "Token value" and the endpoint URLs on that page; we only need those two keys plus your Account ID.
+
+### 64. 2026-11-18 13:16
+
+**Robert:**
+> You dont want the  jurisdiction-specific endpoints for S3 clients?
+
+**Claude:**
+> No, we don't need them. The backend builds the endpoint itself from your Account ID, as `https://<account-id>.r2.cloudflarestorage.com` ([file_storage.py:163](backend/shared/file_storage.py#L163)). That's the default endpoint, so the only value it needs from that page is the Account ID.
+> 
+> The jurisdiction-specific endpoints only matter if you created a bucket that has to stay inside a region for legal reasons, such as an EU or FedRAMP bucket. `dnd-app-uploads` was created as a normal bucket with an Eastern North America location hint, which is a performance hint and not a jurisdiction. So the default endpoint is correct.
+> 
+> If you'd rather keep everything in one place, copying the default S3 endpoint into your password manager does no harm. Just don't choose the EU one.
+
+**Commands run:** 1
+
+### 65. 2026-11-18 13:18
+
+**Robert:**
+> okay created
+
+**Claude:**
+> The token is set up correctly: scoped to **dnd-app-uploads** only, with **Object Read & Write** and status **Active**. With the Access Key ID, Secret Access Key and Account ID in your password manager, **Cloudflare is done.**
+> 
+> Here's what we have:
+> | | |
+> |---|---|
+> | Render | Account and two-factor done; repo connected; Virginia region; free tier |
+> | R2 bucket | `dnd-app-uploads` |
+> | Public URL | `https://pub-a1ce541f177b4225b2ae82461e297fe2.r2.dev` |
+> | R2 keys | In your password manager |
+> 
+> ## T6, step 1: the database
+> In Render, click **+ New → Postgres** and fill in:
+> - **Name:** `dnd-app-db`
+> - **Database:** `dnd_app`
+> - **User:** leave blank, so Render generates one
+> - **Region:** **Virginia (US East)**. The backend must use this same region.
+> - **PostgreSQL Version:** the newest one offered
+> - **Plan:** **Free**
+> 
+> Click **Create Database**. It takes a minute or two to say **Available**.
+> 
+> When …
+
+### 66. 2026-11-18 13:22
+
+**Robert:**
+> okay it is available.
+> 
+> What do you need
+
+**Claude:**
+> I tried to create the **`production` branch** that Render will deploy from, but pushing a new branch to GitHub needs your OK first. It copies `main`'s current commit (`1bac949`, the one CI just passed) to a new branch called `production`. Nothing on `main` changes. Either:
+> - **reply "yes, push production"** and I'll run it, or
+> - run it yourself from the repo folder:
+>   ```
+>   git fetch origin
+>   git branch production origin/main
+>   git push origin production
+>   ```
+> 
+> Once it exists, here's the **backend Web Service**: **+ New → Web Service → Bobear92 / DnD-App**.
+> 
+> | Field | Value |
+> |---|---|
+> | Name | `dnd-app-api` |
+> | Language | **Python 3** |
+> | Branch | **`production`** |
+> | Region | **Virginia (US East)**, the same as the database |
+> | Root Directory | `backend` |
+> | Build Command | `pip install -r requirements.txt` |
+> | Start Command | `bash start.sh` |
+> | Instance Type | **Free** |
+> 
+> **Environme …
+
+**Commands run:** 4
+
+### 67. 2026-11-18 13:24
+
+**Robert:**
+> yes, push production
+
+**Claude:**
+> I pushed the new `production` branch to GitHub at commit `1bac949`, the same commit as `main`. Your local copy now tracks it too. Nothing on `main` changed.
+> 
+> Create the Web Service with the settings in the table above, choosing **Branch: `production`**. Then paste the service URL when it's live, or the error lines from the log if the build fails.
+
+**Commands run:** 2
+
+### 68. 2026-11-18 13:26
+
+**Robert:**
+> wait what am i doing walk me through it
+
+**Claude:**
+> The backend is the Python server, the part the website talks to. We're asking Render to take the code from the `production` branch on GitHub, install it and run it, so it has a public web address.
+> 
+> Take it one screen at a time, and send a screenshot whenever something looks different.
+> 
+> **Step 1: start the form**
+> 1. In Render, click **+ New** in the top bar, then **Web Service**.
+> 2. You'll see the repo list from earlier. Click **Bobear92 / DnD-App**.
+> 
+> **Step 2: the basic settings** (fill these in from top to bottom)
+> 1. **Name:** `dnd-app-api`. This becomes part of the web address.
+> 2. **Language:** **Python 3**
+> 3. **Branch:** **`production`**, the branch I just created
+> 4. **Region:** **Virginia (US East)**, the same region as the database
+> 5. **Root Directory:** `backend`. The repo holds both the frontend and the backend, and this tells Render to use only the backend folder.
+> 6. **Build Comm …
+
+### 69. 2026-11-18 13:28
+
+**Robert:**
+> this okay for the build command with backend/ first?
+
+**Claude:**
+> Yes, that's right. The `backend/ $` at the start isn't something you typed. Render adds it to remind you the command will run from inside the `backend` folder, because that's what you set as the Root Directory. Leave the box as `pip install -r requirements.txt`.
+> 
+> The **Start Command** box will show the same prefix, as `backend/ $ bash start.sh`. That's correct too.
+
+### 70. 2026-11-18 13:30
+
+**Robert:**
+> free right?
+
+**Claude:**
+> Yes, choose Free. Render has pre-selected the **$7/month** plan, so click the **$0 / month** row (0.1 CPU, 512 MB RAM, marked "Free") and check that its circle is filled in.
+> 
+> That's enough for development. The trade-offs are what we covered: it sleeps after about 15 minutes idle, so the first request after a break takes up to a minute, and it's slower overall. We can switch to the $7 plan whenever real players start using it.
+> 
+> The Start Command is correct. Next comes **Environment Variables**, just below.
+
+### 71. 2026-11-18 13:32
+
+**Robert:**
+> this makes sense?
+
+**Claude:**
+> Yes, that's the right value. It's the **Internal** URL: the host part `dpg-…-a` has no `.render.com` ending, so it only works inside Render's network.
+> 
+> **One problem: that screenshot shows the database password,** so treat it as exposed. The database is empty, so nothing is at risk yet. To close the gap:
+> 
+> - **Block outside connections.** In the database's page, open **Info** or **Networking** and find **Access Control**. Remove the rule allowing `0.0.0.0/0` (everyone). After that, only your Render services can connect, so the leaked password can't be used from outside Render. We'll briefly allow your own IP address when we seed the data in T8.
+> - **Optional extra step:** if the database page offers to rotate or reset the password, do it. Then paste the new Internal URL into `DATABASE_URL` without screenshotting it. If there's no such option, blocking outside access is enough for a free, e …
+
+### 72. 2026-11-18 13:37
+
+**Robert:**
+> I dont know the R2_ACCOUNT_ID you said to save the 2 keys nothing about this
+
+**Claude:**
+> No problem, it's easy to find again, and it isn't secret on its own:
+> 
+> 1. In Cloudflare, go to **Storage & databases → R2 Object Storage**, the overview page that lists your bucket.
+> 2. In the **Account Details** box on the right, next to **Account ID**, click the **copy icon** (the small square). The ID is truncated on screen, so use the icon rather than selecting the text.
+> 3. Paste it as the value of **`R2_ACCOUNT_ID`** in Render.
+> 
+> It's a 32-character string of letters and numbers. Also save it in your password manager next to the two keys, so all three are together next time.
+
+### 73. 2026-11-18 13:39
+
+**Robert:**
+> okay deploying
+
+**Claude:**
+> While it builds, here's what the log should show, roughly in this order:
+> 
+> 1. **Python 3.12.8** being installed, near the top.
+> 2. **`pip install`** installing the libraries (FastAPI, SQLAlchemy, boto3 and so on). This is the slowest part.
+> 3. **`Build successful`**
+> 4. **`Running upgrade … ->`** lines from Alembic, about 30 of them, creating the tables in the new database.
+> 5. **`Uvicorn running on http://0.0.0.0:10000`** or a similar address, then **`Your service is live 🎉`**.
+> 
+> When it says **Live**, paste the URL from the top of the page. I'll check that `/docs` loads and that the server responds. If it fails, paste the last 20 or so lines of the log.
+
+### 74. 2026-11-18 13:41
+
+**Robert:**
+> <pasted_content id="0f4a">
+> ==> Your service is live 🎉
+> ==> 
+> ==> ///////////////////////////////////////////////////////////
+> ==> 
+> ==> Available at your primary URL https://dnd-app-api.onrender.com
+> ==> 
+> ==> ///////////////////////////////////////////////////////////
+> INFO:     Started server process [60]
+> INFO:     Waiting for application startup.
+> INFO:     Application startup complete.
+> INFO:     Uvicorn running on http://0.0.0.0:10000 (Press CTRL+C to quit)
+> INFO:     127.0.0.1:35888 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+> INFO:     35.230.76.60:0 - "GET / HTTP/1.1" 200 OK
+> </pasted_content id=" …
+
+**Claude:**
+> That's the right URL. Opening it in a browser just shows a small JSON message, which is normal; the backend has no web page of its own. The visible site is the frontend, which comes next. I've recorded T6 as done in the deploy ticket, on a new branch `feature/deploy-t6-t7`.
+> 
+> ## First: lock the database (2 minutes)
+> The password showed in that screenshot, so in Render:
+> 1. Open **dnd-app-db** and find **Access Control** (under **Info** or **Networking**).
+> 2. Delete the rule that allows **`0.0.0.0/0`**.
+> 
+> Your backend will still connect, because it uses the internal network. Afterwards, check that the backend still says **Live**.
+> 
+> ## T7: the frontend (the website itself)
+> In Render, click **+ New → Static Site → Bobear92 / DnD-App**.
+> 
+> | Field | Value |
+> |---|---|
+> | Name | `dnd-app` |
+> | Branch | **`production`** |
+> | Root Directory | `frontend` |
+> | Build Command | `npm ci && npm run build` |
+> | Pu …
+
+**Commands run:** 4
+
+### 75. 2026-11-18 13:43
+
+**Robert:**
+> I dont see access control
+
+**Claude:**
+> You found it. In Render it's called **Networking**, and the part you want is the bottom box, **PostgreSQL Inbound IP Rules**:
+> 
+> 1. Click the **red trash icon** next to `0.0.0.0/0 — everywhere` in that bottom box.
+> 2. Click **Save**.
+> 
+> Leave the two upper sections ("Affected by: Workspace"/"Environment") alone. Those are workspace-wide rules for your services in general, and changing them could block the website itself.
+> 
+> Once the rule is gone, nothing outside Render can connect to the database, even with the password, while the backend keeps working over Render's internal network. When we seed in T8, we'll add your own IP address here temporarily.
+> 
+> After saving, check that **dnd-app-api** still shows **Live**, then move on to the T7 Static Site steps.
+
+### 76. 2026-11-18 13:44
+
+**Robert:**
+> Like this?
+
+**Claude:**
+> Yes, exactly. "All internet traffic is blocked" is what we want. Now click **Save**; the change hasn't applied until you do.
+> 
+> **Don't click the red button below it.** That's almost certainly **Delete Database**.
+> 
+> Tell me once it's saved and I'll check from here that the backend can still reach the database.
+
+### 77. 2026-11-18 13:46
+
+**Robert:**
+> saved
+
+**Claude:**
+> The database is locked down: nothing outside Render can connect to it. I checked from here and the backend still reaches it over Render's internal network. I've recorded this in the deploy ticket too.
+> 
+> ## Next: T7, the website
+> In Render, click **+ New → Static Site → Bobear92 / DnD-App** and fill in:
+> 
+> | Field | Value |
+> |---|---|
+> | Name | `dnd-app` |
+> | Branch | **`production`** |
+> | Root Directory | `frontend` |
+> | Build Command | `npm ci && npm run build` |
+> | Publish Directory | `dist` |
+> 
+> **Environment Variables:**
+> | Key | Value |
+> |---|---|
+> | `VITE_API_URL` | `https://dnd-app-api.onrender.com` |
+> | `VITE_UPLOADS_URL` | `https://pub-a1ce541f177b4225b2ae82461e297fe2.r2.dev` |
+> | `NODE_VERSION` | `22` |
+> 
+> Click **Deploy Static Site**. None of these values are secret, so screenshots are fine. Paste the site's URL when it's live.
+
+**Commands run:** 2
+
+### 78. 2026-11-18 13:48
+
+**Robert:**
+> okay building
+
+**Claude:**
+> While it builds, here's what the log should show:
+> 
+> 1. **Node 22** being set up.
+> 2. **`npm ci`** installing packages. This is the slowest part, a minute or two.
+> 3. **`vite build`** with `✓ built in …`. Some yellow warnings about large chunk sizes are normal and can be ignored.
+> 4. **`Your site is live 🎉`**
+> 
+> When it's live, there are two steps:
+> 
+> 1. **Add the rewrite:** open the site's **Redirects/Rewrites** tab and add a rule with Source `/*`, Destination `/index.html`, Action **Rewrite**, then save. Without it, refreshing any page other than the home page shows "Not Found".
+> 2. **Paste the site's URL here.** It will look like `https://dnd-app.onrender.com` or `https://dnd-app-xxxx.onrender.com`.
+> 
+> The login page will load, but logging in won't work yet. The backend still needs to be told to accept requests from this site, through `ALLOWED_ORIGINS`, and that's the step after this.
+
+### 79. 2026-11-18 13:50
+
+**Robert:**
+> <pasted_content id="0f4a">
+> ✓ built in 5.81s
+> ==> Requesting Node.js version 22
+> ==> Using Node.js version 22.23.5 via environment variable NODE_VERSION
+> ==> Docs on specifying a Node.js version: https://render.com/docs/node-version
+> ==> Uploading build...
+> ==> Your site is live 🎉
+> </pasted_content id="0f4a">
+
+**Claude:**
+> The build worked and the site is live.
+> 
+> Two steps now:
+> 
+> **1. The rewrite**
+> On the **dnd-app** static site, open the **Redirects/Rewrites** tab and click **Add Rule**:
+> - Source: `/*`
+> - Destination: `/index.html`
+> - Action: **Rewrite**
+> 
+> Save it.
+> 
+> **2. Send me the site's URL**
+> It's at the top of the dnd-app page, something like `https://dnd-app.onrender.com` or `https://dnd-app-xxxx.onrender.com`. Paste it here and I'll check the site from here, then walk you through adding it to the backend's `ALLOWED_ORIGINS` so logging in works.
+
+### 80. 2026-11-18 13:51
+
+**Robert:**
+> where do I do this? On the dnd-app static site?
+
+**Claude:**
+> Yes, on the **dnd-app** static site, not on dnd-app-api.
+> 
+> 1. In the Render dashboard, click **dnd-app**.
+> 2. In the left menu of that service, click **Redirects/Rewrites**.
+> 3. Click **Add Rule** and fill it in:
+>    - **Source:** `/*`
+>    - **Destination:** `/index.html`
+>    - **Action:** **Rewrite** (not Redirect)
+> 4. Click **Save Changes**.
+> 
+> If **Redirects/Rewrites** isn't in the left menu, send a screenshot of the menu.
+
+### 81. 2026-11-18 13:53
+
+**Robert:**
+> okay saved
+
+**Claude:**
+> I tried the obvious address, `https://dnd-app.onrender.com`, and it doesn't respond. Someone else probably already owns that name, so Render added a suffix to yours.
+> 
+> Paste the URL shown at the top of the **dnd-app** page in Render, under the name. It will look like `https://dnd-app-xxxx.onrender.com`. Then I'll check the site and the rewrite, and we'll do the last setting.
+
+**Commands run:** 1
+
+### 82. 2026-11-18 13:55
+
+**Robert:**
+> https://dnd-app-api.onrender.com
+
+**Claude:**
+> That's the **backend** URL (dnd-app-api), which we already have. What I need is the URL of the **website**:
+> 
+> 1. Go back to the Render dashboard, where you see all your services.
+> 2. Click **dnd-app**, the Static Site. It's a separate entry from **dnd-app-api**.
+> 3. At the top of its page, under the name, there's a URL ending in `.onrender.com`. That's the one to paste here.
+> 
+> It probably looks like `https://dnd-app-xxxx.onrender.com`, without the word `api`.
+
+### 83. 2026-11-18 13:56
+
+**Robert:**
+> https://dnd-app-ginj.onrender.com
+
+**Claude:**
+> The website checks out:
+> 
+> | Check | Result |
+> |---|---|
+> | Home page | 200, loads |
+> | Refreshing a deep link (`/campaigns/1/characters`) | 200, **so the rewrite works** |
+> | The site's code points at the backend | `dnd-app-api.onrender.com` is built in |
+> | Images point at R2 | the `r2.dev` URL is built in |
+> | Any `localhost:8000` left over | none |
+> 
+> ## Last T7 step: let the backend accept the website
+> 1. In Render, open **dnd-app-api** (the backend), then **Environment** in the left menu.
+> 2. **Add Environment Variable**:
+>    - Key: `ALLOWED_ORIGINS`
+>    - Value: `https://dnd-app-ginj.onrender.com`
+> 3. Click **Save**. If Render offers **Save, rebuild and deploy** or **Save and deploy**, choose that one. The backend only reads this value when it starts, so it needs to restart.
+> 4. Wait until dnd-app-api shows **Live** again (about a minute), then tell me.
+> 
+> I'll check that the backend accepts the we …
+
+**Commands run:** 1
+
+### 84. 2026-11-18 14:00
+
+**Robert:**
+> okay it deployed
+
+**Claude:**
+> **The app is live in production at https://dnd-app-ginj.onrender.com.**
+> 
+> I checked the backend: it accepts requests from your site and refuses them from anywhere else. T6 and T7 are marked done in the deploy ticket, which is now at 9 of 12.
+> 
+> What you can try now:
+> 1. Open the site. If the backend has been idle, the first request takes up to a minute while it wakes up; that's the free tier.
+> 2. **Register your own account.** It becomes your admin account in T8, so use a real, strong password, not the `password123` test login.
+> 3. Log in and create a campaign if you like. The database is still the throwaway free one.
+> 
+> What won't work yet:
+> - **Creating characters or browsing the encyclopedia.** The compendium is empty: no classes, spells, items or feats. Filling it is T8 (seed production and make you admin).
+> - **Portrait uploads might work**, and if one does, that's the first real test of R2. …
+
+**Commands run:** 2
+
+### 85. 2026-11-18 14:02
+
+**Robert:**
+> okay we will do this later. Lets add all of our learnings and progress to our docs and then we will ship.
+
+**Claude:**
+> The docs are updated on branch **`feature/deploy-t6-t7`**. Nothing is committed yet; this is ready for `/ship`.
+> 
+> **[docs/deployment.md](docs/deployment.md)**
+> - A new **Live services** section with all four URLs, the service names, the Virginia region, the `production` branch, and the free database's expiry date (around Dec 18).
+> - **Database access is closed**, plus how to open it to one IP address for a job from your laptop and close it again.
+> - A new **Accounts and cost guards** section: two-factor on Render and Cloudflare, Render's GitHub access limited to DnD-App, the $1 Cloudflare budget alert, the R2 kill switch, and "never screenshot a screen that shows a secret".
+> - The tier decision (free for now, and Render's form pre-selects the $7 plan).
+> - `PYTHON_VERSION` and `NODE_VERSION` explained and added to the environment variables table; `ALLOWED_ORIGINS` is set after the website exist …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/update_docs.py`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/feedback_warn_before_secret_screens.md`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/project_production_deployment.md` · **Commands run:** 8

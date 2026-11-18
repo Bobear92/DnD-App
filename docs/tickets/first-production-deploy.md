@@ -4,14 +4,16 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 7/12 done (T1–T5b). All code tickets are done; T6 onward needs Robert's accounts. Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** 9/12 done (T1–T7). All code tickets are done; T6 onward needs Robert's accounts. Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
 **Decisions:**
 - Uploads: **Cloudflare R2** (decided 2026-11-16).
 
-**Still open:**
-- Tier: free (cold starts, database expires) or paid (~$13/mo). Needed by T6.
+- Tier: **free** for both the database and the backend while in development (decided 2026-11-18). The free
+  database expires ~30 days after creation (created 2026-11-18) and has no backups — upgrade it to paid before
+  real players' data goes in. Region: **Virginia (US East)** for every service.
+- Cost guard: Cloudflare budget alert at **$1** (Manage account → Notifications). It only emails; there is no hard cap.
 
 Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 onward is setup on Render and GitHub.
 
@@ -123,27 +125,43 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - guard: a backend test per script: run twice, change a value in between, the row is updated and not duplicated;
   a campaign override with the same name is unchanged.
 
-## T6 — Render: database and backend (needs the tier decision)
-- [ ] Create Render Postgres; note the internal URL.
-- [ ] Check the build log uses Python 3.12 (see deployment.md › Hosting); if not, set `PYTHON_VERSION` to a full 3.12.x.
-- [ ] Create the backend Web Service from the repo, root `backend/`, start command `bash start.sh`, **deploying from the `production` branch**
-  (create it from `main` first: `git branch production main && git push origin production`).
-- [ ] Create the R2 bucket, API token and public URL ([deployment.md › Uploads](../deployment.md#uploads-cloudflare-r2)).
-- [ ] Set env vars: `DATABASE_URL`, `SECRET_KEY` (freshly generated), `ALLOWED_ORIGINS` (fill in after T7), `DEBUG=false`,
+## T6 — Render: database and backend ✅
+- **Landed 2026-11-18.** Backend live at `https://dnd-app-api.onrender.com` (service `dnd-app-api`, free, Virginia),
+  database `dnd-app-db` (free). `production` branch created from `main` at `1bac949`. R2 bucket `dnd-app-uploads`,
+  public URL `https://pub-a1ce541f177b4225b2ae82461e297fe2.r2.dev` (→ `VITE_UPLOADS_URL` in T7), account API token
+  `dnd-app-render-backend` scoped to that bucket, Object Read & Write. Checked from outside: `/docs` 200, a login for an
+  unknown user → 401 (so the DB is reached and migrated), `/api/auth/me` → 401, `/uploads/*` → 404 (R2 mode), an
+  unlisted CORS origin is refused. `PYTHON_VERSION=3.12.8` set explicitly, because the service root is `backend/` and
+  `.python-version` sits at the repo root.
+- [x] Database external access blocked (Networking › PostgreSQL Inbound IP Rules emptied, 2026-11-18) — its password
+  was exposed in a screenshot while the DB was empty. The backend still reaches it internally (verified). T8 must add
+  one IP there temporarily to seed, then remove it.
+- [ ] R2 is proven only once a portrait upload works on the live site (T7/T10).
+- [x] Create Render Postgres; note the internal URL.
+- [x] Python 3.12 pinned via `PYTHON_VERSION`.
+- [x] Create the backend Web Service from the repo, root `backend/`, start command `bash start.sh`, **deploying from the `production` branch**.
+- [x] Create the R2 bucket, API token and public URL ([deployment.md › Uploads](../deployment.md#uploads-cloudflare-r2)).
+- [x] Set env vars (ALLOWED_ORIGINS still pending T7): `DATABASE_URL`, `SECRET_KEY` (freshly generated), `ALLOWED_ORIGINS` (`https://dnd-app-ginj.onrender.com`), `DEBUG=false`,
   `STORAGE_BACKEND=r2`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`,
   `ACCESS_TOKEN_EXPIRE_MINUTES=720`.
 - done: `https://<backend>/docs` loads.
 
-## T7 — Render: frontend
-- [ ] Create the Static Site, root `frontend/`, build `npm ci && npm run build`, publish `dist`, branch `production`.
-- [ ] Set `VITE_API_URL` to the backend URL and `VITE_UPLOADS_URL` to the R2 public URL; add the rewrite `/*` → `/index.html`.
-- [ ] Put the Static Site's URL into the backend's `ALLOWED_ORIGINS`; redeploy the backend.
+## T7 — Render: frontend ✅
+- **Landed 2026-11-18.** Site live at `https://dnd-app-ginj.onrender.com` (Static Site `dnd-app`; `dnd-app` itself was
+  taken, hence the suffix). `NODE_VERSION=22` set. Checked from outside: `/` and a deep link both 200 (rewrite works);
+  the bundle contains the backend URL and the R2 URL and no `localhost:8000`; a CORS preflight from the site is allowed
+  and one from an unlisted origin gets 400.
+- [x] Create the Static Site, root `frontend/`, build `npm ci && npm run build`, publish `dist`, branch `production`.
+- [x] Set `VITE_API_URL` to the backend URL and `VITE_UPLOADS_URL` to the R2 public URL; add the rewrite `/*` → `/index.html`.
+- [x] Put the Static Site's URL into the backend's `ALLOWED_ORIGINS`; redeploy the backend.
 - done: the login page loads, and refreshing on a deep link (e.g. `/campaigns/1/characters`) doesn't 404.
 
 ## T8 — Seed production and create the admin
-- [ ] From the Render shell, run the seed scripts in the order in [deployment.md › Data operations](../deployment.md#data-operations).
+- [ ] The free tier has **no Render shell**: add Robert's IP to the database's inbound rules, run the seed scripts from
+  this laptop against the database's **External** URL (set in the terminal only, never in `backend/.env`) in the order
+  in [deployment.md › Data operations](../deployment.md#data-operations), then **remove the IP rule**.
   **Not `seed_data.py`** (it refuses a remote database anyway).
-- [ ] Register through the live app; flip `is_admin` with SQL.
+- [ ] Register through the live app (Robert's real account, strong password); flip `is_admin` with SQL in the same IP window.
 - done: the Encyclopedia shows classes, spells, feats and items; character creation works end to end.
 
 ## T9 — Release flow and repo docs
@@ -162,7 +180,9 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [ ] Update the `.githooks/pre-commit` and `feature-branch-guard.mjs` protection to cover `production` too.
 
 ## T10 — Pre-public checks
+- [ ] Confirm GitHub two-factor is on (it guards the repo, the Render deploy source and both social logins).
 - [ ] Run the `security-reviewer` agent over auth, campaign membership and visibility before sharing the URL.
 - [ ] Smoke test as a GM and as an invited player on the live site (create a campaign, invite, create a character, upload a portrait,
   redeploy, and confirm the portrait survives).
-- [ ] Take a manual database dump and confirm Render backups are on.
+- [ ] Take a manual database dump. Render backups exist only on the paid database tier — upgrade first (the free
+  database expires around 2026-12-18).

@@ -42,6 +42,7 @@ These are the lessons most likely to be learned again. Each is a candidate for a
 | An autogenerate "rename" is a drop + add that deletes the column's data | Production and data safety | the `/release` destructive-migration stop (first-deploy T9) |
 | Back up and rehearse on a restored prod copy before any migration release | Production and data safety | the `/release` skill (first-deploy T9) |
 | Background servers can die mid-session; re-check before relying on them | Tooling | a status check in `restart-*.sh` callers |
+| Warn **before** a dashboard step that shows a secret (2FA QR code, database URL, API key) not to screenshot it | Production and data safety | memory `feedback_warn_before_secret_screens`; a line in the `/release` skill |
 
 ---
 
@@ -123,6 +124,12 @@ Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](
 | **Releases are tags, not branches**: tags can't move, so they stay accurate rollback points | none (documented in `docs/deployment.md`) | Session 2026-11-15 |
 | **Run the real start path against an EMPTY database before trusting it.** Doing so found `env.py` crashing on a `%` in DATABASE_URL (ConfigParser interpolation) — every deploy would have failed | guard test (`test_schema_ownership.py`), CI (`alembic upgrade head` + `alembic check` from scratch) | Session 2026-11-16 |
 | **Alembic owns the schema**: no `create_all` in the app, so a model without a migration fails CI, not a deploy | guard test (`test_schema_ownership.py`), CI `alembic check` | Session 2026-11-16 |
+| **Secrets leak through screenshots.** In the first deploy a two-factor QR code and the database URL (with its password) were pasted into chat as images; the QR was regenerated and the database's external access closed. Say "don't screenshot this screen" *before* the step, not after | memory `feedback_warn_before_secret_screens` | Session 2026-11-18 |
+| **Close the database to the internet once the backend is up.** The internal URL keeps working; open one IP only for a laptop job (seeding, a dump), then close it | none (documented in `docs/deployment.md`) | Session 2026-11-18 |
+| **A service Root Directory can hide repo-root config.** `.python-version` sits at the root but the backend's root is `backend/`, so pin `PYTHON_VERSION` (and `NODE_VERSION`) explicitly | none (documented) | Session 2026-11-18 |
+| **Check the plan on every create form**: Render pre-selects the $7 instance even on a free workspace | none (documented) | Session 2026-11-18 |
+| **Verify a deploy from outside, not from the dashboard's "Live"**: `/docs` 200; a login for an unknown user → 401 proves the DB is reached and migrated; a CORS preflight from the site is allowed and one from another origin refused; the built bundle contains the backend and uploads URLs and no `localhost:8000`; a deep link returns 200 (SPA rewrite) | none — a candidate smoke step for `/release` (first-deploy T9) | Session 2026-11-18 |
+| **"Render shell" is a paid feature**: on the free tier, laptop jobs against prod go through a temporary IP rule | none (documented) | Session 2026-11-18 |
 
 ## Shared mechanisms and duplication
 
