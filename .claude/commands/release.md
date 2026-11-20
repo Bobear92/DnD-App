@@ -65,13 +65,14 @@ Skip if Step 2 listed no migration files. Otherwise, before Step 4:
 ## Step 5 — Fast-forward, tag, push
 
 ```bash
-git checkout production
-git merge --ff-only origin/main          # never a merge commit; if this fails, stop (production diverged)
-git tag -a vX.Y.Z -m "vX.Y.Z" -m "<the notes from Step 4>"
+git fetch . origin/main:production       # moves local production WITHOUT checking it out; refuses anything but a fast-forward
+git tag -a vX.Y.Z production -m "vX.Y.Z" -m "<the notes from Step 4>"
 git push origin production vX.Y.Z
-git checkout main
+git ls-remote origin refs/heads/production 'refs/tags/vX.Y.Z^{}'   # both must show main's HEAD
 ```
 
+**Don't `git checkout production`:** the session-log hook keeps `docs/sessions/*` modified, so a checkout aborts
+(v0.1.0 hit this). If the fetch says "non-fast-forward", stop — production diverged (deployment.md › Hotfix/Rollback).
 `.githooks/pre-commit` refuses commits on `production`; a fast-forward creates none, so it does not fire.
 Render auto-deploys `production` once GitHub reports CI passed for that commit — the same commit already passed on
 `main`, so the deploy starts at once. The backend runs `alembic upgrade head` on start.
@@ -82,7 +83,7 @@ Wait for the new frontend bundle and a healthy backend (the free backend may be 
 
 ```bash
 SITE=https://dnd-app-ginj.onrender.com; API=https://dnd-app-api.onrender.com
-curl -s $SITE/ | grep -o 'assets/index-[^"]*\.js'          # changes when the new frontend is live (compare before/after)
+curl -s $SITE/ | grep -o 'assets/index-[^"]*\.js'          # changes when the new frontend is live — unless no frontend/src change shipped (same build, same name)
 curl -s -o /dev/null -w "%{http_code}\n" $API/docs           # 200
 curl -s -X POST $API/api/auth/login -H "Content-Type: application/json" \
   -d '{"email":"nobody@example.com","password":"x"}' -w " [%{http_code}]\n"   # 401 = DB reached and migrated

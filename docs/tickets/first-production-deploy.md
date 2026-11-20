@@ -4,7 +4,7 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 10/12 done (T1–T8). All code tickets are done; T6 onward needs Robert's accounts. Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** 11/12 done (T1–T9). All code tickets are done; T6 onward needs Robert's accounts. Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
 **Decisions:**
@@ -181,9 +181,11 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [ ] Register through the live app (Robert's real account, strong password); flip `is_admin` with SQL in the same IP window.
 - done: the Encyclopedia shows classes, spells, feats and items; character creation works end to end.
 
-## T9 — Release flow and repo docs (built 2026-11-20; v0.1.0 pending)
-- [ ] Render auto-deploy set to "after CI checks pass".
-- [ ] Tag the first release `v0.1.0` on `production`.
+## T9 — Release flow and repo docs ✅
+- [x] Render auto-deploy set to "after CI checks pass" on both services (Robert, 2026-11-20).
+- [x] Tag the first release `v0.1.0` on `production` — released 2026-11-20 with `/release`: production 1bac949 → 2ad9779,
+  annotated tag pushed. First run found `git checkout production` aborts on the always-dirty session logs; the skill now
+  moves production with `git fetch . origin/main:production` (ff-only, no checkout).
 - [x] Update CLAUDE.md › Development Workflow: `main` is the develop line (no longer "the deployable trunk");
   `production` and tags handle releases; link [docs/deployment.md](../deployment.md). Add the
   rollback-safe migration rule as a standing rule.

@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy, plan through release flow (T1–T9)
+title: First production deploy, plan through v0.1.0 (T1–T9)
 date: 2026-11-15
 started: 17:50
-branch: feature/release-flow
+branch: feature/release-v0.1.0-followups
 area: tooling
 tags: [docs, build, consolidation, deployment, data-safety, migration, seed-data, user-rule, guard-test, tooling]
 issues: []
-summary: Prod deploy: plan + code (T1–T5b), live on Render + R2 (T6–T7), seeded (T8), /release + production guards (T9)
-turns: 107
+summary: Prod deploy: plan + code (T1–T5b), live on Render + R2 (T6–T7), seeded (T8), /release + guards, v0.1.0 released (T9)
+turns: 111
 stepped_in: true
-last_uuid: ecf3352a-eb55-44d2-8484-86108998a30e
+last_uuid: 55ca2108-9f3a-49ba-bbf9-f81876c28031
 ---
 
-# First production deploy, plan through release flow (T1–T9)
+# First production deploy, plan through v0.1.0 (T1–T9)
 
 ## Summary
 
@@ -160,8 +160,10 @@ last_uuid: ecf3352a-eb55-44d2-8484-86108998a30e
 
 ## Open threads
 
-- **Next: Robert sets Render Auto-Deploy → "After CI Checks Pass" on dnd-app-api and dnd-app**, then `/release` v0.1.0
-  (production 1bac949 → main; carries the T8 seed fix, T9 tooling, docs; no migrations since 1bac949).
+- **v0.1.0 released** (production + tag at 2ad9779; Render Auto-Deploy "After CI Checks Pass" on both services). Verified
+  from outside: /docs 200, login 401, CORS, deep link 200; bundle unchanged (no frontend/src change). The first run aborted
+  at `git checkout production` (dirty session logs) before pushing anything — `/release` Step 5 now uses
+  `git fetch . origin/main:production`. Robert's browser smoke test (save + reload a character, map still shows) pending.
 - **T10** — GitHub 2FA, security-reviewer, live smoke test incl. a player account and "the map survives a redeploy",
   a database dump.
 - **Free database expires around 2026-12-18** — upgrade before anything in it matters (no backups on free).
@@ -2130,3 +2132,87 @@ last_uuid: ecf3352a-eb55-44d2-8484-86108998a30e
 > - **`production` is protected:** committing on it is refused, and my edit guard blocks editing there. There are **8 new tests** for both hooks, and against the old hooks the `production …
 
 **Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t9_hooks.py`, `frontend/src/test/branchGuards.test.js`, `.claude/commands/release.md`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t9_docs.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t9_trim.py`, `CLAUDE.md` · **Commands run:** 23
+
+### 108. 2026-11-20 14:25
+
+**Robert:**
+> /ship
+
+**Claude:**
+> T9 is shipped: `main` is at **`2ad9779`** and pushed, the feature branch is deleted, and the working tree is clean. The new pre-commit hook ran on this commit and allowed it, since it was on a feature branch.
+> 
+> - **Tests:** frontend 3,940 passed. The backend gate and the live-app check were skipped because nothing in the backend or the app changed.
+> - **Agents:** none referred to "deployable trunk", so nothing to update.
+> - **Session log:** updated, and it records the `CalendarTab` flake as an open thread.
+> 
+> CI for `2ad9779` is running in the background; I'll report when it finishes. Production is still at `1bac949`.
+> 
+> **Before `/release`:** please confirm you've set **Auto-Deploy → "After CI Checks Pass"** on both **dnd-app-api** and **dnd-app**. Then run `/release`. It will show you the v0.1.0 notes and the data check (there are no migrations since `1bac949`), and nothing is pushed until yo …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/log_t9.py` · **Commands run:** 3
+
+### 109. 2026-11-20 14:27
+
+**Robert:**
+> both dnd app and dnd api have set to auto deploy after the CI check passes. 
+> 
+> lets /release
+
+**Claude:**
+> CI is green for `2ad9779` (backend and frontend). Every precondition is met, so here's the release proposal.
+> 
+> ## Proposed release: **v0.1.0**
+> **Commits:** `1bac949` → `2ad9779` (3 commits). This is the first tagged release, so the tag marks everything that's live.
+> 
+> **Release notes**
+> - **Features:** none in this range. v0.1.0 marks the first production deployment as a whole: Render plus Cloudflare R2, a seeded compendium, and the admin account.
+> - **Fixes**
+>   - The network seed scripts (`seed_items.py`, `seed_spells.py`) now retry failed downloads and exit with an error instead of printing "Done" after a partial seed.
+> - **Behind the scenes**
+>   - The `/release` flow, and protection for the `production` branch: commits there are refused, and my edits there are blocked.
+>   - Deployment docs: live services, cost guards, how seeding works on the free tier, lessons learned.
+> - **Data:** no migrati …
+
+**Commands run:** 3
+
+### 110. 2026-11-20 14:43
+
+**Robert:**
+> yes
+
+**Claude:**
+> I've fixed the skill and marked T9 done in the ticket, now 11 of 12. Waiting on the live-site check.
+
+**Files edited:** `.claude/commands/release.md` · **Commands run:** 5
+
+### 111. 2026-11-20 14:48
+
+**Robert:**
+> <task-notification>
+> <task-id>b2hezi6sy</task-id>
+> <tool-use-id>toolu_01PfkEMbsC7kFHCjtFDXpQwd</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\b2hezi6sy.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for Render, then verify the live site" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> **v0.1.0 is live, and every check passed:**
+> 
+> | Check | Result |
+> |---|---|
+> | API docs | 200 |
+> | Login for an unknown user | 401, so the database is reachable and migrated |
+> | CORS from the site | allowed |
+> | Refreshing a deep link | 200 |
+> | Website build | `index-CwdyXj2K.js`, unchanged as expected because no app code changed |
+> 
+> From outside I can't tell whether Render actually redeployed, since the code is the same. **Please check two things for me:**
+> 
+> 1. **In Render:** open **dnd-app-api → Events** (and the same for **dnd-app**). The latest deploy should be commit **`2ad9779`** ("Add the /release flow…"). That confirms "Auto-Deploy after CI checks pass" works with the release flow.
+> 2. **Smoke test** on https://dnd-app-ginj.onrender.com:
+>    - log in;
+>    - open your Test Fighter, change something small (for example inspiration), and let it save;
+>    - reload the page and check that nothing …
+
+**Commands run:** 1
