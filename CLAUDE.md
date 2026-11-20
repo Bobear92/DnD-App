@@ -1076,12 +1076,16 @@ Only what is genuinely missing or deferred. Descriptions of what IS built live i
 - Multiclassing support (deferred — will be its own feature after both editions complete)
 - **Character personality (traits / ideals / bonds / flaws) — NOT BUILT.** The same gap the Appearance section just closed for physical description: NPCs have `personality_traits`, `ideals`, `bonds` and `flaws` columns; player characters have none, even though backgrounds carry a `characteristics` JSON the creation flow never turns into stored character state. The shape is already proven — a sibling JSONB column plus a catalog module beside `appearance/appearanceData.js`, rendered as a second Narrative-tab card — and the background's suggested traits would make good datalist suggestions. Deliberately left out of the appearance pass to keep its scope honest.
 - Loot table UI
+- **Player Locations view should match the GM's** (Robert, 2026-11-20): the GM sees the top-level location's world map previewed above the hierarchy; a player sees only the hierarchy row and must click into it. Show the same preview to players (respecting map/location visibility).
+- **Items deep dive** (Robert, 2026-11-20): incl. moving the 34 potion-type SRD magic items (Potion of Animal Friendship, Oil of Sharpness, …) into Potions — needs the seed changed AND the existing system `magic_items` rows removed in prod.
+- Bug: the Locations "Upload failed" banner stays up after a later upload succeeds.
 - **World items for world-building campaigns** — agreed with the user (Nov 2026), not built: a lore list of the world's notable items (description, picture, linked NPCs) that stays visible in world-building mode while the item's stat block hides. Items today are encyclopedia rows with no image or NPC link, so this is a new module. Also: the create-campaign modal does not offer `campaign_mode` yet (the API accepts it; Settings can switch it).
 - Encyclopedia browsing UI — Classes, Skills, Spells, Items (Weapons/Armor/Gear/Potions/Magic Items/Food & Drink — system browse + GM override + campaign homebrew + edit), Feats, and **Mechanics** (game-mechanic reference pages — see below) tabs exist; Monsters tab not yet built. Items are not yet integrated into the character sheet (Weapons & Armor tab inventory is the next step)
 - Campaign spell override/homebrew management — built (SpellsTab override button, CampaignSpellsTab, SpellEditPage); admin panels for base compendium not yet built
 - Admin panels (manage base compendium: races, backgrounds, feats, spells, items, creatures)
 - GM panels (campaign overrides + homebrew content management)
 - Token refresh / expiration handling
+- **Account emails + password reset** (requested by Robert 2026-11-20): a welcome email to a new user, an email to the admin(s) naming the new account, and forgot/reset password (single-use expiring token emailed as a link). Needs an email provider (e.g. Resend/Postmark) + env vars, and a reset-token table; nothing sends email today.
 - Persistent/global music player (deferred — current `MusicPlayer` is inline per-page and stops on navigation; a root-level context player that keeps ambience playing across pages is a future enhancement)
 
 

@@ -130,6 +130,8 @@ Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](
 | **Check the plan on every create form**: Render pre-selects the $7 instance even on a free workspace | none (documented) | Session 2026-11-18 |
 | **Verify a deploy from outside, not from the dashboard's "Live"**: `/docs` 200; a login for an unknown user → 401 proves the DB is reached and migrated; a CORS preflight from the site is allowed and one from another origin refused; the built bundle contains the backend and uploads URLs and no `localhost:8000`; a deep link returns 200 (SPA rewrite) | none — a candidate smoke step for `/release` (first-deploy T9) | Session 2026-11-18 |
 | **"Render shell" is a paid feature**: on the free tier, laptop jobs against prod go through a temporary IP rule | none (documented) | Session 2026-11-18 |
+| **A network seed can report success after a failed download.** `seed_items.py` printed "Done" and exited 0 when dnd5eapi.co timed out on its list calls, leaving prod with 15 of ~530 items; it was caught only by reading the counts. Seeds must fail loudly, and a prod seed is checked against dev's counts | guard test (`test_seeding.py › TestNetworkSeedsNeverFailSilently`), one helper (`shared/seeding.fetch_json`) | Session 2026-11-20 |
+| **Keep production secrets out of synced folders**: Windows' Save As defaults to OneDrive\Documents | none (documented) | Session 2026-11-20 |
 
 ## Shared mechanisms and duplication
 

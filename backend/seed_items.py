@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import httpx
 from shared.database import SessionLocal
-from shared.seeding import upsert_system_row, summary
+from shared.seeding import FAILED, SeedFetchError, exit_if_failed, fetch_json, upsert_system_row, summary
 from shared.encyclopedia.items.weapons.models import Weapon
 from shared.encyclopedia.items.armor.models import Armor
 from shared.encyclopedia.items.adventuring_gear.models import AdventuringGear
@@ -63,13 +63,19 @@ def _weapon_range(data: dict) -> tuple[int | None, int | None]:
     return normal, long
 
 
-def _fetch(client: httpx.Client, path: str) -> dict | None:
+def _fetch(client: httpx.Client, path: str) -> dict:
+    """Retries, then raises SeedFetchError — a failed download is never silent (shared/seeding.py)."""
+    return fetch_json(client, f"{API_BASE}{path}")
+
+
+def _fetch_record(client, path: str, counts: Counter, failures: list) -> dict | None:
+    """One item's detail record, or None after counting it as FAILED (the run then exits non-zero)."""
     try:
-        r = client.get(f"{API_BASE}{path}", timeout=10)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        print(f"  !! Failed to fetch {path}: {e}")
+        return _fetch(client, path)
+    except SeedFetchError as exc:
+        print(f"  !! {exc}")
+        counts[FAILED] += 1
+        failures.append(path)
         return None
 
 
@@ -115,20 +121,26 @@ def _equipment_row(data: dict):
     return None
 
 
-def seed_equipment(db, client, delay=0.03) -> Counter:
-    """Weapons, armor, and adventuring gear all come from /api/equipment."""
+def seed_equipment(db, client, delay=0.03, failures=None) -> Counter:
+    """Weapons, armor, and adventuring gear all come from /api/equipment.
+
+    A failed LIST download raises (nothing to seed from); a failed item is counted as FAILED and
+    named in ``failures``. "skipped" means deliberately ignored (not an item kind we store, or a
+    repeated name) — never a download that failed.
+    """
     counts = Counter()
+    failures = [] if failures is None else failures
     listing = _fetch(client, "/api/equipment")
-    if not listing:
-        return counts
     entries = listing.get("results", [])
     print(f"Found {len(entries)} equipment entries.")
 
     seen = set()
     for i, entry in enumerate(entries, start=1):
-        data = _fetch(client, f"/api/equipment/{entry['index']}")
+        data = _fetch_record(client, f"/api/equipment/{entry['index']}", counts, failures)
         time.sleep(delay)
-        row = _equipment_row(data) if data else None
+        if data is None:
+            continue
+        row = _equipment_row(data)
         if not row or (row[0], data["name"]) in seen:  # first record for a name wins (see magic items)
             counts["skipped"] += 1
             continue
@@ -144,11 +156,11 @@ def seed_equipment(db, client, delay=0.03) -> Counter:
     return counts
 
 
-def seed_magic_items(db, client, delay=0.03) -> Counter:
+def seed_magic_items(db, client, delay=0.03, failures=None) -> Counter:
+    """Failure handling as in seed_equipment."""
     counts = Counter()
+    failures = [] if failures is None else failures
     listing = _fetch(client, "/api/magic-items")
-    if not listing:
-        return counts
     entries = listing.get("results", [])
     print(f"Found {len(entries)} magic items.")
 
@@ -162,10 +174,9 @@ def seed_magic_items(db, client, delay=0.03) -> Counter:
             counts["skipped"] += 1
             continue
         seen.add(name)
-        data = _fetch(client, f"/api/magic-items/{entry['index']}")
+        data = _fetch_record(client, f"/api/magic-items/{entry['index']}", counts, failures)
         time.sleep(delay)
-        if not data:
-            counts["skipped"] += 1
+        if data is None:
             continue
         effect = _desc(data)
         _, status = upsert_system_row(db, MagicItem, {"name": name}, {
@@ -254,16 +265,18 @@ def main(client=None):
     db = SessionLocal()
     own_client = client is None
     client = client or httpx.Client(timeout=15, follow_redirects=True)
+    failures: list[str] = []
     try:
         print("Seeding equipment (weapons, armor, adventuring gear)...")
-        print(f"  Equipment: {summary(seed_equipment(db, client))}.\n")
+        print(f"  Equipment: {summary(seed_equipment(db, client, failures=failures))}.\n")
 
         print("Seeding magic items...")
-        print(f"  Magic items: {summary(seed_magic_items(db, client))}.\n")
+        print(f"  Magic items: {summary(seed_magic_items(db, client, failures=failures))}.\n")
 
         print("Seeding curated weapons + potions + food/drink...")
         print(f"  Curated: {summary(seed_curated(db))}.\n")
 
+        exit_if_failed(failures, "seed_items.py")
         print("Done.")
     finally:
         if own_client:

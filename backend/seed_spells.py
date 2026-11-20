@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import httpx
 from shared.database import SessionLocal
 from shared.encyclopedia.spells.models import Spell
-from shared.seeding import upsert_system_row, summary
+from shared.seeding import FAILED, SeedFetchError, exit_if_failed, fetch_json, upsert_system_row, summary
 from seed_artificer_spells import ARTIFICER_SPELLS
 
 API_BASE = "https://www.dnd5eapi.co"
@@ -32,16 +32,6 @@ def _fmt_components(spell_data: dict) -> str:
     if "M" in parts and material:
         joined += f" ({material})"
     return joined or "None"
-
-
-def _fetch_spell_detail(client: httpx.Client, index: str) -> dict | None:
-    try:
-        r = client.get(f"{API_BASE}/api/spells/{index}", timeout=10)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        print(f"  !! Failed to fetch {index}: {e}")
-        return None
 
 
 def spell_values(data: dict) -> dict:
@@ -71,16 +61,19 @@ def seed_spells(client=None, delay=0.05):
     client = client or httpx.Client(timeout=15, follow_redirects=True)
     try:
         print("Fetching spell list from D&D 5e API...")
-        r = client.get(f"{API_BASE}/api/spells")
-        r.raise_for_status()
-        spell_list = r.json().get("results", [])
+        # A failed list download raises SeedFetchError: there is nothing to seed from.
+        spell_list = fetch_json(client, f"{API_BASE}/api/spells").get("results", [])
         print(f"Found {len(spell_list)} spells.")
 
         counts = Counter()
+        failures = []
         for i, entry in enumerate(spell_list, start=1):
-            data = _fetch_spell_detail(client, entry["index"])
-            if not data:
-                counts["skipped"] += 1
+            try:
+                data = fetch_json(client, f"{API_BASE}/api/spells/{entry['index']}")
+            except SeedFetchError as exc:
+                print(f"  !! {exc}")
+                counts[FAILED] += 1
+                failures.append(entry["index"])
                 continue
             _, status = upsert_system_row(db, Spell, {"name": data["name"], "edition": "5e"}, spell_values(data))
             counts[status] += 1
@@ -90,7 +83,9 @@ def seed_spells(client=None, delay=0.05):
             time.sleep(delay)  # be polite to the API
 
         db.commit()
-        print(f"\nDone. Spells: {summary(counts)}.")
+        print(f"\nSpells: {summary(counts)}.")
+        exit_if_failed(failures, "seed_spells.py")
+        print("Done.")
         return counts
     finally:
         if own_client:

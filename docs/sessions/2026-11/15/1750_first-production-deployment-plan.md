@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy, plan through live (T1–T7)
+title: First production deploy, plan through seeded (T1–T8)
 date: 2026-11-15
 started: 17:50
-branch: feature/deploy-t6-t7
+branch: feature/deploy-t8
 area: tooling
 tags: [docs, build, consolidation, deployment, data-safety, migration, seed-data, user-rule, guard-test]
 issues: []
-summary: Prod deploy plan, all code tickets (T1–T5b), then live on Render free tier + Cloudflare R2 (T6–T7)
-turns: 85
+summary: Prod deploy plan + code tickets (T1–T5b); live on Render free + R2 (T6–T7); prod seeded, admin, fail-loud seeds (T8)
+turns: 104
 stepped_in: true
-last_uuid: 226cae3b-283c-4569-81ab-44f8fd61cd86
+last_uuid: e1217b60-1717-437b-a978-945e816dafc5
 ---
 
-# First production deploy, plan through live (T1–T7)
+# First production deploy, plan through seeded (T1–T8)
 
 ## Summary
 
@@ -62,7 +62,17 @@ last_uuid: 226cae3b-283c-4569-81ab-44f8fd61cd86
   `ALLOWED_ORIGINS` set on the backend. Verified: `/` and a deep link 200; bundle has the API + R2 URLs and no localhost;
   CORS preflight from the site allowed, others 400.
 - Docs: deployment.md (Live services, Accounts and cost guards, free tier, env vars, real R2 steps, no-shell seeding),
-  ticket (T6/T7 done, 9/12; T8 rewritten for the free tier; T10 GitHub 2FA), learnings (7 rows), 2 memories.
+  ticket (T6/T7 done, 9/12; T8 rewritten for the free tier; T10 GitHub 2FA), learnings (7 rows), 2 memories. Shipped fcaf673.
+- **T8 (2026-11-20):** Robert registered (`BobearDM`); temporary IP rule; External URL in `C:\Users\rober\dnd-prod-db.env`
+  read by a scratch runner that never printed it; all seeds run; `is_admin` set; IP rule removed and the laptop connection
+  confirmed refused. Prod counts match dev except potions (dev legacy seeder) and one dev duplicate.
+- **R2 proven:** first map upload failed (`Credential access key has length 31, should be 32`, a hand-copied key); token
+  recreated with the copy buttons; upload works and renders from r2.dev.
+- **Fail-loud seeds:** `shared/seeding.fetch_json` (3 attempts, backoff, `SeedFetchError`), `exit_if_failed`; seed_items and
+  seed_spells abort on a failed list and exit non-zero naming failed records (`failed`, never `skipped`). 6 tests
+  (`TestNetworkSeedsNeverFailSilently`); backend 1067 + 1 skipped, frontend 3932; real-API seed_spells on dev exit 0.
+- Robert's feature notes recorded in CLAUDE.md › Not Yet Built: account emails + password reset, player Locations view
+  matching the GM's world-map preview, items deep dive (potions), the sticky "Upload failed" banner.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -102,6 +112,14 @@ last_uuid: 226cae3b-283c-4569-81ab-44f8fd61cd86
 - The docs said to seed "from the Render shell"; the free tier has no shell. Caught while writing up, not before the tier
   decision. Fixed in deployment.md and T8.
 - Pushing the new `production` branch was blocked pending Robert's explicit OK; asked, he approved.
+- **T8:** Render hides the External URL while inbound rules are empty — Claude's steps had the URL first and the IP rule
+  second, so the order had to be swapped. Claude sent Robert to the database's Connect button (that was the web service's
+  outbound-IP menu) and assumed the DB was in the project list (it was outside the project).
+- Notepad saved the secret file to OneDrive\Documents (synced) instead of `C:\Users\rober`; found by the runner, moved.
+- `seed_items.py` timed out on both list calls yet printed "Done" and exited 0 — caught only because Claude read the
+  output for "!!" lines and compared counts with dev. Root cause was the seeds' catch-print-continue `_fetch`; fixed this session.
+- R2 had never been exercised with real credentials until Robert's upload; the 31-character key would have been caught at
+  T6 by checking key lengths (now in deployment.md).
 
 ## Decisions
 
@@ -121,21 +139,22 @@ last_uuid: 226cae3b-283c-4569-81ab-44f8fd61cd86
 - Database inbound IP rules empty; open one IP only for laptop jobs (forced by the leaked URL, kept as the standard).
 - Cloudflare budget alert at $1 as the cost guard (no hard cap exists); app-level storage quota offered, not taken.
 - `PYTHON_VERSION`/`NODE_VERSION` pinned as env vars rather than trusting repo-root version files.
+- Laptop jobs against prod use a secret file outside the repo + a runner that only puts the URL in child processes' env.
+- Nothing fails silently (Robert): a seed retries, then aborts (list) or exits non-zero naming the failed records.
+- Potion-type magic items belong under Potions (Robert) — deferred to an items deep dive since it deletes prod rows.
 
 ## Open threads
 
-- **Next: T8** — Robert registers his real account on the live site; then add his IP to `dnd-app-db` inbound rules, run the
-  seeds from the laptop with the External URL set in the terminal only (order in deployment.md › Data operations; never
-  `seed_data.py`), flip `is_admin`, remove the IP rule.
-- T9: `/release` skill, `v0.1.0` tag, Render auto-deploy after CI, CLAUDE.md Development Workflow (`main` is no longer
-  "the deployable trunk"), protect `production` in the hooks. T10: GitHub 2FA check, security-reviewer, live smoke test.
-- **R2 not yet proven end to end**: upload a portrait on the live site, see the object in the bucket, redeploy, confirm it renders.
-- **Free database expires around 2026-12-18** — upgrade to paid before then if anything in it matters (no backups on free).
-- Follow-up from T5a: send only changed keys to stop concurrent saves overwriting each other.
-- R2: no automatic backups (versioning/periodic copy later); hidden maps' file URLs stay reachable to anyone holding them.
-- Local venv is Python 3.14 while CI/prod pin 3.12; worth aligning eventually.
-- Follow-up: one shared axios client (every service repeats the token interceptor); natural with token-expiry work.
-- Optional: app-level upload storage quota as a hard cost cap (offered, not requested).
+- **Next: T9** — `/release` skill, `v0.1.0` tag, Render auto-deploy after CI, CLAUDE.md Development Workflow (`main` is no
+  longer "the deployable trunk"), protect `production` in the hooks. **T10** — GitHub 2FA, security-reviewer, live smoke
+  test incl. a player account and "the map survives a redeploy", a database dump.
+- `production` is still at 1bac949: the T8 seed fix (and fcaf673 docs) reach prod only with the first release.
+- **Free database expires around 2026-12-18** — upgrade before anything in it matters (no backups on free).
+- Feature work recorded in CLAUDE.md › Not Yet Built: account emails + password reset; player Locations world-map preview;
+  items deep dive (potions → Potions table, delete the prod magic_items rows); the sticky "Upload failed" banner.
+- Robert may delete `C:\Users\rober\dnd-prod-db.env` (useless while the DB is closed); empty the OneDrive recycle bin.
+- Follow-ups carried: send only changed keys on save; R2 backups/versioning; one shared axios client + token expiry;
+  local venv Python 3.14 vs 3.12; optional app-level upload quota.
 
 ## Turn log
 
@@ -1680,3 +1699,362 @@ last_uuid: 226cae3b-283c-4569-81ab-44f8fd61cd86
 > - `PYTHON_VERSION` and `NODE_VERSION` explained and added to the environment variables table; `ALLOWED_ORIGINS` is set after the website exist …
 
 **Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/update_docs.py`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/feedback_warn_before_secret_screens.md`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/project_production_deployment.md` · **Commands run:** 8
+
+### 86. 2026-11-18 14:06
+
+**Robert:**
+> okay i see 5 commits can we make sure nothing is left over. 
+> 
+> /ship
+
+**Claude:**
+> It's shipped: `main` is at **`fcaf673`** and pushed. Nothing is left over.
+> 
+> - **Those 5 were changed files, not commits.** All 5 went into the one commit: deployment.md, learnings.md, the deploy ticket, and the session log plus its index.
+> - **The working tree is clean:** no uncommitted changes, no stashes.
+> - **The branch is gone:** `feature/deploy-t6-t7` is deleted locally and wasn't on GitHub. Only `main` and `production` remain.
+> - **Tests:** frontend 3,932 passed. There were no code changes, so the backend tests and the live-app check were skipped.
+> - **`production` stays at `1bac949` on purpose.** This was docs only, so the live site doesn't need a redeploy. `production` moves only when we release, which is T9.
+> 
+> One expected leftover: the session-log hook adds this turn's entry to the session log after I reply, so that file will show as modified again. It goes into the next commit, as …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/update_log.py` · **Commands run:** 7
+
+### 87. 2026-11-20 12:51
+
+**Robert:**
+> okay lets do T8
+
+**Claude:**
+> T8 has three parts: register your account, fill the compendium, and make you admin. I've started branch `feature/deploy-t8` for the ticket notes at the end.
+> 
+> **How it works:** I run the seed scripts from this computer against the production database. The database is closed to the internet, so we open it to your IP address only while we work, then close it again. **The database password must never appear in this chat**, so it goes in a file on your computer that I load without displaying.
+> 
+> ### Step 1: Register (skip if you already did)
+> Go to https://dnd-app-ginj.onrender.com and register with your real email and a strong password, not `password123`. The first load may take a minute while the free server wakes up. Then tell me which email you used, so I can make that account admin.
+> 
+> ### Step 2: Put the database URL in a file ⚠️ don't screenshot this step
+> 1. In Render, open **dnd-app-db**, …
+
+**Commands run:** 1
+
+### 88. 2026-11-20 12:54
+
+**Robert:**
+> okay i made an account with this email robertwoolbright16@yahoo.com
+> 
+> To note for a future feature. When an account is made lets send an email to the registered email. Lets also send an email to the admins email that a new user made an account at said email 
+> Lets also build out the forgot or reset password functionality.
+
+**Claude:**
+> I've got the email and will make that account admin once the seeds are in.
+> 
+> **I've recorded the feature request** as "Account emails + password reset" in CLAUDE.md › Not Yet Built, with a pointer from deployment.md's known gaps. It covers:
+> - a welcome email to the new user
+> - an email to the admin(s) naming the new account
+> - forgot/reset password, using a single-use, expiring link sent by email
+> 
+> None of it exists today; the app can't send email at all. Building it means choosing an email provider (Resend or Postmark are simple, with free tiers) and adding a table for reset tokens. It's a good next feature once T8–T10 are done. Until then, a forgotten password can only be reset with SQL.
+> 
+> Still needed before I can seed:
+> - **Step 2:** `C:\Users\rober\dnd-prod-db.env` containing the line `DATABASE_URL=<External Database URL>`. Don't screenshot or paste it.
+> - **Step 3:** the inbound IP rule ` …
+
+**Commands run:** 1
+
+### 89. 2026-11-20 12:56
+
+**Robert:**
+> Walk me through step 2
+
+**Claude:**
+> Here's step 2 slowly. ⚠️ **Don't screenshot anything in this step.** The URL contains the database password.
+> 
+> **A. Copy the URL from Render**
+> 1. Go to **dashboard.render.com** and click **dnd-app-db**.
+> 2. Click the **Connect** button near the top right. It opens a small panel with tabs; choose **External**. If there's no Connect button, scroll down the **Info** page to the **Connections** section.
+> 3. Find **External Database URL**. It starts with `postgresql://` and contains `.virginia-postgres.render.com`.
+> 4. Click the **copy icon** next to it. The value may be hidden as dots, but the copy icon still copies the whole URL.
+> 
+> **B. Make the file**
+> 1. Press the **Windows key**, type **Notepad** and open it.
+> 2. Type `DATABASE_URL=` with no spaces, then paste (**Ctrl+V**) straight after the `=`. The whole thing is one line: `DATABASE_URL=postgresql://dnd_app...render.com/dnd_app...`
+> 3. Click * …
+
+### 90. 2026-11-20 12:58
+
+**Robert:**
+> the connect button is just a dropdown with the outbound ip addresses.
+
+**Claude:**
+> That sounds like the **web service's** page (dnd-app-api). Its Connect menu lists outbound IP addresses. The database has its own page:
+> 
+> 1. Go back to **dashboard.render.com**, the list of all services.
+> 2. Click **dnd-app-db**. Its type says **PostgreSQL**, not Web Service.
+> 3. In that page's left menu, click **Info**.
+> 4. Scroll down to the **Connections** section. It lists Hostname, Port, Database, Username, Password, **Internal Database URL** and **External Database URL**.
+> 5. Use the **copy icon** next to **External Database URL**. The value shows as dots, but the icon copies it.
+> 
+> If you're definitely on dnd-app-db and there's no Connections section, describe the left menu items (a screenshot of just the menu is fine) and I'll find it.
+
+### 91. 2026-11-20 12:59
+
+**Robert:**
+> I see 2 things in my project
+
+**Claude:**
+> The database still exists and works; I just checked through the backend. It isn't in this list because you're looking at a **project**, and the database was created outside it. Two quick ways to find it:
+> 
+> - **Search:** press **Ctrl+K** (or click **Search** in the top bar), type `dnd-app-db` and open it.
+> - **Or** click your **workspace name** in the top left, to get the overview of all resources rather than the project. The database appears there, often under **Ungrouped** or a separate **Databases** section.
+> 
+> Once you're on its page: **Info → Connections → External Database URL → copy icon**, then continue with the Notepad steps.
+> 
+> If you want everything tidy later, you can move the database into the project from its **Settings** page. That's optional.
+
+**Commands run:** 1
+
+### 92. 2026-11-20 13:01
+
+**Robert:**
+> Found it, but no external url: 
+> 
+> External traffic not allowed. Add IP addresses in the Networking section.
+
+**Claude:**
+> That's because we closed the database. Render hides the External URL while no outside traffic is allowed, so just do **step 3 first**:
+> 
+> 1. On the dnd-app-db page, open **Networking**. Under **PostgreSQL Inbound IP Rules**, click **Add source**:
+>    - Source: `73.81.96.154/32`
+>    - Description: `T8 seeding`
+> 2. Click **Save**.
+> 3. Go back to **Info → Connections**. The **External Database URL** should now appear. Copy it with the copy icon.
+> 4. Continue with the Notepad steps: one line, `DATABASE_URL=<paste>`, saved as `C:\Users\rober\dnd-prod-db.env` with type **All files**.
+> 
+> ⚠️ Same as before: don't screenshot the Connections section.
+> 
+> Say **go** when the file is saved.
+
+### 93. 2026-11-20 13:03
+
+**Robert:**
+> For this 
+> DATABASE_URL=<paste the External Database URL here>
+> 
+> 
+> do i keep the <> or remove them? Does the url go inside or just after =  ?
+
+**Claude:**
+> Remove the `<` and `>`; they only marked where the URL goes. Paste the URL straight after the `=`, with no spaces and no quotes:
+> 
+> ```
+> DATABASE_URL=postgresql://dnd_app_user:abc123...@dpg-xxxx-a.virginia-postgres.render.com/dnd_app_xxxx
+> ```
+> 
+> It's all one line, starting with `DATABASE_URL=postgresql://`. Save it as `C:\Users\rober\dnd-prod-db.env` with type **All files**, then say **go**.
+
+### 94. 2026-11-20 13:04
+
+**Robert:**
+> Am i saving it to this location? C:\Users\rober\dnd-prod-db.env or that as the file name?
+
+**Claude:**
+> That path is both parts together:
+> - **Folder:** `C:\Users\rober`
+> - **File name:** `dnd-prod-db.env`
+> 
+> The simplest way: in Notepad's **Save As** window, type the whole path `C:\Users\rober\dnd-prod-db.env` into the **File name** box, set **Save as type** to **All files (\*.\*)**, and click **Save**. Windows saves it into that folder with that name.
+
+### 95. 2026-11-20 13:06
+
+**Robert:**
+> okay saved what next?
+
+**Claude:**
+> The seeds are running in the background: classes, spells, Artificer spells, PHB spells, feats, items, then starting items. I'll report when they finish, then make your account admin and count the rows.
+> 
+> Nothing for you to do meanwhile. Leave the IP rule in place until I say it's done.
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/prod_run.py` · **Commands run:** 5
+
+### 96. 2026-11-20 13:08
+
+**Robert:**
+> <task-notification>
+> <task-id>byhs5k9jv</task-id>
+> <tool-use-id>toolu_01ESetgLwDHamSeurbHFaYQG</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\byhs5k9jv.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run all production seed scripts in order" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> Production matches development except for two differences, and **in both, development is the odd one out**:
+> 
+> - **Potions: prod 6, dev 40.** Dev's extra 34 (Oil of Sharpness, Potion of Animal Friendship, …) came from the old dev-only seeder `scripts/seed_5e_srd.py` in May. In production they exist too, but under **Magic Items**, which is where the current seed puts them. Your Potions tab in prod shows only the 6 basic ones. Tell me if you'd rather they appear under Potions; that's a small seed change.
+> - **Magic items: prod 361, dev 362.** Dev still has the duplicate Potion of Healing from before the T5b first-wins fix.
+> 
+> **Your account `BobearDM` is now admin.**
+> 
+> ## ⚠️ Close the database again
+> In **dnd-app-db → Networking → PostgreSQL Inbound IP Rules**, delete the `73.81.96.154/32 — T8 seeding` rule and click **Save**, so you're back to "All internet traffic is blocked". Then tell me, and …
+
+**Commands run:** 6
+
+### 97. 2026-11-20 13:12
+
+**Robert:**
+> okay rule deleted
+
+**Claude:**
+> **T8 is done apart from your check in the app.** Production now has:
+> - 25 classes with 537 features
+> - 322 spells
+> - 114 feats
+> - about 570 items
+> - your account `BobearDM` as admin
+> 
+> The database is closed to the internet again.
+> 
+> The ticket is at 10 of 12 on branch `feature/deploy-t8`, and the docs record what we learned. Render hides the External URL until an IP rule exists; Save As defaulted to OneDrive; and a seed can say "Done" after a failed download. The account-email feature request is in the docs too. Nothing is committed yet.
+> 
+> **Over to you:**
+> 1. On https://dnd-app-ginj.onrender.com, log out and back in, so admin status takes effect.
+> 2. Check that the Encyclopedia is populated: classes, spells, feats, items.
+> 3. Create a campaign and a character from start to finish.
+> 4. Optionally, delete `C:\Users\rober\dnd-prod-db.env`. The password is useless while the database is closed, but dele …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t8_docs.py` · **Commands run:** 2
+
+### 98. 2026-11-20 13:15
+
+**Robert:**
+> Just tried to upload a map and it failed
+
+**Claude:**
+> The R2 code is standard: endpoint, keys, region `auto`. So the error message is what will tell us the cause. The likely candidates are a mistyped key or Account ID in Render, or an R2 permission refusal. The server log will name it.
+> 
+> **Please get the error from Render:**
+> 1. Open **dnd-app-api** and click **Logs** in the left menu.
+> 2. Find the line from your upload attempt. It looks like `"POST /api/gm/campaigns/…/maps HTTP/1.1" 500` (or 400 or 413).
+> 3. Copy the lines just above it, the **traceback**. The most useful is the last one, something like `botocore.exceptions.ClientError: An error occurred (SignatureDoesNotMatch) …` or `(AccessDenied)`.
+> 4. Paste them here as text. Logs normally don't contain secrets, but glance over them first, and if you see a long key-like string, cut it out.
+> 
+> Also tell me roughly how big the map file was, and whether it's a PNG or JPG. Maps are capped at 100 …
+
+**Commands run:** 1
+
+### 99. 2026-11-20 13:17
+
+**Robert:**
+> botocore.exceptions.ClientError: An error occurred (InvalidArgument) when calling the PutObject operation: Credential access key has length 31, should be 32
+
+**Claude:**
+> That error is precise. **The `R2_ACCESS_KEY_ID` in Render is one character short.** An R2 Access Key ID is always 32 characters, and the one in Render has 31, so a character was lost when it was copied or pasted. The code is fine.
+> 
+> **Fix:**
+> 1. Open the Access Key ID in your password manager and count it (or paste it into Notepad and look at the column number). It should be **32 characters** of letters and digits.
+>    - **If your saved copy has 32:** go to **dnd-app-api → Environment**, click edit on `R2_ACCESS_KEY_ID`, clear the box completely, paste the full value, and save with **Save, rebuild and deploy**.
+>    - **If your saved copy also has 31**, it was saved incomplete. In Cloudflare, go to **R2 → Manage API tokens** and delete `dnd-app-render-backend`, then create a new one with the same settings (Object Read & Write, `dnd-app-uploads` only, Forever, no IP filter). Save both new valu …
+
+### 100. 2026-11-20 13:19
+
+**Robert:**
+> The key i wrote down is 31 so i must have written it down wrong
+> 
+> What do we do now?
+
+**Claude:**
+> No problem; we'll replace the token. The old one can't be recovered, because Cloudflare shows the keys only once. ⚠️ **The next screens show the new keys, so don't screenshot them.**
+> 
+> **1. Delete the old token (Cloudflare)**
+> - Go to **Storage & databases → R2 Object Storage**, then in the right-hand box **API Tokens → Manage**.
+> - On the `dnd-app-render-backend` row, click the **⋯** menu, then **Delete**, and confirm.
+> 
+> **2. Create a new one**
+> Click **Create Account API token**, with the same settings as before:
+> - Token name: `dnd-app-render-backend`
+> - Permissions: **Object Read & Write**
+> - Specify bucket: **Apply to specific buckets only**, then `dnd-app-uploads`
+> - TTL: **Forever**
+> - Client IP filtering: leave it empty
+> - Click **Create**.
+> 
+> **3. Copy the keys with the copy buttons, not by selecting text**
+> The result page has a **copy icon** next to each value. For each key, click it, paste …
+
+### 101. 2026-11-20 13:25
+
+**Robert:**
+> okay it worked
+
+**Claude:**
+> **R2 works end to end.** The map went to the bucket, and your browser is loading it from Cloudflare's `r2.dev` URL. That was the last unproven piece of T6.
+> 
+> The red "Upload failed" banner is left over from the earlier failed attempt. The page doesn't clear it when a later upload succeeds. It's a small UI bug, so I've added it to the ticket as a follow-up rather than fixing it now. Click the × to dismiss it.
+> 
+> I've also recorded the cause of the failure. The docs now say to copy keys with the copy buttons and check the lengths (ID 32, secret 64), and they include the exact error message.
+> 
+> **Optional quick check:** in Cloudflare, open **dnd-app-uploads → Objects**. You should see an `uploads/maps/…` folder holding your map.
+> 
+> **Two answers I still need before we ship T8:**
+> 1. **The seed safety fix:** should `seed_items.py` (and `seed_spells.py`) retry and then **fail loudly** instead of prin …
+
+**Commands run:** 1
+
+### 102. 2026-11-20 13:30
+
+**Robert:**
+> 1: Yes if it fails we should know. Nothing should fail silently. 
+> 2: Potions is fine, but we will do a deeper dive of items in the future. 
+> 
+> To note to add as feature work. 
+> 
+> I am at the top level world hierarchy for the map which is set to top level. This is what it looks like at the gm, but for the player the top level looks like the second picture where you have to click the top level first. I dont like that it should be the same as the GM sees it.
+
+**Claude:**
+> The docs and catalog are updated. Waiting for the full backend suite to finish.
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/seed_fix.py` · **Commands run:** 12
+
+### 103. 2026-11-20 13:41
+
+**Robert:**
+> <task-notification>
+> <task-id>boh70ko6k</task-id>
+> <tool-use-id>toolu_01Rzd1ScPyJzX5TrPQ7Bvbg5</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\boh70ko6k.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run the full backend test suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> I fixed the seed scripts so a failed download can no longer pass silently. Backend (1,067 passed, 1 skipped) and frontend (3,932) tests both pass. Everything is on branch `feature/deploy-t8`, uncommitted.
+> 
+> **The fix** (`shared/seeding.py`, `seed_items.py`, `seed_spells.py`):
+> - **Retries:** every download from the D&D API is tried up to 3 times, waiting 2 then 4 seconds between attempts.
+> - **A failed list stops the seed with an error.** This is what happened in T8: the item list timed out, the script said "Done", and production got only 15 items.
+> - **A single failed item no longer counts as "skipped".** It's counted as "failed", and the script finishes saving everything else, then exits with an error naming what failed. Seeds are safe to re-run, so you just run it again.
+> - **Tests:** 6 new ones in `test_seeding.py` cover each of these cases.
+> 
+> I haven't run the new code against the real D& …
+
+**Commands run:** 3
+
+### 104. 2026-11-20 13:52
+
+**Robert:**
+> Encyclopedia is seeded. 
+> 
+> Level 20 fighter working fine
+
+**Claude:**
+> That completes T8: the encyclopedia is populated and a level-20 Fighter works in production. I've marked T8 fully done in the ticket.
+> 
+> The deploy now stands at **10 of 12**. Two remain:
+> - **T9, release flow:** a `/release` skill, the first `v0.1.0` tag, Render deploying only after CI passes, and protecting the `production` branch.
+> - **T10, pre-public checks:** GitHub two-factor, a security review, a full smoke test with a player account (including checking that the map is still there after a redeploy), and a database dump.
+> 
+> The seed fix and all the T8 notes are waiting on `feature/deploy-t8`. Run **`/ship`** when you're ready.
+
+**Commands run:** 1

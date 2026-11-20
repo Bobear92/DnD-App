@@ -4,7 +4,7 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 9/12 done (T1–T7). All code tickets are done; T6 onward needs Robert's accounts. Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** 10/12 done (T1–T8). All code tickets are done; T6 onward needs Robert's accounts. Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
 **Decisions:**
@@ -136,7 +136,10 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [x] Database external access blocked (Networking › PostgreSQL Inbound IP Rules emptied, 2026-11-18) — its password
   was exposed in a screenshot while the DB was empty. The backend still reaches it internally (verified). T8 must add
   one IP there temporarily to seed, then remove it.
-- [ ] R2 is proven only once a portrait upload works on the live site (T7/T10).
+- [x] R2 proven on the live site 2026-11-20: a map upload stored and rendered from the r2.dev URL. The first try failed with
+  `InvalidArgument: Credential access key has length 31, should be 32` (a character lost when the key was hand-copied); the
+  token was recreated using the copy buttons. Still owed (T10): redeploy and confirm the map survives.
+- [ ] Follow-up (UI): the Locations "Upload failed" banner stays up after a later upload succeeds.
 - [x] Create Render Postgres; note the internal URL.
 - [x] Python 3.12 pinned via `PYTHON_VERSION`.
 - [x] Create the backend Web Service from the repo, root `backend/`, start command `bash start.sh`, **deploying from the `production` branch**.
@@ -156,7 +159,21 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [x] Put the Static Site's URL into the backend's `ALLOWED_ORIGINS`; redeploy the backend.
 - done: the login page loads, and refreshing on a deep link (e.g. `/campaigns/1/characters`) doesn't 404.
 
-## T8 — Seed production and create the admin
+## T8 — Seed production and create the admin ✅
+- **Landed 2026-11-20.** Robert registered (`BobearDM`), opened the DB to his IP, put the External URL in
+  `C:\Users\rober\dnd-prod-db.env` (outside the repo; Notepad's Save As defaulted to OneDrive\Documents, which syncs to
+  the cloud, so it was moved). A local runner loaded it into the child processes' environment only and never printed it.
+  Seeded in order; `seed_items.py` hit a dnd5eapi.co read timeout on its two list calls, still printed "Done" and exited 0
+  with only the 15 curated items — re-run (then `seed_starting_items.py` again, to keep the dev order for the 14 shared
+  names). Prod counts: 25 classes / 537 features, 322 spells, 114 feats, 38 weapons, 13 armor, 144 gear, 6 potions,
+  361 magic items, 8 food & drink. Matches dev except potions (dev has 34 more from the legacy `seed_5e_srd.py`; prod
+  has them as magic items) and one dev duplicate Potion of Healing (pre-T5b). `is_admin` set; IP rule removed and the
+  laptop's connection confirmed refused.
+- [x] **Fixed the silent partial seed:** `shared/seeding.fetch_json` retries 3× (2 s, 4 s) then raises `SeedFetchError`.
+  In `seed_items.py` and `seed_spells.py` a failed LIST aborts the seed; a failed record is counted `failed` (never
+  "skipped") and `exit_if_failed` ends the run non-zero naming it, after saving everything else. Tests: 6 in
+  `test_seeding.py › TestNetworkSeedsNeverFailSilently`.
+- [x] Robert's check (2026-11-20): Encyclopedia populated; a level-20 Fighter created and working on the live site.
 - [ ] The free tier has **no Render shell**: add Robert's IP to the database's inbound rules, run the seed scripts from
   this laptop against the database's **External** URL (set in the terminal only, never in `backend/.env`) in the order
   in [deployment.md › Data operations](../deployment.md#data-operations), then **remove the IP rule**.

@@ -7,6 +7,8 @@ before the fix (production). Only owner_type=system rows are matched, so campaig
 The scripts open their own SessionLocal, which conftest points at the test database. The network
 seeds (spells, items) are driven by a fake API client.
 """
+from collections import Counter
+
 import pytest
 
 import seed_classes
@@ -16,6 +18,7 @@ import seed_phb_spells
 import seed_spells
 import seed_starting_items
 from players.classes.models import CharacterClass
+from shared import seeding
 from shared.database import SessionLocal
 from shared.encyclopedia.items.adventuring_gear.models import AdventuringGear
 from shared.encyclopedia.items.weapons.models import Weapon
@@ -239,3 +242,72 @@ class TestSeedDataIsDevOnly:
     @pytest.mark.parametrize("url", ["postgresql://u:p@localhost:5432/dnd", "postgresql://u:p@127.0.0.1/dnd"])
     def test_allows_a_local_database(self, url):
         seed_data.refuse_non_local_database(url)  # no exception
+
+
+class FlakyApi(FakeApi):
+    """Like FakeApi, but the listed paths fail their first ``fails`` requests (a timeout, say)."""
+
+    def __init__(self, routes, flaky, fails):
+        super().__init__(routes)
+        self.flaky, self.fails, self.calls = set(flaky), fails, Counter()
+
+    def get(self, url, timeout=None):
+        path = url.split("dnd5eapi.co", 1)[-1]
+        self.calls[path] += 1
+        if path in self.flaky and self.calls[path] <= self.fails:
+            raise TimeoutError("The read operation timed out")
+        return super().get(url, timeout)
+
+
+@pytest.fixture
+def no_retry_wait(monkeypatch):
+    monkeypatch.setattr(seeding, "RETRY_DELAY_SECONDS", 0)
+
+
+class TestNetworkSeedsNeverFailSilently:
+    """first-deploy T8: a timed-out list call left prod with 15 of ~530 items while seed_items.py
+    printed "Done" and exited 0. A download failure must retry, then stop the run or fail it."""
+
+    def test_fetch_json_retries_a_transient_failure(self, no_retry_wait):
+        api = FlakyApi({"/api/x": {"ok": 1}}, flaky={"/api/x"}, fails=seeding.FETCH_ATTEMPTS - 1)
+        assert seeding.fetch_json(api, "https://www.dnd5eapi.co/api/x") == {"ok": 1}
+        assert api.calls["/api/x"] == seeding.FETCH_ATTEMPTS
+
+    def test_fetch_json_raises_when_every_attempt_fails(self, no_retry_wait):
+        api = FlakyApi({"/api/x": {"ok": 1}}, flaky={"/api/x"}, fails=99)
+        with pytest.raises(seeding.SeedFetchError, match="after 3 attempts"):
+            seeding.fetch_json(api, "https://www.dnd5eapi.co/api/x")
+
+    def test_a_failed_item_list_stops_the_seed(self, db, no_retry_wait):
+        api = FakeApi({})  # every path 404s
+        with pytest.raises(seeding.SeedFetchError):
+            seed_items.seed_equipment(db, api, delay=0)
+        with pytest.raises(seeding.SeedFetchError):
+            seed_items.main(client=api)
+
+    def test_a_failed_item_is_counted_failed_not_skipped_and_the_run_exits_non_zero(self, db, no_retry_wait):
+        routes = dict(TestSeedItems()._equipment(weight=1).routes)
+        routes["/api/magic-items"] = {"results": []}
+        api = FlakyApi(routes, flaky={"/api/equipment/rope"}, fails=99)
+
+        failures = []
+        counts = seed_items.seed_equipment(db, api, delay=0, failures=failures)
+        assert counts[seeding.FAILED] == 1 and counts["skipped"] == 0
+        assert failures == ["/api/equipment/rope"]
+        assert len(_system(db, Weapon, "Dagger")) == 1  # the rest is still saved
+
+        with pytest.raises(SystemExit) as exc:
+            seed_items.main(client=api)
+        assert exc.value.code != 0 and "/api/equipment/rope" in str(exc.value.code)
+
+    def test_spells_list_failure_stops_the_seed(self, db, no_retry_wait):
+        with pytest.raises(seeding.SeedFetchError):
+            seed_spells.seed_spells(client=FakeApi({}), delay=0)
+
+    def test_a_failed_spell_fails_the_run_but_keeps_the_others(self, db, no_retry_wait):
+        api = _spell_api(_spell("Magic Missile"), _spell("Shield"))
+        flaky = FlakyApi(api.routes, flaky={"/api/spells/shield"}, fails=99)
+        with pytest.raises(SystemExit) as exc:
+            seed_spells.seed_spells(client=flaky, delay=0)
+        assert "shield" in str(exc.value.code)
+        assert len(_system(db, Spell, "Magic Missile")) == 1

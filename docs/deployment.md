@@ -99,7 +99,8 @@ In production (`STORAGE_BACKEND=r2`) the same key is an object in the R2 bucket,
 2. R2 overview → *Account Details* → *API Tokens* → **Manage** → **Create Account API token** (account tokens survive a
    user leaving; user tokens don't) with **Object Read & Write**, applied to that bucket only, TTL forever, **no client
    IP filter** (Render's outbound IPs change). Copy the access key ID and secret (shown once) into the backend's env
-   vars. Ignore the jurisdiction-specific endpoints: the backend builds the default
+   vars **with the copy buttons**, and check the lengths: the ID is 32 characters, the secret 64 (a hand-copied ID one
+   character short fails every upload with `Credential access key has length 31, should be 32`). Ignore the jurisdiction-specific endpoints: the backend builds the default
    `https://<account-id>.r2.cloudflarestorage.com` itself.
 3. Bucket → *Settings* → *Public access*: enable the `r2.dev` subdomain (fine to start; Cloudflare rate-limits it) or
    connect a custom domain (better for real use). That URL is `VITE_UPLOADS_URL`.
@@ -262,7 +263,10 @@ In order of danger for this app:
 
 - **Seeding** — the free tier has **no Render shell**, so run the scripts from a laptop: add your IP to the database's
   inbound rules, set `DATABASE_URL` to the database's **External** URL in that terminal only (never in `backend/.env`),
-  run them, then remove the IP rule. In this order, and safe to re-run any time:
+  run them, then remove the IP rule. Render hides the External URL while the inbound rules are empty, so add the
+  rule first. Keep the URL in a file outside the repo and out of OneDrive (Notepad's Save As defaults to the synced
+  Documents folder), and a network seed that cannot download a record now retries, then exits non-zero naming it (re-run it; seeds are safe to re-run).
+  In this order, and safe to re-run any time:
   `seed_classes.py`, `seed_spells.py` (downloads from dnd5eapi.co), `seed_artificer_spells.py`, `seed_phb_spells.py`,
   `seed_feats.py`, `seed_items.py` (downloads), `seed_starting_items.py` (after `seed_items.py`). All upsert. Re-run the
   matching script after a release that changes its file (`seed_feats.py` also re-syncs character feat snapshots).
@@ -283,6 +287,6 @@ In order of danger for this app:
   which covers a session. When one does expire, the frontend doesn't notice: every request fails with "Could not
   validate credentials" while the player stays on the page, and only a reload sends them to login (losing unsaved
   sheet edits). Real fix: a 401 → re-login flow (one shared axios client would make that one change, not ~15), or refresh tokens.
-- **Open registration.** Anyone with the URL can sign up.
+- **Open registration.** Anyone with the URL can sign up. Nobody is told when they do, and there is no forgot-password flow (a lost password needs SQL) — planned as "Account emails + password reset" in CLAUDE.md › Not Yet Built.
 - **No error monitoring** (Sentry or similar) and no uptime check.
 - **Free-tier cold starts**: the backend sleeps after ~15 idle minutes, so the first request after a break takes up to a minute (until the Starter upgrade).

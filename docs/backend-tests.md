@@ -12,7 +12,9 @@ backend/tests/
                                     #   ".." filenames; R2Storage against a fake S3 client (put key/content-type/cache header, delete reports
                                     #   existence, folder delete paginates and spares "1/20" when deleting "1/2", non-404 errors raised);
                                     #   backend selection (tests on local temp storage, r2 fails fast naming missing creds). Deploy ticket T4
-├── test_seeding.py                 # 16 tests: seed scripts UPSERT system rows (deploy T5b) — upsert_system_row (create/update/
+├── test_seeding.py                 # 22 tests: seed scripts UPSERT system rows (deploy T5b) and never fail silently (T8: fetch_json retries
+                                    #   then raises; a failed list stops seed_items/seed_spells; a failed record is `failed`, exits non-zero,
+                                    #   the rest saved) — upsert_system_row (create/update/
                                     #   unchanged; never matches a campaign row; owns=False leaves it); seed_spells (re-run fixes text,
                                     #   no duplicate; Artificer tag applied and stable — fake API); seed_phb_spells; seed_classes
                                     #   (restores columns + rebuilds features in place, clean re-run changes nothing); seed_items
