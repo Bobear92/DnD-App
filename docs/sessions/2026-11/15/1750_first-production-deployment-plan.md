@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy, plan through seeded (T1–T8)
+title: First production deploy, plan through release flow (T1–T9)
 date: 2026-11-15
 started: 17:50
-branch: feature/deploy-t8
+branch: feature/release-flow
 area: tooling
-tags: [docs, build, consolidation, deployment, data-safety, migration, seed-data, user-rule, guard-test]
+tags: [docs, build, consolidation, deployment, data-safety, migration, seed-data, user-rule, guard-test, tooling]
 issues: []
-summary: Prod deploy plan + code tickets (T1–T5b); live on Render free + R2 (T6–T7); prod seeded, admin, fail-loud seeds (T8)
-turns: 104
+summary: Prod deploy: plan + code (T1–T5b), live on Render + R2 (T6–T7), seeded (T8), /release + production guards (T9)
+turns: 107
 stepped_in: true
-last_uuid: e1217b60-1717-437b-a978-945e816dafc5
+last_uuid: ecf3352a-eb55-44d2-8484-86108998a30e
 ---
 
-# First production deploy, plan through seeded (T1–T8)
+# First production deploy, plan through release flow (T1–T9)
 
 ## Summary
 
@@ -72,7 +72,14 @@ last_uuid: e1217b60-1717-437b-a978-945e816dafc5
   seed_spells abort on a failed list and exit non-zero naming failed records (`failed`, never `skipped`). 6 tests
   (`TestNetworkSeedsNeverFailSilently`); backend 1067 + 1 skipped, frontend 3932; real-API seed_spells on dev exit 0.
 - Robert's feature notes recorded in CLAUDE.md › Not Yet Built: account emails + password reset, player Locations view
-  matching the GM's world-map preview, items deep dive (potions), the sticky "Upload failed" banner.
+  matching the GM's world-map preview, items deep dive (potions), the sticky "Upload failed" banner. Shipped 24c6ea8 (CI green).
+- **T9 (release flow):** `.claude/commands/release.md` (`/release`: preconditions incl. CI green and production an ancestor of
+  main; data check that stops on destructive migrations / drop+add / character_data save changes; backup + rehearsal for
+  migrations; version + notes + Robert's explicit yes; ff production, annotated tag, push; outside verification; seeds +
+  smoke). `.githooks/pre-commit` and `feature-branch-guard.mjs` now protect `production`; `src/test/branchGuards.test.js`
+  (8, throwaway repos; the two production cases fail against the old hooks). CLAUDE.md workflow: `main` = develop line,
+  step 5 `/release`, expand → contract rule. deployment.md: `/release`, how Render's "after CI" works with ff-only production.
+  Frontend 3940 green.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -120,6 +127,11 @@ last_uuid: e1217b60-1717-437b-a978-945e816dafc5
   output for "!!" lines and compared counts with dev. Root cause was the seeds' catch-print-continue `_fetch`; fixed this session.
 - R2 had never been exercised with real credentials until Robert's upload; the 31-character key would have been caught at
   T6 by checking key lengths (now in deployment.md).
+- **T9:** the hook files are CRLF, so exact-match edits missed; a first fix via a bash heredoc turned `\r\n` escapes into
+  literal newlines and corrupted the scratch script — rewritten with the Write tool (the shell-edits memory already says so).
+  A `@vitest-environment node` directive broke on the shared jsdom setup file. CLAUDE.md went over its 100 KB budget from
+  this session's additions; trimmed today's lines plus two long Not-Yet-Built entries. `CalendarTab.test.jsx` failed once
+  under full-suite load and passed alone and on re-run — a latent async flake, not fixed.
 
 ## Decisions
 
@@ -142,17 +154,21 @@ last_uuid: e1217b60-1717-437b-a978-945e816dafc5
 - Laptop jobs against prod use a secret file outside the repo + a runner that only puts the URL in child processes' env.
 - Nothing fails silently (Robert): a seed retries, then aborts (list) or exits non-zero naming the failed records.
 - Potion-type magic items belong under Potions (Robert) — deferred to an items deep dive since it deletes prod rows.
+- `/release` is the only way `production` moves forward, and it never pushes without Robert's explicit yes in the session.
+- Release history lives in annotated tags (`git tag -n`), not a doc table — no post-release commit needed.
+- Pre-1.0 versioning: MINOR for anything players notice, PATCH for fixes/docs/tooling; first release v0.1.0.
 
 ## Open threads
 
-- **Next: T9** — `/release` skill, `v0.1.0` tag, Render auto-deploy after CI, CLAUDE.md Development Workflow (`main` is no
-  longer "the deployable trunk"), protect `production` in the hooks. **T10** — GitHub 2FA, security-reviewer, live smoke
-  test incl. a player account and "the map survives a redeploy", a database dump.
-- `production` is still at 1bac949: the T8 seed fix (and fcaf673 docs) reach prod only with the first release.
+- **Next: Robert sets Render Auto-Deploy → "After CI Checks Pass" on dnd-app-api and dnd-app**, then `/release` v0.1.0
+  (production 1bac949 → main; carries the T8 seed fix, T9 tooling, docs; no migrations since 1bac949).
+- **T10** — GitHub 2FA, security-reviewer, live smoke test incl. a player account and "the map survives a redeploy",
+  a database dump.
 - **Free database expires around 2026-12-18** — upgrade before anything in it matters (no backups on free).
-- Feature work recorded in CLAUDE.md › Not Yet Built: account emails + password reset; player Locations world-map preview;
-  items deep dive (potions → Potions table, delete the prod magic_items rows); the sticky "Upload failed" banner.
-- Robert may delete `C:\Users\rober\dnd-prod-db.env` (useless while the DB is closed); empty the OneDrive recycle bin.
+- Feature work in CLAUDE.md › Not Yet Built: account emails + password reset; player Locations world-map preview; items
+  deep dive (potions); the sticky "Upload failed" banner.
+- `CalendarTab.test.jsx › player sees "not set up" message` flaked once under load — check with `SLOW_MOCKS=1`.
+- Robert may delete `C:\Users\rober\dnd-prod-db.env`; empty the OneDrive recycle bin.
 - Follow-ups carried: send only changed keys on save; R2 backups/versioning; one shared axios client + token expiry;
   local venv Python 3.14 vs 3.12; optional app-level upload quota.
 
@@ -2058,3 +2074,59 @@ last_uuid: e1217b60-1717-437b-a978-945e816dafc5
 > The seed fix and all the T8 notes are waiting on `feature/deploy-t8`. Run **`/ship`** when you're ready.
 
 **Commands run:** 1
+
+### 105. 2026-11-20 13:54
+
+**Robert:**
+> /ship
+
+**Claude:**
+> T8 is shipped: `main` is at **`24c6ea8`** and pushed, and the feature branch is deleted. Nothing was left uncommitted. The session log will show as modified again after this reply, because the logging hook adds this turn to it; that's normal and goes into the next commit.
+> 
+> Checks before the commit:
+> - **Tests:** backend 1,067 passed (1 skipped), frontend 3,932 passed.
+> - **Feat-coverage check:** passed.
+> - **New seed code against the real D&D API** (dev database): `seed_spells.py` finished normally.
+> 
+> The commit contains:
+> - **The seed fix:** a failed download is retried, then reported as an error instead of a silent "Done".
+> - **Docs:** the T8 ticket (now 10 of 12), deployment notes, lessons learned, the backend test list, and the session log.
+> - **Your feature notes**, added to CLAUDE.md's "Not Yet Built" list.
+> 
+> **The live site doesn't have these changes yet.** Render deploys from the `produc …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/log_t8.py` · **Commands run:** 5
+
+### 106. 2026-11-20 14:06
+
+**Robert:**
+> <task-notification>
+> <task-id>bo0ro0b46</task-id>
+> <tool-use-id>toolu_015EPf5SbpSd3R8Z23zrQmJ7</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\bo0ro0b46.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Watch CI for the shipped commit" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> GitHub's CI check passed for `24c6ea8`, both frontend and backend. T8 is shipped. Next are T9 (release flow) and T10 (pre-public checks).
+
+**Commands run:** 1
+
+### 107. 2026-11-20 14:11
+
+**Robert:**
+> okay lets do T9
+
+**Claude:**
+> Everything passes: **174 files, 3,940 tests.** `CalendarTab` passed on its own and in the full re-run, so it's an intermittent flake, the timing kind CLAUDE.md warns about. I'll note it as a follow-up rather than chase it now.
+> 
+> ## T9 status: built, on branch `feature/release-flow`
+> - **`/release` skill** (`.claude/commands/release.md`):
+>   - It checks CI, then lists migrations, seeds and save-format changes since the last tag, and stops on anything destructive.
+>   - It requires a backup and a rehearsal when a migration is included.
+>   - It proposes a version with release notes, then **waits for your explicit yes**.
+>   - Then it fast-forwards `production`, tags it, pushes, and checks the live site from outside.
+> - **`production` is protected:** committing on it is refused, and my edit guard blocks editing there. There are **8 new tests** for both hooks, and against the old hooks the `production …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t9_hooks.py`, `frontend/src/test/branchGuards.test.js`, `.claude/commands/release.md`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t9_docs.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t9_trim.py`, `CLAUDE.md` · **Commands run:** 23

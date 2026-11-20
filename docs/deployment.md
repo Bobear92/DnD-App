@@ -149,7 +149,9 @@ feature/*  ──ff──▶  main (develop)  ──release──▶  production
 5. Render deploys (`alembic upgrade head` runs at start). Run any seed/backfill scripts from step 2.
 6. Smoke-test: log in, open a campaign, open **and save** an existing character, then reload it and check nothing went missing.
 
-A future `/release` skill should automate steps 2–6 (`/ship` stays the feature-branch → `main` step).
+**Run it with `/release`** (`.claude/commands/release.md`), which automates steps 1–6 and asks for an explicit yes before pushing; `/ship` stays the feature-branch → `main` step. `.githooks/pre-commit` refuses a commit on `production`, and Claude's edit guard blocks editing there.
+
+**Render waits for CI.** Both services are set to Auto-Deploy *After CI checks pass*. CI runs on pushes to `main`, and GitHub attaches its result to the **commit**, so when `production` fast-forwards to a commit `main` already passed, the deploy starts at once. A commit that never went through `main` would have no checks and would not deploy — one more reason `production` only ever fast-forwards.
 
 ### Rollback
 - **Fastest:** Render dashboard → backend/frontend → *Rollback* to the previous deploy.

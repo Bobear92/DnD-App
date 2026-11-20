@@ -181,20 +181,21 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [ ] Register through the live app (Robert's real account, strong password); flip `is_admin` with SQL in the same IP window.
 - done: the Encyclopedia shows classes, spells, feats and items; character creation works end to end.
 
-## T9 — Release flow and repo docs
+## T9 — Release flow and repo docs (built 2026-11-20; v0.1.0 pending)
 - [ ] Render auto-deploy set to "after CI checks pass".
 - [ ] Tag the first release `v0.1.0` on `production`.
-- [ ] Update CLAUDE.md › Development Workflow: `main` is the develop line (no longer "the deployable trunk");
+- [x] Update CLAUDE.md › Development Workflow: `main` is the develop line (no longer "the deployable trunk");
   `production` and tags handle releases; link [docs/deployment.md](../deployment.md). Add the
   rollback-safe migration rule as a standing rule.
-- [ ] Write a `/release` skill that follows [deployment.md › Release](../deployment.md#release) steps 2–6:
+- [x] Write a `/release` skill (`.claude/commands/release.md`) that follows [deployment.md › Release](../deployment.md#release) steps 2–6:
   list migrations and seed/backfill changes since the last tag; **stop** on `drop_`, `alter_column`, `UPDATE`,
   `DELETE` or `execute(` in a migration (and on drop + add pairs, the autogenerate-rename trap); require a backup
   and a rehearsal on a restored prod backup when there is a migration; fast-forward `production`; tag; push; list
   the seed scripts to run; smoke-test including saving an existing character.
-- [ ] Add "Back up and rehearse before a migration release" to deployment.md's release procedure checks (done in
+- [x] Add "Back up and rehearse before a migration release" to deployment.md's release procedure checks (done in
   the doc; the skill enforces it).
-- [ ] Update the `.githooks/pre-commit` and `feature-branch-guard.mjs` protection to cover `production` too.
+- [x] Update the `.githooks/pre-commit` and `feature-branch-guard.mjs` protection to cover `production` too. Tested by
+  `frontend/src/test/branchGuards.test.js` (8: throwaway repos; the two production cases fail against the old hooks).
 
 ## T10 — Pre-public checks
 - [ ] Confirm GitHub two-factor is on (it guards the repo, the Render deploy source and both social logins).

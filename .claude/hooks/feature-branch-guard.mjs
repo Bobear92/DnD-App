@@ -1,7 +1,8 @@
 /**
  * PreToolUse(Write|Edit) guard — enforces the "short-lived feature branches" workflow in CLAUDE.md.
  *
- * `main` is the deployable trunk. The rule is to branch BEFORE touching files, but that is a
+ * `main` is the develop line and `production` is what Render deploys; neither is edited directly.
+ * The rule is to branch BEFORE touching files, but that is a
  * judgment call that is easy to skip — it was skipped in the session that added this hook, and the
  * whole feature landed as a direct commit on `main`. This turns the rule into an actual interrupt:
  * the first Write/Edit to a repo file while `main` is checked out is blocked with instructions to
@@ -24,6 +25,9 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const norm = (p) => (p || '').replace(/\\/g, '/');
+
+/** Branches nobody edits on: the develop line, and what Render deploys (moved only by /release). */
+const PROTECTED = new Set(['main', 'master', 'production']);
 
 /** Walk up from a file to the repo root (the dir containing .git). Null if it isn't in one. */
 function findRepoRoot(filePath) {
@@ -63,7 +67,7 @@ function main() {
   if (!repo) process.exit(0);
 
   const branch = currentBranch(repo);
-  if (branch !== 'main' && branch !== 'master') process.exit(0);
+  if (!PROTECTED.has(branch)) process.exit(0);
 
   // One interrupt per session.
   const session = String(payload.session_id || 'no-session').replace(/[^\w.-]/g, '_');
@@ -74,7 +78,8 @@ function main() {
   process.stderr.write(
     `⛔ You are on '${branch}' — branch before editing.\n\n`
     + 'CLAUDE.md → Development Workflow: short-lived feature branches, merged to main on every ship. '
-    + '`main` is the deployable trunk and should never carry in-progress work.\n\n'
+    + '`main` is the develop line and should never carry in-progress work; `production` is what Render '
+    + 'deploys and only moves by /release (fast-forward to main) or rollback.\n\n'
     + '  git checkout main && git pull --ff-only && git checkout -b feature/<short-name>\n\n'
     + 'Any edits you have already made carry across `git checkout -b`, so nothing is lost. '
     + '/ship will fast-forward main back onto the branch at the end.\n\n'

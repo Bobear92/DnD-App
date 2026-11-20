@@ -79,7 +79,7 @@ When unsure whether a tripwire applies, raise it anyway — a 10-second flag is 
 
 ## Development Workflow (Git)
 
-**Short-lived feature branches, merged to `main` on every ship.** `main` is the deployable trunk and should never lag far behind.
+**Short-lived feature branches, merged to `main` on every ship.** `main` is the **develop line**; **`production`** (what Render deploys) moves only by `/release` or a rollback to a tag — see [docs/deployment.md](docs/deployment.md#branches-releases-rollback).
 
 1. **Branch FIRST — at the start of the session, before any work begins.** The moment a session has a subject (a feature, a bug, a QA pass), branch from an up-to-date `main`:
    `git checkout main && git pull --ff-only && git checkout -b feature/<short-name>`
@@ -87,12 +87,15 @@ When unsure whether a tripwire applies, raise it anyway — a 10-second flag is 
 2. **Develop on the branch** — commit as you go; write tests alongside each change (see Post-Turn Requirements). Commit/push only when the user asks.
 3. **Ship (`/ship`)** — run the full test suite + coverage gates → **verify runtime changes end-to-end** (Step 3c: drive the real app for any product-source change, skip for docs/tests/tooling-only) → audit CLAUDE.md → commit on the feature branch → **fast-forward `main` to the branch (`git merge --ff-only`) and push `main`** → delete the feature branch (local + remote). The `/ship` skill automates this final step (branch-aware).
 4. **Next feature** starts from a fresh branch off the new `main`.
+5. **Release (`/release`)** — only when Robert asks; needs his explicit yes before pushing. `/ship` never touches `production`.
+
+**Migrations must be expand → contract** (add now, drop/rename in a later release); an autogenerate "rename" is a drop + add that deletes data.
 
 Commit messages end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`. Keep merges fast-forward (no merge commits); if `--ff-only` fails because `main` moved, rebase the feature branch on `main`, re-run tests, then merge.
 
 **This is enforced, not just documented** (it was skipped once and a whole feature landed as a direct commit on `main`):
-- `.claude/hooks/feature-branch-guard.mjs` — a `PreToolUse(Write|Edit)` hook blocks the FIRST edit of a repo file while `main`/`master` is checked out, with instructions to branch. Fires once per session, so re-issuing gets through when you genuinely need `main`. **It is a backstop, not the trigger** — it can only fire once an edit is already being attempted, which is too late for step 1 above. Branching is Claude's job at session start; the hook just catches the miss.
-- `.githooks/pre-commit` — the tool-agnostic backstop: refuses a commit on `main` whatever is driving git. **One-time setup per clone: `git config core.hooksPath .githooks`.** `git merge --ff-only` creates no commit, so /ship's merge is unaffected; the escape hatch is `git commit --no-verify`.
+- `.claude/hooks/feature-branch-guard.mjs` — a `PreToolUse(Write|Edit)` hook blocks the FIRST edit of a repo file while `main`/`master`/`production` is checked out, with instructions to branch. Fires once per session, so re-issuing gets through when you genuinely need `main`. **It is a backstop, not the trigger** — it can only fire once an edit is already being attempted, which is too late for step 1 above. Branching is Claude's job at session start; the hook just catches the miss.
+- `.githooks/pre-commit` — the tool-agnostic backstop: refuses a commit on `main` or `production` whatever is driving git (both hooks tested by `src/test/branchGuards.test.js`). **One-time setup per clone: `git config core.hooksPath .githooks`.** `git merge --ff-only` creates no commit, so /ship's merge is unaffected; the escape hatch is `git commit --no-verify`.
 
 Uncommitted work carries across `git checkout -b`, so branching late is always safe — nothing already edited is lost.
 
@@ -1074,18 +1077,18 @@ Only what is genuinely missing or deferred. Descriptions of what IS built live i
 
 **Elsewhere in the app**
 - Multiclassing support (deferred — will be its own feature after both editions complete)
-- **Character personality (traits / ideals / bonds / flaws) — NOT BUILT.** The same gap the Appearance section just closed for physical description: NPCs have `personality_traits`, `ideals`, `bonds` and `flaws` columns; player characters have none, even though backgrounds carry a `characteristics` JSON the creation flow never turns into stored character state. The shape is already proven — a sibling JSONB column plus a catalog module beside `appearance/appearanceData.js`, rendered as a second Narrative-tab card — and the background's suggested traits would make good datalist suggestions. Deliberately left out of the appearance pass to keep its scope honest.
+- **Character personality (traits / ideals / bonds / flaws) — NOT BUILT.** NPCs have these columns; characters don't, though backgrounds carry unused `characteristics`. Proven shape: a sibling JSONB column + a catalog beside `appearance/appearanceData.js`, a second Narrative-tab card, background traits as datalist suggestions.
 - Loot table UI
-- **Player Locations view should match the GM's** (Robert, 2026-11-20): the GM sees the top-level location's world map previewed above the hierarchy; a player sees only the hierarchy row and must click into it. Show the same preview to players (respecting map/location visibility).
-- **Items deep dive** (Robert, 2026-11-20): incl. moving the 34 potion-type SRD magic items (Potion of Animal Friendship, Oil of Sharpness, …) into Potions — needs the seed changed AND the existing system `magic_items` rows removed in prod.
+- **Player Locations view should match the GM's** (Robert, 2026-11-20): players get the top-level world-map preview too (respecting visibility).
+- **Items deep dive** (Robert, 2026-11-20): incl. moving the 34 potion-type magic items into Potions (seed change + delete the prod rows).
 - Bug: the Locations "Upload failed" banner stays up after a later upload succeeds.
-- **World items for world-building campaigns** — agreed with the user (Nov 2026), not built: a lore list of the world's notable items (description, picture, linked NPCs) that stays visible in world-building mode while the item's stat block hides. Items today are encyclopedia rows with no image or NPC link, so this is a new module. Also: the create-campaign modal does not offer `campaign_mode` yet (the API accepts it; Settings can switch it).
+- **World items for world-building campaigns** (agreed Nov 2026): a lore list of notable items (description, picture, linked NPCs) visible in world-building mode — a new module (encyclopedia items have no image/NPC link). Also: the create-campaign modal doesn't offer `campaign_mode` yet.
 - Encyclopedia browsing UI — Classes, Skills, Spells, Items (Weapons/Armor/Gear/Potions/Magic Items/Food & Drink — system browse + GM override + campaign homebrew + edit), Feats, and **Mechanics** (game-mechanic reference pages — see below) tabs exist; Monsters tab not yet built. Items are not yet integrated into the character sheet (Weapons & Armor tab inventory is the next step)
 - Campaign spell override/homebrew management — built (SpellsTab override button, CampaignSpellsTab, SpellEditPage); admin panels for base compendium not yet built
 - Admin panels (manage base compendium: races, backgrounds, feats, spells, items, creatures)
 - GM panels (campaign overrides + homebrew content management)
 - Token refresh / expiration handling
-- **Account emails + password reset** (requested by Robert 2026-11-20): a welcome email to a new user, an email to the admin(s) naming the new account, and forgot/reset password (single-use expiring token emailed as a link). Needs an email provider (e.g. Resend/Postmark) + env vars, and a reset-token table; nothing sends email today.
+- **Account emails + password reset** (Robert, 2026-11-20): welcome email, admin notified of each new account, forgot/reset password. Needs an email provider and a reset-token table; nothing sends email today.
 - Persistent/global music player (deferred — current `MusicPlayer` is inline per-page and stops on navigation; a root-level context player that keeps ambience playing across pages is a future enhancement)
 
 

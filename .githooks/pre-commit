@@ -1,23 +1,36 @@
 #!/bin/sh
-# Refuse commits directly on the trunk.
+# Refuse commits directly on `main` or `production`.
 #
 # CLAUDE.md → Development Workflow: work happens on short-lived feature branches and reaches `main`
-# only via a fast-forward merge at ship time. This is the tool-agnostic backstop for that rule —
+# only via a fast-forward merge at ship time; `production` (what Render deploys) only ever moves by
+# fast-forward to a commit already on `main` (/release) or back to a tag (rollback) — a commit made
+# on it would go live without having been on `main`. This is the tool-agnostic backstop for that rule —
 # it fires whatever is driving git (Claude, the IDE, the terminal). The earlier, friendlier
 # checkpoint is .claude/hooks/feature-branch-guard.mjs, which interrupts at the first EDIT.
 #
 # Enable once per clone:
 #     git config core.hooksPath .githooks
 #
-# `git merge --ff-only` does not create a commit, so /ship's merge to main is unaffected.
+# `git merge --ff-only` does not create a commit, so /ship's and /release's merges are unaffected.
 # Genuine exception (resolving a merge, an emergency fix): git commit --no-verify
 
 branch=$(git branch --show-current)
 
+if [ "$branch" = "production" ]; then
+  echo "⛔ Refusing to commit on 'production'."
+  echo
+  echo "   production is what Render deploys. It only moves by fast-forward to a commit already on main"
+  echo "   (/release) or back to a release tag (rollback, docs/deployment.md). Commit on a feature branch,"
+  echo "   /ship it to main, then /release. A hotfix starts as hotfix/<name> from the live tag."
+  echo
+  echo "   Genuinely need this commit on 'production'?  git commit --no-verify"
+  exit 1
+fi
+
 if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
   echo "⛔ Refusing to commit directly on '$branch'."
   echo
-  echo "   main is the deployable trunk — work lands there via a fast-forward merge at ship time,"
+  echo "   main is the develop line — work lands there via a fast-forward merge at ship time,"
   echo "   not as a direct commit. Your staged changes are untouched; move them to a branch:"
   echo
   echo "       git checkout -b feature/<short-name>"

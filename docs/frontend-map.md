@@ -14,6 +14,8 @@ frontend/src/
 │   │                            #   uploadUrl(path) for every uploads/... image/audio URL — from VITE_UPLOADS_URL (the R2 bucket)
 │   │                            #   when set, else the backend's /uploads. Tested by api.test.js;
 │   │                            #   src/test/noHardcodedApiUrl.test.js fails on a backend URL hardcoded anywhere else
+├── test/branchGuards.test.js    # 8 tests: .githooks/pre-commit refuses commits on production/main (allows feature branches
+│                                #   and ff merges); feature-branch-guard.mjs blocks edits on production/main — run in throwaway repos
 ├── components/
 │   └── ui/                      # shadcn/ui components: Button, Card, Dialog, Input, Label,
 │                                #   Badge, Textarea, Select, Tabs (do not edit)
