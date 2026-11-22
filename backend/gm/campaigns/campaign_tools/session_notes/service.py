@@ -15,7 +15,7 @@ from .schemas import (
     SessionImageResponse,
 )
 from shared.file_storage import (
-    save_upload, delete_upload, delete_upload_file, delete_upload_folder, SESSION_IMAGE, MUSIC,
+    save_upload, delete_upload, delete_owned_upload, delete_upload_file, delete_upload_folder, SESSION_IMAGE, MUSIC,
 )
 from gm.campaigns.models import CampaignMember
 from gm.campaigns.campaign_tools.timeline.schemas import EraDate
@@ -254,7 +254,7 @@ async def upload_music(
 ) -> SessionNote:
     _require_gm(db, campaign_id, user_id)
     session = _get_session_or_404(db, campaign_id, session_id)
-    delete_upload(session.music_url)
+    delete_owned_upload(session.music_url, MUSIC, "sessions", campaign_id, session_id)
     session.music_url = await save_upload(file, MUSIC, "sessions", campaign_id, session_id)
     db.commit()
     db.refresh(session)
@@ -267,7 +267,7 @@ def delete_music(
     _require_gm(db, campaign_id, user_id)
     session = _get_session_or_404(db, campaign_id, session_id)
     if session.music_url:
-        delete_upload(session.music_url)
+        delete_owned_upload(session.music_url, MUSIC, "sessions", campaign_id, session_id)
         session.music_url = None
         db.commit()
         db.refresh(session)

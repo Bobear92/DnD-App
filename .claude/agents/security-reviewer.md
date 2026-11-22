@@ -34,6 +34,10 @@ A user can be GM of campaign A and a player in campaign B simultaneously. Never 
 - Does every route that takes a resource ID verify the resource belongs to the caller's campaign?
 - Can a player in campaign A pass `campaign_id=B` to read/write campaign B content?
 - Can an NPC/location/session ID from a different campaign be accessed by guessing the integer ID?
+- **Nested resources** (`/campaigns/{B}/locations/{A_loc}/maps/{A_map}`): the GM check is against the URL's campaign,
+  so the PARENT must be proven to belong to it too (`locations/service._get_campaign_location` / `_get_campaign_map`).
+  Checking only `child.parent_id == parent_id` is the T10 bug.
+- **Anyone can register and create a campaign**, so "GM of some campaign" means any stranger — never treat GM as trusted.
 
 ```python
 # GOOD — checks membership before returning the object
@@ -98,6 +102,8 @@ return [i for i in items if i.is_visible_to_players or member.role == "gm"]
 - File size checked on the byte stream after reading (not from `Content-Length` header, which is spoofable)
 - Upload path constructed from `campaign_id` + `item_id` + `uuid.uuid4()` — never from user-supplied filename directly
 - Uploaded files served via FastAPI `StaticFiles` from a fixed base dir — verify no path traversal possible via `..` in filenames
+- A key read from a CLIENT-WRITABLE field (`theme_music_url`, `music_url`) is deleted only with
+  `file_storage.delete_owned_upload(key, kind, *ids)` — plain `delete_upload` would delete any `uploads/` key (T10 bug)
 
 ### 7. SQL Injection
 - All DB queries use SQLAlchemy ORM or parameterized `text()` — never string-formatted SQL
@@ -105,6 +111,8 @@ return [i for i in items if i.is_visible_to_players or member.role == "gm"]
 
 ### 8. Frontend — XSS and Data Leakage
 - `ReactMarkdown` renders user-supplied content — verify no `dangerouslySetInnerHTML` is used alongside it
+- Every `dangerouslySetInnerHTML` must wrap its HTML in `sanitizeHtml()` (`src/lib/sanitizeHtml.js`, DOMPurify);
+  `src/test/noUnsanitizedHtml.test.js` enforces it. Session content rendered raw was the T10 critical finding
 - GM Notes, `gm_notes`, or any private fields must never be present in the API response shape that reaches the frontend player view — even if the React component doesn't render them, they're visible in DevTools
 - `localStorage` stores the JWT token and the selected campaign — verify logout clears both (`token` key and `selectedCampaign` key)
 - `CampaignContext` computes `userRole` from `campaign.created_by === user.id` — if `created_by` is absent from the list endpoint response, `userRole` defaults to `'player'`, silently hiding all GM controls (data integrity issue, not XSS, but worth flagging)

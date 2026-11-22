@@ -58,6 +58,39 @@ def _get_map_or_404(db: Session, map_id: int) -> LocationMap:
     return m
 
 
+def _get_campaign_location(db: Session, campaign_id: int, location_id: int) -> Location:
+    """The location, but only if it belongs to the campaign in the URL.
+
+    Every nested endpoint (maps, pins, NPC links, relationships, links) must call this first. The membership
+    check is against the URL's campaign, so without it a GM of campaign B could address campaign A's children
+    by id (security review, deploy T10).
+    """
+    loc = _get_location_or_404(db, location_id)
+    if loc.campaign_id != campaign_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
+    return loc
+
+
+def _get_campaign_map(db: Session, campaign_id: int, location_id: int, map_id: int) -> LocationMap:
+    _get_campaign_location(db, campaign_id, location_id)
+    m = _get_map_or_404(db, map_id)
+    if m.location_id != location_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Map {map_id} not found")
+    return m
+
+
+def _check_linked_location(db: Session, campaign_id: int, linked_location_id: int | None) -> None:
+    """A pin may only link to a location in the same campaign (it can re-parent the linked location)."""
+    if linked_location_id is None:
+        return
+    linked = db.query(Location).filter(Location.id == linked_location_id).first()
+    if not linked or linked.campaign_id != campaign_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The linked location must belong to this campaign",
+        )
+
+
 def _build_npc_response(ln: LocationNPC, npc: NPC) -> LocationNPCResponse:
     return LocationNPCResponse(
         id=ln.id,
@@ -280,6 +313,7 @@ def add_location_npc(db: Session, campaign_id: int, location_id: int, data: Loca
 
 def remove_location_npc(db: Session, campaign_id: int, location_id: int, ln_id: int, user_id: int) -> dict:
     _require_gm(db, campaign_id, user_id)
+    _get_campaign_location(db, campaign_id, location_id)
     ln = db.query(LocationNPC).filter(
         LocationNPC.id == ln_id,
         LocationNPC.location_id == location_id,
@@ -326,7 +360,7 @@ def add_relationship(
 
 def get_relationships(db: Session, campaign_id: int, location_id: int, user_id: int) -> List[LocationRelationship]:
     _require_member(db, campaign_id, user_id)
-    _get_location_or_404(db, location_id)
+    _get_campaign_location(db, campaign_id, location_id)
     return db.query(LocationRelationship).filter(
         (LocationRelationship.location_a_id == location_id) |
         (LocationRelationship.location_b_id == location_id)
@@ -335,6 +369,7 @@ def get_relationships(db: Session, campaign_id: int, location_id: int, user_id: 
 
 def delete_relationship(db: Session, campaign_id: int, location_id: int, rel_id: int, user_id: int) -> dict:
     _require_gm(db, campaign_id, user_id)
+    _get_campaign_location(db, campaign_id, location_id)
     rel = db.query(LocationRelationship).filter(LocationRelationship.id == rel_id).first()
     if not rel or (rel.location_a_id != location_id and rel.location_b_id != location_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Relationship {rel_id} not found")
@@ -374,9 +409,7 @@ def get_maps(db: Session, campaign_id: int, location_id: int, user_id: int) -> L
 
 def delete_map(db: Session, campaign_id: int, location_id: int, map_id: int, user_id: int) -> dict:
     _require_gm(db, campaign_id, user_id)
-    m = _get_map_or_404(db, map_id)
-    if m.location_id != location_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Map {map_id} not found")
+    m = _get_campaign_map(db, campaign_id, location_id, map_id)
     delete_upload(m.image_path)
     db.delete(m)
     db.commit()
@@ -385,9 +418,7 @@ def delete_map(db: Session, campaign_id: int, location_id: int, map_id: int, use
 
 def toggle_map_visibility(db: Session, campaign_id: int, location_id: int, map_id: int, user_id: int) -> LocationMap:
     _require_gm(db, campaign_id, user_id)
-    m = _get_map_or_404(db, map_id)
-    if m.location_id != location_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Map {map_id} not found")
+    m = _get_campaign_map(db, campaign_id, location_id, map_id)
     m.is_visible_to_players = not m.is_visible_to_players
     db.commit()
     db.refresh(m)
@@ -409,9 +440,8 @@ def _maybe_set_pin_parent(db: Session, linked_location_id: int | None, parent_lo
 
 def create_pin(db: Session, campaign_id: int, location_id: int, map_id: int, data: MapPinCreate, user_id: int) -> MapPin:
     _require_gm(db, campaign_id, user_id)
-    m = _get_map_or_404(db, map_id)
-    if m.location_id != location_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Map {map_id} not found")
+    m = _get_campaign_map(db, campaign_id, location_id, map_id)
+    _check_linked_location(db, campaign_id, data.linked_location_id)
     pin = MapPin(map_id=map_id, **data.model_dump())
     db.add(pin)
     db.commit()
@@ -422,9 +452,7 @@ def create_pin(db: Session, campaign_id: int, location_id: int, map_id: int, dat
 
 def get_pins(db: Session, campaign_id: int, location_id: int, map_id: int, user_id: int) -> List[MapPin]:
     member = _require_member(db, campaign_id, user_id)
-    m = _get_map_or_404(db, map_id)
-    if m.location_id != location_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Map {map_id} not found")
+    m = _get_campaign_map(db, campaign_id, location_id, map_id)
     query = db.query(MapPin).filter(MapPin.map_id == map_id)
     if member.role == "player":
         query = query.filter(MapPin.is_visible_to_players == True)
@@ -435,14 +463,13 @@ def update_pin(
     db: Session, campaign_id: int, location_id: int, map_id: int, pin_id: int, data: MapPinUpdate, user_id: int
 ) -> MapPin:
     _require_gm(db, campaign_id, user_id)
-    m = _get_map_or_404(db, map_id)
-    if m.location_id != location_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Map {map_id} not found")
+    m = _get_campaign_map(db, campaign_id, location_id, map_id)
     pin = db.query(MapPin).filter(MapPin.id == pin_id, MapPin.map_id == map_id).first()
     if not pin:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Pin {pin_id} not found")
     fields = data.model_dump(exclude_unset=True)
     new_linked_id = fields.get('linked_location_id')
+    _check_linked_location(db, campaign_id, new_linked_id)
     for field, value in fields.items():
         setattr(pin, field, value)
     db.commit()
@@ -454,9 +481,7 @@ def update_pin(
 
 def delete_pin(db: Session, campaign_id: int, location_id: int, map_id: int, pin_id: int, user_id: int) -> dict:
     _require_gm(db, campaign_id, user_id)
-    m = _get_map_or_404(db, map_id)
-    if m.location_id != location_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Map {map_id} not found")
+    m = _get_campaign_map(db, campaign_id, location_id, map_id)
     pin = db.query(MapPin).filter(MapPin.id == pin_id, MapPin.map_id == map_id).first()
     if not pin:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Pin {pin_id} not found")
@@ -491,6 +516,7 @@ def get_links(db: Session, campaign_id: int, location_id: int, user_id: int) -> 
 
 def delete_link(db: Session, campaign_id: int, location_id: int, link_id: int, user_id: int) -> dict:
     _require_gm(db, campaign_id, user_id)
+    _get_campaign_location(db, campaign_id, location_id)
     link = db.query(LocationLink).filter(
         LocationLink.id == link_id, LocationLink.location_id == location_id
     ).first()

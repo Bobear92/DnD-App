@@ -10,6 +10,9 @@ frontend/src/
 ├── index.css                    # Tailwind import + shadcn CSS variables (light/dark)
 ├── lib/
 │   ├── utils.js                 # cn() helper for class merging
+│   ├── sanitizeHtml.js          # DOMPurify wrapper — EVERY dangerouslySetInnerHTML goes through it (session content is
+│   │                            #   shown to players; deploy-T10 XSS fix). sanitizeHtml.test.js; src/test/noUnsanitizedHtml.test.js
+│   │                            #   fails the build on a raw-HTML render that skips it
 │   ├── api.js                   # THE backend address: API_ORIGIN / API_BASE from VITE_API_URL (dev fallback :8000),
 │   │                            #   uploadUrl(path) for every uploads/... image/audio URL — from VITE_UPLOADS_URL (the R2 bucket)
 │   │                            #   when set, else the backend's /uploads. Tested by api.test.js;

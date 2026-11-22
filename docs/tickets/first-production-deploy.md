@@ -199,10 +199,31 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [x] Update the `.githooks/pre-commit` and `feature-branch-guard.mjs` protection to cover `production` too. Tested by
   `frontend/src/test/branchGuards.test.js` (8: throwaway repos; the two production cases fail against the old hooks).
 
-## T10 — Pre-public checks
+## T10 — Pre-public checks (in progress 2026-11-22)
 - [ ] Confirm GitHub two-factor is on (it guards the repo, the Render deploy source and both social logins).
-- [ ] Run the `security-reviewer` agent over auth, campaign membership and visibility before sharing the URL.
+- [x] Run the `security-reviewer` agent over auth, campaign membership and visibility before sharing the URL.
+  Whole-codebase review, 2026-11-22. **Fixed (v0.1.1)**, each with a regression test that fails on the old code:
+  1. **Critical — stored XSS in session content** (rendered raw for players; any user can add anyone to their campaign,
+     so it was one-step token theft). `src/lib/sanitizeHtml.js` (DOMPurify) at the one raw-HTML render;
+     `src/test/noUnsanitizedHtml.test.js` fails on any `dangerouslySetInnerHTML` without it.
+  2. **Cross-campaign location children** (maps, pins, NPC links, relationships, links checked the URL campaign's GM but
+     not that the location was in it; a pin could re-parent another campaign's location). `_get_campaign_location` /
+     `_get_campaign_map` / `_check_linked_location` in `locations/service.py`.
+  3. **Deleting any upload through a music field** (a client-writable `theme_music_url`/`music_url` was passed to
+     `delete_upload`). `file_storage.delete_owned_upload` deletes only under the resource's own folder.
+  4. **Hidden calendar eras sent to players.** `calendar/service._player_calendar` (a response copy, never the ORM row).
+  5. **Hidden NPCs via relationship endpoints.** `npcs/service._require_npc_visible` + the other side filtered.
+  Tests: `backend/tests/test_security_review.py` (15), `sanitizeHtml.test.js`, `RichTextEditor.test.jsx`, the guard.
+  **Follow-ups (not yet fixed — fix before inviting people beyond friends):** any user can read any campaign's
+  homebrew (`?campaign_id` / campaign-owned rows on every compendium GET); user search returns emails (2-char queries
+  can harvest every address); music uploads keep the client's Content-Type, so the bucket can serve HTML; `is_admin`
+  grants GM powers in `characters/service.py`; a GM adds players with no consent step; children of a hidden location
+  (maps/NPCs/links) are listable by id; era ids from another campaign are accepted on timeline/session dates; campaign
+  classes are writable by anyone (latent — no API creates them); no login rate limit or password minimum; `/docs` public
+  in production; every member's email in `CampaignResponse`.
 - [ ] Smoke test as a GM and as an invited player on the live site (create a campaign, invite, create a character, upload a portrait,
   redeploy, and confirm the portrait survives).
-- [ ] Take a manual database dump. Render backups exist only on the paid database tier — upgrade first (the free
-  database expires around 2026-12-18).
+- [x] Take a manual database dump. Render backups exist only on the paid database tier — upgrade first (the free
+  database expires around 2026-12-18). Done 2026-11-22 via the temporary-IP procedure:
+  `C:\Users\rober\dnd-backups\dnd-prod-20261122-1348.dump` (custom format, 374 KB, 45 tables; pg_dump 18.3).
+  Holds every account's email and password hash — keep it off synced folders. Restore with `pg_restore --no-owner`.

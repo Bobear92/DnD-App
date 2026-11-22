@@ -9,7 +9,7 @@ from .schemas import (
     NPCRelationshipCreate, NPCRelationshipResponse,
     NPCPlayerRelationshipCreate, NPCPlayerRelationshipResponse,
 )
-from shared.file_storage import save_upload, delete_upload, NPC_IMAGE, MUSIC
+from shared.file_storage import save_upload, delete_upload, delete_owned_upload, NPC_IMAGE, MUSIC
 from gm.campaigns.models import CampaignMember
 from auth.models import User
 
@@ -192,7 +192,7 @@ async def upload_npc_music(db: Session, npc_id: int, file: UploadFile, current_u
     npc = _get_npc_or_404(db, npc_id)
     _require_gm(db, npc.campaign_id, current_user_id)
 
-    delete_upload(npc.theme_music_url)
+    delete_owned_upload(npc.theme_music_url, MUSIC, "npcs", npc.campaign_id, npc_id)
 
     npc.theme_music_url = await save_upload(file, MUSIC, "npcs", npc.campaign_id, npc_id)
     db.commit()
@@ -205,7 +205,7 @@ def delete_npc_music_endpoint(db: Session, npc_id: int, current_user_id: int) ->
     _require_gm(db, npc.campaign_id, current_user_id)
 
     if npc.theme_music_url:
-        delete_upload(npc.theme_music_url)
+        delete_owned_upload(npc.theme_music_url, MUSIC, "npcs", npc.campaign_id, npc_id)
         npc.theme_music_url = None
         db.commit()
         db.refresh(npc)
@@ -215,11 +215,22 @@ def delete_npc_music_endpoint(db: Session, npc_id: int, current_user_id: int) ->
 
 # ── NPC Relationships ──────────────────────────────────────────────────────────
 
+def _require_npc_visible(npc: NPC, member: CampaignMember) -> None:
+    """A player may not reach a hidden NPC through any endpoint — same rule (and 403) as the NPC detail."""
+    if member.role == 'player' and not npc.is_visible_to_players:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="This NPC is not visible to players")
+
+
 def get_npc_relationships(db: Session, npc_id: int, current_user_id: int) -> List[NPCRelationshipResponse]:
     npc = _get_npc_or_404(db, npc_id)
-    _require_member(db, npc.campaign_id, current_user_id)
-    rels = db.query(NPCRelationship).filter(NPCRelationship.npc_a_id == npc_id).all()
-    return [_build_relationship_response(r, db) for r in rels]
+    member = _require_member(db, npc.campaign_id, current_user_id)
+    _require_npc_visible(npc, member)
+    query = db.query(NPCRelationship).filter(NPCRelationship.npc_a_id == npc_id)
+    if member.role == 'player':
+        # The other side of the relationship is named in the response, so a hidden one would leak.
+        query = query.join(NPC, NPCRelationship.npc_b_id == NPC.id).filter(NPC.is_visible_to_players == True)
+    return [_build_relationship_response(r, db) for r in query.all()]
 
 
 def add_npc_relationship(db: Session, npc_id: int, data: NPCRelationshipCreate,
@@ -268,7 +279,8 @@ def delete_npc_relationship(db: Session, npc_id: int, rel_id: int, current_user_
 def get_npc_player_relationships(db: Session, npc_id: int,
                                   current_user_id: int) -> List[NPCPlayerRelationshipResponse]:
     npc = _get_npc_or_404(db, npc_id)
-    _require_member(db, npc.campaign_id, current_user_id)
+    member = _require_member(db, npc.campaign_id, current_user_id)
+    _require_npc_visible(npc, member)
     rels = db.query(NPCPlayerRelationship).filter(NPCPlayerRelationship.npc_id == npc_id).all()
     return [_build_player_rel_response(r, db) for r in rels]
 

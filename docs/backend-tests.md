@@ -12,6 +12,11 @@ backend/tests/
                                     #   ".." filenames; R2Storage against a fake S3 client (put key/content-type/cache header, delete reports
                                     #   existence, folder delete paginates and spares "1/20" when deleting "1/2", non-404 errors raised);
                                     #   backend selection (tests on local temp storage, r2 fails fast naming missing creds). Deploy ticket T4
+├── test_security_review.py         # 15 tests: deploy-T10 security review regressions — a GM of campaign B can't reach A's
+                                    #   maps/pins/NPC links/relationships/links by id under B's URL, nor link a pin to A's location;
+                                    #   a music field pointed at another upload never deletes it (character/NPC/session); players
+                                    #   get no hidden eras (current_era_id cleared on a copy, DB untouched); hidden NPCs' relationships
+                                    #   403 for players and hidden NPCs are filtered from the other side. All fail on the pre-fix code
 ├── test_seeding.py                 # 22 tests: seed scripts UPSERT system rows (deploy T5b) and never fail silently (T8: fetch_json retries
                                     #   then raises; a failed list stops seed_items/seed_spells; a failed record is `failed`, exits non-zero,
                                     #   the rest saved) — upsert_system_row (create/update/

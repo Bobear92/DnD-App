@@ -153,7 +153,11 @@ MY_IMAGE = UploadKind("mymodule", 10, content_types=_IMAGE_TYPES, type_error="On
 from shared.file_storage import save_upload, delete_upload, MY_IMAGE
 item.image_path = await save_upload(file, MY_IMAGE, campaign_id, item_id)
 delete_upload(item.image_path)   # on replace / delete; no-op for empty or non-upload values
+# A key from a field the CLIENT can write (e.g. a music URL) — delete only under the resource's own folder:
+delete_owned_upload(item.music_url, MUSIC, "mymodule", campaign_id, item_id)
 ```
+Nested routes (`/{parent_id}/children/{child_id}`) must first prove the PARENT belongs to the URL's campaign (see
+`locations/service._get_campaign_location`) — a GM check on the URL campaign alone lets any GM reach other campaigns' children.
 The old per-module pattern, kept below only so you recognise it in history — **do not copy it**:
 ```python
 # (removed) backend/gm/.../mymodule/storage.py

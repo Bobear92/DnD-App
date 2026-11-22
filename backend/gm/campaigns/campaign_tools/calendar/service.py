@@ -10,6 +10,7 @@ from .schemas import (
     MonthCreate, MonthUpdate,
     EraCreate, EraUpdate, EraVisibilityUpdate,
     WeekdayCreate, WeekdayUpdate,
+    CalendarResponse,
 )
 from gm.campaigns.models import CampaignMember
 
@@ -26,13 +27,14 @@ def _require_gm(db: Session, campaign_id: int, user_id: int) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the GM can perform this action")
 
 
-def _require_member(db: Session, campaign_id: int, user_id: int) -> None:
+def _require_member(db: Session, campaign_id: int, user_id: int) -> CampaignMember:
     member = db.query(CampaignMember).filter(
         CampaignMember.campaign_id == campaign_id,
         CampaignMember.user_id == user_id,
     ).first()
     if not member:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You must be a member of this campaign")
+    return member
 
 
 # ── Era math ──────────────────────────────────────────────────────────────────
@@ -121,12 +123,32 @@ def _compute_era_range(
 
 # ── Calendar CRUD ─────────────────────────────────────────────────────────────
 
-def get_calendar(db: Session, campaign_id: int, user_id: int) -> CampaignCalendar:
-    _require_member(db, campaign_id, user_id)
+def get_calendar(db: Session, campaign_id: int, user_id: int):
+    member = _require_member(db, campaign_id, user_id)
     cal = db.query(CampaignCalendar).filter(CampaignCalendar.campaign_id == campaign_id).first()
     if not cal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No calendar found for this campaign")
-    return _load_calendar(db, cal)
+    cal = _load_calendar(db, cal)
+    if member.role == "gm":
+        return cal
+    return _player_calendar(cal)
+
+
+def _player_calendar(cal: CampaignCalendar) -> CalendarResponse:
+    """The calendar as a player may see it: hidden eras removed, and any id that points at one cleared.
+
+    Built on a response copy, never by mutating the ORM object — a mutated ORM row would be flushed back to
+    the database by the next autoflush (security review, deploy T10).
+    """
+    resp = CalendarResponse.model_validate(cal)
+    visible = [e for e in resp.eras if e.is_visible_to_players]
+    ids = {e.id for e in visible}
+    eras = [e if e.anchor_era_id in ids or e.anchor_era_id is None else e.model_copy(update={"anchor_era_id": None})
+            for e in visible]
+    update = {"eras": eras}
+    if resp.current_era_id is not None and resp.current_era_id not in ids:
+        update["current_era_id"] = None
+    return resp.model_copy(update=update)
 
 
 def create_calendar(db: Session, campaign_id: int, data: CalendarCreate, user_id: int) -> CampaignCalendar:

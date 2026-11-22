@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy, plan through v0.1.0 (T1–T9)
+title: First production deploy, plan through T10 hardening
 date: 2026-11-15
 started: 17:50
-branch: feature/release-v0.1.0-followups
+branch: feature/deploy-t10-hardening
 area: tooling
-tags: [docs, build, consolidation, deployment, data-safety, migration, seed-data, user-rule, guard-test, tooling]
+tags: [docs, build, consolidation, deployment, data-safety, security, migration, seed-data, user-rule, guard-test, tooling]
 issues: []
-summary: Prod deploy: plan + code (T1–T5b), live on Render + R2 (T6–T7), seeded (T8), /release + guards, v0.1.0 released (T9)
-turns: 111
+summary: Prod deploy T1–T9 (live on Render + R2, v0.1.0), then T10: prod dump + security review, 5 fixes
+turns: 117
 stepped_in: true
-last_uuid: 55ca2108-9f3a-49ba-bbf9-f81876c28031
+last_uuid: f5d213e5-0ae5-40c1-bebf-461398a85b89
 ---
 
-# First production deploy, plan through v0.1.0 (T1–T9)
+# First production deploy, plan through T10 hardening
 
 ## Summary
 
@@ -80,6 +80,13 @@ last_uuid: 55ca2108-9f3a-49ba-bbf9-f81876c28031
   (8, throwaway repos; the two production cases fail against the old hooks). CLAUDE.md workflow: `main` = develop line,
   step 5 `/release`, expand → contract rule. deployment.md: `/release`, how Render's "after CI" works with ff-only production.
   Frontend 3940 green.
+- **T10 (2026-11-22):** prod `pg_dump` via the temporary-IP procedure (`C:\Users\rober\dnd-backups\dnd-prod-20261122-1348.dump`,
+  45 tables; IP rule removed, refusal confirmed). Whole-codebase security-reviewer run: 9 confirmed findings. Fixed 1–5:
+  stored XSS in session content (`src/lib/sanitizeHtml.js`, DOMPurify 3.2.6, guard `noUnsanitizedHtml.test.js`);
+  cross-campaign location children (`_get_campaign_location`/`_get_campaign_map`/`_check_linked_location`); music
+  fields deleting any upload (`file_storage.delete_owned_upload`); hidden eras sent to players (`_player_calendar`
+  response copy); hidden NPCs via relationship endpoints (`_require_npc_visible`). `test_security_review.py` (15, all
+  fail on pre-fix code). Backend 1082 + 1 skipped, frontend 3953, build OK, live 404 on a cross-campaign location.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -132,6 +139,12 @@ last_uuid: 55ca2108-9f3a-49ba-bbf9-f81876c28031
   A `@vitest-environment node` directive broke on the shared jsdom setup file. CLAUDE.md went over its 100 KB budget from
   this session's additions; trimmed today's lines plus two long Not-Yet-Built entries. `CalendarTab.test.jsx` failed once
   under full-suite load and passed alone and on re-run — a latent async flake, not fixed.
+- **T10:** a find-and-replace over `locations/service.py` also rewrote the inside of the new `_get_campaign_map` helper,
+  making it recursive — caught on read-back. The new guard flagged its own target's doc comments (skipped comment lines).
+  First test run: 7 setup failures from payloads (NPC needs `race`, secondary ascending era needs `anchor_this_year`).
+  `gh api user` can't read 2FA status, so that check stays Robert's. A ship-time curl first used a non-GM campaign id
+  (403 membership) before the real cross-campaign case (404) was exercised.
+- The security holes were all invisible to ~5,000 tests: "GM" was implicitly trusted though anyone can become one.
 
 ## Decisions
 
@@ -157,6 +170,9 @@ last_uuid: 55ca2108-9f3a-49ba-bbf9-f81876c28031
 - `/release` is the only way `production` moves forward, and it never pushes without Robert's explicit yes in the session.
 - Release history lives in annotated tags (`git tag -n`), not a doc table — no post-release commit needed.
 - Pre-1.0 versioning: MINOR for anything players notice, PATCH for fixes/docs/tooling; first release v0.1.0.
+- T10: fix security findings 1–5 now (Robert), ship as v0.1.1 (PATCH); 6–9 + minor items recorded in the ticket.
+- A GM is a potential stranger: nested endpoints prove the parent is in the URL's campaign; client-writable keys never
+  reach a plain delete; HTML is sanitized at render (DOMPurify, exact version) rather than on save.
 
 ## Open threads
 
@@ -164,8 +180,9 @@ last_uuid: 55ca2108-9f3a-49ba-bbf9-f81876c28031
   from outside: /docs 200, login 401, CORS, deep link 200; bundle unchanged (no frontend/src change). The first run aborted
   at `git checkout production` (dirty session logs) before pushing anything — `/release` Step 5 now uses
   `git fetch . origin/main:production`. Robert's browser smoke test (save + reload a character, map still shows) pending.
-- **T10** — GitHub 2FA, security-reviewer, live smoke test incl. a player account and "the map survives a redeploy",
-  a database dump.
+- **T10 remaining** — `/release` v0.1.1 (security fixes; no migrations); Robert checks GitHub 2FA; live smoke test with a
+  player account (+alias) incl. "the map survives a redeploy". Security follow-ups 6–9 + minor (homebrew readable
+  cross-campaign, emails via user search, music Content-Type, is_admin as GM, …) listed in the ticket › T10.
 - **Free database expires around 2026-12-18** — upgrade before anything in it matters (no backups on free).
 - Feature work in CLAUDE.md › Not Yet Built: account emails + password reset; player Locations world-map preview; items
   deep dive (potions); the sticky "Upload failed" banner.
@@ -2216,3 +2233,130 @@ last_uuid: 55ca2108-9f3a-49ba-bbf9-f81876c28031
 >    - reload the page and check that nothing …
 
 **Commands run:** 1
+
+### 112. 2026-11-20 17:56
+
+**Robert:**
+> /ship
+
+**Claude:**
+> This is shipped: `main` is now at **`dc1f8ed`**, pushed, and the feature branch is deleted.
+> 
+> - **What went in:** the `/release` fix, so it now moves `production` without switching branches. Also in: T9 marked done (the deploy ticket is at 11 of 12) and the session log updated to record the v0.1.0 release.
+> - **Checks:** all 3,940 frontend tests pass. I skipped the in-app check because only docs and the `/release` instructions changed.
+> - **Production** is still at v0.1.0 (`2ad9779`). This commit is only docs and tooling, so it can wait for the next `/release`; there's no need to release it on its own.
+> 
+> Still waiting on you, from the release:
+> 1. **Render → Events** on both services: check that the latest deploy is commit `2ad9779`.
+> 2. **Smoke test** on https://dnd-app-ginj.onrender.com: save a character, reload it, and check that your map still shows.
+> 
+> After that, only **T10** is left: GitH …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/log_release.py` · **Commands run:** 4
+
+### 113. 2026-11-22 13:43
+
+**Robert:**
+> okay lets do T10
+
+**Claude:**
+> T10 has four parts. The security review is already running in the background, and I'm on branch `feature/deploy-t10-hardening`. The other three need you, one at a time.
+> 
+> ## 1. Database backup (about 3 minutes, start here)
+> 
+> The dump script is ready. It writes to `C:\Users\rober\dnd-backups\` (outside OneDrive) and never prints the database address.
+> 
+> ⚠️ **Don't screenshot or paste anything from the database's Info page while the rule is on.** The External URL appears there as soon as you add the rule.
+> 
+> 1. Render → **dnd-app-db** → **Networking** (Access Control) → **Add source**.
+> 2. Enter **`73.81.96.154/32`** (your current IP) with a description like `laptop backup`, then **Save**.
+> 3. Tell me "rule added". I'll run the dump and tell you the size and which tables it contains.
+> 4. Then **delete the rule** and tell me, and I'll confirm the database refuses connections again.
+> 
+> The backup conta …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/prod_dump.py` · **Commands run:** 3
+
+### 114. 2026-11-22 13:46
+
+**Robert:**
+> For render you are talking about the inbound ip rules?
+
+**Claude:**
+> Yes, that's the one: the **Inbound IP Rules** section on **dnd-app-db**. It's the same place you removed the rules after setup.
+> 
+> 1. Under Inbound IP Rules, click **+ Add source**.
+> 2. **Source:** `73.81.96.154/32`. **Description:** `laptop backup`.
+> 3. Click **Save**.
+> 
+> The rules apply only to the database. You don't need to change anything on `dnd-app-api` or `dnd-app`. Tell me "rule added" and I'll run the backup.
+
+### 115. 2026-11-22 13:48
+
+**Robert:**
+> rule added
+
+**Claude:**
+> **The backup worked.** It's at `C:\Users\rober\dnd-backups\dnd-prod-20261122-1348.dump` (374 KB). It contains all 45 tables, including users, characters, campaigns, maps and the compendium.
+> 
+> 👉 **Now delete the `laptop backup` rule** on dnd-app-db → Inbound IP Rules, and tell me. I'll confirm the database refuses connections again.
+> 
+> ---
+> 
+> ## The security review: don't share the URL yet
+> 
+> The review found real problems. I checked the top two in the code myself and they're real. Anyone can register, and anyone who creates a campaign becomes its GM, so "an attacker" below just means any stranger with an account.
+> 
+> **Fix before sharing the URL:**
+> 1. **🔴 Critical: account takeover via session notes.** Session content is shown to players as raw HTML without cleaning ([RichTextEditor.jsx:122](frontend/src/sessions/components/RichTextEditor.jsx#L122)). An attacker can add *anyone* to their campaig …
+
+**Commands run:** 2
+
+### 116. 2026-11-22 13:50
+
+**Robert:**
+> Sure fix 1-5. and the ip rule has been deleted.
+
+**Claude:**
+> Fixes 1–5 are in, but the full backend test run hasn't finished yet. I'll continue when it does.
+> 
+> **Backup:** done at `C:\Users\rober\dnd-backups\dnd-prod-20261122-1348.dump`, and the database refuses outside connections again.
+> 
+> **What changed on branch `feature/deploy-t10-hardening`:**
+> 1. **Session-notes XSS:** session content is now cleaned with DOMPurify before players see it. A new guard test fails the build if any page shows HTML without cleaning it first.
+> 2. **Cross-campaign location data:** maps, pins, NPC links, relationships and links now check that the location belongs to the campaign in the address. A pin can no longer link to another campaign's location.
+> 3. **Music-field deletes:** the character, NPC and session music fields can only delete files in their own upload folder.
+> 4. **Hidden eras:** players no longer receive hidden eras. If the current era is hidden, players see no …
+
+**Files edited:** `backend/gm/campaigns/campaign_tools/locations/service.py`, `backend/shared/file_storage.py`, `frontend/src/lib/sanitizeHtml.js`, `frontend/src/sessions/components/RichTextEditor.jsx`, `frontend/src/sessions/components/RichTextEditor.test.jsx`, `frontend/src/lib/sanitizeHtml.test.js`, `frontend/src/test/noUnsanitizedHtml.test.js`, `backend/tests/test_security_review.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/t10_docs.py`, `CLAUDE.md` · **Commands run:** 39
+
+### 117. 2026-11-22 14:08
+
+**Robert:**
+> <task-notification>
+> <task-id>bhqmopmqi</task-id>
+> <tool-use-id>toolu_016bCTFzubeyBH8EPxqHyL11</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\bhqmopmqi.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run the full backend test suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> All tests now pass:
+> 
+> | Suite | Result |
+> |---|---|
+> | Backend | 1,082 passed, 1 skipped (includes the 15 new security tests) |
+> | Frontend | 3,953 passed |
+> 
+> The local backend has been restarted with the fixes and is up on :8000.
+> 
+> Fixes 1–5 are ready on `feature/deploy-t10-hardening`. Next steps:
+> 1. **`/ship`**, which lands the fixes on `main`.
+> 2. **`/release`**, which puts them live as v0.1.1. There's no migration, so it won't need a database backup or rehearsal.
+> 3. **Smoke test as GM and as a player** on the live site. The release's redeploy also covers the "map survives a redeploy" check.
+> 4. **GitHub two-factor:** check it in your GitHub settings when you have a moment.
+> 
+> Until those are done, don't share the URL beyond people you trust. The follow-ups (homebrew readable from other campaigns, emails visible through user search, and the rest) are listed in the T10 ticket for a later pass.
+
+**Commands run:** 3

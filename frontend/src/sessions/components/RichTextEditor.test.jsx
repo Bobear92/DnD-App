@@ -102,4 +102,21 @@ describe('RichTextEditor — read-only mode', () => {
     const div = document.querySelector('.rich-content');
     expect(div).toBeTruthy();
   });
+
+  // Security review, deploy T10: players see session content through this read-only view, and the
+  // HTML used to be injected raw — an <img onerror> stole the viewer's login token.
+  it('strips scripts and event handlers from the content players see', () => {
+    render(
+      <RichTextEditor
+        readOnly
+        content={'<p>Safe text</p><img src="x" onerror="window.__pwned=1"><script>window.__pwned=2</script>'
+          + '<a href="javascript:alert(1)">bad link</a>'}
+      />,
+    );
+    const div = document.querySelector('.rich-content');
+    expect(screen.getByText('Safe text')).toBeTruthy();
+    expect(div.innerHTML).not.toMatch(/onerror|<script|javascript:/i);
+    expect(div.querySelector('img')).toBeTruthy(); // the image itself survives, minus the handler
+    expect(window.__pwned).toBeUndefined();
+  });
 });

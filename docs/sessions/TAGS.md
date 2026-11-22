@@ -86,6 +86,7 @@ can see whether a problem is shrinking. Mark one only when it actually happened.
 - `snapshot-backfill` — fixing data snapshotted onto stored characters
 - `deployment` — production hosting, releases, rollback, environments (`docs/deployment.md`)
 - `data-safety` — protecting stored user data across deploys (migrations, backups, whole-blob writes)
+- `security` — authorization, visibility leaks, XSS, upload safety (security-reviewer findings and their fixes)
 - `5e` — the session was specifically about 2014 rules
 - `2024` — the session was specifically about 2024 rules
 

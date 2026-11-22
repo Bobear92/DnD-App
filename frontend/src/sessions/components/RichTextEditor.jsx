@@ -6,6 +6,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 import {
   Bold, Italic, Underline as UnderlineIcon,
   List, ListOrdered, Quote, Link as LinkIcon,
@@ -120,7 +121,7 @@ export default function RichTextEditor({
       <div
         className="rich-content min-h-[100px]"
         dangerouslySetInnerHTML={{
-          __html: content || '<p class="empty-hint">No content yet.</p>',
+          __html: sanitizeHtml(content) || '<p class="empty-hint">No content yet.</p>',
         }}
       />
     );

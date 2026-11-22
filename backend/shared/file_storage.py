@@ -210,6 +210,21 @@ def delete_upload(key: str | None) -> bool:
     return get_storage().delete(key)
 
 
+def delete_owned_upload(key: str | None, kind: UploadKind, *path_parts) -> bool:
+    """Delete ``key`` only if it lives under ``uploads/<kind.folder>/<path_parts...>/`` — the folder the
+    resource's own uploads are saved to.
+
+    Use this for any key read from a field a client can WRITE (the music URLs: ``theme_music_url``,
+    ``music_url``). Plain ``delete_upload`` trusts the key, so a player who pasted another resource's
+    ``uploads/maps/...`` path into their music field and then removed the music would delete that map
+    (security review, deploy T10). A key outside the folder is left alone and returns False.
+    """
+    prefix = KEY_PREFIX + "/".join([kind.folder, *(str(p) for p in path_parts)]) + "/"
+    if not key or not key.startswith(prefix) or ".." in key or "\\" in key:
+        return False
+    return delete_upload(key)
+
+
 def delete_upload_file(kind: UploadKind, *path_parts, filename: str) -> bool:
     """Delete ``uploads/<kind.folder>/<path_parts...>/<filename>`` when the caller has only a bare
     filename (e.g. from a URL). Anything that isn't a plain file name — a "/", "\\" or ".." that

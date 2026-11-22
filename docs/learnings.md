@@ -130,6 +130,11 @@ Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](
 | **"Render shell" is a paid feature**: on the free tier, laptop jobs against prod go through a temporary IP rule | none (documented) | Session 2026-11-18 |
 | **A network seed can report success after a failed download.** `seed_items.py` printed "Done" and exited 0 when dnd5eapi.co timed out on its list calls, leaving prod with 15 of ~530 items; it was caught only by reading the counts. Seeds must fail loudly, and a prod seed is checked against dev's counts | guard test (`test_seeding.py › TestNetworkSeedsNeverFailSilently`), one helper (`shared/seeding.fetch_json`) | Session 2026-11-20 |
 | **Keep production secrets out of synced folders**: Windows' Save As defaults to OneDrive\Documents | none (documented) | Session 2026-11-20 |
+| **Run a whole-codebase security review before the URL is shared, not just per diff.** The T10 review found a critical stored XSS and four data-integrity/leak holes that 3,900 passing tests never touched — because anyone can register and create a campaign, every "GM-only" check is a check against a stranger | agent (`security-reviewer`), ticket step (first-deploy T10) | Session 2026-11-22 |
+| **User HTML is never rendered raw.** Session content went straight into `dangerouslySetInnerHTML` for players | guard test (`noUnsanitizedHtml.test.js`), one helper (`src/lib/sanitizeHtml.js`) | Session 2026-11-22 |
+| **A nested endpoint checks the parent belongs to the URL's campaign**, not just that the caller is GM of the URL's campaign — otherwise a GM of B addresses A's children by id | guard test (`test_security_review.py`), one helper per module (`locations/service._get_campaign_location`) | Session 2026-11-22 |
+| **A value a client can write must never reach a destructive call unchecked**: the music URL fields fed `delete_upload` | guard test (`test_security_review.py`), one helper (`file_storage.delete_owned_upload`) | Session 2026-11-22 |
+| **A visibility filter covers every endpoint that names the hidden thing** — detail, list, *and* the side endpoints (relationships, the calendar's era list) | guard test (`test_security_review.py`) | Session 2026-11-22 |
 
 ## Shared mechanisms and duplication
 
