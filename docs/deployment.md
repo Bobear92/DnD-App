@@ -151,7 +151,7 @@ feature/*  ──ff──▶  main (develop)  ──release──▶  production
 
 **Run it with `/release`** (`.claude/commands/release.md`), which automates steps 1–6 and asks for an explicit yes before pushing; `/ship` stays the feature-branch → `main` step. `.githooks/pre-commit` refuses a commit on `production`, and Claude's edit guard blocks editing there.
 
-**Render waits for CI.** Both services are set to Auto-Deploy *After CI checks pass*. CI runs on pushes to `main`, and GitHub attaches its result to the **commit**, so when `production` fast-forwards to a commit `main` already passed, the deploy starts at once. A commit that never went through `main` would have no checks and would not deploy — one more reason `production` only ever fast-forwards.
+**Render waits for CI.** Both services are set to Auto-Deploy *After CI checks pass*. Render deploys when a check run **completes** on the branch it watches, so CI runs on pushes to `production` as well as `main`: a `/release` push starts a fresh run on the already-tested commit, and the deploy begins when it passes (~10 min). Before this, CI ran on `main` only, a fast-forward of `production` started no run, and Render never deployed — v0.1.1 needed **Manual Deploy → Deploy latest commit** on both services, which is still the fallback if no deploy appears.
 
 ### Rollback
 - **Fastest:** Render dashboard → backend/frontend → *Rollback* to the previous deploy.

@@ -4,7 +4,7 @@
 [docs/deployment.md](../deployment.md) set up. This is a practice deploy for a small group of friends,
 not a launch, so the aim is a working pipeline, not a finished app.
 
-**Status:** 11/12 done (T1–T9). All code tickets are done; T6 onward needs Robert's accounts. Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
+**Status:** ✅ 12/12 done (2026-11-23) — live at v0.1.1. Remaining security follow-ups are listed under T10. Planned 2026-11-15. T5a and T5b were added after the data-loss discussion; T5a is the
 one code change here that protects real players' data, so don't drop it to save time.
 
 **Decisions:**
@@ -67,7 +67,7 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
   credentials. Frontend `uploadUrl` uses `VITE_UPLOADS_URL`. Also fixed: session-image delete joined a URL `filename` into a
   path (`../` could reach another session's files); tests no longer write into `backend/uploads` (temp dir via conftest).
   Tests: `backend/tests/test_file_storage.py` (R2 via a fake client); `test_locations.py` map tests now use real storage.
-- [ ] **Not yet proven against real R2** — needs the bucket and credentials. Do it in T6: upload a portrait on the live
+- [x] **Proven against real R2** (2026-11-20, Robert's map upload after the 31-character-key fix) — needs the bucket and credentials. Do it in T6: upload a portrait on the live
   site, confirm the object appears in the bucket and the image renders, redeploy, confirm it still renders.
 - [x] ~~**Disk option:** make the uploads root configurable (`UPLOADS_DIR` env var) in the four storage modules
   (`players/characters/storage.py`, `npcs/storage.py`, `locations/storage.py`, `shared/music_storage.py`) and
@@ -174,11 +174,11 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
   "skipped") and `exit_if_failed` ends the run non-zero naming it, after saving everything else. Tests: 6 in
   `test_seeding.py › TestNetworkSeedsNeverFailSilently`.
 - [x] Robert's check (2026-11-20): Encyclopedia populated; a level-20 Fighter created and working on the live site.
-- [ ] The free tier has **no Render shell**: add Robert's IP to the database's inbound rules, run the seed scripts from
+- [x] The free tier has **no Render shell**: add Robert's IP to the database's inbound rules, run the seed scripts from
   this laptop against the database's **External** URL (set in the terminal only, never in `backend/.env`) in the order
   in [deployment.md › Data operations](../deployment.md#data-operations), then **remove the IP rule**.
   **Not `seed_data.py`** (it refuses a remote database anyway).
-- [ ] Register through the live app (Robert's real account, strong password); flip `is_admin` with SQL in the same IP window.
+- [x] Register through the live app (Robert's real account, strong password); flip `is_admin` with SQL in the same IP window.
 - done: the Encyclopedia shows classes, spells, feats and items; character creation works end to end.
 
 ## T9 — Release flow and repo docs ✅
@@ -199,8 +199,8 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [x] Update the `.githooks/pre-commit` and `feature-branch-guard.mjs` protection to cover `production` too. Tested by
   `frontend/src/test/branchGuards.test.js` (8: throwaway repos; the two production cases fail against the old hooks).
 
-## T10 — Pre-public checks (in progress 2026-11-22)
-- [ ] Confirm GitHub two-factor is on (it guards the repo, the Render deploy source and both social logins).
+## T10 — Pre-public checks ✅ (2026-11-23)
+- [x] Confirm GitHub two-factor is on (it guards the repo, the Render deploy source and both social logins). Robert confirmed 2026-11-23.
 - [x] Run the `security-reviewer` agent over auth, campaign membership and visibility before sharing the URL.
   Whole-codebase review, 2026-11-22. **Fixed (v0.1.1)**, each with a regression test that fails on the old code:
   1. **Critical — stored XSS in session content** (rendered raw for players; any user can add anyone to their campaign,
@@ -221,8 +221,16 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
   (maps/NPCs/links) are listable by id; era ids from another campaign are accepted on timeline/session dates; campaign
   classes are writable by anyone (latent — no API creates them); no login rate limit or password minimum; `/docs` public
   in production; every member's email in `CampaignResponse`.
-- [ ] Smoke test as a GM and as an invited player on the live site (create a campaign, invite, create a character, upload a portrait,
-  redeploy, and confirm the portrait survives).
+- [x] **v0.1.1 released** (2026-11-23, `af5b16a`). Render did NOT auto-deploy: "After CI checks pass" waits for a check
+  run to complete on `production`, and CI ran on `main` only. Robert deployed both services manually; live bundle
+  `index-82I08alL.js` carries the sanitizer, /docs 200, login 401, CORS allowed, deep link 200. Fixed for next time:
+  `ci.yml` now also runs on pushes to `production` (ships in the next release).
+- [x] Smoke test as a GM and as an invited player on the live site (create a campaign, invite, create a character, upload a portrait,
+  redeploy, and confirm the portrait survives). Done 2026-11-23 on v0.1.1 by Robert (BobearDM + SmokeTestPlayer): invite,
+  player character + portrait, GM notes hidden from the player, saves on two characters kept, portraits and the world map
+  survived a manual API redeploy. Found (to-dos in CLAUDE.md): two accounts in one browser share the login token (use a
+  private window); GM cards should show the owning player; invite needs a username list without emails; maps start hidden
+  and real players see the GM's "Upload one" empty text.
 - [x] Take a manual database dump. Render backups exist only on the paid database tier — upgrade first (the free
   database expires around 2026-12-18). Done 2026-11-22 via the temporary-IP procedure:
   `C:\Users\rober\dnd-backups\dnd-prod-20261122-1348.dump` (custom format, 374 KB, 45 tables; pg_dump 18.3).

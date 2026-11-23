@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `production` too: Render's "After CI checks pass" deploys on a check run COMPLETING for the branch it
+    # watches. A fast-forward of production to a commit main already passed starts no run, so without this
+    # Render never deploys (v0.1.1 needed a manual deploy).
+    branches: [main, production]
   pull_request:
 
 jobs:

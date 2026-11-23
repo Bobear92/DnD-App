@@ -1,19 +1,19 @@
 ---
 session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
-title: First production deploy, plan through T10 hardening
+title: First production deploy, T1–T10 complete
 date: 2026-11-15
 started: 17:50
-branch: feature/deploy-t10-hardening
+branch: feature/ci-on-production
 area: tooling
 tags: [docs, build, consolidation, deployment, data-safety, security, migration, seed-data, user-rule, guard-test, tooling]
-issues: []
-summary: Prod deploy T1–T9 (live on Render + R2, v0.1.0), then T10: prod dump + security review, 5 fixes
-turns: 117
+issues: [rework]
+summary: Prod deploy done: T1–T9 live (v0.1.0), T10 security fixes as v0.1.1, smoke test passed, CI deploys on production
+turns: 132
 stepped_in: true
-last_uuid: f5d213e5-0ae5-40c1-bebf-461398a85b89
+last_uuid: 50734db7-1710-4447-87d1-27588538dd1d
 ---
 
-# First production deploy, plan through T10 hardening
+# First production deploy, T1–T10 complete
 
 ## Summary
 
@@ -87,6 +87,10 @@ last_uuid: f5d213e5-0ae5-40c1-bebf-461398a85b89
   fields deleting any upload (`file_storage.delete_owned_upload`); hidden eras sent to players (`_player_calendar`
   response copy); hidden NPCs via relationship endpoints (`_require_npc_visible`). `test_security_review.py` (15, all
   fail on pre-fix code). Backend 1082 + 1 skipped, frontend 3953, build OK, live 404 on a cross-campaign location.
+  Shipped af5b16a; **released v0.1.1** (2026-11-23). Render did not auto-deploy — Robert deployed manually; live bundle
+  `index-82I08alL.js` carries the sanitizer. Fix: `ci.yml` runs on pushes to `production` too (+ deployment.md,
+  `/release` fallback, learnings row). Robert's live smoke test (GM + SmokeTestPlayer, private window) passed incl.
+  a manual API redeploy; 2FA confirmed. **Deploy ticket 12/12 complete.** New to-dos in CLAUDE.md (see Open threads).
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -144,6 +148,11 @@ last_uuid: f5d213e5-0ae5-40c1-bebf-461398a85b89
   First test run: 7 setup failures from payloads (NPC needs `race`, secondary ascending era needs `anchor_this_year`).
   `gh api user` can't read 2FA status, so that check stays Robert's. A ship-time curl first used a non-GM campaign id
   (403 membership) before the real cross-campaign case (404) was exercised.
+- **Claude's T9 docs claimed the deploy "starts at once"** when production fast-forwards to a tested commit; v0.1.1 sat
+  undeployed ~13 min until Robert checked Render. The trigger was never observed firing (v0.1.0 likely deployed off a
+  settings change). Should have watched the first release's deploy start, not inferred it.
+- Smoke-test instructions assumed Robert knew to play both roles and to use a private window; he had to ask, then hit
+  the shared-token mix-up in two normal windows. Say "private window" as a requirement, not a tip.
 - The security holes were all invisible to ~5,000 tests: "GM" was implicitly trusted though anyone can become one.
 
 ## Decisions
@@ -180,9 +189,14 @@ last_uuid: f5d213e5-0ae5-40c1-bebf-461398a85b89
   from outside: /docs 200, login 401, CORS, deep link 200; bundle unchanged (no frontend/src change). The first run aborted
   at `git checkout production` (dirty session logs) before pushing anything — `/release` Step 5 now uses
   `git fetch . origin/main:production`. Robert's browser smoke test (save + reload a character, map still shows) pending.
-- **T10 remaining** — `/release` v0.1.1 (security fixes; no migrations); Robert checks GitHub 2FA; live smoke test with a
-  player account (+alias) incl. "the map survives a redeploy". Security follow-ups 6–9 + minor (homebrew readable
-  cross-campaign, emails via user search, music Content-Type, is_admin as GM, …) listed in the ticket › T10.
+- **Next `/release` (v0.1.2) must confirm Render auto-deploys** off the new `production` CI run, with no manual click.
+- Security follow-ups 6–9 + minor (homebrew readable cross-campaign, emails via user search, music Content-Type,
+  is_admin as GM, …) listed in the ticket › T10 — fix before inviting people beyond friends.
+- Robert's smoke-test to-dos (CLAUDE.md › Not Yet Built): invite by browsable username list (no emails); GM character
+  cards show the owning player; a login in another tab should switch this tab; player Locations view — maps start
+  hidden and real players see the GM's "Upload one" empty text. **CLAUDE.md is at ~99.9 KB of 100 KB** — new to-dos
+  need a ticket file or a trim first.
+- Live data: "Smoke test" campaign + SmokeTestPlayer account remain in prod (keep for release checks or delete).
 - **Free database expires around 2026-12-18** — upgrade before anything in it matters (no backups on free).
 - Feature work in CLAUDE.md › Not Yet Built: account emails + password reset; player Locations world-map preview; items
   deep dive (potions); the sticky "Upload failed" banner.
@@ -2360,3 +2374,278 @@ last_uuid: f5d213e5-0ae5-40c1-bebf-461398a85b89
 > Until those are done, don't share the URL beyond people you trust. The follow-ups (homebrew readable from other campaigns, emails visible through user search, and the rest) are listed in the T10 ticket for a later pass.
 
 **Commands run:** 3
+
+### 118. 2026-11-22 18:50
+
+**Robert:**
+> /ship
+
+**Claude:**
+> The security fixes are on `main` and pushed (`af5b16a`). The feature branch is deleted, both locally and on GitHub.
+> 
+> Checks before shipping:
+> - **Tests:** the backend suite passed (1,082, 1 skipped) and so did the frontend (3,953). The feat-coverage check also passed, and the frontend builds.
+> - **Running app:** on the local backend, asking for campaign 1's location through campaign 2's address now returns "not found". Before the fix it returned that location's data. The calendar and the normal location pages still load.
+> - **Session log:** updated with the T10 work. I added a new `security` tag to `TAGS.md` for it.
+> 
+> Next steps:
+> 1. **`/release`** puts the fixes live as v0.1.1. There's no database migration, so it needs no backup or trial run first, but it still waits for your explicit yes.
+> 2. **Smoke test:** on the live site, test as yourself (the GM) and as a second player account. Use a G …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/log_t10.py` · **Commands run:** 12
+
+### 119. 2026-11-22 20:38
+
+**Robert:**
+> /release
+
+**Claude:**
+> Everything is in place to release:
+> - `main` (`af5b16a`) is pushed, and its automated checks on GitHub passed.
+> - `production` is directly behind `main`, so it can move straight forward.
+> - The only local changes are the session-log files, as expected.
+> - The live site's frontend file is currently `index-CwdyXj2K.js`. I noted it so I can see when the new version goes live.
+> 
+> **Proposed release: v0.1.1** (a fixes-only release). It covers `v0.1.0..af5b16a`, which is 2 commits.
+> 
+> **Fixes**
+> - Session notes no longer run scripts or other unsafe HTML a GM puts in them. They are cleaned before players see them.
+> - A GM can no longer reach another campaign's maps, pins, NPC links or location relationships by guessing their ID numbers.
+> - Removing a theme song can no longer delete someone else's uploaded file.
+> - Players no longer receive calendar eras the GM has hidden.
+> - Players can no longer see hidden …
+
+**Commands run:** 1
+
+### 120. 2026-11-23 00:46
+
+**Robert:**
+> yes
+
+**Claude:**
+> v0.1.1 is pushed, but the live site isn't running it yet, so it isn't verified.
+> 
+> - **Pushed:** `production` and the `v0.1.1` tag both point at `af5b16a`. GitHub's backend and frontend checks for that commit both passed.
+> - **Not live yet:** after about 13 minutes the site still serves the old frontend file (`index-CwdyXj2K.js`), and that file has no sign of the new HTML cleaner.
+> - **Backend:** it answers, but it took 72 seconds, meaning it was asleep. That suggests it hasn't been redeployed either, though I can't tell from outside. Free-tier builds normally finish within a few minutes, so Render probably didn't pick up the push.
+> 
+> Could you check in the Render dashboard?
+> 1. Open the **dnd-app** static site and look at **Events**. Is there a deploy for `af5b16a` ("Fix T10 security review findings 1-5…"), and is it building, failed, or missing?
+> 2. Do the same for **dnd-app-api**.
+> 3. If eithe …
+
+**Commands run:** 6
+
+### 121. 2026-11-23 01:08
+
+**Robert:**
+> niether has updated
+
+**Claude:**
+> Neither service redeployed, and I think I know why.
+> 
+> **Likely cause:** Render's "After CI Checks Pass" deploys when GitHub reports that a check run has *finished* on the deployed branch. Our CI only runs on pushes to `main`. When I fast-forwarded `production` to the same commit, no new check run started, so Render never received a "checks passed" event. My docs say the deploy "starts at once"; that was wrong. v0.1.0 probably deployed only because you were changing the service settings around then.
+> 
+> **For now, deploy by hand:**
+> 1. Open **dnd-app-api**, choose **Manual Deploy → Deploy latest commit**, and confirm it shows `af5b16a`.
+> 2. Do the same for **dnd-app**.
+> 
+> Tell me when both show a new deploy, and I'll run the live-site checks.
+> 
+> **Proposed permanent fix (once the manual deploys are done):** on a new branch, add `production` to the branches that trigger `.github/workflows/ci.yml` on …
+
+### 122. 2026-11-23 13:07
+
+**Robert:**
+> <task-notification>
+> <task-id>bjgtvrze6</task-id>
+> <tool-use-id>toolu_019HEuegS4xNxu1VfRmW2CjR</tool-use-id>
+> <status>stopped</status>
+> <summary>Background shell command didn't finish before the previous session ended</summary>
+> <note>No completion record was found for it in the previous session. It may have been stopped (via the UI, Monitor timeout, or agent teardown — these leave no transcript marker), or it may have been running when the previous Claude Code process exited. Check the output file for partial results before assuming it completed.</note>
+> </task-notification>
+
+**Claude:**
+> _(no text reply)_
+
+### 123. 2026-11-23 13:09
+
+**Robert:**
+> Sure but we also need to do the last first production deployment ticket. Lets not forget that so we can wrap up this session.
+
+**Claude:**
+> The CI fix and doc corrections are written on `feature/ci-on-production`, not yet committed. The diff only touches tooling and docs, so no tests needed rerunning.
+> - **`.github/workflows/ci.yml`:** CI now also runs when `production` is pushed. Render auto-deploys only after a check run finishes on `production`, so each `/release` push should now deploy by itself.
+> - **`docs/deployment.md` and `/release`:** I removed the wrong claim that the deploy "starts at once". `/release` now says the deploy comes about 10 minutes after the push, and to deploy by hand if nothing shows after about 20.
+> - **Deploy ticket:** v0.1.1 is recorded as released. I also ticked three boxes that were done but never marked: R2 proven, the IP-window seeding, and your admin account.
+> - **`docs/learnings.md`:** one new row, "prove the auto-deploy trigger fires".
+> 
+> The CI change takes effect with the next release, which n …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/ci_prod.py` · **Commands run:** 4
+
+### 124. 2026-11-23 13:24
+
+**Robert:**
+> What are the sets for number 2? Ask the GM? Ask the player? Its just me right now.
+
+**Claude:**
+> You play both roles. You need two accounts open in two browser windows at once:
+> 
+> - **GM window:** your normal browser window, logged in as your own account (BobearDM).
+> - **Player window:** a private/incognito window (Ctrl+Shift+N in Chrome or Edge). It keeps a separate login, so both stay signed in side by side.
+> 
+> **Steps**
+> 
+> 1. **Before you start:** in Render, check that **dnd-app-api** shows a recent deploy of `af5b16a`.
+> 2. **Player window:** open https://dnd-app-ginj.onrender.com and register a second account. Use a Gmail "+" address like yourname+player@gmail.com; mail still reaches your normal inbox, but the app treats it as a different user.
+> 3. **GM window:**
+>    - Create a campaign called "Smoke test".
+>    - Go to **Members** and invite the player account by searching its username.
+> 4. **Player window:**
+>    - Refresh. "Smoke test" should now show in your campaign list.
+>    - Open it, cr …
+
+### 125. 2026-11-23 13:26
+
+**Robert:**
+> does the email need to be valid for the player one?
+
+**Claude:**
+> No. The app never sends email, so nothing is ever delivered to that address. It just needs to look like an email address (something@something.com), because sign-up checks the format.
+> 
+> It's still worth using your Gmail "+" address. Once password reset is built (it's on the Not Yet Built list), a made-up address would leave you no way to recover the account.
+
+### 126. 2026-11-23 13:33
+
+**Robert:**
+> Some issues. For my main account i added a new campaing the smoke test one and dont see the test player i made in the list.
+
+**Claude:**
+> That's expected. The **Players** list only shows people already invited to this campaign, and nobody is yet. New accounts don't appear there automatically.
+> 
+> To invite the test player:
+> 1. Click in **Search by username or email…** and type at least 2 letters of the test player's **username**.
+> 2. Pick the player from the dropdown that appears.
+> 3. Click **Add**. The player should then appear under Players with a count of 1.
+> 
+> If typing the username shows no results, tell me exactly what you typed and the account's username. That would be a real bug.
+
+### 127. 2026-11-23 13:34
+
+**Robert:**
+> Maybe we should have an option there as well to see a list of usernames. Not emails as maybe people dont want those floating around. 
+> 
+> Add it as a todo.
+
+**Claude:**
+> I've added it to the to-do list in CLAUDE.md: a username list to choose from when inviting a player, with emails never shown. I put it next to the existing security follow-up about user search exposing emails, so both get fixed together.
+> 
+> The same screen also prints your own email under your name, which is part of that follow-up too.
+> 
+> For now, carry on with the smoke test by typing the test player's username into the invite search.
+
+**Files edited:** `CLAUDE.md` · **Commands run:** 2
+
+### 128. 2026-11-23 13:36
+
+**Robert:**
+> Seems to be working.
+
+**Claude:**
+> Inviting works:
+> - SmokeTestPlayer appears under Players.
+> - The player sees "Smoke test" in their campaign list and lands in it as a Player.
+> - The player's sidebar correctly hides GM-only pages such as Encounters and Settings.
+> 
+> Next steps:
+> 
+> 1. **Player window:** click **Create Character** and make any quick character. Then open it and upload a portrait.
+> 2. **GM window:** go to the campaign's characters page, open that character, and check you see it and its portrait. Write something in **GM Notes** and save.
+> 3. **Player window:** reload the character and check the GM note doesn't appear anywhere.
+> 
+> Steps 7–8 from before come after: the save-and-reload check on an existing character, then the manual redeploy to check the portrait and your map survive it.
+
+### 129. 2026-11-23 13:41
+
+**Robert:**
+> Seems to be working.
+
+**Claude:**
+> That's the core of the test passing:
+> - The player created a character and uploaded a portrait, and the GM sees both.
+> - The character shows as **Hidden** in the GM's list, which is correct because new characters start hidden from the other players.
+> - The player's Notes tab has no GM Notes section at all.
+> 
+> One thing to confirm: in the GM screenshot, **Save** and **Reset** are still lit on GM Notes, which can mean the note wasn't saved yet. Reload the character in the GM window and check "GM Notes." is still there. If it is, the hidden-note check is a real pass. If not, click Save and re-check the player view.
+> 
+> Then the last two steps:
+> 
+> 7. **Save check (GM window):** open one of your existing characters (not SmokeTestFighter), change something small and save. Reload, and check nothing else went missing.
+> 8. **Redeploy check:**
+>    - In Render, open **dnd-app-api** → **Manual Deploy → Deploy l …
+
+### 130. 2026-11-23 13:48
+
+**Robert:**
+> The notes are saved and i dont see the GM notes on the player character account. 
+> 
+> Also to note i cant seem to have two different windows with 2 different accounts. Things get mixed up and the player starts to seem to be in the wrong campaign but can interact with anything. I have to log and relog every time. 
+> 
+> Also thing to note as a ticket for the GM view of all characters on the character card lets have the username of the character for all characters not made by the gm. So made by players. 
+> 
+> Everything seems to be working for saving stuff on another characters. Each one has a different pic …
+
+**Claude:**
+> The hidden-note check passes: the GM note is saved, and the player can't see it anywhere. The save check passes too, and each character keeps its own portrait. I've added both of your requests to the to-do list in CLAUDE.md:
+> - **GM character cards show the owning player's username.**
+> - **Two accounts in one browser:** I logged this as a to-do as well, details below.
+> 
+> **Two accounts in one browser:** this is probably not a permissions leak. The login is stored per browser, and normal windows and tabs share that storage. Logging in as one account in one window quietly replaces the login in every other window. Each window keeps displaying what it had loaded, but anything you click is done as the most recent login. That's why the "player" seemed to be in the wrong campaign, and could still click everything there. The server checks each request against whoever is actually logged in.
+> 
+> - **Was …
+
+**Files edited:** `CLAUDE.md` · **Commands run:** 1
+
+### 131. 2026-11-23 13:58
+
+**Robert:**
+> Redeployed And character info has persisted. 
+> 
+> 
+> One thing to note is i just added a top level location map. I can see it as the DM but not the Player. 
+> We will need to fix that lets add it as a todo.
+
+**Claude:**
+> I've marked the smoke test done on the deploy ticket and listed everything it turned up there.
+> 
+> **One item left on the deploy ticket: GitHub two-factor.**
+> 1. Go to github.com → your avatar (top right) → **Settings** → **Password and authentication**.
+> 2. Check that the **Two-factor authentication** section says it's enabled.
+> 3. If it isn't, set it up. Don't screenshot or paste the QR code or the recovery codes it shows, and keep the recovery codes somewhere safe.
+> 
+> Tell me whether it's on. Then I'll mark T10 and the whole ticket complete, and the session is ready for your `/ship`. That ship includes the CI change so Render deploys on its own next release.
+
+**Files edited:** `CLAUDE.md` · **Commands run:** 4
+
+### 132. 2026-11-23 14:00
+
+**Robert:**
+> I did the two factor before all this it is done
+
+**Claude:**
+> The first production deploy ticket is complete: all 12 items are ticked, and T10 is marked done with your two-factor confirmation. The app is live at v0.1.1, and the remaining security follow-ups are listed under T10 for a later pass.
+> 
+> Ready for your `/ship`. It will land:
+> - the CI change that lets Render deploy by itself after each release;
+> - the corrected deploy docs and `/release` steps;
+> - the completed ticket;
+> - your new to-dos: the username list for invites, the player's name on GM character cards, logins in other tabs, and the player maps view.
+> 
+> After that, a `/release` of v0.1.2 is the real test of the CI fix: Render should deploy on its own with no manual click.
+> 
+> Two reminders, no rush:
+> - **The free database expires around 2026-12-18.** Upgrade it before real players' data matters.
+> - **You can delete `C:\Users\rober\dnd-prod-db.env`** whenever you like. The backup in `C:\Users\ro …
+
+**Commands run:** 2

@@ -134,6 +134,7 @@ Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](
 | **User HTML is never rendered raw.** Session content went straight into `dangerouslySetInnerHTML` for players | guard test (`noUnsanitizedHtml.test.js`), one helper (`src/lib/sanitizeHtml.js`) | Session 2026-11-22 |
 | **A nested endpoint checks the parent belongs to the URL's campaign**, not just that the caller is GM of the URL's campaign — otherwise a GM of B addresses A's children by id | guard test (`test_security_review.py`), one helper per module (`locations/service._get_campaign_location`) | Session 2026-11-22 |
 | **A value a client can write must never reach a destructive call unchecked**: the music URL fields fed `delete_upload` | guard test (`test_security_review.py`), one helper (`file_storage.delete_owned_upload`) | Session 2026-11-22 |
+| **Prove the auto-deploy trigger fires, don't infer it.** Render's "After CI checks pass" waits for a check run to complete on the watched branch; fast-forwarding `production` to a commit `main` had tested started none, so v0.1.1 sat undeployed while the docs said "starts at once" | CI config (`ci.yml` runs on `production`), `/release` step 5 fallback | Session 2026-11-23 |
 | **A visibility filter covers every endpoint that names the hidden thing** — detail, list, *and* the side endpoints (relationships, the calendar's era list) | guard test (`test_security_review.py`) | Session 2026-11-22 |
 
 ## Shared mechanisms and duplication

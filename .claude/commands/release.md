@@ -74,8 +74,9 @@ git ls-remote origin refs/heads/production 'refs/tags/vX.Y.Z^{}'   # both must s
 **Don't `git checkout production`:** the session-log hook keeps `docs/sessions/*` modified, so a checkout aborts
 (v0.1.0 hit this). If the fetch says "non-fast-forward", stop — production diverged (deployment.md › Hotfix/Rollback).
 `.githooks/pre-commit` refuses commits on `production`; a fast-forward creates none, so it does not fire.
-Render auto-deploys `production` once GitHub reports CI passed for that commit — the same commit already passed on
-`main`, so the deploy starts at once. The backend runs `alembic upgrade head` on start.
+The push to `production` starts a CI run (`ci.yml` runs on `main` and `production`); Render auto-deploys when that
+run passes, ~10 minutes later. If no new deploy shows in Render after ~20 minutes, ask Robert for **Manual Deploy →
+Deploy latest commit** on both services (v0.1.1 needed it). The backend runs `alembic upgrade head` on start.
 
 ## Step 6 — Verify the live site from outside
 
