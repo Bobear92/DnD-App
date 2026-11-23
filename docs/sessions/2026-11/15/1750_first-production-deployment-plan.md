@@ -3,14 +3,14 @@ session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
 title: First production deploy, T1–T10 complete
 date: 2026-11-15
 started: 17:50
-branch: feature/ci-on-production
+branch: feature/render-root-dir-docs
 area: tooling
 tags: [docs, build, consolidation, deployment, data-safety, security, migration, seed-data, user-rule, guard-test, tooling]
 issues: [rework]
 summary: Prod deploy done: T1–T9 live (v0.1.0), T10 security fixes as v0.1.1, smoke test passed, CI deploys on production
-turns: 132
+turns: 143
 stepped_in: true
-last_uuid: 50734db7-1710-4447-87d1-27588538dd1d
+last_uuid: 9a7dadd4-ea70-45a3-a857-551c0d66a4ce
 ---
 
 # First production deploy, T1–T10 complete
@@ -189,7 +189,10 @@ last_uuid: 50734db7-1710-4447-87d1-27588538dd1d
   from outside: /docs 200, login 401, CORS, deep link 200; bundle unchanged (no frontend/src change). The first run aborted
   at `git checkout production` (dirty session logs) before pushing anything — `/release` Step 5 now uses
   `git fetch . origin/main:production`. Robert's browser smoke test (save + reload a character, map still shows) pending.
-- **Next `/release` (v0.1.2) must confirm Render auto-deploys** off the new `production` CI run, with no manual click.
+- **Auto-deploy: explained, still to observe.** v0.1.2 (`d34a834`, docs/CI only) deployed nothing because each service's
+  Root Directory (`backend`/`frontend`) was untouched — Render skips silently. Claude first misreported it as fixed, then
+  chased the GitHub app before Robert's settings screenshot showed Root Directory. The next release that changes app
+  code should deploy with no manual click — watch it.
 - Security follow-ups 6–9 + minor (homebrew readable cross-campaign, emails via user search, music Content-Type,
   is_admin as GM, …) listed in the ticket › T10 — fix before inviting people beyond friends.
 - Robert's smoke-test to-dos (CLAUDE.md › Not Yet Built): invite by browsable username list (no emails); GM character
@@ -2649,3 +2652,208 @@ last_uuid: 50734db7-1710-4447-87d1-27588538dd1d
 > - **You can delete `C:\Users\rober\dnd-prod-db.env`** whenever you like. The backup in `C:\Users\ro …
 
 **Commands run:** 2
+
+### 133. 2026-11-23 14:02
+
+**Robert:**
+> /ship
+
+**Claude:**
+> Shipped: `main` is at `d34a834` and pushed, and the feature branch is deleted. This change touched no app code. I ran the CLAUDE.md size test and it passes; the full test suites weren't re-run.
+> 
+> **The first production deploy is finished:**
+> - **Ticket:** all 12 items are complete.
+> - **Live version:** v0.1.1, with the five security fixes.
+> - **Smoke test:** passed as GM and player, including a redeploy.
+> - **Backup:** a database backup was taken.
+> - **Two-factor:** you've confirmed it's on.
+> 
+> **What this ship contains:**
+> - CI now also runs when `production` is pushed, so Render should deploy on its own after a release. It goes live in the next release, v0.1.2, which is the real test: no manual deploy should be needed.
+> - The corrected deploy docs and `/release` steps, and a new learnings row.
+> - The session log.
+> - Your to-dos from the smoke test, added to CLAUDE.md.
+> 
+> **Worth knowing:**
+> - **CLAUD …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/4051bf53-b2cf-4078-9910-980ee08763c7/scratchpad/log_final.py` · **Commands run:** 3
+
+### 134. 2026-11-23 14:04
+
+**Robert:**
+> /release
+
+**Claude:**
+> CI passed for `d34a834`, and everything else is in place:
+> - `main` is pushed.
+> - `production` is directly behind it, so it can move straight forward.
+> - The only local changes are the session-log files.
+> - The live frontend file is currently `index-82I08alL.js`.
+> 
+> **Proposed release: v0.1.2** (a tooling-only release). It covers `v0.1.1..d34a834`, which is 1 commit.
+> 
+> **Behind the scenes**
+> - Pushing a release now starts a CI run on `production`, so Render should deploy by itself. This release is the test of that.
+> - The deploy docs and `/release` steps are corrected, including the manual-deploy fallback.
+> - The first-deploy ticket is closed, and your smoke-test to-dos are recorded.
+> 
+> **Data:** no database changes, no seed scripts, and no app code changed.
+> 
+> Because no app code changed, the live frontend file name will stay the same. To confirm the deploy, check Render for a new deploy of `d34a834` …
+
+**Commands run:** 2
+
+### 135. 2026-11-23 14:23
+
+**Robert:**
+> yes
+
+**Claude:**
+> The CI run on `production` is still going; the earlier run on `main` took about 11 minutes. I'll report when it finishes.
+
+**Commands run:** 3
+
+### 136. 2026-11-23 14:37
+
+**Robert:**
+> <task-notification>
+> <task-id>bugp0rip9</task-id>
+> <tool-use-id>toolu_01XZmnSJVg2dn96T3rtsoB5t</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\4051bf53-b2cf-4078-9910-980ee08763c7\tasks\bugp0rip9.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for the production CI run to finish" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> v0.1.2 is pushed and the CI run on `production` passed at 14:37, but I can't yet confirm the point of this release: that Render deployed it by itself.
+> 
+> - **Tag and branch:** `production` and the tag `v0.1.2` are both at `d34a834`.
+> - **CI on `production`:** the push started a run on `production` this time, which v0.1.1 never got. That's the trigger Render waits for, and the run passed.
+> - **Live checks:** the API answers (docs page 200, bad login 401), the site is allowed to call it, and deep links load. The frontend file is unchanged, `index-82I08alL.js`, which is expected because no app code shipped.
+> 
+> Since no app code changed, I can't tell from outside whether Render redeployed. **Could you check Render?**
+> 1. Open **dnd-app-api** and **dnd-app**, and look at **Events** on each.
+> 2. Each should show a deploy of `d34a834` ("Run CI on production pushes…") that started on its own around 14:3 …
+
+**Commands run:** 1
+
+### 137. 2026-11-23 18:32
+
+**Robert:**
+> yep they both deployed.
+
+**Claude:**
+> v0.1.2 is live, and Render deployed both services by itself. The automatic deploy now works: a `/release` push starts CI on `production`, and when it passes, Render deploys. The manual click is now only a fallback.
+> 
+> I've recorded the confirmation in the session log. It isn't committed; it goes in with the next ship.
+> 
+> **Where things stand:**
+> - **Live version:** v0.1.2 (`d34a834`). The first production deploy is done, all 12 items.
+> - **Next up, when you're ready:**
+>   - the security follow-ups under T10 (fix before inviting people beyond friends);
+>   - your smoke-test to-dos: invite by username list, the player's name on GM character cards, logins in other tabs, the player maps view;
+>   - upgrading the free database before around 2026-12-18.
+> - **CLAUDE.md is nearly full**, so the next batch of to-dos should start a ticket file.
+
+**Commands run:** 1
+
+### 138. 2026-11-23 18:34
+
+**Robert:**
+> Wait no this is still the af5b16a. I need to manually redeploy
+> 
+> No i am deploying the d34a834 one
+
+**Claude:**
+> I was wrong: I took your earlier "yep" as confirming the automatic deploy, and called it fixed when it isn't. Thanks for catching it. I've corrected the session log.
+> 
+> So the CI change made Render receive the trigger it supposedly waits for: the run on `production` started and passed. Render still didn't deploy, so the cause is in Render's settings. Once your manual deploy finishes, could you check these on **each** service (dnd-app-api and dnd-app)?
+> 
+> 1. **Settings → Build & Deploy → Branch:** it should say `production`.
+> 2. **Auto-Deploy:** it should say "After CI Checks Pass". If it says "Off", that alone explains everything.
+> 3. **Build Filters**, on the same page: are any included or ignored paths set? If so, a release that only touches docs or `.github/` would be skipped. That would explain v0.1.2, though not v0.1.1.
+> 4. **Events:** around 14:37, is there any entry for `d34a834`, such a …
+
+**Commands run:** 1
+
+### 139. 2026-11-23 18:36
+
+**Robert:**
+> branch set to production and auto deploy set ot after ci pass 
+> 
+> Nothing under build filters
+
+**Claude:**
+> Your settings are right: branch `production`, Auto-Deploy "After CI Checks Pass", and no build filters. So Render isn't skipping the deploy; most likely it never hears about the push at all. Pushes reach Render through the Render app installed on your GitHub account, and if that app can't see the repository, nothing gets through.
+> 
+> Two quick checks:
+> 1. **Render → dnd-app-api → Events:** is there **any** entry for `d34a834` around 14:37 other than your manual deploy, such as "skipped" or "waiting for checks"? If there's nothing at all, Render never received the push.
+> 2. **GitHub → your avatar → Settings → Applications → Installed GitHub Apps → Render → Configure:** under **Repository access**, is it "All repositories", or "Only select repositories" with **DnD-App** listed? If DnD-App is missing, add it. That would explain why no push has ever deployed on its own.
+> 
+> **If both look fine:** Re …
+
+### 140. 2026-11-23 18:38
+
+**Robert:**
+> No nothing for d34a834 until my manual deploy
+> 
+> d34a834
+
+**Claude:**
+> That settles it: Render received nothing for `d34a834` until your manual deploy, so the push never reached it. It also looks as if every deploy so far was manual or set off by a settings change, which would mean automatic deploys have never worked.
+> 
+> That points at the GitHub connection. Please do check 2:
+> 
+> **GitHub → your avatar → Settings → Applications → Installed GitHub Apps → Render → Configure**
+> - Under **Repository access**: is it "All repositories", or "Only select repositories"? If the latter, is **DnD-App** listed?
+> - Also check whether the page shows a yellow banner asking you to approve updated permissions. If so, approve it.
+> 
+> That page shows no secrets, so a screenshot is fine. If DnD-App is missing, add it and save. We can then test with an empty commit on `main` and a `/release`. If access is already correct, we use the Deploy Hook route from before.
+
+### 141. 2026-11-23 18:39
+
+**Robert:**
+> here
+
+**Claude:**
+> GitHub access is set up correctly: the Render app can see DnD-App. So the app isn't the problem.
+> 
+> My next suspect: the repository is **public**, and Render has two ways to connect one. One goes through your GitHub account, which gets push notifications. The other uses the repo's public web address, which Render can only pull from by hand: **no push notifications, so no automatic deploys**. Your earlier screenshot showed a **"Use My Credentials"** button just above Build Filters. That button usually appears when the service isn't using your GitHub account's connection.
+> 
+> Could you screenshot the **top of the Build & Deploy page** on dnd-app-api? That's the **Repository** row and the **Git Credentials** section with that "Use My Credentials" button. No secrets are shown there.
+> 
+> - If the Repository row shows a plain `https://github.com/Bobear92/DnD-App` link, or Git Credentials names no GitH …
+
+**Commands run:** 1
+
+### 142. 2026-11-23 18:41
+
+**Robert:**
+> where is this? in github?
+
+**Claude:**
+> No, this one is in **Render**, on the same page where you found Build Filters:
+> 
+> 1. Go to dashboard.render.com and click **dnd-app-api**.
+> 2. In the left menu, click **Settings**.
+> 3. Scroll to the **Build & Deploy** section. At the top are the **Repository** row and **Git Credentials**, the one with the "Use My Credentials" button you saw. Build Filters is a little further down.
+> 
+> Screenshot that top part (Repository and Git Credentials) and send it over.
+
+### 143. 2026-11-23 18:45
+
+**Robert:**
+> okay so can we close up this session? Are we done with our first production deployment tickets?
+
+**Claude:**
+> Yes. The first production deployment ticket is finished, all 12 items, and the app is live at v0.1.2.
+> 
+> To close the session, one small thing is left: the Root Directory explanation is written on the branch `feature/render-root-dir-docs` but not yet committed. Run **`/ship`** and it lands on `main`. It's docs only, so no release is needed.
+> 
+> For next time:
+> - **Watch the first app-code release.** It should deploy both services with no manual click. If it doesn't, we set up Deploy Hooks.
+> - **Security follow-ups** are listed under T10 in the ticket. Fix them before inviting anyone beyond friends.
+> - **Your smoke-test to-dos:** an invite list by username with no emails shown, the player's name on GM character cards, logins in other tabs, and the player maps view. CLAUDE.md is nearly full, so start a ticket file for these.
+> - **Upgrade the free database before about 2026-12-18.**
+> - Optionally, de …
