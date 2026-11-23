@@ -3,14 +3,14 @@ session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
 title: First production deploy, T1–T10 complete
 date: 2026-11-15
 started: 17:50
-branch: feature/render-root-dir-docs
+branch: feature/post-deploy-followups
 area: tooling
 tags: [docs, build, consolidation, deployment, data-safety, security, migration, seed-data, user-rule, guard-test, tooling]
 issues: [rework]
 summary: Prod deploy done: T1–T9 live (v0.1.0), T10 security fixes as v0.1.1, smoke test passed, CI deploys on production
-turns: 143
+turns: 145
 stepped_in: true
-last_uuid: 9a7dadd4-ea70-45a3-a857-551c0d66a4ce
+last_uuid: dc9f6213-639e-449a-a3c6-7f980727d28e
 ---
 
 # First production deploy, T1–T10 complete
@@ -185,6 +185,8 @@ last_uuid: 9a7dadd4-ea70-45a3-a857-551c0d66a4ce
 
 ## Open threads
 
+- **All open items below are collected in `docs/tickets/post-deploy-followups.md`** (2026-11-23) — start there;
+  Robert plans to begin with T1, cleaning up CLAUDE.md.
 - **v0.1.0 released** (production + tag at 2ad9779; Render Auto-Deploy "After CI Checks Pass" on both services). Verified
   from outside: /docs 200, login 401, CORS, deep link 200; bundle unchanged (no frontend/src change). The first run aborted
   at `git checkout production` (dirty session logs) before pushing anything — `/release` Step 5 now uses
@@ -2857,3 +2859,35 @@ last_uuid: 9a7dadd4-ea70-45a3-a857-551c0d66a4ce
 > - **Your smoke-test to-dos:** an invite list by username with no emails shown, the player's name on GM character cards, logins in other tabs, and the player maps view. CLAUDE.md is nearly full, so start a ticket file for these.
 > - **Upgrade the free database before about 2026-12-18.**
 > - Optionally, de …
+
+### 144. 2026-11-23 18:46
+
+**Robert:**
+> /ship
+
+**Claude:**
+> Shipped: `main` is at `9f0728c` and pushed, and the feature branch is deleted. Since this was docs only, I didn't run the tests or check the running app.
+> 
+> The session is wrapped up. The first production deploy is complete and the app is live at v0.1.2. Everything for next time is in the session log and the deploy ticket:
+> - **Watch the first app-code release:** it should deploy by itself.
+> - **The T10 security follow-ups.**
+> - **Your smoke-test to-dos.**
+> - **The free database expires around 2026-12-18.**
+
+**Commands run:** 1
+
+### 145. 2026-11-23 18:48
+
+**Robert:**
+> okay lets make sure we have all the todos from this chat. In a new session we will start some of those first probably cleaning up the claude md file.
+
+**Claude:**
+> Every to-do from this session is now in one file, `docs/tickets/post-deploy-followups.md`, in the order you'd tackle them:
+> 
+> | Ticket | What's in it |
+> |---|---|
+> | **T1 — Clean up CLAUDE.md** (first) | It's at about 99.7 KB of its 100 KB cap. Move the long to-do entries into ticket files, possibly move the API endpoint tables to their own doc, and keep the rules. |
+> | **T2 — Security follow-ups** | All 11 remaining review items: homebrew readable from other campaigns, emails in user search and on the Members tab, music upload type, `is_admin` acting as GM, no consent step for invites, hidden location children, another campaign's eras accepted on dates, campaign classes writable by anyone, no rate limit or password minimum, public `/docs`. |
+> | **T3 — Your smoke-test findings** | Invite by username list, owner on GM character cards, logins in other tabs, player maps view and its "Upload one" …
+
+**Files edited:** `docs/tickets/post-deploy-followups.md`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/project_production_deployment.md` · **Commands run:** 4

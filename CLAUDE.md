@@ -1082,8 +1082,7 @@ Only what is genuinely missing or deferred. Descriptions of what IS built live i
 - **Player Locations view should match the GM's** (Robert, 2026-11-20): players get the top-level world-map preview too (respecting visibility). Maps start hidden; players see "Upload one" text.
 - **Items deep dive** (Robert, 2026-11-20): incl. moving the 34 potion-type magic items into Potions (seed change + delete the prod rows).
 - Bug: the Locations "Upload failed" banner stays up after a later upload succeeds.
-- **Security follow-ups** from the T10 review (homebrew readable cross-campaign, emails via user search, …): `docs/tickets/first-production-deploy.md` › T10.
-- Robert, 2026-11-23: **Invite Player browsable username list** (no emails); **GM character cards show the owning player's username**; **a login in another tab should switch this tab** (shared localStorage token; reload on the `storage` event).
+- **Post-deploy follow-ups** — security fixes, Robert's smoke-test to-dos (invite by username, owner on GM cards, cross-tab login), ops: `docs/tickets/post-deploy-followups.md`.
 - **World items for world-building campaigns** (agreed Nov 2026): a lore list of notable items (description, picture, linked NPCs) visible in world-building mode — a new module (encyclopedia items have no image/NPC link). Also: the create-campaign modal doesn't offer `campaign_mode` yet.
 - Encyclopedia browsing UI — Classes, Skills, Spells, Items (Weapons/Armor/Gear/Potions/Magic Items/Food & Drink — system browse + GM override + campaign homebrew + edit), Feats, and **Mechanics** (game-mechanic reference pages — see below) tabs exist; Monsters tab not yet built. Items are not yet integrated into the character sheet (Weapons & Armor tab inventory is the next step)
 - Campaign spell override/homebrew management — built (SpellsTab override button, CampaignSpellsTab, SpellEditPage); admin panels for base compendium not yet built
