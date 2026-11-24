@@ -89,6 +89,7 @@ return [i for i in items if i.is_visible_to_players or member.role == "gm"]
 - `get_current_user` (any authenticated user) vs a GM check vs `require_admin` — verify each GM-only route has one. The GM check is either the `require_campaign_gm` dependency (campaign routes) or a `_require_gm(db, campaign_id, user_id)` call in the module's `service.py` (calendar, encounters, locations, npcs, session_notes, timeline) — a missing `Depends(require_campaign_gm)` on those routes is NOT a finding if the service calls `_require_gm`
 - Player cannot promote themselves to GM by passing `role='gm'` in a request body
 - The `campaign_members` insert/update route must never accept `role` from untrusted input
+- A `campaign_members` player row is created ONLY by the invitee accepting a `campaign_invites` row (`accept_invite`). Flag any new path that inserts a membership without that consent, and any membership check that reads `campaign_invites` as if it granted access
 
 ### 5. JWT / Auth Handling
 - `sub` in the JWT payload must be a user ID string (`str(user.id)`) — never email or username

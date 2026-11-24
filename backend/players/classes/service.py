@@ -58,6 +58,26 @@ def get_class_by_id(db: Session, class_id: int):
     return cls
 
 
+def _require_class_write(db: Session, cls, user_id: int, is_admin: bool) -> None:
+    """System classes: admin only. Campaign classes: that campaign's GM only.
+
+    The old checks only covered the system case, so any logged-in user could edit or delete a campaign's class and its
+    features (security follow-up, post-deploy T2).
+    """
+    if cls.owner_type == OwnerType.system:
+        if not is_admin:
+            raise ForbiddenException("Only administrators can modify system classes")
+        return
+    from gm.campaigns.models import CampaignMember
+    is_gm = db.query(CampaignMember).filter(
+        CampaignMember.campaign_id == cls.owner_id,
+        CampaignMember.user_id == user_id,
+        CampaignMember.role == "gm",
+    ).first()
+    if not is_gm:
+        raise ForbiddenException("Only this campaign's GM can modify its classes")
+
+
 def create_class(db: Session, data: schemas.ClassCreate, user_id: int, is_admin: bool):
     if not is_admin:
         raise ForbiddenException("Only administrators can create system classes")
@@ -87,8 +107,7 @@ def create_class(db: Session, data: schemas.ClassCreate, user_id: int, is_admin:
 def update_class(db: Session, class_id: int, data: schemas.ClassUpdate, user_id: int, is_admin: bool):
     cls = get_class_by_id(db, class_id)
 
-    if cls.owner_type == OwnerType.system and not is_admin:
-        raise ForbiddenException("Only administrators can update system classes")
+    _require_class_write(db, cls, user_id, is_admin)
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -102,8 +121,7 @@ def update_class(db: Session, class_id: int, data: schemas.ClassUpdate, user_id:
 def delete_class(db: Session, class_id: int, user_id: int, is_admin: bool):
     cls = get_class_by_id(db, class_id)
 
-    if cls.owner_type == OwnerType.system and not is_admin:
-        raise ForbiddenException("Only administrators can delete system classes")
+    _require_class_write(db, cls, user_id, is_admin)
 
     db.delete(cls)
     db.commit()
@@ -112,8 +130,7 @@ def delete_class(db: Session, class_id: int, user_id: int, is_admin: bool):
 
 def add_feature(db: Session, class_id: int, data: schemas.ClassFeatureCreate, user_id: int, is_admin: bool):
     cls = get_class_by_id(db, class_id)
-    if cls.owner_type == OwnerType.system and not is_admin:
-        raise ForbiddenException("Only administrators can modify system class features")
+    _require_class_write(db, cls, user_id, is_admin)
 
     feature = models.ClassFeature(
         class_id=class_id,
@@ -133,8 +150,7 @@ def update_feature(db: Session, feature_id: int, data: schemas.ClassFeatureUpdat
         raise NotFoundException(f"Feature with id {feature_id} not found")
 
     cls = get_class_by_id(db, feature.class_id)
-    if cls.owner_type == OwnerType.system and not is_admin:
-        raise ForbiddenException("Only administrators can modify system class features")
+    _require_class_write(db, cls, user_id, is_admin)
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -151,8 +167,7 @@ def delete_feature(db: Session, feature_id: int, user_id: int, is_admin: bool):
         raise NotFoundException(f"Feature with id {feature_id} not found")
 
     cls = get_class_by_id(db, feature.class_id)
-    if cls.owner_type == OwnerType.system and not is_admin:
-        raise ForbiddenException("Only administrators can modify system class features")
+    _require_class_write(db, cls, user_id, is_admin)
 
     db.delete(feature)
     db.commit()

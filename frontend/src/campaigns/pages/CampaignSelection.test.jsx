@@ -7,7 +7,10 @@ vi.mock('react-router-dom', async () => ({
   useNavigate: () => mockNavigate,
 }));
 vi.mock('../campaignService', () => ({
-  default: { getAllCampaigns: vi.fn(), createCampaign: vi.fn() },
+  default: {
+    getAllCampaigns: vi.fn(), createCampaign: vi.fn(),
+    getMyInvites: vi.fn(), acceptInvite: vi.fn(), declineInvite: vi.fn(),
+  },
 }));
 vi.mock('../../auth/AuthContext', () => ({ useAuth: vi.fn() }));
 vi.mock('../CampaignContext', () => ({ useCampaign: vi.fn() }));
@@ -39,6 +42,7 @@ beforeEach(() => {
   mockLogout.mockReset();
   useAuth.mockReturnValue({ user: USER, logout: mockLogout });
   useCampaign.mockReturnValue({ enterCampaign: mockEnterCampaign });
+  campaignService.getMyInvites.mockResolvedValue({ success: true, data: [] });
 });
 
 describe('CampaignSelection — loading', () => {
@@ -171,5 +175,60 @@ describe('CampaignSelection — logout', () => {
     fireEvent.click(screen.getByText('Logout'));
     expect(mockLogout).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/login');
+  });
+});
+
+describe('CampaignSelection — invitations (consent step, post-deploy T2)', () => {
+  const INVITE = {
+    id: 7, campaign_id: 3, created_at: '2026-11-24T00:00:00Z',
+    campaign: { id: 3, name: 'Tomb of Annihilation', description: null },
+    inviter: { id: 99, username: 'dm_dave' }, user: { id: 1, username: 'testgm' },
+  };
+
+  it('shows no invitations section when there are none', async () => {
+    campaignService.getAllCampaigns.mockResolvedValue({ success: true, data: CAMPAIGNS });
+    renderPage();
+    await screen.findByText('Lost Mines');
+    await waitFor(() => expect(campaignService.getMyInvites).toHaveBeenCalled());
+    expect(screen.queryByTestId('pending-invitations')).toBeNull();
+  });
+
+  it('accepting an invite calls acceptInvite and reloads the campaign list', async () => {
+    campaignService.getAllCampaigns.mockResolvedValue({ success: true, data: [] });
+    campaignService.getMyInvites.mockResolvedValue({ success: true, data: [INVITE] });
+    campaignService.acceptInvite.mockResolvedValue({ success: true, data: { id: 3, name: 'Tomb of Annihilation' } });
+    renderPage();
+    expect(await screen.findByText('Tomb of Annihilation')).toBeTruthy();
+    expect(screen.getByText('Invited by dm_dave')).toBeTruthy();
+    campaignService.getAllCampaigns.mockResolvedValue({
+      success: true, data: [{ id: 3, name: 'Tomb of Annihilation', description: '', created_by: 99 }],
+    });
+    fireEvent.click(screen.getByRole('button', { name: /accept invitation to tomb of annihilation/i }));
+    await waitFor(() => expect(campaignService.acceptInvite).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(campaignService.getAllCampaigns).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('pending-invitations')).toBeNull());
+  });
+
+  it('declining an invite calls declineInvite and does not reload campaigns', async () => {
+    campaignService.getAllCampaigns.mockResolvedValue({ success: true, data: [] });
+    campaignService.getMyInvites.mockResolvedValue({ success: true, data: [INVITE] });
+    campaignService.declineInvite.mockResolvedValue({ success: true });
+    renderPage();
+    await screen.findByText('Tomb of Annihilation');
+    fireEvent.click(screen.getByRole('button', { name: /decline invitation/i }));
+    await waitFor(() => expect(campaignService.declineInvite).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(screen.queryByTestId('pending-invitations')).toBeNull());
+    expect(campaignService.getAllCampaigns).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the error and keeps the invite when accepting fails', async () => {
+    campaignService.getAllCampaigns.mockResolvedValue({ success: true, data: [] });
+    campaignService.getMyInvites.mockResolvedValue({ success: true, data: [INVITE] });
+    campaignService.acceptInvite.mockResolvedValue({ success: false, error: 'Invite not found' });
+    renderPage();
+    await screen.findByText('Tomb of Annihilation');
+    fireEvent.click(screen.getByRole('button', { name: /accept invitation/i }));
+    expect(await screen.findByText('Invite not found')).toBeTruthy();
+    expect(screen.getByTestId('pending-invitations')).toBeTruthy();
   });
 });

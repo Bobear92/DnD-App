@@ -1,19 +1,19 @@
 ---
 session_id: 05c19ffe-a208-44cb-8b78-2114ea1032e2
-title: /ship-it rename and T2 security leaks
+title: /ship-it rename and T2 security slices 1-2
 date: 2026-11-23
 started: 23:26
-branch: feature/t2-security-leaks
+branch: feature/t2-authz-invites
 area: backend
-tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia]
+tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule]
 issues: []
-summary: Renamed /ship to /ship-it (built-in clash); T2 slice 1: closed homebrew, email, hidden-location and era leaks
-turns: 6
+summary: /ship → /ship-it; T2 security: data leaks closed, invite+accept consent, admin≠GM, campaign class writes
+turns: 9
 stepped_in: false
-last_uuid: 1a72cded-412a-4f18-a9d2-a8ec2fd386e4
+last_uuid: be427a2d-8e32-4c3a-9faf-51c53a345665
 ---
 
-# /ship-it rename and T2 security leaks
+# /ship-it rename and T2 security slices 1-2
 
 <!-- Claude fills the sections below with /log. area is one of: character-system, campaign-tools, encyclopedia, backend, tooling -->
 
@@ -36,6 +36,19 @@ last_uuid: 1a72cded-412a-4f18-a9d2-a8ec2fd386e4
   - `backend/tests/test_security_leaks.py` (57; 33 fail on the old code). Docs: api.md, backend-tests.md, ticket;
     agent + `/new-backend-module` now say compendium modules go in `COMPENDIUM_ROUTERS`.
   - Verified live: curl (search, `?campaign_id` 403) and Playwright on the Members page (no "@", username-only search).
+  - Shipped as `d2e8762`.
+- **T2 slice 2 (authorization rules)** on `feature/t2-authz-invites`:
+  - Consent step (Robert's call: player must accept): new `campaign_invites` table (migration `b24c002b0ad5`, additive),
+    GM invite/list/cancel + invitee mine/accept/decline routes; direct `POST /{id}/players` removed. `conftest.invite_player`
+    now invites + accepts (mints the player's token) so every existing test kept its meaning.
+  - `is_admin` dropped from every GM decision in `characters/service.py`; `_require_class_write` in classes service
+    (system → admin, campaign → that campaign's GM) for class + feature create/update/delete.
+  - Frontend: the two duplicated invite/member UIs merged into `campaigns/components/MembersPanel.jsx` (pending invites
+    with cancel, Invite button); `PendingInvitations.jsx` on /campaigns (Accept reloads the list / Decline).
+  - Tests: `test_campaign_invites.py` (16; admin/class tests fail on old code), `MembersPanel.test.jsx` (11, incl. a real
+    player view — the old one rendered as GM), `PendingInvitations.test.jsx` (4), selection page invitations (4).
+  - Verified live: invite routes served, old add route 404, Playwright on Members + Settings tab (Invite button, no
+    emails, no page errors). Did not click a real invite→accept (would create dev test users; Robert drives QA).
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -45,6 +58,9 @@ last_uuid: 1a72cded-412a-4f18-a9d2-a8ec2fd386e4
 - T2: the generic row-builder in the new test guessed JSON column shapes wrong twice (list vs object defaults) — test
   data, not product code, but two extra runs. An older `test_search_response_shape` still asserted `email` and only
   surfaced in the 12-minute full run; grepping tests for the field being removed would have caught it up front.
+- Slice 2: a big python-in-bash heredoc failed on quoting ("unexpected EOF"); switched to writing scripts to files with
+  the Write tool (the shell-edits memory already says this — should have started there). The new class-write test
+  fixture needed two NOT NULL columns found by trial; reading the model first would have saved two runs.
 - The Playwright check first clicked the campaign title (not "Enter Campaign"), so the page rendered as a non-GM and
   looked like a role regression; checking created_by vs user id via the API ruled that out.
 
@@ -57,16 +73,22 @@ last_uuid: 1a72cded-412a-4f18-a9d2-a8ec2fd386e4
   worldbuilding. Ticket T5 + memory updated.
 - Compendium list guard attached at include time (one place) instead of per route; detail check is a one-line wrapper
   per route, matching `check_content_ownership`. Non-member gets 403 (the repo's convention), not 404.
-- T2 split into 3 slices: leaks (done), authorization rules, hardening.
+- T2 split into 3 slices: leaks (done), authorization rules (done), hardening.
+- Robert: an invited player must ACCEPT before joining (`user-rule`).
+- Invites in their own table, not a status column on campaign_members: every membership check queries that table, so a
+  status flag would be one missed filter from letting an invitee in.
+- Invitee routes return 404 (not 403) for someone else's invite id; `/invites/...` declared before `/{campaign_id}`.
+- Merged the duplicated members UI before adding invites to it (duplication tripwire), rather than editing both copies.
 
 ## Open threads
 
 - Robert's Windows PATH still has one empty entry (entry 39). It's harmless to the project and only the built-in `/ship` checks it. Cleaning it up is optional.
-- T2 slice 2 needs Robert's call: should an added player have to accept (consent step), or is direct add fine?
-  Also in slice 2: `is_admin` granting GM powers in `characters/service.py`; campaign classes writable by anyone.
 - T2 slice 3: music upload Content-Type, login rate limit + password minimum, public `/docs`.
-- Logged on the ticket (T6): the two duplicated invite UIs (`CampaignMembers.jsx` / `CampaignSettingsPage.jsx`) —
-  extract before T3's username picker; location links shown to players can point at hidden NPCs.
+- Logged on the ticket (T6): location links shown to players can point at hidden NPCs; `CampaignSelection.jsx` still
+  on legacy CSS (migrate to Tailwind).
+- `characters/service.py` functions still take an unused `is_admin` param (kept so callers didn't change) — drop it in
+  a cleanup pass.
+- Production: this needs `/release`; the migration runs on deploy (`start.sh`). Existing players stay members.
 
 ## Turn log
 
@@ -169,3 +191,62 @@ last_uuid: 1a72cded-412a-4f18-a9d2-a8ec2fd386e4
 > - **Emails:** user search now matches usernames only and returns just id and username. Member lists no longer include anyone's em …
 
 **Files edited:** `backend/tests/test_campaigns.py` · **Commands run:** 7
+
+### 7. 2026-11-24 00:14
+
+**Robert:**
+> /ship-it
+
+**Claude:**
+> The security fixes are shipped: `main` is now at **d2e8762** and pushed to GitHub. The feature branch is deleted; it was never pushed, so there was nothing to delete on GitHub.
+> 
+> The commit holds the four leak fixes, the new security tests and the doc updates:
+> - **Campaign homebrew:** only that campaign's members can see it.
+> - **Emails:** gone from user search and member lists.
+> - **Hidden locations:** players can't list their maps, NPCs or links.
+> - **Calendar eras:** dates only accept this campaign's eras.
+> 
+> **Checks before shipping:**
+> - **Tests:** all 3,957 frontend tests pass. The full backend run turned up one old test that still expected search to return an email; I updated it and re-ran that file (42/42).
+> - **Build and feat-coverage check:** both pass.
+> - **Server:** the backend is restarted, and searching ".com" returns nothing, while asking for another campaign's list is refused.
+> - * …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/verify_members.cjs` · **Commands run:** 12
+
+### 8. 2026-11-24 00:18
+
+**Robert:**
+> Lets have the player accept the invite. 
+> 
+> Lets then move to slice 2.
+
+**Claude:**
+> The frontend suite passes: 3,963 tests, including the CLAUDE.md budget test. The backend suite is still running; I'll get a notice when it finishes, then restart the server and check the invite flow live.
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/invites_backend.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/invites_tests_edit.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/classes_edit.py`, `backend/tests/test_campaign_invites.py`, `frontend/src/campaigns/components/MembersPanel.jsx`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/members_pages_edit.py`, `frontend/src/campaigns/components/PendingInvitations.jsx`, `frontend/src/campaigns/components/MembersPanel.test.jsx`, `frontend/src/campaigns/pages/CampaignMembers.test.jsx`, `frontend/src/campaigns/components/PendingInvitations.test.jsx`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/docs_slice2.py` · **Commands run:** 43
+
+### 9. 2026-11-24 00:36
+
+**Robert:**
+> <task-notification>
+> <task-id>bnhew1dmx</task-id>
+> <tool-use-id>toolu_016oAZJeYiaqTu5TzLMp5uon</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\05c19ffe-a208-44cb-8b78-2114ea1032e2\tasks\bnhew1dmx.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend test suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> Slice 2 of T2, the authorization rules, is built and waiting on `feature/t2-authz-invites` for `/ship-it`. All tests pass: 3,963 frontend and 1,151 backend. The backend is restarted on the new code.
+> 
+> **What's fixed:**
+> - **Players have to accept invites.**
+>   - When a GM invites someone, nothing is granted until that player accepts it on their campaign list, under a new **Invitations** section with Accept and Decline.
+>   - Before accepting, they can't see or open anything in the campaign.
+>   - The GM sees **Pending invites** on the Members page and Settings › Members tab, and can withdraw one.
+>   - Nobody else can accept or decline someone's invite, and the old "add player directly" route is gone.
+>   - Invites live in a new `campaign_invites` table, kept separate from campaign membership so they can't accidentally count as membership anywhere in the app. Its migration only adds that table.
+> - * …
+
+**Commands run:** 4

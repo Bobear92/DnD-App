@@ -28,7 +28,9 @@ frontend/src/
 │   └── authService.js
 ├── campaigns/
 │   ├── pages/CampaignSelection.jsx  # List campaigns, create modal, enter → sets CampaignContext ✅
-│   ├── pages/CampaignMembers.jsx    # Member list + invite (search → select → add) + remove; GM-only controls ✅
+│   ├── components/MembersPanel.jsx  # THE member list + pending invites (cancel) + invite search (→ Invite) + remove; GM-only controls; used by CampaignMembers + Settings › Members ✅
+│   ├── components/PendingInvitations.jsx # the current user's invites on /campaigns: Accept (joins, reloads the list) / Decline ✅
+│   ├── pages/CampaignMembers.jsx    # header + member count around MembersPanel ✅
 │   ├── pages/CampaignSettingsPage.jsx # /settings route — General tab (Campaign Mode select `campaign-mode-select`; edition, alignment, ability score method, leveling, currency coin-types, starting equipment, ASI — the rules settings are HIDDEN (never cleared) when the GM's draft mode is world-building; players see a read-only `campaign-mode-readonly` row) + Members tab ✅
 │   ├── pages/CampaignSettingsPage.test.jsx # currency setting (GM sees currency-type-select, player read-only "CP, SP, GP, PP" / "CP, SP, EP, GP, PP") + starting-equipment setting (GM sees starting-equipment-select, player read-only "None") + asi-feat-mode setting (GM sees asi-feat-mode-select, player read-only "Ability score increase or a feat" / "...and a feat") + campaign mode (GM full shows rules sections, world-building hides all six, save sends campaign_mode, player read-only mode + hidden rules rows) (13 tests)
 │   ├── CampaignContext.jsx      # {campaign, enterCampaign, leaveCampaign}; persisted to localStorage
@@ -392,7 +394,7 @@ frontend/src/
 ### Campaign Settings UI — Key Behaviours
 - **Route:** `/campaigns/:campaignId/settings` — wrapped in `<MainLayout>`; GM-only editing controls; accessible to all members (read-only for players); "Campaign Settings" link (Settings icon) in GM section of Sidebar
 - **General tab:** Campaign Identity section (name, description, edition select — 5e/5.5e), Roleplaying Options (alignment toggle — hides alignment from all character forms when off), Ability Score Assignment (method select: Standard Array / Point Buy / Dice Roll; conditional "Allow reroll 1s" toggle appears when Dice Roll chosen), Leveling section (Milestone / Experience XP select + Ability Score Improvements select — `data-testid="asi-feat-mode-select"`: "Ability score increase only" = `asi_only` | "...or a feat" = `asi_or_feat` | "...and a feat" = `asi_and_feat`; drives the LevelUpWizard ASI-level steps), Currency section (coin-types select — "Copper, Silver, Gold, Platinum" = `standard` vs "All five (adds Electrum)" = `full`; `data-testid="currency-type-select"`), Starting Equipment section (`data-testid="starting-equipment-select"` — "Class & background equipment" = `equipment` | "Equipment, or take starting gold" = `equipment_or_gold` | "Nothing (no equipment or gold)" = `none`; drives the CharacterCreate Equipment step); Save/Reset buttons appear per section when dirty; players see read-only view of settings (currency shows "CP, SP, GP, PP" / "CP, SP, EP, GP, PP"; starting equipment shows "Class & background equipment" / "Equipment or starting gold" / "None"; ASI mode shows "Ability score increase or a feat" etc. via `asi-feat-mode-readonly`)
-- **Members tab:** full member management (extracted from old /members page); GM section (crown icon, "You" badge); players list with invite/remove; invite search (≥2 chars, debounced); same `data-testid` attributes as CampaignMembers.jsx
+- **Members tab:** renders the shared `MembersPanel` (same as /members): GM section, players with remove, pending invites with cancel, invite search (≥2 chars). Players join only after accepting on /campaigns
 
 ### Calendar/Timeline Settings UI — Key Behaviours
 - **Route:** `/campaigns/:campaignId/campaign-time` — wrapped in `<MainLayout>` in App.jsx (not internally); GM-only controls; "Campaign Time" link in GM section of Sidebar
@@ -614,9 +616,12 @@ frontend/src/
 ├── campaigns/
 │   └── pages/
 │       ├── CampaignSelection.jsx
-│       ├── CampaignSelection.test.jsx  # load list, empty state, enter (role=gm/player), navigate to dashboard, create modal (submit+close+reload), logout (11 tests)
-│       ├── CampaignMembers.jsx         # Member list (GM + players), invite flow (search → select → add), remove player; GM-only controls ✅
-│       └── CampaignMembers.test.jsx    # load/render, GM badge, empty players, invite panel, search+dropdown, filter existing members, select enables Add, addPlayer+reload, addPlayer error, removePlayer+reload, GM not removable, load error (12 tests)
+│       ├── CampaignSelection.test.jsx  # load list, empty state, enter (role=gm/player), navigate to dashboard, create modal (submit+close+reload), logout, invitations (none hidden, accept → acceptInvite + reload, decline, accept error) (15 tests)
+│       ├── CampaignMembers.jsx         # header + count around MembersPanel ✅
+│       └── CampaignMembers.test.jsx    # renders MembersPanel for the URL campaign, shows the reported member count (2 tests)
+│   └── components/
+│       ├── MembersPanel.test.jsx       # members + onMembersLoaded, pending invites, no emails, search hides members + invitees, Invite → invitePlayer + pending, invite error, cancel invite, remove player, GM not removable, load error, real player view (no invite UI, no getInvites call) (11 tests)
+│       └── PendingInvitations.test.jsx # empty renders nothing, lists campaign + inviter, accept removes one + onAccepted, decline (4 tests)
 ├── characters/
 │   └── pages/
 │       ├── CharacterList.jsx

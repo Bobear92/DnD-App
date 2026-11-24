@@ -95,8 +95,30 @@ class CampaignListItem(BaseModel):
         from_attributes = True
 
 
-class AddPlayerRequest(BaseModel):
+class InvitePlayerRequest(BaseModel):
     user_id: int
+
+
+class InviteCampaignInfo(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CampaignInviteResponse(BaseModel):
+    """A pending invite. The GM's list shows `user`; the invitee's list shows `campaign` + `inviter`."""
+    id: int
+    campaign_id: int
+    user: UserInfo
+    inviter: UserInfo
+    campaign: InviteCampaignInfo
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class RemovePlayerRequest(BaseModel):

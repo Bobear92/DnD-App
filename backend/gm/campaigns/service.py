@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
-from gm.campaigns.models import Campaign, CampaignMember
+from gm.campaigns.models import Campaign, CampaignMember, CampaignInvite
 from gm.campaigns.schemas import CampaignCreate, CampaignUpdate
 from auth.models import User
 
@@ -88,26 +88,89 @@ def delete_campaign(campaign_id: int, db: Session):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
 
     db.query(CampaignMember).filter(CampaignMember.campaign_id == campaign_id).delete()
+    db.query(CampaignInvite).filter(CampaignInvite.campaign_id == campaign_id).delete()
     db.delete(campaign)
     db.commit()
 
-def add_player_to_campaign(campaign_id: int, player_user_id: int, db: Session):
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
-    if not campaign:
+# ── Invites (consent step: a GM invites, the player accepts) ─────────────────
+
+def _get_invite_or_404(db: Session, invite_id: int) -> CampaignInvite:
+    invite = db.query(CampaignInvite).filter(CampaignInvite.id == invite_id).first()
+    if not invite:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found")
+    return invite
+
+
+def invite_player(campaign_id: int, player_user_id: int, gm_user_id: int, db: Session) -> CampaignInvite:
+    if not db.query(Campaign).filter(Campaign.id == campaign_id).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
-
-    user = db.query(User).filter(User.id == player_user_id).first()
-    if not user:
+    if not db.query(User).filter(User.id == player_user_id).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    existing = db.query(CampaignMember).filter(
-        CampaignMember.campaign_id == campaign_id,
-        CampaignMember.user_id == player_user_id
-    ).first()
-    if existing:
+    if db.query(CampaignMember).filter(
+        CampaignMember.campaign_id == campaign_id, CampaignMember.user_id == player_user_id
+    ).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is already a member of this campaign")
+    if db.query(CampaignInvite).filter(
+        CampaignInvite.campaign_id == campaign_id, CampaignInvite.user_id == player_user_id
+    ).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User has already been invited")
+    invite = CampaignInvite(campaign_id=campaign_id, user_id=player_user_id, invited_by=gm_user_id)
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    return invite
 
-    db.add(CampaignMember(campaign_id=campaign_id, user_id=player_user_id, role='player'))
+
+def get_campaign_invites(campaign_id: int, db: Session) -> list[CampaignInvite]:
+    return (
+        db.query(CampaignInvite)
+        .filter(CampaignInvite.campaign_id == campaign_id)
+        .order_by(CampaignInvite.created_at)
+        .all()
+    )
+
+
+def cancel_invite(campaign_id: int, invite_id: int, db: Session) -> None:
+    invite = _get_invite_or_404(db, invite_id)
+    if invite.campaign_id != campaign_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found")
+    db.delete(invite)
+    db.commit()
+
+
+def get_my_invites(user_id: int, db: Session) -> list[CampaignInvite]:
+    return (
+        db.query(CampaignInvite)
+        .filter(CampaignInvite.user_id == user_id)
+        .order_by(CampaignInvite.created_at)
+        .all()
+    )
+
+
+def _get_own_invite(db: Session, invite_id: int, user_id: int) -> CampaignInvite:
+    invite = _get_invite_or_404(db, invite_id)
+    if invite.user_id != user_id:
+        # 404, not 403: another user's invite ids reveal nothing.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found")
+    return invite
+
+
+def accept_invite(invite_id: int, user_id: int, db: Session) -> Campaign:
+    invite = _get_own_invite(db, invite_id, user_id)
+    campaign_id = invite.campaign_id
+    already = db.query(CampaignMember).filter(
+        CampaignMember.campaign_id == campaign_id, CampaignMember.user_id == user_id
+    ).first()
+    if not already:
+        db.add(CampaignMember(campaign_id=campaign_id, user_id=user_id, role='player'))
+    db.delete(invite)
+    db.commit()
+    return db.query(Campaign).filter(Campaign.id == campaign_id).first()
+
+
+def decline_invite(invite_id: int, user_id: int, db: Session) -> None:
+    invite = _get_own_invite(db, invite_id, user_id)
+    db.delete(invite)
     db.commit()
 
 def remove_player_from_campaign(campaign_id: int, player_user_id: int, db: Session):

@@ -218,7 +218,7 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 
 ### Campaigns
 - **Any authenticated user can create a campaign** — they become the GM (`campaign_members` role `'gm'`)
-- **The GM invites players** — no self-service join for players
+- **The GM invites; the player must accept** (`campaign_invites`) — no direct add, no self-service join
 - **Players see ONLY campaigns they are assigned to**
 - **Each campaign has exactly ONE GM** — the user who created it
 - **A user can be GM of multiple campaigns** and/or a player in others simultaneously
@@ -242,11 +242,11 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 
 ---
 
-## Database Schema (44 Tables)
+## Database Schema (45 Tables)
 
 **The full column listing is [docs/schema.md](docs/schema.md); why each column is shaped the way it is goes in
 [docs/schema-notes.md](docs/schema-notes.md).** Read schema.md before touching a model or migration, and update it in
-the same change. Tables by area: core (`users`, `campaigns`, `campaign_members`, `characters` + `character_timeline_events`,
+the same change. Tables by area: core (`users`, `campaigns`, `campaign_members`, `campaign_invites`, `characters` + `character_timeline_events`,
 `character_npcs`); compendium (`races`, `backgrounds`, `feats`, `character_classes`, `class_features`, `spells`,
 `creatures`, the six item tables, `loot_tables`); GM tools (`npcs` + 2 relationship tables, `locations` + maps/pins/links/
 relationships/npcs, the calendar's 5 tables, `timeline_events` + 2 junctions, `session_notes` + 4 junctions, `encounters` +
@@ -287,7 +287,7 @@ The constraints that change how code is written:
 - Structure varies by class — this is intentional and flexible by design
 
 ### Campaign Members
-- `campaign_members` responses include nested user object: `{id, username, email}`
+- `campaign_members` responses include nested user object: `{id, username}` — never an email
 - User info is eagerly loaded with member relationships
 
 ### GM Authorization
@@ -493,7 +493,7 @@ The session fixture does `DROP SCHEMA public CASCADE` + `CREATE SCHEMA public` a
 | `make_user(client, n)` | `(headers, user_id)` | Regular user |
 | `make_admin(client, n)` | `(headers, user_id)` | Admin user (flips `is_admin` in DB) |
 | `make_campaign(client, gm_headers)` | `campaign_id` | Campaign setup |
-| `invite_player(client, gm_headers, campaign_id, player_user_id)` | — | Add player to campaign |
+| `invite_player(client, gm_headers, campaign_id, player_user_id)` | — | Make them a player (invite + accept) |
 | `register(client, ...)` | response | Low-level registration |
 | `auth_headers(client, ...)` | `{"Authorization": ...}` | Low-level auth header |
 

@@ -1,4 +1,4 @@
-# Database schema (44 tables)
+# Database schema (45 tables)
 
 Moved out of CLAUDE.md on 2026-11-23. **This file is the current column listing — update it in the same change as any model/migration.** Why a column is shaped the way it is goes in [schema-notes.md](schema-notes.md).
 
@@ -27,6 +27,10 @@ campaign_members
   id, campaign_id (FK→campaigns), user_id (FK→users),
   role ('gm' or 'player'), joined_at
   UNIQUE(campaign_id, user_id)
+
+campaign_invites                ← a PENDING invite; the user becomes a campaign_members row only when THEY accept
+  id, campaign_id (FK→campaigns, CASCADE), user_id (FK→users, CASCADE), invited_by (FK→users, CASCADE), created_at
+  UNIQUE(campaign_id, user_id)  (migration b24c002b0ad5; separate table so no membership check can let an invitee in)
 
 characters
   id, name, race, char_class, level, background, alignment,

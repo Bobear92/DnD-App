@@ -135,10 +135,17 @@ def make_campaign(client, gm_headers, *, name="Test Campaign"):
 
 
 def invite_player(client, gm_headers, campaign_id, player_user_id):
-    """Add a player to a campaign (GM must call this)."""
+    """Make a user a player of the campaign: the GM invites, then the player accepts (the consent step).
+
+    Signature kept from the old direct-add helper, so the player's own token is minted here from their id.
+    """
+    from shared.security import create_access_token
     resp = client.post(
-        f"/api/gm/campaigns/{campaign_id}/players",
+        f"/api/gm/campaigns/{campaign_id}/invites",
         json={"user_id": player_user_id},
         headers=gm_headers,
     )
     assert resp.status_code == 201, resp.text
+    player_headers = {"Authorization": f"Bearer {create_access_token(data={'sub': str(player_user_id)})}"}
+    accept = client.post(f"/api/gm/campaigns/invites/{resp.json()['id']}/accept", headers=player_headers)
+    assert accept.status_code == 200, accept.text

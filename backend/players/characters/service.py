@@ -35,14 +35,18 @@ def _get_membership(db: Session, campaign_id: int, user_id: int) -> CampaignMemb
 def _resolve_character_and_access(
     db: Session, character_id: int, user_id: int, is_admin: bool
 ) -> tuple[Character, CampaignMember | None, bool, bool]:
-    """Return (character, membership, is_gm, is_owner). Raises 404/403 as needed."""
+    """Return (character, membership, is_gm, is_owner). Raises 404/403 as needed.
+
+    `is_admin` is deliberately NOT part of is_gm: an admin manages the base compendium and is not the GM of a campaign
+    they merely play in (security follow-up, post-deploy T2). The parameter stays only so callers are unchanged.
+    """
     character = db.query(Character).filter(Character.id == character_id).first()
     if not character:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Character not found")
     membership = _get_membership(db, character.campaign_id, user_id)
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this character")
-    is_gm = membership.role == "gm" or is_admin
+    is_gm = membership.role == "gm"
     is_owner = character.user_id == user_id
     return character, membership, is_gm, is_owner
 
@@ -105,7 +109,7 @@ def get_characters_for_user(user_id: int, campaign_id: int, is_admin: bool, db: 
             detail="You are not a member of this campaign"
         )
 
-    is_gm = membership.role == "gm" or is_admin
+    is_gm = membership.role == "gm"
 
     if is_gm:
         return db.query(Character).filter(Character.campaign_id == campaign_id).all()
@@ -129,7 +133,7 @@ def get_character_by_id(character_id: int, user_id: int, is_admin: bool, db: Ses
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this character")
 
-    is_gm = membership.role == "gm" or is_admin
+    is_gm = membership.role == "gm"
     is_owner = character.user_id == user_id
 
     if not (is_gm or is_owner or character.is_visible_to_players):
@@ -147,7 +151,7 @@ def update_character(character_id: int, character_data: CharacterUpdate | Charac
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this character")
 
-    is_gm = membership.role == "gm" or is_admin
+    is_gm = membership.role == "gm"
     is_owner = character.user_id == user_id
 
     if not (is_gm or is_owner):
@@ -202,7 +206,7 @@ def delete_character(character_id: int, user_id: int, is_admin: bool, db: Sessio
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this character")
 
-    is_gm = membership.role == "gm" or is_admin
+    is_gm = membership.role == "gm"
     is_owner = character.user_id == user_id
 
     if not (is_gm or is_owner):
@@ -218,7 +222,7 @@ def toggle_character_visibility(character_id: int, is_visible: bool, user_id: in
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Character not found")
 
     membership = _get_membership(db, character.campaign_id, user_id)
-    is_gm = membership and (membership.role == "gm" or is_admin)
+    is_gm = membership is not None and membership.role == "gm"
 
     if not is_gm:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only GMs can change character visibility")

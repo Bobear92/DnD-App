@@ -111,15 +111,80 @@ const campaignService = {
     }
   },
 
-  // Add a player to a campaign (GM only)
-  addPlayer: async (campaignId, userId) => {
+  // Invite a user to a campaign (GM only). They join only once they accept.
+  invitePlayer: async (campaignId, userId) => {
     try {
-      const response = await api.post(`/${campaignId}/players`, { user_id: userId });
+      const response = await api.post(`/${campaignId}/invites`, { user_id: userId });
       return { success: true, data: response.data };
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to add player',
+        error: error.response?.data?.detail || 'Failed to invite player',
+      };
+    }
+  },
+
+  // Pending invites for a campaign (GM only)
+  getInvites: async (campaignId) => {
+    try {
+      const response = await api.get(`/${campaignId}/invites`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Failed to load invites',
+      };
+    }
+  },
+
+  // Withdraw a pending invite (GM only)
+  cancelInvite: async (campaignId, inviteId) => {
+    try {
+      await api.delete(`/${campaignId}/invites/${inviteId}`);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Failed to cancel invite',
+      };
+    }
+  },
+
+  // The current user's pending invites
+  getMyInvites: async () => {
+    try {
+      const response = await api.get('/invites/mine');
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Failed to load invitations',
+      };
+    }
+  },
+
+  // Accept your own invite — returns the campaign you joined
+  acceptInvite: async (inviteId) => {
+    try {
+      const response = await api.post(`/invites/${inviteId}/accept`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Failed to accept invitation',
+      };
+    }
+  },
+
+  // Decline your own invite
+  declineInvite: async (inviteId) => {
+    try {
+      await api.post(`/invites/${inviteId}/decline`);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Failed to decline invitation',
       };
     }
   },
@@ -137,7 +202,7 @@ const campaignService = {
     }
   },
 
-  // Search users by username or email (for invite flow)
+  // Search users by username (for invite flow) — the API never matches or returns emails
   searchUsers: async (q) => {
     if (!q || q.length < 2) return { success: true, data: [] };
     try {

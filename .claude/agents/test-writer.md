@@ -19,7 +19,7 @@ You are an expert on this D&D app's test suite. You write backend pytest tests a
 make_user(client, n=0)          # → (headers, user_id)  — regular user
 make_admin(client, n=0)         # → (headers, user_id)  — user with is_admin=True
 make_campaign(client, gm_headers)  # → campaign_id
-invite_player(client, gm_headers, campaign_id, player_user_id)  # → None
+invite_player(client, gm_headers, campaign_id, player_user_id)  # → None (GM invites, then the player accepts — the only way to join)
 
 # Low-level
 register(client, email, username, password)  # → response

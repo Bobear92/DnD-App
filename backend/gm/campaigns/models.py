@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Boolean, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from shared.database import Base
@@ -44,3 +44,27 @@ class CampaignMember(Base):
     
     def __repr__(self):
         return f"<CampaignMember(campaign_id={self.campaign_id}, user_id={self.user_id}, role='{self.role}')>"
+
+
+class CampaignInvite(Base):
+    """A pending invitation. The user becomes a CampaignMember only when THEY accept (consent step, post-deploy T2).
+
+    Kept out of campaign_members on purpose: every membership check in the app queries that table, so an invitee
+    living there with a status flag would be one missed filter away from access.
+    """
+    __tablename__ = "campaign_invites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    invited_by = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    campaign = relationship("Campaign")
+    user = relationship("User", foreign_keys=[user_id])
+    inviter = relationship("User", foreign_keys=[invited_by])
+
+    __table_args__ = (UniqueConstraint("campaign_id", "user_id", name="uq_campaign_invite"),)
+
+    def __repr__(self):
+        return f"<CampaignInvite(campaign_id={self.campaign_id}, user_id={self.user_id})>"

@@ -26,10 +26,17 @@ Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs`
 | GET | /api/gm/campaigns/{id} | Yes (member) |
 | PUT | /api/gm/campaigns/{id} | Yes (GM of campaign) |
 | DELETE | /api/gm/campaigns/{id} | Yes (GM of campaign) |
-| POST | /api/gm/campaigns/{id}/players | Yes (GM of campaign) |
+| POST | /api/gm/campaigns/{id}/invites | Yes (GM of campaign) — body `{user_id}`; 400 if already a member or invited |
+| GET | /api/gm/campaigns/{id}/invites | Yes (GM of campaign) — pending invites |
+| DELETE | /api/gm/campaigns/{id}/invites/{invite_id} | Yes (GM of campaign) — withdraw |
+| GET | /api/gm/campaigns/invites/mine | Yes — the caller's pending invites (`campaign`, `inviter`) |
+| POST | /api/gm/campaigns/invites/{invite_id}/accept | Yes (the invitee only; anyone else 404) — joins as player, returns the campaign |
+| POST | /api/gm/campaigns/invites/{invite_id}/decline | Yes (the invitee only; anyone else 404) |
 | DELETE | /api/gm/campaigns/{id}/players/{user_id} | Yes (GM of campaign) |
 
 Campaign creation uses `get_current_user` (any authenticated user). Member management uses `require_campaign_gm`.
+**Players join by invite + accept only** — there is no direct add-player route (removed in post-deploy T2). The
+`/invites/...` routes are declared before `/{campaign_id}` in `routes.py`.
 Campaign PUT accepts all settings fields: `use_alignment`, `ability_score_method`, `allow_reroll_ones`, `leveling_type`, `currency_type`, `starting_equipment`, `asi_feat_mode`, `campaign_mode` (also accepted on POST; unknown value → 422). `currency_type` ("standard" | "full"), `starting_equipment` ("equipment" | "equipment_or_gold" | "none"), and `asi_feat_mode` ("asi_only" | "asi_or_feat" | "asi_and_feat") are in `CampaignResponse` + `CampaignListItem` so they reach the frontend CampaignContext. (Like the other settings, `asi_feat_mode` is set only via PUT — `create_campaign` relies on the column default.)
 
 ## Characters

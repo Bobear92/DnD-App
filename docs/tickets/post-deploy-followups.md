@@ -3,7 +3,7 @@
 **Goal:** everything left open by the first production deploy ([first-production-deploy.md](first-production-deploy.md),
 complete 2026-11-23, live at v0.1.2) in one place, so a new session can pick it up without reading old session logs.
 
-**Status:** T1 done; T2 slice 1 (data leaks) done 2026-11-24. Collected 2026-11-23. Order is a suggestion. CLAUDE.md is now ~53 KB of a 60 KB cap
+**Status:** T1 done; T2 slices 1 (data leaks) and 2 (authorization) done 2026-11-24. Collected 2026-11-23. Order is a suggestion. CLAUDE.md is now ~53 KB of a 60 KB cap
 (`claudeMdBudget.test.js`); doc lines go to the files its Docs index names.
 
 ## T1 — Clean up CLAUDE.md (do first)
@@ -20,11 +20,11 @@ hardening (upload Content-Type, login rate limit/password minimum, /docs).
 - [x] Any user can read any campaign's homebrew (`?campaign_id` / campaign-owned rows on every compendium GET).
 - [x] User search returns emails; 2-character queries can harvest every address. Pairs with T3's username list.
 - [ ] Music uploads keep the client's Content-Type, so the bucket can serve HTML.
-- [ ] `is_admin` grants GM powers in `characters/service.py`.
-- [ ] A GM adds players with no consent step.
+- [x] `is_admin` grants GM powers in `characters/service.py`.
+- [x] A GM adds players with no consent step. (Robert: player must accept — `campaign_invites`, 2026-11-24.)
 - [x] Children of a hidden location (maps / NPCs / links) are listable by id.
 - [x] Era ids from another campaign are accepted on timeline/session dates.
-- [ ] Campaign classes are writable by anyone (latent — no API creates them).
+- [x] Campaign classes are writable by anyone (latent — no API creates them).
 - [ ] No login rate limit or password minimum.
 - [ ] `/docs` is public in production.
 - [x] Every member's email is in `CampaignResponse` (the Members tab shows emails, including the GM's own).
@@ -61,7 +61,8 @@ hardening (upload Content-Type, login rate limit/password minimum, /docs).
 - [ ] R2 backups / versioning for uploads.
 - [ ] Local venv is Python 3.14; production is 3.12.
 - [ ] Optional app-level upload quota.
-- [ ] `CampaignMembers.jsx` and `CampaignSettingsPage.jsx` carry two near-identical invite/member UIs (both had to be
-  edited for the T2 email fix) — extract one shared component before T3's username picker touches them again.
+- [x] The two near-identical invite/member UIs are one `campaigns/components/MembersPanel.jsx` (T2 slice 2).
+- [ ] `CampaignSelection.jsx` still uses the legacy `CampaignSelection.css` — migrate to Tailwind and delete it (the
+  new Invitations block there is already Tailwind).
 - [ ] Location links (`/locations/{id}/links`) return every `content_type`/`content_id` + `notes` to players on a
   visible location, including links to hidden NPCs. Decide whether players should see links at all (security, low).

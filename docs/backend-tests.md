@@ -12,6 +12,10 @@ backend/tests/
                                     #   ".." filenames; R2Storage against a fake S3 client (put key/content-type/cache header, delete reports
                                     #   existence, folder delete paginates and spares "1/20" when deleting "1/2", non-404 errors raised);
                                     #   backend selection (tests on local temp storage, r2 fails fast naming missing creds). Deploy ticket T4
+├── test_campaign_invites.py        # 16 tests: post-deploy T2 slice 2 — invite → accept is the only way in (invitee is not a
+                                    #   member until accepting; decline/cancel; nobody else can accept/decline; no direct add route;
+                                    #   duplicate/member/unknown-user invites refused; campaign delete clears invites); is_admin is not
+                                    #   GM over characters; campaign classes + features writable by that campaign's GM only
 ├── test_security_leaks.py          # 57 tests: post-deploy T2 slice 1 — all 12 compendium modules refuse a non-member the
                                     #   ?campaign_id list and a campaign row's detail (members + system rows still read); no emails in
                                     #   user search or member payloads; players can't list a hidden location's maps/NPCs/relationships/
@@ -41,7 +45,7 @@ backend/tests/
                                     #   origin passes a preflight with credentials; an unlisted origin gets 400 and no allow-origin header;
                                     #   never "*") + TestAllowedOriginsParsing (dev default, comma/space/trailing-slash parsing, read from env,
                                     #   debug defaults off). Deploy ticket T2
-├── test_campaigns.py               # campaign CRUD + member management + TestUserSearch (search by username/email, excludes self, min 2 chars, auth required, response shape) + TestCampaignCurrency (currency_type defaults to "standard", GM can set "full", present in list response) + TestCampaignStartingEquipment (defaults to "equipment", GM can set equipment_or_gold/none, present in list) + TestCampaignAsiFeatMode (defaults to "asi_or_feat", GM can set asi_only/asi_and_feat, present in list) + TestCampaignMode (defaults to "full", create in world-building, toggle back and forth, toggle preserves rules settings, unknown mode → 422, player → 403, present in list)
+├── test_campaigns.py               # campaign CRUD + member management (remove) + TestUserSearch (username only — never matches or returns email, excludes self, min 2 chars, auth required, response shape) + TestCampaignCurrency (currency_type defaults to "standard", GM can set "full", present in list response) + TestCampaignStartingEquipment (defaults to "equipment", GM can set equipment_or_gold/none, present in list) + TestCampaignAsiFeatMode (defaults to "asi_or_feat", GM can set asi_only/asi_and_feat, present in list) + TestCampaignMode (defaults to "full", create in world-building, toggle back and forth, toggle preserves rules settings, unknown mode → 422, player → 403, present in list)
 ├── test_calendar_timeline.py       # calendar (6+2+3+4+8+8), timeline events (13), event links (6), location filter (5) = 57 tests
                                     #   TestCalendarCRUD(6), TestSeasons(2), TestMonths(3), TestMonthOptionalName(4),
                                     #   TestWeekdays(7), TestEras(8), TestTimelineEvents(13, incl. gm_notes), TestEventListFieldRoundTrip(8), TestEventLinks(6), TestLocationFilter(5)

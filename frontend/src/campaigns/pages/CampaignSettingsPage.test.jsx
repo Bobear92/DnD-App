@@ -6,8 +6,10 @@ vi.mock('../campaignService', () => ({
   default: {
     updateCampaign: vi.fn(),
     getCampaignById: vi.fn().mockResolvedValue({ success: true, data: { members: [] } }),
+    getInvites: vi.fn().mockResolvedValue({ success: true, data: [] }),
     searchUsers: vi.fn(),
-    addPlayer: vi.fn(),
+    invitePlayer: vi.fn(),
+    cancelInvite: vi.fn(),
     removePlayer: vi.fn(),
   },
 }));

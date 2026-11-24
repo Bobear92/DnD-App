@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import campaignService from '../campaignService';
 import { useAuth } from '../../auth/AuthContext';
 import { useCampaign } from '../CampaignContext';
+import PendingInvitations from '../components/PendingInvitations';
 import './CampaignSelection.css';
 
 const CampaignSelection = () => {
@@ -121,6 +122,9 @@ const handleEnterCampaign = (campaign) => {
             </button>
           </div>
         )}
+
+        {/* Invites wait here until the player accepts (consent step) */}
+        <PendingInvitations onAccepted={() => loadCampaigns()} />
 
         {/* Campaign List */}
         <div className="campaigns-grid">

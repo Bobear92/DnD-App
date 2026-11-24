@@ -1,4 +1,4 @@
-from tests.conftest import register, auth_headers
+from tests.conftest import register, auth_headers, invite_player
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -71,7 +71,7 @@ class TestListCampaigns:
         h1, _ = make_user(client, 1)
         h2, uid2 = make_user(client, 2)
         campaign_id = create_campaign(client, h1).json()["id"]
-        client.post(f"/api/gm/campaigns/{campaign_id}/players", json={"user_id": uid2}, headers=h1)
+        invite_player(client, h1, campaign_id, uid2)
 
         resp = client.get("/api/gm/campaigns", headers=h2).json()
         assert any(c["id"] == campaign_id for c in resp)
@@ -130,7 +130,7 @@ class TestUpdateCampaign:
         h2, uid2 = make_user(client, 2)
         campaign_id = create_campaign(client, h1).json()["id"]
         # Invite player so they can see the campaign but not edit it
-        client.post(f"/api/gm/campaigns/{campaign_id}/players", json={"user_id": uid2}, headers=h1)
+        invite_player(client, h1, campaign_id, uid2)
         resp = client.put(
             f"/api/gm/campaigns/{campaign_id}",
             json={"name": "Hacked"},
@@ -257,7 +257,7 @@ class TestCampaignMode:
         gm_headers, _ = make_user(client, 1)
         player_headers, player_id = make_user(client, 2)
         campaign_id = create_campaign(client, gm_headers).json()["id"]
-        client.post(f"/api/gm/campaigns/{campaign_id}/players", json={"user_id": player_id}, headers=gm_headers)
+        invite_player(client, gm_headers, campaign_id, player_id)
         resp = client.put(f"/api/gm/campaigns/{campaign_id}", json={"campaign_mode": "worldbuilding"}, headers=player_headers)
         assert resp.status_code == 403
 
@@ -297,48 +297,11 @@ class TestDeleteCampaign:
 # ---------------------------------------------------------------------------
 
 class TestPlayerManagement:
-    def test_gm_can_add_player(self, client):
-        h1, _ = make_user(client, 1)
-        h2, uid2 = make_user(client, 2)
-        campaign_id = create_campaign(client, h1).json()["id"]
-        resp = client.post(
-            f"/api/gm/campaigns/{campaign_id}/players",
-            json={"user_id": uid2},
-            headers=h1,
-        )
-        assert resp.status_code == 201
-
-    def test_non_gm_cannot_add_player(self, client):
-        h1, _ = make_user(client, 1)
-        h2, uid2 = make_user(client, 2)
-        h3, uid3 = make_user(client, 3)
-        campaign_id = create_campaign(client, h1).json()["id"]
-        client.post(f"/api/gm/campaigns/{campaign_id}/players", json={"user_id": uid2}, headers=h1)
-        # Player 2 tries to add player 3
-        resp = client.post(
-            f"/api/gm/campaigns/{campaign_id}/players",
-            json={"user_id": uid3},
-            headers=h2,
-        )
-        assert resp.status_code == 403
-
-    def test_cannot_add_same_player_twice(self, client):
-        h1, _ = make_user(client, 1)
-        h2, uid2 = make_user(client, 2)
-        campaign_id = create_campaign(client, h1).json()["id"]
-        client.post(f"/api/gm/campaigns/{campaign_id}/players", json={"user_id": uid2}, headers=h1)
-        resp = client.post(
-            f"/api/gm/campaigns/{campaign_id}/players",
-            json={"user_id": uid2},
-            headers=h1,
-        )
-        assert resp.status_code == 400
-
     def test_gm_can_remove_player(self, client):
         h1, _ = make_user(client, 1)
         h2, uid2 = make_user(client, 2)
         campaign_id = create_campaign(client, h1).json()["id"]
-        client.post(f"/api/gm/campaigns/{campaign_id}/players", json={"user_id": uid2}, headers=h1)
+        invite_player(client, h1, campaign_id, uid2)
 
         resp = client.delete(f"/api/gm/campaigns/{campaign_id}/players/{uid2}", headers=h1)
         assert resp.status_code == 204
@@ -346,16 +309,6 @@ class TestPlayerManagement:
         # Player no longer sees the campaign
         campaigns = client.get("/api/gm/campaigns", headers=h2).json()
         assert not any(c["id"] == campaign_id for c in campaigns)
-
-    def test_adding_nonexistent_user_gives_404(self, client):
-        headers, _ = make_user(client, 1)
-        campaign_id = create_campaign(client, headers).json()["id"]
-        resp = client.post(
-            f"/api/gm/campaigns/{campaign_id}/players",
-            json={"user_id": 99999},
-            headers=headers,
-        )
-        assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
