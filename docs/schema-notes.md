@@ -1,6 +1,6 @@
 # Schema notes
 
-The full annotated schema as it stood in CLAUDE.md on 2026-11-14: every column **with the reasoning behind it**, the `character_data` key reference, and seeding history. CLAUDE.md keeps a compact column listing; this file is where rationale goes. When a column changes, update the compact listing there and the note here.
+The full annotated schema as it stood in CLAUDE.md on 2026-11-14: every column **with the reasoning behind it**, the `character_data` key reference, and seeding history. The current column listing is [schema.md](schema.md); this file is where rationale goes. When a column changes, update schema.md and the note here.
 
 ## Annotated schema (41 Tables)
 

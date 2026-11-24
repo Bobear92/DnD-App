@@ -2,7 +2,7 @@
 
 How this system works today: the unified Spells tab, subclass spellcasting and subclass-granted spells.
 
-> Moved verbatim out of CLAUDE.md on 2026-11-14 so it loads when needed instead of every turn. **This file is now the home for this material — update it here.** The standing rules that apply across systems stay in CLAUDE.md under "Character sheet rules"; what is still missing is in CLAUDE.md under "Frontend Not Yet Built".
+> Moved verbatim out of CLAUDE.md on 2026-11-14 so it loads when needed instead of every turn. **This file is now the home for this material — update it here.** The standing rules that apply across systems stay in CLAUDE.md under "Character sheet rules"; what is still missing is in [docs/backlog.md](../backlog.md).
 
 - **Unified Spells tab — mechanism built, 1 of 15 sheets converted.** Every caster should render the one shared layout (level strip + per-level Class/Racial/Feats source toggle). A hand-written sheet opts in by delegating its spells section to `CasterSpellBlock` with an entry in `classData/casterDescriptors.js` (presence = the fold switch read by `CharacterDetail.foldSources`). Done: Wizard + Eldritch Knight (config-driven, always used it) and **Cleric 5e**. The other 14 caster sheets still hand-roll their section. **Remaining work is per-class and is meant to be picked up during that class's QA pass — see `docs/tickets/unified-spells-tab.md`** (deferred behind finishing the Fighter subclasses). School-based separation stays EK-only (+ Arcane Trickster when built, which needs Rogue spellcasting first — it does not exist yet).
 

@@ -2,7 +2,7 @@
 
 How this system works today: the rest endpoint, the rest tables, initiative recharges and the Encounters tool.
 
-> Moved verbatim out of CLAUDE.md on 2026-11-14 so it loads when needed instead of every turn. **This file is now the home for this material — update it here.** The standing rules that apply across systems stay in CLAUDE.md under "Character sheet rules"; what is still missing is in CLAUDE.md under "Frontend Not Yet Built".
+> Moved verbatim out of CLAUDE.md on 2026-11-14 so it loads when needed instead of every turn. **This file is now the home for this material — update it here.** The standing rules that apply across systems stay in CLAUDE.md under "Character sheet rules"; what is still missing is in [docs/backlog.md](../backlog.md).
 
 **Endpoint notes (the full `POST /api/characters/campaign/{id}/rest` row):**
 

@@ -128,7 +128,7 @@ cd frontend && npm test -- --run     # featEffects, FeatsSubTab, LevelUpWizard, 
 cd backend && pytest tests/test_races_backgrounds_feats.py -q
 ```
 Restart uvicorn after any `.py` change (model/schema/seed/rest sync). Update the docs: `docs/systems/feat-effects.md`
-(the effects model + consumers), `docs/schema-notes.md` (feat seeding notes + coverage numbers), and in CLAUDE.md only the compact `feats` schema entry if the effect KINDS changed.
+(the effects model + consumers), `docs/schema-notes.md` (feat seeding notes + coverage numbers), and the `feats` entry in `docs/schema.md` if the effect KINDS changed.
 
 ## Arguments
 $ARGUMENTS

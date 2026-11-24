@@ -170,7 +170,7 @@ Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](
 
 | Lesson | Enforced by | Source |
 |---|---|---|
-| **CLAUDE.md is rules and compact reference only**, capped at 100 KB; system descriptions go to `docs/systems/` | guard test (`claudeMdBudget.test.js`), rule, memory `feedback_claude_md_after_tests` | Retro §7c |
+| **CLAUDE.md is rules and compact reference only**, capped at 60 KB (100 KB until the 2026-11-23 trim); system descriptions go to `docs/systems/` | guard test (`claudeMdBudget.test.js`), rule, memory `feedback_claude_md_after_tests` | Retro §7c |
 | Every `docs/systems` file must be listed in CLAUDE.md's Docs index, and **read before touching that area** | guard test (`claudeMdBudget`), rule | Retro §7c |
 | **A proposal that lives only in a retro works only while someone points at it**: write it into a skill | none — this file is the partial fix | Retro §4, §6a |
 | **Move documentation verbatim and verify by script**, rather than rewriting it | none | Retro §7d |

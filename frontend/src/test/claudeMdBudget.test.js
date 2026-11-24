@@ -10,9 +10,13 @@
  *   • every docs/systems file must be listed in the index, so a new system description is not
  *     written and then never read.
  *
- * If the budget fails: move the description you just added into the matching docs/systems file
- * (or docs/frontend-map.md / docs/schema-notes.md / docs/backend-tests.md) and leave one line.
- * Raising the number is the last resort, not the fix.
+ * The 2026-11-23 trim moved the column listing (docs/schema.md), endpoint tables (docs/api.md),
+ * routes table (docs/frontend-map.md) and to-do lists (docs/backlog.md) out too, taking the file
+ * from 99.7 KB to ~53 KB; the budget dropped from 100 KB to 60 KB so it cannot creep back.
+ *
+ * If the budget fails: move what you just added into the doc that owns it (docs/systems/*,
+ * docs/frontend-map.md, docs/schema.md, docs/api.md, docs/backlog.md, docs/backend-tests.md)
+ * and leave one line. Raising the number is the last resort, not the fix.
  */
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
@@ -22,7 +26,7 @@ const REPO = path.resolve(process.cwd(), '..');
 const CLAUDE_MD = path.join(REPO, 'CLAUDE.md');
 const SYSTEMS_DIR = path.join(REPO, 'docs', 'systems');
 
-export const CLAUDE_MD_BUDGET_BYTES = 100_000;
+export const CLAUDE_MD_BUDGET_BYTES = 60_000;
 
 const text = fs.readFileSync(CLAUDE_MD, 'utf-8');
 
@@ -38,8 +42,9 @@ describe('CLAUDE.md budget', () => {
     const bytes = Buffer.byteLength(text, 'utf-8');
     expect(
       bytes,
-      `CLAUDE.md is ${bytes} bytes (budget ${CLAUDE_MD_BUDGET_BYTES}). Move the system description you added into `
-      + 'docs/systems/<system>.md and leave a one-line pointer.',
+      `CLAUDE.md is ${bytes} bytes (budget ${CLAUDE_MD_BUDGET_BYTES}). Move what you added into the doc that owns it `
+      + '(system descriptions → docs/systems/<system>.md, columns → docs/schema.md, endpoints → docs/api.md, '
+      + 'routes/components → docs/frontend-map.md, to-dos → docs/backlog.md) and leave a one-line pointer.',
     ).toBeLessThanOrEqual(CLAUDE_MD_BUDGET_BYTES);
   });
 

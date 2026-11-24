@@ -115,7 +115,7 @@ cd frontend && npm test -- --run
 uvicorn if you touched any `.py` (backend rest sync).
 
 ## Update the docs
-Reflect the migrated/added class in `docs/frontend-map.md` (the `classSheet/` section + test catalog) and, if a class left the hand-written list, the "Frontend Not Yet Built" line in CLAUDE.md. CLAUDE.md is rules + compact reference only and is capped at 100 KB by `src/test/claudeMdBudget.test.js` — see its "Docs index" for which file owns what.
+Reflect the migrated/added class in `docs/frontend-map.md` (the `classSheet/` section + test catalog) and, if a class left the hand-written list, the hand-written-sheets line in `docs/backlog.md`. CLAUDE.md is rules + compact reference only and is capped at 60 KB by `src/test/claudeMdBudget.test.js` — see its "Docs index" for which file owns what.
 
 ## Arguments
 $ARGUMENTS

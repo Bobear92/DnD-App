@@ -250,8 +250,8 @@ rest logic. Re-run `npm run report:class-coverage` to confirm the mechanized cou
 Describe each newly-mechanized subclass feature in the `docs/systems/` file for the mechanism it uses
 (`action-economy.md`, `level-up-and-grants.md`, `active-effects.md`, `sheet-panels.md`, `inventory.md`, or the subclass's own
 section in `fighter-subclasses.md` — add a sibling file + a Docs-index row for another class), and the test catalog +
-counts in `docs/frontend-map.md`. In CLAUDE.md touch only the "Frontend Not Yet Built" list and — if QA produced a rule that
-applies beyond this subclass — "Character sheet rules". CLAUDE.md is rules + compact reference only and is capped at 100 KB by `src/test/claudeMdBudget.test.js` — see its "Docs index" for which file owns what.
+counts in `docs/frontend-map.md`. Update `docs/backlog.md` for what is still missing. In CLAUDE.md touch only — if QA produced a rule that
+applies beyond this subclass — "Character sheet rules". CLAUDE.md is rules + compact reference only and is capped at 60 KB by `src/test/claudeMdBudget.test.js` — see its "Docs index" for which file owns what.
 
 ## Don't
 - Don't build a new per-subclass JSX panel pattern without flagging it — `BattleMasterPanel` is the only

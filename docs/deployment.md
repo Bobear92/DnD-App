@@ -289,6 +289,6 @@ In order of danger for this app:
   which covers a session. When one does expire, the frontend doesn't notice: every request fails with "Could not
   validate credentials" while the player stays on the page, and only a reload sends them to login (losing unsaved
   sheet edits). Real fix: a 401 → re-login flow (one shared axios client would make that one change, not ~15), or refresh tokens.
-- **Open registration.** Anyone with the URL can sign up. Nobody is told when they do, and there is no forgot-password flow (a lost password needs SQL) — planned as "Account emails + password reset" in CLAUDE.md › Not Yet Built.
+- **Open registration.** Anyone with the URL can sign up. Nobody is told when they do, and there is no forgot-password flow (a lost password needs SQL) — planned as "Account emails + password reset" in `docs/tickets/post-deploy-followups.md` › T4.
 - **No error monitoring** (Sentry or similar) and no uptime check.
 - **Free-tier cold starts**: the backend sleeps after ~15 idle minutes, so the first request after a break takes up to a minute (until the Starter upgrade).

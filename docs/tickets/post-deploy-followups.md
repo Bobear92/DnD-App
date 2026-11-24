@@ -3,14 +3,15 @@
 **Goal:** everything left open by the first production deploy ([first-production-deploy.md](first-production-deploy.md),
 complete 2026-11-23, live at v0.1.2) in one place, so a new session can pick it up without reading old session logs.
 
-**Status:** 0 done. Collected 2026-11-23. Order is a suggestion; T1 first because CLAUDE.md is at ~99.9 KB of its
-100 KB cap (`claudeMdBudget.test.js`), so every other ticket's doc line needs room.
+**Status:** 1 done (T1). Collected 2026-11-23. Order is a suggestion. CLAUDE.md is now ~53 KB of a 60 KB cap
+(`claudeMdBudget.test.js`); doc lines go to the files its Docs index names.
 
 ## T1 — Clean up CLAUDE.md (do first)
-- [ ] Trim CLAUDE.md well under the cap. Candidates: the long "Frontend Not Yet Built" / "Elsewhere in the app" entries
-  (move the detail into ticket files like this one and leave one-line pointers), the full API endpoint tables (could
-  move to a `docs/api.md` with a Docs-index row), narrative that already lives in `docs/systems/*`.
-- [ ] Keep the rules (Post-Turn Requirements, Character sheet rules, workflow) — those are why the file loads every turn.
+- [x] Trimmed CLAUDE.md 99.7 KB → ~53 KB (2026-11-23): column listing → `docs/schema.md`, endpoint tables →
+  `docs/api.md` (CLAUDE.md keeps the cross-cutting API conventions), routes table → `docs/frontend-map.md` (already
+  held it), to-do lists → `docs/backlog.md` (items already in this ticket deduped), backend tree compacted, stale
+  `require_gm` references fixed. Budget test lowered to 60 KB; skills/agents/hook prompt repointed.
+- [x] Rules (Post-Turn Requirements, Character sheet rules, workflow) kept.
 
 ## T2 — Security follow-ups (fix before inviting anyone beyond friends)
 From the T10 review (detail: first-production-deploy.md › T10):
@@ -36,8 +37,9 @@ From the T10 review (detail: first-production-deploy.md › T10):
   player sees the GM's empty text "No maps yet. Upload one to get started." (`LocationDetail.jsx`); should be
   "No visible maps."
 
-## T4 — Feature requests already in CLAUDE.md › Not Yet Built
-- [ ] Account emails + password reset (welcome email, admin notified of new accounts, forgot/reset password).
+## T4 — Feature requests (moved here from CLAUDE.md › Not Yet Built)
+- [ ] Account emails + password reset (welcome email, admin notified of new accounts, forgot/reset password). Needs an
+  email provider and a reset-token table; nothing sends email today.
 - [ ] Items deep dive, incl. moving the 34 potion-type magic items into Potions (seed change + delete the prod rows).
 - [ ] Bug: the Locations "Upload failed" banner stays up after a later upload succeeds.
 

@@ -88,15 +88,18 @@ ship on green tests alone.
 
 ## Step 4 — Audit the docs
 
-CLAUDE.md is rules + compact reference only, capped at 100 KB by `src/test/claudeMdBudget.test.js`. Its "Docs index" says which file owns what.
+CLAUDE.md is rules + compact reference only, capped at 60 KB by `src/test/claudeMdBudget.test.js`. Its "Docs index" says which file owns what.
 
 **In CLAUDE.md** (one line each — never narrative):
-- **Database schema**: table count, new tables as compact column listings
-- **Backend structure tree**: new modules/files
-- **API endpoints tables**: new routes
-- **Implemented routes table**: new routes with status
-- **Frontend Not Yet Built**: remove items just completed, add newly deferred items
+- **Database Schema**: table count + area list for a new table; a new code-shaping constraint
+- **API**: a new route prefix or cross-cutting convention
 - **Character sheet rules**: a new standing rule, if QA produced one
+
+**Reference docs** (update in the same change):
+- **`docs/schema.md`**: new/changed columns
+- **`docs/api.md`**: new routes
+- **`docs/frontend-map.md` › Routes**: new routes with status
+- **`docs/backlog.md`**: remove items just completed, add newly deferred items
 
 **Outside CLAUDE.md:**
 - **How a system works** → its `docs/systems/*.md` file (new file ⇒ add a Docs-index row)

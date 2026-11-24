@@ -86,7 +86,7 @@ return [i for i in items if i.is_visible_to_players or member.role == "gm"]
 
 ### 4. Role Escalation / Privilege Confusion
 - `is_admin` must never gate GM actions — only `campaign_members.role='gm'` does
-- `get_current_user` (any authenticated user) vs `require_gm(campaign_id)` (campaign GM only) vs `require_admin` — verify the right dependency is used on each route
+- `get_current_user` (any authenticated user) vs a GM check vs `require_admin` — verify each GM-only route has one. The GM check is either the `require_campaign_gm` dependency (campaign routes) or a `_require_gm(db, campaign_id, user_id)` call in the module's `service.py` (calendar, encounters, locations, npcs, session_notes, timeline) — a missing `Depends(require_campaign_gm)` on those routes is NOT a finding if the service calls `_require_gm`
 - Player cannot promote themselves to GM by passing `role='gm'` in a request body
 - The `campaign_members` insert/update route must never accept `role` from untrusted input
 

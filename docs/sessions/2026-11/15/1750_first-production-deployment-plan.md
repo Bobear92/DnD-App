@@ -3,14 +3,14 @@ session_id: 4051bf53-b2cf-4078-9910-980ee08763c7
 title: First production deploy, T1–T10 complete
 date: 2026-11-15
 started: 17:50
-branch: feature/post-deploy-followups
+branch: main
 area: tooling
 tags: [docs, build, consolidation, deployment, data-safety, security, migration, seed-data, user-rule, guard-test, tooling]
 issues: [rework]
 summary: Prod deploy done: T1–T9 live (v0.1.0), T10 security fixes as v0.1.1, smoke test passed, CI deploys on production
-turns: 145
+turns: 146
 stepped_in: true
-last_uuid: dc9f6213-639e-449a-a3c6-7f980727d28e
+last_uuid: c086236e-d154-4519-b18d-222b5ca31654
 ---
 
 # First production deploy, T1–T10 complete
@@ -2891,3 +2891,15 @@ last_uuid: dc9f6213-639e-449a-a3c6-7f980727d28e
 > | **T3 — Your smoke-test findings** | Invite by username list, owner on GM character cards, logins in other tabs, player maps view and its "Upload one" …
 
 **Files edited:** `docs/tickets/post-deploy-followups.md`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/project_production_deployment.md` · **Commands run:** 4
+
+### 146. 2026-11-23 18:51
+
+**Robert:**
+> /ship
+
+**Claude:**
+> Shipped: `main` is at `073e7fb` and pushed, the feature branch is deleted, and nothing is left uncommitted.
+> 
+> Every to-do from this session is now in `docs/tickets/post-deploy-followups.md`. My memory points there too, so the next session will start with T1, cleaning up CLAUDE.md.
+
+**Commands run:** 1
