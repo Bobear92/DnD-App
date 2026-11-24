@@ -124,7 +124,7 @@ feature/*  ──ff──▶  main (develop)  ──release──▶  production
                                         └─ tag v0.1.0, v0.2.0, … (permanent rollback points)
 ```
 
-- **`main` is the develop line.** Feature branches fast-forward into it via `/ship`, the same as today.
+- **`main` is the develop line.** Feature branches fast-forward into it via `/ship-it`, the same as today.
   Code on `main` has passed tests but is **not** necessarily released.
 - **`production` mirrors prod.** Render deploys from this branch and only this branch. It only ever moves
   by fast-forward to a commit that is already on `main`, or to a tag on rollback. Nobody commits to it directly.
@@ -149,7 +149,7 @@ feature/*  ──ff──▶  main (develop)  ──release──▶  production
 5. Render deploys (`alembic upgrade head` runs at start). Run any seed/backfill scripts from step 2.
 6. Smoke-test: log in, open a campaign, open **and save** an existing character, then reload it and check nothing went missing.
 
-**Run it with `/release`** (`.claude/commands/release.md`), which automates steps 1–6 and asks for an explicit yes before pushing; `/ship` stays the feature-branch → `main` step. `.githooks/pre-commit` refuses a commit on `production`, and Claude's edit guard blocks editing there.
+**Run it with `/release`** (`.claude/commands/release.md`), which automates steps 1–6 and asks for an explicit yes before pushing; `/ship-it` stays the feature-branch → `main` step. `.githooks/pre-commit` refuses a commit on `production`, and Claude's edit guard blocks editing there.
 
 **Render waits for CI.** Both services are set to Auto-Deploy *After CI checks pass*. Render deploys when a check run **completes** on the branch it watches, so CI runs on pushes to `production` as well as `main`: a `/release` push starts a fresh run on the already-tested commit, and the deploy begins when it passes (~10 min). Before this, CI ran on `main` only, a fast-forward of `production` started no run, and Render never deployed — v0.1.1 needed **Manual Deploy → Deploy latest commit** on both services, which is still the fallback if no deploy appears. **Each service also has a Root Directory** (`backend`, `frontend`): a release that changes nothing under it does **not** deploy that service, and Render logs nothing for the skip — v0.1.2 (docs/CI only) deployed neither, correctly.
 

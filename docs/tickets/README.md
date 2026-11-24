@@ -13,5 +13,5 @@ machine worklists — the coverage reports (`npm run report:class-coverage`,
 `report_feat_effects.py`, `docs/spell-upcast-review.md`), `docs/character-system-backlog.md` (the character-system
 epics) and `docs/backlog.md` (the flat list of everything not built yet — delete its line when a ticket ships it).
 
-Updating a ticket's checkbox is part of that ticket's `/ship`. When every box is checked, leave the
+Updating a ticket's checkbox is part of that ticket's `/ship-it`. When every box is checked, leave the
 file as the audit trail.

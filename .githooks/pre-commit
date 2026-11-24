@@ -11,7 +11,7 @@
 # Enable once per clone:
 #     git config core.hooksPath .githooks
 #
-# `git merge --ff-only` does not create a commit, so /ship's and /release's merges are unaffected.
+# `git merge --ff-only` does not create a commit, so /ship-it's and /release's merges are unaffected.
 # Genuine exception (resolving a merge, an emergency fix): git commit --no-verify
 
 branch=$(git branch --show-current)
@@ -21,7 +21,7 @@ if [ "$branch" = "production" ]; then
   echo
   echo "   production is what Render deploys. It only moves by fast-forward to a commit already on main"
   echo "   (/release) or back to a release tag (rollback, docs/deployment.md). Commit on a feature branch,"
-  echo "   /ship it to main, then /release. A hotfix starts as hotfix/<name> from the live tag."
+  echo "   /ship-it to main, then /release. A hotfix starts as hotfix/<name> from the live tag."
   echo
   echo "   Genuinely need this commit on 'production'?  git commit --no-verify"
   exit 1
@@ -36,7 +36,7 @@ if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
   echo "       git checkout -b feature/<short-name>"
   echo "       git commit ..."
   echo
-  echo "   Then /ship (or: git checkout main && git merge --ff-only feature/<short-name>)."
+  echo "   Then /ship-it (or: git checkout main && git merge --ff-only feature/<short-name>)."
   echo
   echo "   Genuinely need this commit on '$branch'?  git commit --no-verify"
   exit 1

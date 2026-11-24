@@ -3,14 +3,14 @@ session_id: 860adc01-2cea-4920-8e2a-a71a61f8a9be
 title: CLAUDE.md trim to 53 KB
 date: 2026-11-23
 started: 18:53
-branch: feature/claude-md-trim
+branch: main
 area: tooling
 tags: [docs, tooling, claude-md, consolidation]
 issues: [rework]
 summary: Post-deploy T1 — CLAUDE.md 99.7→53 KB: schema/api/backlog docs split out, budget cap 100→60 KB, stale refs fixed
-turns: 12
+turns: 14
 stepped_in: true
-last_uuid: ec3b1141-c874-4ae1-87df-45766db805eb
+last_uuid: ee1b3a69-b560-440b-b30d-e4cea1df966d
 ---
 
 # CLAUDE.md trim to 53 KB
@@ -214,3 +214,34 @@ last_uuid: ec3b1141-c874-4ae1-87df-45766db805eb
 > 1. **Ship this branch now:** say "commit and merge" and I'll run your `ship.md` steps by hand. That's commit on `feature/claud …
 
 **Commands run:** 1
+
+### 13. 2026-11-23 23:22
+
+**Robert:**
+> commit and merge
+
+**Claude:**
+> This is shipped. `main` is now at **8dfe1e2**, pushed, and the feature branch is deleted locally. It was never pushed, so there was no remote branch to delete. The working tree is clean.
+> 
+> The commit includes the CLAUDE.md trim, the three new docs, the 60 KB budget test, the updated skills, agents and system docs, and the session log. The log is at `docs/sessions/2026-11/23/1853_claude-md-file-cleanup.md`.
+> 
+> The session log flags one open item: the `/ship` name clash. Claude Code's built-in `/ship` now runs instead of your `.claude/commands/ship.md`, which is why I ran your steps by hand this time. Renaming your command to something like `/ship-it` stops that for good. I can do it as its own small branch, or you can check whether a fresh session picks up your `/ship` again first.
+
+**Commands run:** 4
+
+### 14. 2026-11-23 23:24
+
+**Robert:**
+> Lets open another session and try the ship command. Make sure you have all the context needed in memory for that session.
+
+**Claude:**
+> The next session has what it needs. I saved a new memory note, `project_ship_command_clash.md`, and added a line to the memory index (`MEMORY.md`). The note covers:
+> - **How to tell which `/ship` ran.** Your project's command starts "Complete the post-turn checklist and ship…". The built-in one starts "/ship-local: review only".
+> - **What to say if the built-in runs.** One plain line saying your command was replaced. The PATH message comes second, explained as a side issue.
+> - **What to offer.** Run your ship steps by hand when you say so, or rename the command (for example to `/ship-it`) after asking, with the list of files that mention `/ship`.
+> - **The PATH facts.** One empty entry. `git` and `gh` both resolve to the right programs.
+> 
+> Two things to know for the test:
+> - **There needs to be something to ship.** Everything from this session is already on `main`. Have the new session make a sm …
+
+**Files edited:** `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/project_ship_command_clash.md`, `../../../.claude/projects/c--Users-rober-Documents-Projects-dnd-app/memory/MEMORY.md`

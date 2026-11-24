@@ -87,9 +87,9 @@ When unsure whether a tripwire applies, raise it anyway — a 10-second flag is 
    `git checkout main && git pull --ff-only && git checkout -b feature/<short-name>`
    **This includes QA-only sessions** — a QA pass reliably turns into fixes, and branching after the first finding means the branch point is already contaminated. Branch before the app is even opened. Never accumulate unrelated work on one long-lived branch (a 10-commit / 100-file branch means `main` was stale for too long).
 2. **Develop on the branch** — commit as you go; write tests alongside each change (see Post-Turn Requirements). Commit/push only when the user asks.
-3. **Ship (`/ship`)** — run the full test suite + coverage gates → **verify runtime changes end-to-end** (Step 3c: drive the real app for any product-source change, skip for docs/tests/tooling-only) → audit CLAUDE.md → commit on the feature branch → **fast-forward `main` to the branch (`git merge --ff-only`) and push `main`** → delete the feature branch (local + remote). The `/ship` skill automates this final step (branch-aware).
+3. **Ship (`/ship-it`)** — run the full test suite + coverage gates → **verify runtime changes end-to-end** (Step 3c: drive the real app for any product-source change, skip for docs/tests/tooling-only) → audit CLAUDE.md → commit on the feature branch → **fast-forward `main` to the branch (`git merge --ff-only`) and push `main`** → delete the feature branch (local + remote). The `/ship-it` skill automates this final step (branch-aware). It is not named `/ship`: Claude Code's built-in `/ship` (review-only, no merge) shadows a project command of that name.
 4. **Next feature** starts from a fresh branch off the new `main`.
-5. **Release (`/release`)** — only when Robert asks; needs his explicit yes before pushing. `/ship` never touches `production`.
+5. **Release (`/release`)** — only when Robert asks; needs his explicit yes before pushing. `/ship-it` never touches `production`.
 
 **Migrations must be expand → contract** (add now, drop/rename in a later release); an autogenerate "rename" is a drop + add that deletes data.
 
@@ -97,7 +97,7 @@ Commit messages end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com
 
 **This is enforced, not just documented** (it was skipped once and a whole feature landed as a direct commit on `main`):
 - `.claude/hooks/feature-branch-guard.mjs` — a `PreToolUse(Write|Edit)` hook blocks the FIRST edit of a repo file while `main`/`master`/`production` is checked out, with instructions to branch. Fires once per session, so re-issuing gets through when you genuinely need `main`. **It is a backstop, not the trigger** — it can only fire once an edit is already being attempted, which is too late for step 1 above. Branching is Claude's job at session start; the hook just catches the miss.
-- `.githooks/pre-commit` — the tool-agnostic backstop: refuses a commit on `main` or `production` whatever is driving git (both hooks tested by `src/test/branchGuards.test.js`). **One-time setup per clone: `git config core.hooksPath .githooks`.** `git merge --ff-only` creates no commit, so /ship's merge is unaffected; the escape hatch is `git commit --no-verify`.
+- `.githooks/pre-commit` — the tool-agnostic backstop: refuses a commit on `main` or `production` whatever is driving git (both hooks tested by `src/test/branchGuards.test.js`). **One-time setup per clone: `git config core.hooksPath .githooks`.** `git merge --ff-only` creates no commit, so /ship-it's merge is unaffected; the escape hatch is `git commit --no-verify`.
 
 Uncommitted work carries across `git checkout -b`, so branching late is always safe — nothing already edited is lost.
 
@@ -105,7 +105,7 @@ Uncommitted work carries across `git checkout -b`, so branching late is always s
 
 ## Session Logs
 
-Every Claude Code session has a log in `docs/sessions/YYYY-MM/DD/HHMM_<branch>.md`, indexed in `docs/sessions/INDEX.md` (newest first, plus a tag → sessions index — search by tag there before reading logs). The `session-log` hook creates the file on the session's first real turn (a session never prompted leaves no file; SessionStart deletes any zero-turn log) and appends a Turn log entry after every response — **never edit the Turn log or INDEX.md by hand.** Run **`/log`** before shipping (it is Step 5b of `/ship`) to write the title, area, summary, **where Claude struggled / where Robert stepped in**, decisions and open threads. Do not read old logs unless asked — they are history, not context.
+Every Claude Code session has a log in `docs/sessions/YYYY-MM/DD/HHMM_<branch>.md`, indexed in `docs/sessions/INDEX.md` (newest first, plus a tag → sessions index — search by tag there before reading logs). The `session-log` hook creates the file on the session's first real turn (a session never prompted leaves no file; SessionStart deletes any zero-turn log) and appends a Turn log entry after every response — **never edit the Turn log or INDEX.md by hand.** Run **`/log`** before shipping (it is Step 5b of `/ship-it`) to write the title, area, summary, **where Claude struggled / where Robert stepped in**, decisions and open threads. Do not read old logs unless asked — they are history, not context.
 
 ---
 

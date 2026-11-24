@@ -3,7 +3,7 @@ description: Release main to production — data check, version + notes, fast-fo
 ---
 
 Cut a release: move `production` (what Render deploys) forward to `main`, tag it, and check the live site.
-`/ship` gets work onto `main`; **`/release` is the only way `production` moves forward.** The standing reference
+`/ship-it` gets work onto `main`; **`/release` is the only way `production` moves forward.** The standing reference
 is `docs/deployment.md` › *Branches, releases, rollback* and *The migration rule* — read them if anything here is unclear.
 
 **Never push, tag or touch production data without Robert's explicit "yes" in this conversation (Step 4).**

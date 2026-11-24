@@ -164,7 +164,7 @@ Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](
 | Mocks must match the real contract (the FeatPicker mock once hid a "feats stored with no effects" bug) | none | `FeatsSubTab.test.jsx` header |
 | **Await what the assertion depends on**, not what renders first; `SLOW_MOCKS=1` surfaces it | rule | CLAUDE.md Testing |
 | **Never run two pytest sessions at once** (a collision looks like 427 failures) | rule | CLAUDE.md Testing |
-| **Green tests are not proof it works in the app**: drive the changed flow, or check the real database | skill step (`/ship` Step 3c) | Retro §3, §7d |
+| **Green tests are not proof it works in the app**: drive the changed flow, or check the real database | skill step (`/ship-it` Step 3c) | Retro §3, §7d |
 
 ## Documentation and context
 
@@ -174,7 +174,7 @@ Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](
 | Every `docs/systems` file must be listed in CLAUDE.md's Docs index, and **read before touching that area** | guard test (`claudeMdBudget`), rule | Retro §7c |
 | **A proposal that lives only in a retro works only while someone points at it**: write it into a skill | none — this file is the partial fix | Retro §4, §6a |
 | **Move documentation verbatim and verify by script**, rather than rewriting it | none | Retro §7d |
-| **Log every session with `/log`**, tagged from `TAGS.md`; read logs only when asked | hook (`session-log.mjs`), skill step (`/ship` 5b) | Retro §4 #8 |
+| **Log every session with `/log`**, tagged from `TAGS.md`; read logs only when asked | hook (`session-log.mjs`), skill step (`/ship-it` 5b) | Retro §4 #8 |
 | A retro states its sources and their limits | none | Retro §1–§4 header |
 
 ## Workflow and git
@@ -182,8 +182,8 @@ Agreed before the first deploy. The full reasoning is in [`docs/deployment.md`](
 | Lesson | Enforced by | Source |
 |---|---|---|
 | **Branch at the start of every session that has a subject**, QA sessions included | hook (`feature-branch-guard.mjs`, `.githooks/pre-commit`), memory `feedback_branch_at_session_start` | CLAUDE.md |
-| **Ship only when Robert says `/ship`**; approval does not carry to the next change | memory `feedback_ship_only_on_command` | Polearm Master, 2026-08-14 (recorded in the memory) |
-| Short-lived branches, fast-forward merges only | skill step (`/ship`), memory `feedback_git_workflow` | CLAUDE.md |
+| **Ship only when Robert says `/ship-it`**; approval does not carry to the next change | memory `feedback_ship_only_on_command` | Polearm Master, 2026-08-14 (recorded in the memory) |
+| Short-lived branches, fast-forward merges only | skill step (`/ship-it`), memory `feedback_git_workflow` | CLAUDE.md |
 | **Robert drives QA**: start both servers, report the ports, and wait | memory `feedback_user_drives_qa` | — |
 | **Restart the backend yourself** after any `.py` change; a stale uvicorn serves old code | rule, memory `feedback_restart_backend_server` | CLAUDE.md |
 | **State a plan before touching 3+ files**; use `/grill` before the Nth variant, `/to-tickets` for multi-slice work | rule, hook (`nth-variant-nudge.mjs`) | CLAUDE.md |

@@ -82,7 +82,7 @@ function main() {
     + 'deploys and only moves by /release (fast-forward to main) or rollback.\n\n'
     + '  git checkout main && git pull --ff-only && git checkout -b feature/<short-name>\n\n'
     + 'Any edits you have already made carry across `git checkout -b`, so nothing is lost. '
-    + '/ship will fast-forward main back onto the branch at the end.\n\n'
+    + '/ship-it will fast-forward main back onto the branch at the end.\n\n'
     + 'This fires once per session. If you genuinely need to work on '
     + `'${branch}' (e.g. resolving a merge), just re-issue — it will let you through now.\n`,
   );

@@ -40,11 +40,11 @@ into one ticket where splitting adds no value.
 - **scope** — the files/dirs it touches
 - **guard** — the test written/updated AND whether it moves a coverage ratchet (if so, the ticket
   ends by bumping the baseline: `npm run coverage:baseline` / `report_feat_effects.py --write-baseline`)
-- **done** — the observable done-criteria (what you'd verify per `/ship` Step 3c)
+- **done** — the observable done-criteria (what you'd verify per `/ship-it` Step 3c)
 
 ### 5. Write the file
 `docs/tickets/<slug>.md` (create `docs/tickets/` if absent). Update checkboxes as tickets land —
-committing the status change is part of each ticket's `/ship`. When every box is checked, the file
+committing the status change is part of each ticket's `/ship-it`. When every box is checked, the file
 records the finished feature; leave it as the audit trail.
 
 ## File template
