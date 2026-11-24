@@ -79,6 +79,18 @@ def _get_campaign_map(db: Session, campaign_id: int, location_id: int, map_id: i
     return m
 
 
+def _get_readable_location(db: Session, member: CampaignMember, campaign_id: int, location_id: int) -> Location:
+    """The location, if this member may read it and its children (maps, pins, NPCs, relationships, links).
+
+    A player is refused a hidden location's children exactly as they are refused the location itself — listing them
+    by id used to work (security follow-up, post-deploy T2).
+    """
+    loc = _get_campaign_location(db, campaign_id, location_id)
+    if member.role == "player" and not loc.is_visible_to_players:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This location is not visible to players")
+    return loc
+
+
 def _check_linked_location(db: Session, campaign_id: int, linked_location_id: int | None) -> None:
     """A pin may only link to a location in the same campaign (it can re-parent the linked location)."""
     if linked_location_id is None:
@@ -177,11 +189,7 @@ def get_locations(db: Session, campaign_id: int, user_id: int) -> List[LocationL
 
 def get_location_by_id(db: Session, campaign_id: int, location_id: int, user_id: int) -> Location:
     member = _require_member(db, campaign_id, user_id)
-    loc = _get_location_or_404(db, location_id)
-    if loc.campaign_id != campaign_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
-    if member.role == "player" and not loc.is_visible_to_players:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This location is not visible to players")
+    loc = _get_readable_location(db, member, campaign_id, location_id)
     if member.role == "player":
         loc.gm_notes = None
     return loc
@@ -264,9 +272,7 @@ def toggle_location_visibility(db: Session, campaign_id: int, location_id: int, 
 
 def get_location_npcs(db: Session, campaign_id: int, location_id: int, user_id: int) -> List[LocationNPCResponse]:
     member = _require_member(db, campaign_id, user_id)
-    loc = _get_location_or_404(db, location_id)
-    if loc.campaign_id != campaign_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
+    _get_readable_location(db, member, campaign_id, location_id)
 
     # Manually linked NPCs (location_npcs junction)
     linked_query = (
@@ -359,12 +365,22 @@ def add_relationship(
 
 
 def get_relationships(db: Session, campaign_id: int, location_id: int, user_id: int) -> List[LocationRelationship]:
-    _require_member(db, campaign_id, user_id)
-    _get_campaign_location(db, campaign_id, location_id)
-    return db.query(LocationRelationship).filter(
+    member = _require_member(db, campaign_id, user_id)
+    _get_readable_location(db, member, campaign_id, location_id)
+    rels = db.query(LocationRelationship).filter(
         (LocationRelationship.location_a_id == location_id) |
         (LocationRelationship.location_b_id == location_id)
     ).all()
+    if member.role == "player":
+        # Drop relationships whose other side is hidden — the id alone tells a player a hidden place exists.
+        other_ids = {r.location_b_id if r.location_a_id == location_id else r.location_a_id for r in rels}
+        visible = {
+            lid for (lid,) in db.query(Location.id).filter(
+                Location.id.in_(other_ids), Location.is_visible_to_players == True
+            )
+        }
+        rels = [r for r in rels if (r.location_b_id if r.location_a_id == location_id else r.location_a_id) in visible]
+    return rels
 
 
 def delete_relationship(db: Session, campaign_id: int, location_id: int, rel_id: int, user_id: int) -> dict:
@@ -398,9 +414,7 @@ async def upload_map(
 
 def get_maps(db: Session, campaign_id: int, location_id: int, user_id: int) -> List[LocationMap]:
     member = _require_member(db, campaign_id, user_id)
-    loc = _get_location_or_404(db, location_id)
-    if loc.campaign_id != campaign_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
+    _get_readable_location(db, member, campaign_id, location_id)
     query = db.query(LocationMap).filter(LocationMap.location_id == location_id)
     if member.role == "player":
         query = query.filter(LocationMap.is_visible_to_players == True)
@@ -452,7 +466,10 @@ def create_pin(db: Session, campaign_id: int, location_id: int, map_id: int, dat
 
 def get_pins(db: Session, campaign_id: int, location_id: int, map_id: int, user_id: int) -> List[MapPin]:
     member = _require_member(db, campaign_id, user_id)
+    _get_readable_location(db, member, campaign_id, location_id)
     m = _get_campaign_map(db, campaign_id, location_id, map_id)
+    if member.role == "player" and not m.is_visible_to_players:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This map is not visible to players")
     query = db.query(MapPin).filter(MapPin.map_id == map_id)
     if member.role == "player":
         query = query.filter(MapPin.is_visible_to_players == True)
@@ -507,10 +524,8 @@ def create_link(
 
 
 def get_links(db: Session, campaign_id: int, location_id: int, user_id: int) -> List[LocationLink]:
-    _require_member(db, campaign_id, user_id)
-    loc = _get_location_or_404(db, location_id)
-    if loc.campaign_id != campaign_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Location {location_id} not found")
+    member = _require_member(db, campaign_id, user_id)
+    _get_readable_location(db, member, campaign_id, location_id)
     return db.query(LocationLink).filter(LocationLink.location_id == location_id).all()
 
 

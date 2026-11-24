@@ -252,7 +252,7 @@ op.execute("""
 
 ## After Creating Files
 Always:
-1. Register the router in `backend/main.py`
+1. Register the router in `backend/main.py` — **an `owner_type` (compendium) module goes in `COMPENDIUM_ROUTERS` instead** (members-only `?campaign_id`), wraps its get-by-id in `check_content_read(row, current_user, db)`, and gets a row in `tests/test_security_leaks.py › COMPENDIUM`
 2. `migrations/env.py` imports `main`, so registering the router in step 1 is what makes autogenerate see the new models (an explicit model import there is harmless but no longer required)
 3. Run `alembic revision --autogenerate -m "add <table>"` then `alembic upgrade head`. **Alembic owns the schema** — `main.py` no longer runs `create_all`, so a model without a migration has NO table in dev or production, and CI's `alembic check` fails the build
    - **Open the generated file and confirm it is not empty.** If the dev DB already has the table (e.g. created by hand, or by an old `create_all`), autogenerate sees no diff and writes a `pass` body — the table then exists nowhere in the chain and a fresh database fails at the next migration that references it. This happened for real: `c54f8b027131` shipped empty and broke every from-scratch build.

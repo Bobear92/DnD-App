@@ -29,9 +29,9 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 class UserSearchResult(BaseModel):
+    # No email: any logged-in user can search, so an email here let a short query harvest every address.
     id: int
     username: str
-    email: str
 
     class Config:
         from_attributes = True

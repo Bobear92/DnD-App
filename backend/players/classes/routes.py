@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from . import service, schemas
 from shared.database import get_db
-from shared.dependencies import get_current_user
+from shared.dependencies import get_current_user, check_content_read
 from auth.models import User
 
 router = APIRouter(prefix="/api/classes", tags=["Classes"])
@@ -27,7 +27,7 @@ def get_class(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return service.get_class_by_id(db, class_id)
+    return check_content_read(service.get_class_by_id(db, class_id), current_user, db)
 
 
 @router.post("", response_model=schemas.ClassResponse, status_code=status.HTTP_201_CREATED)

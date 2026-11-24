@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from shared.database import get_db
-from shared.dependencies import get_current_user, check_content_ownership
+from shared.dependencies import get_current_user, check_content_ownership, check_content_read
 from auth.models import User
 from .schemas import FoodDrinkCreate, FoodDrinkUpdate, FoodDrinkResponse
 from . import service
@@ -37,7 +37,7 @@ def get_food_drink(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return service.get_food_drink_by_id(db, food_drink_id)
+    return check_content_read(service.get_food_drink_by_id(db, food_drink_id), current_user, db)
 
 
 @router.put("/{food_drink_id}", response_model=FoodDrinkResponse)

@@ -4,13 +4,19 @@ Moved out of CLAUDE.md on 2026-11-23. **Update the matching table in the same ch
 
 Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs`
 
+**Compendium reads are member-scoped** (races, backgrounds, feats, classes, bestiary, spells, the six item types): a
+`?campaign_id=N` list returns 403 unless you are a member of N (`require_campaign_query_member`, attached once to
+`COMPENDIUM_ROUTERS` in `main.py`), and a get-by-id of a campaign-owned row returns 403 to non-members
+(`check_content_read` in each detail route). System rows stay readable by any logged-in user. Campaign member payloads
+(`UserInfo`) carry `{id, username}`, no email.
+
 ## Auth
 | Method | Endpoint | Auth Required |
 |--------|----------|---------------|
 | POST | /api/auth/register | No |
 | POST | /api/auth/login | No |
 | GET | /api/auth/me | Yes |
-| GET | /api/auth/users/search?q=X | Yes — returns up to 10 users matching username or email (min 2 chars); excludes requester; used in GM invite flow |
+| GET | /api/auth/users/search?q=X | Yes — returns up to 10 `{id, username}` matching the **username only** (min 2 chars; never matches or returns emails); excludes requester; used in GM invite flow |
 
 ## Campaigns
 | Method | Endpoint | Auth Required |

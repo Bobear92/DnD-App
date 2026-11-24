@@ -183,8 +183,8 @@ def get_event(db: Session, campaign_id: int, event_id: int, user_id: int) -> Tim
 def create_event(db: Session, campaign_id: int, data: EventCreate, user_id: int) -> TimelineEvent:
     _require_gm(db, campaign_id, user_id)
 
-    absolute_year = _resolve_absolute_year(db, data.era_id, data.year)
-    end_absolute_year = _resolve_absolute_year(db, data.end_era_id, data.end_year)
+    absolute_year = _resolve_absolute_year(db, campaign_id, data.era_id, data.year)
+    end_absolute_year = _resolve_absolute_year(db, campaign_id, data.end_era_id, data.end_year)
 
     event = TimelineEvent(
         campaign_id=campaign_id,
@@ -217,8 +217,8 @@ def update_event(db: Session, campaign_id: int, event_id: int, data: EventUpdate
         setattr(event, field, value)
 
     # Recompute both absolute years in case era or year fields changed
-    event.absolute_year = _resolve_absolute_year(db, event.era_id, event.year)
-    event.end_absolute_year = _resolve_absolute_year(db, event.end_era_id, event.end_year)
+    event.absolute_year = _resolve_absolute_year(db, campaign_id, event.era_id, event.year)
+    event.end_absolute_year = _resolve_absolute_year(db, campaign_id, event.end_era_id, event.end_year)
 
     db.commit()
     db.refresh(event)
@@ -367,13 +367,24 @@ def list_location_links(
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
-def _resolve_absolute_year(db: Session, era_id: Optional[int], year: Optional[int]) -> Optional[int]:
-    """Compute absolute_year from era + year. Returns None if either is absent."""
-    if era_id is None or year is None:
+def _resolve_absolute_year(db: Session, campaign_id: int, era_id: Optional[int], year: Optional[int]) -> Optional[int]:
+    """Compute absolute_year from era + year (None if either is absent).
+
+    Any era id given must belong to THIS campaign's calendar, even when no year is set — an id from another campaign
+    used to be accepted and stored (security follow-up, post-deploy T2).
+    """
+    if era_id is None:
         return None
-    era = db.query(CalendarEra).filter(CalendarEra.id == era_id).first()
+    era = (
+        db.query(CalendarEra)
+        .join(CampaignCalendar, CalendarEra.calendar_id == CampaignCalendar.id)
+        .filter(CalendarEra.id == era_id, CampaignCalendar.campaign_id == campaign_id)
+        .first()
+    )
     if not era:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Era not found")
+    if year is None:
+        return None
     return era_to_absolute(era, year)
 
 

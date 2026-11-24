@@ -4,7 +4,7 @@ from typing import List
 
 from . import service, schemas
 from shared.database import get_db
-from shared.dependencies import get_current_user
+from shared.dependencies import get_current_user, check_content_read
 from auth.models import User
 
 router = APIRouter(prefix="/feats", tags=["Feats"])
@@ -32,7 +32,7 @@ def get_feat(
     current_user: User = Depends(get_current_user)
 ):
     """Get specific feat by ID."""
-    feat = service.get_feat_by_id(db, feat_id)
+    feat = check_content_read(service.get_feat_by_id(db, feat_id), current_user, db)
     return feat
 
 @router.post("", response_model=schemas.FeatResponse, status_code=status.HTTP_201_CREATED)

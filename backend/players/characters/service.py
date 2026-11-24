@@ -332,7 +332,7 @@ def create_character_timeline_event(
     if not (is_gm or is_owner):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the character owner or GM can add timeline events")
 
-    absolute_year = _resolve_absolute_year(db, data.era_id, data.year) if data.era_id and data.year is not None else None
+    absolute_year = _resolve_absolute_year(db, character.campaign_id, data.era_id, data.year)
 
     event = TimelineEvent(
         campaign_id=character.campaign_id,

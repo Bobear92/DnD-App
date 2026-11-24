@@ -1,8 +1,9 @@
 import os
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from config import settings
+from shared.dependencies import require_campaign_query_member
 from shared.file_storage import LocalStorage, get_storage
 from auth.routes import router as auth_router
 from gm import campaigns_router, npcs_router, loot_tables_router, locations_router, calendar_router, timeline_router, session_notes_router, encounters_router
@@ -43,10 +44,6 @@ if isinstance(_storage, LocalStorage):
 app.include_router(auth_router)
 app.include_router(campaigns_router)
 app.include_router(characters_router)
-app.include_router(races_router)
-app.include_router(backgrounds_router)
-app.include_router(feats_router)
-app.include_router(classes_router)
 app.include_router(npcs_router)
 app.include_router(loot_tables_router)
 app.include_router(locations_router)
@@ -54,14 +51,16 @@ app.include_router(calendar_router)
 app.include_router(timeline_router)
 app.include_router(session_notes_router)
 app.include_router(encounters_router)
-app.include_router(bestiary_router)
-app.include_router(spells_router)
-app.include_router(armor_router)
-app.include_router(weapons_router)
-app.include_router(adventuring_gear_router)
-app.include_router(potions_router)
-app.include_router(food_drink_router)
-app.include_router(magic_items_router)
+
+# Compendium routers: `?campaign_id=N` merges campaign N's homebrew into a list, so only N's members may pass it.
+# (Detail routes check the row's owner with check_content_read.) Tested in tests/test_security_leaks.py.
+COMPENDIUM_ROUTERS = [
+    races_router, backgrounds_router, feats_router, classes_router,
+    bestiary_router, spells_router, armor_router, weapons_router,
+    adventuring_gear_router, potions_router, food_drink_router, magic_items_router,
+]
+for _router in COMPENDIUM_ROUTERS:
+    app.include_router(_router, dependencies=[Depends(require_campaign_query_member)])
 
 @app.get("/")
 def read_root():

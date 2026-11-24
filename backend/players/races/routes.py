@@ -4,7 +4,7 @@ from typing import List
 
 from . import service, schemas
 from shared.database import get_db
-from shared.dependencies import get_current_user
+from shared.dependencies import get_current_user, check_content_read
 from auth.models import User
 
 router = APIRouter(prefix="/races", tags=["Races"])
@@ -30,7 +30,7 @@ def get_race(
     current_user: User = Depends(get_current_user)
 ):
     """Get specific race by ID."""
-    race = service.get_race_by_id(db, race_id)
+    race = check_content_read(service.get_race_by_id(db, race_id), current_user, db)
     return race
 
 @router.post("", response_model=schemas.RaceResponse, status_code=status.HTTP_201_CREATED)

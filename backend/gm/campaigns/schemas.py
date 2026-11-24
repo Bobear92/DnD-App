@@ -34,9 +34,9 @@ class CampaignUpdate(BaseModel):
 
 
 class UserInfo(BaseModel):
+    # No email: every campaign member receives every other member's UserInfo.
     id: int
     username: str
-    email: str
 
     class Config:
         from_attributes = True

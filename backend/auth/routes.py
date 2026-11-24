@@ -32,11 +32,11 @@ def search_users(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Search users by username or email (for GM invite flow)"""
+    """Search users by username (GM invite flow). Never matches or returns emails."""
     return (
         db.query(User)
         .filter(
-            (User.username.ilike(f"%{q}%")) | (User.email.ilike(f"%{q}%")),
+            User.username.ilike(f"%{q}%"),
             User.id != current_user.id,
         )
         .limit(10)

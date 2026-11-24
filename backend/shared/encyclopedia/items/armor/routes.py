@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from shared.database import get_db
-from shared.dependencies import get_current_user, check_content_ownership
+from shared.dependencies import get_current_user, check_content_ownership, check_content_read
 from auth.models import User
 from .schemas import ArmorCreate, ArmorUpdate, ArmorResponse
 from . import service
@@ -36,7 +36,7 @@ def get_armor(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return service.get_armor_by_id(db, armor_id)
+    return check_content_read(service.get_armor_by_id(db, armor_id), current_user, db)
 
 
 @router.put("/{armor_id}", response_model=ArmorResponse)

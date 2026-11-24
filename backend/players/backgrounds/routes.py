@@ -4,7 +4,7 @@ from typing import List
 
 from . import service, schemas
 from shared.database import get_db
-from shared.dependencies import get_current_user
+from shared.dependencies import get_current_user, check_content_read
 from auth.models import User
 
 router = APIRouter(prefix="/backgrounds", tags=["Backgrounds"])
@@ -30,7 +30,7 @@ def get_background(
     current_user: User = Depends(get_current_user)
 ):
     """Get specific background by ID."""
-    background = service.get_background_by_id(db, background_id)
+    background = check_content_read(service.get_background_by_id(db, background_id), current_user, db)
     return background
 
 @router.post("", response_model=schemas.BackgroundResponse, status_code=status.HTTP_201_CREATED)

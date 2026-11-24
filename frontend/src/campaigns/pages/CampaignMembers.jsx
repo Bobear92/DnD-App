@@ -202,7 +202,7 @@ export default function CampaignMembers() {
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
                       <Input
                         data-testid="invite-search"
-                        placeholder="Search by username or email…"
+                        placeholder="Search by username…"
                         value={query}
                         onChange={e => {
                           setQuery(e.target.value);
@@ -240,7 +240,6 @@ export default function CampaignMembers() {
                             onClick={() => handleSelectUser(u)}
                           >
                             <span className="font-medium">{u.username}</span>
-                            <span className="text-muted-foreground text-xs">{u.email}</span>
                           </button>
                         ))
                       )}
@@ -250,7 +249,7 @@ export default function CampaignMembers() {
 
                 {selectedUser && (
                   <p className="text-xs text-muted-foreground">
-                    Ready to invite <span className="font-medium text-foreground">{selectedUser.username}</span> ({selectedUser.email})
+                    Ready to invite <span className="font-medium text-foreground">{selectedUser.username}</span>
                   </p>
                 )}
 
@@ -281,7 +280,6 @@ function MemberRow({ member, isCurrentUser, isGm, onRemove, removing }) {
             <Badge variant="outline" className="text-xs">You</Badge>
           )}
         </div>
-        <p className="text-xs text-muted-foreground truncate">{member.user?.email}</p>
       </div>
       <div className="text-xs text-muted-foreground hidden sm:block">
         Joined {new Date(member.joined_at).toLocaleDateString()}

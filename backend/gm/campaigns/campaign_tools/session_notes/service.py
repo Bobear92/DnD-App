@@ -167,7 +167,7 @@ def get_session(db: Session, campaign_id: int, session_id: int, user_id: int) ->
 
 def create_session(db: Session, campaign_id: int, data: SessionNoteCreate, user_id: int) -> SessionNote:
     _require_gm(db, campaign_id, user_id)
-    absolute_year = _resolve_absolute_year(db, data.era_id, data.year)
+    absolute_year = _resolve_absolute_year(db, campaign_id, data.era_id, data.year)
     session = SessionNote(
         campaign_id=campaign_id,
         session_number=data.session_number,
@@ -201,7 +201,7 @@ def update_session(db: Session, campaign_id: int, session_id: int, data: Session
     for field, value in update_data.items():
         setattr(session, field, value)
 
-    session.absolute_year = _resolve_absolute_year(db, session.era_id, session.year)
+    session.absolute_year = _resolve_absolute_year(db, campaign_id, session.era_id, session.year)
 
     db.commit()
     db.refresh(session)

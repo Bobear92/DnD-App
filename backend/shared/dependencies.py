@@ -1,4 +1,6 @@
-from fastapi import Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from shared.database import get_db
@@ -95,3 +97,39 @@ def require_campaign_gm(
             detail="GM access required for this campaign"
         )
     return current_user
+
+# ── Reading campaign-owned compendium content ─────────────────────────────────
+# Campaign homebrew/overrides are visible to that campaign's members only (security review, deploy T10 follow-up).
+# The list check is attached once, at include time in main.py (COMPENDIUM_ROUTERS); every get-by-id route wraps its row
+# in check_content_read. backend/tests/test_security_leaks.py covers all of them.
+
+def _is_campaign_member(db: Session, campaign_id: int, user_id: int) -> bool:
+    from gm.campaigns.models import CampaignMember
+    return db.query(CampaignMember).filter(
+        CampaignMember.campaign_id == campaign_id,
+        CampaignMember.user_id == user_id,
+    ).first() is not None
+
+
+def require_campaign_query_member(
+    campaign_id: Optional[int] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """`?campaign_id=N` merges campaign N's rows into a compendium list — only for N's members."""
+    if campaign_id is not None and not _is_campaign_member(db, campaign_id, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be a member of this campaign",
+        )
+
+
+def check_content_read(row, current_user: User, db: Session):
+    """Return a compendium row if the user may read it: system rows always, campaign rows for its members only."""
+    from shared.enums import OwnerType
+    if row.owner_type == OwnerType.campaign and not _is_campaign_member(db, row.owner_id, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be a member of this campaign",
+        )
+    return row

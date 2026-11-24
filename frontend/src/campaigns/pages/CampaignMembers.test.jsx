@@ -35,7 +35,7 @@ vi.mock('../CampaignContext', () => ({
 const GM_MEMBER = {
   id: 1,
   user_id: 1,
-  user: { id: 1, username: 'gm_user', email: 'gm@test.com' },
+  user: { id: 1, username: 'gm_user' },
   role: 'gm',
   joined_at: '2024-01-01T00:00:00Z',
 };
@@ -43,7 +43,7 @@ const GM_MEMBER = {
 const PLAYER_MEMBER = {
   id: 2,
   user_id: 2,
-  user: { id: 2, username: 'alice', email: 'alice@test.com' },
+  user: { id: 2, username: 'alice' },
   role: 'player',
   joined_at: '2024-02-01T00:00:00Z',
 };
@@ -94,6 +94,24 @@ describe('CampaignMembers', () => {
     );
   });
 
+  it('never renders an email, even if a stale API still sends one (security, post-deploy T2)', async () => {
+    campaignService.getCampaignById.mockResolvedValue({
+      success: true,
+      data: { members: [GM_MEMBER, { ...PLAYER_MEMBER, user: { ...PLAYER_MEMBER.user, email: 'alice@test.com' } }] },
+    });
+    campaignService.searchUsers.mockResolvedValue({
+      success: true,
+      data: [{ id: 99, username: 'bob', email: 'bob@test.com' }],
+    });
+    renderPage();
+    await screen.findByText('alice');
+    fireEvent.change(screen.getByTestId('invite-search'), { target: { value: 'bo' } });
+    fireEvent.click(await screen.findByTestId('search-result-99'));
+    await screen.findByText(/ready to invite/i);
+    expect(screen.queryByText(/@test\.com/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('invite-search')).toHaveAttribute('placeholder', 'Search by username…');
+  });
+
   it('shows invite panel for GM', async () => {
     renderPage();
     await waitFor(() =>
@@ -104,7 +122,7 @@ describe('CampaignMembers', () => {
   it('searching triggers searchUsers and shows dropdown', async () => {
     campaignService.searchUsers.mockResolvedValue({
       success: true,
-      data: [{ id: 99, username: 'bob', email: 'bob@test.com' }],
+      data: [{ id: 99, username: 'bob' }],
     });
     renderPage();
     await waitFor(() => screen.getByTestId('invite-search'));
@@ -123,8 +141,8 @@ describe('CampaignMembers', () => {
     campaignService.searchUsers.mockResolvedValue({
       success: true,
       data: [
-        { id: 2, username: 'alice', email: 'alice@test.com' },
-        { id: 99, username: 'bob', email: 'bob@test.com' },
+        { id: 2, username: 'alice' },
+        { id: 99, username: 'bob' },
       ],
     });
     renderPage();
@@ -140,7 +158,7 @@ describe('CampaignMembers', () => {
   it('selecting a result enables Add button and shows confirmation text', async () => {
     campaignService.searchUsers.mockResolvedValue({
       success: true,
-      data: [{ id: 99, username: 'bob', email: 'bob@test.com' }],
+      data: [{ id: 99, username: 'bob' }],
     });
     renderPage();
     await waitFor(() => screen.getByTestId('invite-search'));
@@ -157,7 +175,7 @@ describe('CampaignMembers', () => {
   it('Add button calls addPlayer and reloads members', async () => {
     campaignService.searchUsers.mockResolvedValue({
       success: true,
-      data: [{ id: 99, username: 'bob', email: 'bob@test.com' }],
+      data: [{ id: 99, username: 'bob' }],
     });
     campaignService.addPlayer.mockResolvedValue({ success: true });
     campaignService.getCampaignById
@@ -168,7 +186,7 @@ describe('CampaignMembers', () => {
           members: [
             GM_MEMBER,
             PLAYER_MEMBER,
-            { id: 3, user_id: 99, user: { id: 99, username: 'bob', email: 'bob@test.com' }, role: 'player', joined_at: '2024-03-01T00:00:00Z' },
+            { id: 3, user_id: 99, user: { id: 99, username: 'bob' }, role: 'player', joined_at: '2024-03-01T00:00:00Z' },
           ],
         },
       });
@@ -190,7 +208,7 @@ describe('CampaignMembers', () => {
   it('shows error when addPlayer fails', async () => {
     campaignService.searchUsers.mockResolvedValue({
       success: true,
-      data: [{ id: 99, username: 'bob', email: 'bob@test.com' }],
+      data: [{ id: 99, username: 'bob' }],
     });
     campaignService.addPlayer.mockResolvedValue({ success: false, error: 'Already a member' });
 

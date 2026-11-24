@@ -42,7 +42,7 @@ Create these 5 files following the project's exact patterns:
 
 ## After creating files
 
-1. Register the router in `backend/main.py` — import it and call `app.include_router(...)`
+1. Register the router in `backend/main.py` — import it and call `app.include_router(...)` — **an `owner_type` (compendium) module goes in `COMPENDIUM_ROUTERS` instead** (members-only `?campaign_id`), wraps its get-by-id in `check_content_read(row, current_user, db)`, and gets a row in `tests/test_security_leaks.py › COMPENDIUM`
 2. Run the Alembic migration:
    ```
    cd backend && alembic revision --autogenerate -m "add $MODULE_NAME table"

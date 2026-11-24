@@ -371,12 +371,13 @@ class TestUserSearch:
         data = resp.json()
         assert any(u["username"] == "user2" for u in data)
 
-    def test_search_by_email(self, client):
+    def test_search_never_matches_or_returns_email(self, client):
+        # Security (T2): any logged-in user can search, so emails must not be matchable or returned.
         h1, _ = make_user(client, 1)
         make_user(client, 2)  # email: user2@example.com
-        resp = client.get("/api/auth/users/search?q=user2@example.com", headers=h1)
-        assert resp.status_code == 200
-        assert any(u["email"] == "user2@example.com" for u in resp.json())
+        assert client.get("/api/auth/users/search?q=example.com", headers=h1).json() == []
+        results = client.get("/api/auth/users/search?q=user2", headers=h1).json()
+        assert results and all(set(u) == {"id", "username"} for u in results)
 
     def test_search_excludes_self(self, client):
         h1, uid1 = make_user(client, 1)
@@ -409,6 +410,4 @@ class TestUserSearch:
         make_user(client, 2)
         resp = client.get("/api/auth/users/search?q=user2", headers=h1)
         u = resp.json()[0]
-        assert "id" in u
-        assert "username" in u
-        assert "email" in u
+        assert set(u) == {"id", "username"}  # no email (security, post-deploy T2)
