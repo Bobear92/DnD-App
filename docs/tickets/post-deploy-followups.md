@@ -3,7 +3,7 @@
 **Goal:** everything left open by the first production deploy ([first-production-deploy.md](first-production-deploy.md),
 complete 2026-11-23, live at v0.1.2) in one place, so a new session can pick it up without reading old session logs.
 
-**Status:** T1 done; T2 slices 1 (data leaks) and 2 (authorization) done 2026-11-24. Collected 2026-11-23. Order is a suggestion. CLAUDE.md is now ~53 KB of a 60 KB cap
+**Status:** T1 done; T2 done (all three slices) 2026-11-24 — needs a `/release` to reach production. Collected 2026-11-23. Order is a suggestion. CLAUDE.md is now ~53 KB of a 60 KB cap
 (`claudeMdBudget.test.js`); doc lines go to the files its Docs index names.
 
 ## T1 — Clean up CLAUDE.md (do first)
@@ -19,14 +19,14 @@ From the T10 review (detail: first-production-deploy.md › T10). Slice 1 (data 
 hardening (upload Content-Type, login rate limit/password minimum, /docs).
 - [x] Any user can read any campaign's homebrew (`?campaign_id` / campaign-owned rows on every compendium GET).
 - [x] User search returns emails; 2-character queries can harvest every address. Pairs with T3's username list.
-- [ ] Music uploads keep the client's Content-Type, so the bucket can serve HTML.
+- [x] Music uploads keep the client's Content-Type, so the bucket can serve HTML. (Images' extension too.)
 - [x] `is_admin` grants GM powers in `characters/service.py`.
 - [x] A GM adds players with no consent step. (Robert: player must accept — `campaign_invites`, 2026-11-24.)
 - [x] Children of a hidden location (maps / NPCs / links) are listable by id.
 - [x] Era ids from another campaign are accepted on timeline/session dates.
 - [x] Campaign classes are writable by anyone (latent — no API creates them).
-- [ ] No login rate limit or password minimum.
-- [ ] `/docs` is public in production.
+- [x] No login rate limit or password minimum. (10 failures / 15 min per IP+email; 8 chars.)
+- [x] `/docs` is public in production. (`API_DOCS` opt-in; liveness checks use `/health`.)
 - [x] Every member's email is in `CampaignResponse` (the Members tab shows emails, including the GM's own).
 
 ## T3 — Robert's smoke-test findings (2026-11-23)

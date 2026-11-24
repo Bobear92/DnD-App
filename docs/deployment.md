@@ -40,7 +40,7 @@ new service.
 | | Name | URL / detail |
 |---|---|---|
 | Frontend | Static Site `dnd-app` | https://dnd-app-ginj.onrender.com (`dnd-app` was taken, hence the suffix) |
-| Backend | Web Service `dnd-app-api` | https://dnd-app-api.onrender.com (`/docs` for the API docs) |
+| Backend | Web Service `dnd-app-api` | https://dnd-app-api.onrender.com (`/health` to check it's up; `/docs` is off in production) |
 | Database | Postgres `dnd-app-db` | free; created 2026-11-18, so it **expires around 2026-12-18** unless upgraded first (Render emails before) |
 | Uploads | R2 bucket `dnd-app-uploads` | public URL `https://pub-a1ce541f177b4225b2ae82461e297fe2.r2.dev` |
 
@@ -74,6 +74,7 @@ URL. To run something from a laptop (seeding, a dump), add that one IP there, do
 | backend | `SECRET_KEY` | long random value, generated once — Render's **Generate** button, or `python -c "import secrets; print(secrets.token_urlsafe(64))"` — never the dev value |
 | backend | `ALLOWED_ORIGINS` | comma-separated frontend origin(s) for CORS. Set **after** the Static Site exists (its URL isn't known before); saving it needs a backend redeploy |
 | backend | `DEBUG` | `false` |
+| backend | `API_DOCS` | **leave unset** (default off): `/docs`, `/redoc`, `/openapi.json` would publish every route. Set `true` only locally |
 | backend | `ACCESS_TOKEN_EXPIRE_MINUTES` | `720` (12 h: a long game night, a fresh login each day). Default 30. Longer = a stolen token works longer, and tokens can't be revoked, so don't go far past a day |
 | backend | `STORAGE_BACKEND` | `r2` (default `local`, which production must not use) |
 | backend | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | from the Cloudflare dashboard; the backend refuses to start with `STORAGE_BACKEND=r2` if any is missing |

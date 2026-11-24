@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from auth.schemas import UserRegister, UserLogin, UserResponse, TokenResponse, UserSearchResult
 from auth.service import register_user, login_user
+from auth import rate_limit
 from shared.database import get_db
 from shared.dependencies import get_current_user
 from auth.models import User
@@ -16,9 +17,23 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     return user
 
 @router.post("/login", response_model=TokenResponse)
-def login(login_data: UserLogin, db: Session = Depends(get_db)):
-    """Login and get access token"""
-    result = login_user(login_data, db)
+def login(login_data: UserLogin, request: Request, db: Session = Depends(get_db)):
+    """Login and get access token. Too many failures for one email from one IP → 429 (auth/rate_limit.py)."""
+    ip = request.client.host if request.client else None
+    wait = rate_limit.retry_after(ip, login_data.email)
+    if wait:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Try again later.",
+            headers={"Retry-After": str(wait)},
+        )
+    try:
+        result = login_user(login_data, db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            rate_limit.record_failure(ip, login_data.email)
+        raise
+    rate_limit.record_success(ip, login_data.email)
     return result
 
 @router.get("/me", response_model=UserResponse)

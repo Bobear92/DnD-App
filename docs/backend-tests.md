@@ -12,6 +12,11 @@ backend/tests/
                                     #   ".." filenames; R2Storage against a fake S3 client (put key/content-type/cache header, delete reports
                                     #   existence, folder delete paginates and spares "1/20" when deleting "1/2", non-404 errors raised);
                                     #   backend selection (tests on local temp storage, r2 fails fast naming missing creds). Deploy ticket T4
+├── test_hardening.py               # 16 tests: post-deploy T2 slice 3 — upload Content-Type/extension come from the allow-list
+                                    #   (music by ext, images by validated type; a client text/html or .html never stored); login
+                                    #   throttle (11th try 429 + Retry-After even with the right password, case-insensitive email,
+                                    #   other accounts unaffected, success clears, unknown emails count, sliding window); 8-char
+                                    #   password minimum; API docs off by default (docs_routes on/off, real app follows the setting)
 ├── test_campaign_invites.py        # 16 tests: post-deploy T2 slice 2 — invite → accept is the only way in (invitee is not a
                                     #   member until accepting; decline/cancel; nobody else can accept/decline; no direct add route;
                                     #   duplicate/member/unknown-user invites refused; campaign delete clears invites); is_admin is not

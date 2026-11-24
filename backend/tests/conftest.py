@@ -48,6 +48,15 @@ def _create_tables():
 
 
 @pytest.fixture(autouse=True)
+def _reset_login_rate_limit():
+    """The failed-login throttle is process memory; never let one test's failures leak into the next."""
+    from auth import rate_limit
+    rate_limit.reset()
+    yield
+    rate_limit.reset()
+
+
+@pytest.fixture(autouse=True)
 def _clean_tables(_create_tables):
     yield
     with _engine.begin() as conn:

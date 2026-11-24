@@ -25,7 +25,7 @@ frontend/src/
 ├── auth/
 │   ├── pages/Login.jsx          # Login + Register (dual-mode toggle) ✅
 │   ├── AuthContext.jsx          # Calls /api/auth/me on load; exposes {user, loading, logout}
-│   └── authService.js
+│   └── authService.js               # + errorText (FastAPI detail string OR 422 list → text) and PASSWORD_MIN_LENGTH; authService.test.js (4 tests)
 ├── campaigns/
 │   ├── pages/CampaignSelection.jsx  # List campaigns, create modal, enter → sets CampaignContext ✅
 │   ├── components/MembersPanel.jsx  # THE member list + pending invites (cancel) + invite search (→ Invite) + remove; GM-only controls; used by CampaignMembers + Settings › Members ✅
@@ -612,7 +612,7 @@ frontend/src/
 │   ├── AuthContext.test.jsx          # context state, setUser exposure, logout + selectedCampaign clearing (6 tests)
 │   └── pages/
 │       ├── Login.jsx
-│       └── Login.test.jsx            # login flow, setUser call, navigation, error states (8 tests)
+│       └── Login.test.jsx            # login flow, setUser call, navigation, error states, register 8-char minimum (hint + minLength, refused before the API), no length rule on login (10 tests)
 ├── campaigns/
 │   └── pages/
 │       ├── CampaignSelection.jsx

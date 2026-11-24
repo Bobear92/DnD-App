@@ -31,8 +31,16 @@ from config import settings
 KEY_PREFIX = "uploads/"
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 
+# The stored Content-Type and extension are ALWAYS taken from these tables, never from the client (post-deploy T2):
+# a client-chosen Content-Type let the bucket serve an "audio" upload as text/html, and a client filename could give an
+# image a .html extension (which the local /uploads static server serves as a page).
+_IMAGE_EXT_BY_TYPE = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
 _IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
-_MUSIC_EXTENSIONS = frozenset({".mp3", ".ogg", ".wav", ".m4a", ".aac", ".flac", ".mp4", ".webm", ".mov"})
+_MUSIC_TYPE_BY_EXT = {
+    ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".aac": "audio/aac",
+    ".flac": "audio/flac", ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+}
+_MUSIC_EXTENSIONS = frozenset(_MUSIC_TYPE_BY_EXT)
 _MB = 1024 * 1024
 
 
@@ -51,6 +59,13 @@ class UploadKind:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, self.type_error)
         if self.extensions and ext.lower() not in self.extensions:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, self.type_error)
+
+    def stored_ext_and_type(self, file: UploadFile, ext: str) -> tuple[str, str]:
+        """The extension and Content-Type to store, from the allow-list (call after validate)."""
+        if self.content_types:  # images: the validated type decides both
+            return _IMAGE_EXT_BY_TYPE[file.content_type], file.content_type
+        ext = ext.lower()       # music: the validated extension decides both
+        return ext, _MUSIC_TYPE_BY_EXT[ext]
 
 
 CHARACTER_IMAGE = UploadKind("characters", 10, content_types=_IMAGE_TYPES,
@@ -191,6 +206,7 @@ async def save_upload(file: UploadFile, kind: UploadKind, *path_parts) -> str:
     if kind.extensions:
         ext = ext.lower()
     kind.validate(file, ext)
+    ext, content_type = kind.stored_ext_and_type(file, ext)
 
     contents = await file.read()
     if len(contents) > kind.max_mb * _MB:
@@ -198,7 +214,7 @@ async def save_upload(file: UploadFile, kind: UploadKind, *path_parts) -> str:
 
     parts = [kind.folder, *(str(p) for p in path_parts), f"{uuid.uuid4()}{ext}"]
     key = KEY_PREFIX + "/".join(parts)
-    get_storage().put(key, contents, file.content_type)
+    get_storage().put(key, contents, content_type)
     return key
 
 

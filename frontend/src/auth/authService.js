@@ -25,6 +25,19 @@ api.interceptors.request.use(
   }
 );
 
+// FastAPI's `detail` is a string for an HTTPException but a LIST of {msg, ...} for a 422 validation error. Passing
+// the list to setError crashed the login page, so always hand the UI text.
+export function errorText(error, fallback) {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === 'string' && detail) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail.map((d) => (typeof d === 'string' ? d : d?.msg)).filter(Boolean).join('; ') || fallback;
+  }
+  return fallback;
+}
+
+export const PASSWORD_MIN_LENGTH = 8; // mirrors backend auth/schemas.py
+
 // Auth service functions
 const authService = {
   // Register new user
@@ -35,7 +48,7 @@ const authService = {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Registration failed',
+        error: errorText(error, 'Registration failed'),
       };
     }
   },
@@ -52,7 +65,7 @@ const authService = {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Login failed',
+        error: errorText(error, 'Login failed'),
       };
     }
   },
@@ -65,7 +78,7 @@ const authService = {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Failed to get user',
+        error: errorText(error, 'Failed to get user'),
       };
     }
   },

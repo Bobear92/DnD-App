@@ -77,7 +77,8 @@ def r2(monkeypatch):
 class TestKeys:
     def test_key_shape_is_backend_independent(self, local):
         key = _save(_upload("portrait.PNG"), fs.CHARACTER_IMAGE, 7)
-        assert key.startswith("uploads/characters/7/") and key.endswith(".PNG")
+        # The extension comes from the validated type, not the filename (post-deploy T2).
+        assert key.startswith("uploads/characters/7/") and key.endswith(".png")
 
     def test_music_keys_keep_their_owner_path_and_lowercase_ext(self, local):
         key = _save(_upload("Theme.MP3", "audio/mpeg"), fs.MUSIC, "npcs", 3, 9)

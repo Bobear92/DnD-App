@@ -17,7 +17,7 @@ Run the Alembic migration workflow for this project.
    Then start fresh (Bash, background):
    ```bash
    cd "c:/Users/rober/Documents/Projects/dnd-app/backend" && source venv/Scripts/activate && uvicorn main:app --reload &
-   sleep 4 && curl -s http://localhost:8000/docs > /dev/null && echo "Server up"
+   sleep 4 && curl -s http://localhost:8000/health > /dev/null && echo "Server up"
    ```
 
 If $ARGUMENTS is empty, ask the user for a migration description before proceeding.

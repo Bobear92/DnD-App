@@ -1,12 +1,15 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from typing import Optional
 
 # Request schemas
+PASSWORD_MIN_LENGTH = 8  # mirrored by the register form (frontend/src/auth/pages/Login.jsx)
+
+
 class UserRegister(BaseModel):
     email: EmailStr
     username: str
-    password: str
+    password: str = Field(..., min_length=PASSWORD_MIN_LENGTH)
 
 class UserLogin(BaseModel):
     email: EmailStr

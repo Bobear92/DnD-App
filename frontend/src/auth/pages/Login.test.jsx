@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -12,6 +12,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 vi.mock('../authService', () => ({
+  PASSWORD_MIN_LENGTH: 8,
   default: {
     login: vi.fn(),
     getCurrentUser: vi.fn(),
@@ -159,6 +160,26 @@ describe('Login — registration', () => {
 
     await waitFor(() => expect(mockSetUser).toHaveBeenCalledWith(FAKE_USER));
     expect(mockNavigate).toHaveBeenCalledWith('/campaigns');
+  });
+
+  it('refuses a password under 8 characters without calling the API (post-deploy T2)', async () => {
+    renderLogin();
+    await userEvent.click(screen.getByRole('button', { name: /create an account/i }));
+    expect(screen.getByText('At least 8 characters.')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/email/i), 'new@dnd.com');
+    await userEvent.type(screen.getByLabelText(/username/i), 'newplayer');
+    const pw = screen.getByLabelText(/password/i);
+    expect(pw).toHaveAttribute('minLength', '8');
+    await userEvent.type(pw, 'short12');
+    fireEvent.submit(pw.closest('form'));
+    expect(await screen.findByText('Password must be at least 8 characters')).toBeInTheDocument();
+    expect(authService.register).not.toHaveBeenCalled();
+  });
+
+  it('the login form has no length rule (existing short passwords still sign in)', () => {
+    renderLogin();
+    expect(screen.getByLabelText(/password/i)).not.toHaveAttribute('minLength');
+    expect(screen.queryByText('At least 8 characters.')).toBeNull();
   });
 
   it('shows error on registration failure', async () => {

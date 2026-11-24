@@ -74,7 +74,7 @@ drives the *actual* app for any change with a runtime surface.
 **When it applies, invoke the `verify` skill scoped to the changed flow.** It picks the best
 available driving method; the repo essentials it should cover:
 - **Backend changed** → `bash scripts/restart-backend.sh` (kills stale python first), then
-  `sleep 4 && curl -s http://localhost:8000/docs >/dev/null && echo up`, then `curl` the *specific*
+  `sleep 4 && curl -s http://localhost:8000/health >/dev/null && echo up`, then `curl` the *specific*
   changed endpoint(s) with a real token and read the actual JSON — confirm the new field/behavior is
   really served, not just asserted in a test.
 - **Frontend changed** → `npm run build` must succeed (catches what jsdom tests don't), then drive

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import authService from '../authService';
+import authService, { PASSWORD_MIN_LENGTH } from '../authService';
 import { useAuth } from '../AuthContext';
 import './Login.css';
 
@@ -64,6 +64,11 @@ const Login = () => {
       }
     } else {
       // Register
+      if (formData.password.length < PASSWORD_MIN_LENGTH) {
+        setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+        setLoading(false);
+        return;
+      }
       const result = await authService.register({
         email: formData.email,
         username: formData.username,
@@ -179,7 +184,14 @@ const Login = () => {
                 required
                 placeholder="Enter your secret passphrase"
                 autoComplete={isLogin ? 'current-password' : 'new-password'}
+                minLength={isLogin ? undefined : PASSWORD_MIN_LENGTH}
+                aria-describedby={isLogin ? undefined : 'password-hint'}
               />
+              {!isLogin && (
+                <p id="password-hint" className="mt-1 text-xs text-muted-foreground">
+                  At least {PASSWORD_MIN_LENGTH} characters.
+                </p>
+              )}
             </div>
 
             <button 

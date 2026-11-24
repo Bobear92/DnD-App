@@ -1,19 +1,19 @@
 ---
 session_id: 05c19ffe-a208-44cb-8b78-2114ea1032e2
-title: /ship-it rename and T2 security slices 1-2
+title: /ship-it rename and T2 security follow-ups
 date: 2026-11-23
 started: 23:26
-branch: feature/t2-authz-invites
+branch: feature/t2-hardening
 area: backend
 tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule]
 issues: []
-summary: /ship → /ship-it; T2 security: data leaks closed, invite+accept consent, admin≠GM, campaign class writes
-turns: 9
+summary: /ship → /ship-it; all of T2 security: leaks, invite+accept, admin≠GM, class writes, uploads, login throttle, /docs
+turns: 12
 stepped_in: false
-last_uuid: be427a2d-8e32-4c3a-9faf-51c53a345665
+last_uuid: 2a3dde2e-b902-4849-b5d4-32ac42ec891e
 ---
 
-# /ship-it rename and T2 security slices 1-2
+# /ship-it rename and T2 security follow-ups
 
 <!-- Claude fills the sections below with /log. area is one of: character-system, campaign-tools, encyclopedia, backend, tooling -->
 
@@ -49,6 +49,21 @@ last_uuid: be427a2d-8e32-4c3a-9faf-51c53a345665
     player view — the old one rendered as GM), `PendingInvitations.test.jsx` (4), selection page invitations (4).
   - Verified live: invite routes served, old add route 404, Playwright on Members + Settings tab (Invite button, no
     emails, no page errors). Did not click a real invite→accept (would create dev test users; Robert drives QA).
+  - Shipped as `8382f7c`.
+- **T2 slice 3 (hardening)** on `feature/t2-hardening`:
+  - Uploads: stored Content-Type + extension from the allow-list (`stored_ext_and_type`): music by extension, images by
+    validated type. A client `text/html` or `.html` filename is never stored.
+  - Login throttle `auth/rate_limit.py` (in memory; 10 failures / 15 min per IP + lowercased email → 429 + Retry-After;
+    success clears; conftest autouse reset).
+  - Register password ≥ 8 (Robert's number) — backend Field + form `minLength`, hint and pre-submit check.
+  - `/docs`, `/redoc`, `/openapi.json` behind a new `api_docs` setting (default off; `API_DOCS=true` added to the local
+    `.env`). Liveness checks moved to `/health` (restart-frontend.sh, CLAUDE.md, /ship-it, /migrate); `/release` now
+    expects `/health` 200 and `/docs` 404 in production.
+  - Found on the way: a 422 from register/login put FastAPI's detail LIST into `setError`, which would crash the login
+    page — `errorText()` in authService now always returns text.
+  - Tests: `test_hardening.py` (16; 12 fail on old code, the 4 passing are positive controls), `authService.test.js` (4),
+    Login register-minimum tests (2). Verified live: /health, 7-char register 422, 11th bad login 429 (Retry-After 898),
+    GM login fine; Playwright on the register form (hint + error, no page errors).
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -61,6 +76,11 @@ last_uuid: be427a2d-8e32-4c3a-9faf-51c53a345665
 - Slice 2: a big python-in-bash heredoc failed on quoting ("unexpected EOF"); switched to writing scripts to files with
   the Write tool (the shell-edits memory already says this — should have started there). The new class-write test
   fixture needed two NOT NULL columns found by trial; reading the model first would have saved two runs.
+- Slice 3: running the new tests against the old code first failed for the wrong reason — the old `Settings` rejects the
+  new `API_DOCS` line in `.env` (pydantic extra_forbidden), so nothing loaded. Had to strip the line for that check.
+  Same trap for Robert if he checks out an older commit locally.
+- The `/docs` liveness habit was spread across scripts, CLAUDE.md and three skills; `/release` would have reported a
+  broken release after this ship had it not been grepped for.
 - The Playwright check first clicked the campaign title (not "Enter Campaign"), so the page rendered as a non-GM and
   looked like a role regression; checking created_by vs user id via the API ruled that out.
 
@@ -79,6 +99,10 @@ last_uuid: be427a2d-8e32-4c3a-9faf-51c53a345665
   status flag would be one missed filter from letting an invitee in.
 - Invitee routes return 404 (not 403) for someone else's invite id; `/invites/...` declared before `/{campaign_id}`.
 - Merged the duplicated members UI before adding invites to it (duplication tripwire), rather than editing both copies.
+- Robert: password minimum is 8 characters (applies to new registrations; existing accounts still sign in).
+- Login throttle keyed on IP + email (not IP alone, not email alone) so a shared IP or a targeted lockout can't block
+  everyone; in memory because production is a single instance — move to DB/Redis if ever scaled out.
+- `/docs` gated by its own `api_docs` setting rather than `debug`, because local `.env` has no DEBUG.
 
 ## Open threads
 
@@ -88,7 +112,10 @@ last_uuid: be427a2d-8e32-4c3a-9faf-51c53a345665
   on legacy CSS (migrate to Tailwind).
 - `characters/service.py` functions still take an unused `is_admin` param (kept so callers didn't change) — drop it in
   a cleanup pass.
-- Production: this needs `/release`; the migration runs on deploy (`start.sh`). Existing players stay members.
+- Production: T2 (all three slices) needs `/release`; the invites migration runs on deploy (`start.sh`). Existing
+  players stay members. After release, `/release`'s checks expect `/docs` → 404. Hand-test invite→accept with
+  SmokeTestPlayer.
+- Local only: `backend/.env` now has `API_DOCS=true`; checking out a pre-slice-3 commit needs that line removed.
 
 ## Turn log
 
@@ -248,5 +275,58 @@ last_uuid: be427a2d-8e32-4c3a-9faf-51c53a345665
 >   - Nobody else can accept or decline someone's invite, and the old "add player directly" route is gone.
 >   - Invites live in a new `campaign_invites` table, kept separate from campaign membership so they can't accidentally count as membership anywhere in the app. Its migration only adds that table.
 > - * …
+
+**Commands run:** 4
+
+### 10. 2026-11-24 00:38
+
+**Robert:**
+> /ship-it
+
+**Claude:**
+> Slice 2 is shipped: `main` is at **8382f7c** and pushed to GitHub. The working tree is clean, and the feature branch is deleted. It was never pushed, so there was nothing to delete on GitHub.
+> 
+> This commit adds the accept-before-joining invites with their database migration, stops admins acting as GMs in campaigns they only play in, and limits campaign-class edits to that campaign's GM. It also merges the two members screens into one, and adds the Invitations section to the campaign list.
+> 
+> **Checks before shipping:**
+> - **Tests:** all pass, 3,963 frontend and 1,151 backend.
+> - **Build and feat-coverage check:** both pass.
+> - **Database:** the code matches the migrated schema.
+> - **Running app:** the earlier checks from this change still hold.
+> 
+> **When you `/release` this to production:**
+> - **Migration:** it runs automatically on deploy and only adds the new invites table.
+> - **Existing players: …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/log_slice2.py` · **Commands run:** 3
+
+### 11. 2026-11-24 00:40
+
+**Robert:**
+> Yes lets start with slice 3 and 8 character min is fine.
+
+**Claude:**
+> All 3,969 frontend tests pass. While the backend suite runs: the production `API_DOCS` note needs no action from you, since Render doesn't set it and the default is off. I'll restart and check the server once the suite finishes.
+
+**Files edited:** `backend/auth/rate_limit.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/hardening_backend.py`, `backend/tests/test_hardening.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/hardening_frontend.py`, `frontend/src/auth/authService.test.js`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/docs_slice3.py`, `.claude/commands/release.md` · **Commands run:** 24
+
+### 12. 2026-11-24 00:58
+
+**Robert:**
+> <task-notification>
+> <task-id>bkaz5mdhf</task-id>
+> <tool-use-id>toolu_01Y7yfPm4mWYZaww2CJ76e1e</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\05c19ffe-a208-44cb-8b78-2114ea1032e2\tasks\bkaz5mdhf.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> Slice 3 of T2 is built and checked on `feature/t2-hardening`, waiting for `/ship-it`. That completes T2. All tests pass: 3,969 frontend and 1,167 backend. The 16 new backend tests fail on the old code, except the four that check normal behaviour still works.
+> 
+> **What's fixed:**
+> - **Uploads:** the stored file type now always comes from our allow-list, never from the browser. A music upload claiming to be a web page is stored as `audio/mpeg`. An image named `evil.html` is saved as `.png`.
+> - **Login rate limit:** after 10 failed logins for the same email from the same address within 15 minutes, further attempts are refused, even with the right password. The response says how long to wait, and a successful login clears the count. The counter is kept in the server's memory, so it resets on each deploy; that's fine with one server.
+> - **Password minimum of 8 characters:** new accounts need at le …
 
 **Commands run:** 4

@@ -12,7 +12,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BACKEND_URL="http://localhost:8000/docs"
+BACKEND_URL="http://localhost:8000/health"  # never /docs: it exists only with API_DOCS=true
 BACKEND_LOG="${TMPDIR:-/tmp}/dnd-backend.log"
 
 backend_up() { curl -s -o /dev/null --max-time 2 "$BACKEND_URL"; }

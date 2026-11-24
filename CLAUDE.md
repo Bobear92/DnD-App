@@ -314,7 +314,7 @@ The constraints that change how code is written:
 
 ## API
 
-Base URL `http://localhost:8000` (docs at `/docs`). **Every endpoint, with its method and auth rule, is listed in
+Base URL `http://localhost:8000` (docs at `/docs` only with `API_DOCS=true`; liveness is `/health`). **Every endpoint, with its method and auth rule, is listed in
 [docs/api.md](docs/api.md).** Read it before adding or changing a route, and update its table in the same change.
 Route prefixes: `/api/auth`, `/api/characters`, `/races` `/backgrounds` `/feats` (no `/api`), `/api/classes`,
 `/api/gm/campaigns` (campaigns, plus `/{id}/locations|calendar|timeline|sessions|encounters`), `/api/gm/campaigns/npcs`,
@@ -693,7 +693,7 @@ After any change to backend code — models, schemas, routes, service logic, or 
 # Restart (run_in_background=true), then confirm startup
 bash scripts/restart-backend.sh
 # in a separate call:
-sleep 4 && curl -s http://localhost:8000/docs > /dev/null && echo "Server up"
+sleep 4 && curl -s http://localhost:8000/health > /dev/null && echo "Server up"
 ```
 
 The running process caches old modules and silently serves stale responses (missing fields, wrong behavior) until restarted. This has caused multi-session debugging rabbit holes where the DB and schema files were correct but the API returned wrong data.
@@ -708,6 +708,7 @@ SECRET_KEY=your-secret-key-change-this-in-production
 # Optional (production sets these — see docs/deployment.md):
 # ALLOWED_ORIGINS=https://app.example.com   ← comma-separated CORS origins; default = localhost:3000,5173
 # DEBUG=false                               ← defaults to false
+# API_DOCS=true                             ← /docs, /redoc, /openapi.json; default OFF (set locally, never in prod)
 # ACCESS_TOKEN_EXPIRE_MINUTES=720          ← default 30
 ```
 Frontend: `VITE_API_URL` (build time) is read ONLY by `frontend/src/lib/api.js`; never hardcode the backend URL.

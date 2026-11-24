@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     app_name: str = "D&D RPG API"
     # Off unless an environment opts in: a production deploy must never inherit a debug default.
     debug: bool = False
+    # Interactive API docs (/docs, /redoc, /openapi.json). Off unless an environment opts in (API_DOCS=true locally),
+    # so production doesn't publish a map of every route. Liveness checks use /health, never /docs.
+    api_docs: bool = False
 
     # CORS — comma-separated origins allowed to call the API from a browser (ALLOWED_ORIGINS).
     # A plain string, not a list, so the env var is "https://a.com,https://b.com" rather than JSON.

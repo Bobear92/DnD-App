@@ -2,7 +2,9 @@
 
 Moved out of CLAUDE.md on 2026-11-23. **Update the matching table in the same change as any route.** The cross-cutting API rules (visibility stripping, merge semantics, GM-only reads) stay in CLAUDE.md › API.
 
-Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs`
+Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs` (only with `API_DOCS=true` — off by default and in production; liveness is `GET /health`)
+
+**Login is throttled:** 10 failed logins for one email from one IP within 15 minutes → `429` with `Retry-After`; a success clears it (`auth/rate_limit.py`, in memory — one instance). **Register** requires a password of 8+ characters (422 otherwise). **Uploads** store a Content-Type and extension taken from the allow-list in `shared/file_storage.py`, never from the client.
 
 **Compendium reads are member-scoped** (races, backgrounds, feats, classes, bestiary, spells, the six item types): a
 `?campaign_id=N` list returns 403 unless you are a member of N (`require_campaign_query_member`, attached once to

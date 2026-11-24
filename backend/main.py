@@ -20,7 +20,14 @@ from shared.encyclopedia import bestiary_router, spells_router, armor_router, we
 # fails on. start.sh and scripts/restart-backend.sh run the migrations first; tests build their own
 # schema in conftest.py. CI's `alembic check` fails if a model and the migrations disagree.
 
-app = FastAPI(title="D&D RPG API")
+def docs_routes(enabled: bool) -> dict:
+    """/docs, /redoc and /openapi.json exist only when API_DOCS=true (local dev). Production leaves it unset."""
+    if enabled:
+        return {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
+    return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+
+
+app = FastAPI(title="D&D RPG API", **docs_routes(settings.api_docs))
 
 # CORS middleware for frontend — origins come from ALLOWED_ORIGINS (config.py), defaulting to the
 # local dev frontends. Never "*": with allow_credentials that would be rejected by browsers anyway.

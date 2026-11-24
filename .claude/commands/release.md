@@ -86,7 +86,8 @@ Wait for the new frontend bundle and a healthy backend (the free backend may be 
 ```bash
 SITE=https://dnd-app-ginj.onrender.com; API=https://dnd-app-api.onrender.com
 curl -s $SITE/ | grep -o 'assets/index-[^"]*\.js'          # changes when the new frontend is live — unless no frontend/src change shipped (same build, same name)
-curl -s -o /dev/null -w "%{http_code}\n" $API/docs           # 200
+curl -s -o /dev/null -w "%{http_code}\n" $API/health         # 200
+curl -s -o /dev/null -w "%{http_code}\n" $API/docs           # 404 — API docs must stay OFF in production (API_DOCS unset)
 curl -s -X POST $API/api/auth/login -H "Content-Type: application/json" \
   -d '{"email":"nobody@example.com","password":"x"}' -w " [%{http_code}]\n"   # 401 = DB reached and migrated
 curl -s -o /dev/null -D - -X OPTIONS $API/api/auth/login -H "Origin: $SITE" \
