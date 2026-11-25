@@ -640,7 +640,7 @@ frontend/src/
 │   └── pages/
 │       ├── LocationList.jsx
 │       ├── LocationList.test.jsx     # campaignId prop regression (tree/card navigate), GM toolbar show/hide/navigate, real player = GM's Player View (world-map preview, Hierarchy/A–Z toggle, no GM chrome), GM preview banner, hidden-map notice on/off (11 tests)
-│       └── LocationDetail.test.jsx  # Timeline Events card (9 tests) + Sessions card (7 tests); GM always-visible/empty/events/dates/hidden, player preview (no card when empty, shows card when exists), fetch params; real player "No visible maps." + no GM chrome, GM hidden-map badge on/off, GM empty upload prompt; uses Tabs mock + player-view toggle via title button
+│       └── LocationDetail.test.jsx  # Timeline Events card (9 tests) + Sessions card (7 tests); GM always-visible/empty/events/dates/hidden, player preview (no card when empty, shows card when exists), fetch params; real player "No visible maps." + no GM chrome, GM hidden-map badge on/off, GM empty upload prompt; upload failure shown in the dialog (`upload-failure`, Upload stays enabled), a successful retry clears it with no banner left, reopening starts clean; uses Tabs mock + player-view toggle via title button
 ├── sessions/
 │   └── pages/
 │       ├── SessionList.jsx

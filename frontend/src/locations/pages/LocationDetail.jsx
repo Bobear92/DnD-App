@@ -104,6 +104,8 @@ export default function LocationDetail() {
   const [uploading, setUploading] = useState(false);
   const [uploadPreview, setUploadPreview] = useState(null);
   const [uploadError, setUploadError] = useState('');
+  // A failed UPLOAD shows inside the dialog, not the page banner behind it (which a later success never cleared).
+  const [uploadFailure, setUploadFailure] = useState('');
   const fileInputRef = useRef(null);
 
   // Zoom state
@@ -228,6 +230,7 @@ export default function LocationDetail() {
     const f = e.target.files[0];
     if (!f) return;
     setUploadError('');
+    setUploadFailure('');
     if (f.size > MAX_UPLOAD_MB * 1024 * 1024) {
       setUploadError(`File is ${(f.size / 1024 / 1024).toFixed(1)} MB — maximum is ${MAX_UPLOAD_MB} MB.`);
       e.target.value = '';
@@ -241,6 +244,7 @@ export default function LocationDetail() {
   const handleUploadMap = async () => {
     if (!uploadFile || !uploadName.trim()) return;
     setUploading(true);
+    setUploadFailure('');
     try {
       const newMap = await locationService.uploadMap(campaignId, locationId, uploadName, uploadFile);
       const updatedMaps = [...maps, newMap];
@@ -249,9 +253,10 @@ export default function LocationDetail() {
       setUploadName('');
       setUploadFile(null);
       setUploadPreview(null);
+      setError(''); // a stale banner from an earlier failure must not outlive a success
       await selectMap(campaignId, locationId, newMap);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Upload failed');
+      setUploadFailure(err.response?.data?.detail || 'Upload failed');
     } finally {
       setUploading(false);
     }
@@ -560,7 +565,7 @@ export default function LocationDetail() {
                     variant="outline"
                     size="sm"
                     className="w-full"
-                    onClick={() => { setShowUpload(true); setUploadName(''); setUploadFile(null); setUploadPreview(null); }}
+                    onClick={() => { setShowUpload(true); setUploadName(''); setUploadFile(null); setUploadPreview(null); setUploadFailure(''); }}
                   >
                     <Upload className="w-3 h-3 mr-1" /> Upload Map
                   </Button>
@@ -738,7 +743,7 @@ export default function LocationDetail() {
                       <>
                         <p className="text-muted-foreground text-sm">No map selected</p>
                         {isGm && (
-                          <Button variant="outline" size="sm" className="mt-3" onClick={() => { setShowUpload(true); setUploadName(''); setUploadFile(null); setUploadPreview(null); }}>
+                          <Button variant="outline" size="sm" className="mt-3" onClick={() => { setShowUpload(true); setUploadName(''); setUploadFile(null); setUploadPreview(null); setUploadFailure(''); }}>
                             <Upload className="w-3.5 h-3.5 mr-1" /> Upload First Map
                           </Button>
                         )}
@@ -1260,7 +1265,7 @@ export default function LocationDetail() {
       </div>
 
       {/* ───── UPLOAD MAP DIALOG ───── */}
-      <Dialog open={showUpload} onOpenChange={(open) => { setShowUpload(open); if (!open) setUploadError(''); }}>
+      <Dialog open={showUpload} onOpenChange={(open) => { setShowUpload(open); if (!open) { setUploadError(''); setUploadFailure(''); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Upload Map</DialogTitle>
@@ -1289,6 +1294,11 @@ export default function LocationDetail() {
               <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileChange} />
             </div>
             {uploadError && <p className="text-sm text-destructive flex items-center gap-1.5"><X className="w-4 h-4 shrink-0" /> {uploadError}</p>}
+            {uploadFailure && (
+              <p className="text-sm text-destructive flex items-center gap-1.5" data-testid="upload-failure">
+                <X className="w-4 h-4 shrink-0" /> {uploadFailure}
+              </p>
+            )}
             {uploadFile && !uploadError && <p className="text-xs text-muted-foreground truncate">{uploadFile.name} ({(uploadFile.size / 1024 / 1024).toFixed(1)} MB)</p>}
           </div>
           <DialogFooter>

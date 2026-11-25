@@ -43,7 +43,9 @@ hardening (upload Content-Type, login rate limit/password minimum, /docs).
 - [ ] Account emails + password reset (welcome email, admin notified of new accounts, forgot/reset password). Needs an
   email provider and a reset-token table; nothing sends email today.
 - [ ] Items deep dive, incl. moving the 34 potion-type magic items into Potions (seed change + delete the prod rows).
-- [ ] Bug: the Locations "Upload failed" banner stays up after a later upload succeeds.
+- [x] Bug: the Locations "Upload failed" banner stays up after a later upload succeeds. (A failed upload now shows inside
+  the Upload dialog — `upload-failure` — and is cleared by a retry, a new file, closing, or success; success also clears any
+  stale page banner.)
 
 ## T5 — Production operations
 - [ ] **Upgrade the free Render database before January.** It expires ~2026-12-18, but Robert (2026-11-23): nothing

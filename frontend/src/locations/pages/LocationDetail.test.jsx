@@ -25,6 +25,8 @@ vi.mock('../locationService', () => ({
     getMaps: vi.fn(),
     getLocations: vi.fn(),
     getLocationNpcs: vi.fn(),
+    uploadMap: vi.fn(),
+    getPins: vi.fn().mockResolvedValue([]),
   },
   mapImageUrl: (p) => `http://localhost:8000/${p}`,
 }));
@@ -272,5 +274,56 @@ describe('LocationDetail — maps for a real player vs the GM (T3)', () => {
     useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
     renderDetail();
     expect(await screen.findByText('No maps yet. Upload one to get started.')).toBeInTheDocument();
+  });
+});
+
+describe('LocationDetail — upload failures stay in the Upload dialog (T4 banner bug)', () => {
+  const NEW_MAP = { id: 40, location_id: 7, name: 'Docks', image_path: 'uploads/maps/42/7/d.png', is_visible_to_players: false };
+
+  beforeEach(() => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    URL.createObjectURL = vi.fn(() => 'blob:preview');
+  });
+
+  async function openAndFill() {
+    renderDetail();
+    fireEvent.click(await screen.findByRole('button', { name: /upload map/i }));
+    fireEvent.change(screen.getByPlaceholderText(/City Overview/), { target: { value: 'Docks' } });
+    const file = new File(['x'], 'docks.png', { type: 'image/png' });
+    fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } });
+  }
+  const submit = () => fireEvent.click(screen.getByRole('button', { name: /^upload$/i }));
+
+  it('a failed upload shows its message inside the dialog, not as the page banner', async () => {
+    locationService.uploadMap.mockRejectedValue({ response: { data: { detail: 'File too large' } } });
+    await openAndFill();
+    submit();
+    expect(await screen.findByTestId('upload-failure')).toHaveTextContent('File too large');
+    // the Upload button stays usable so the GM can simply retry
+    expect(screen.getByRole('button', { name: /^upload$/i })).not.toBeDisabled();
+  });
+
+  it('a retry that succeeds clears the failure and leaves no banner behind', async () => {
+    locationService.uploadMap
+      .mockRejectedValueOnce({ response: { data: { detail: 'Network hiccup' } } })
+      .mockResolvedValueOnce(NEW_MAP);
+    await openAndFill();
+    submit();
+    await screen.findByTestId('upload-failure');
+    submit();
+    await waitFor(() => expect(locationService.uploadMap).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('upload-failure')).toBeNull());
+    expect(screen.queryByText('Network hiccup')).toBeNull();
+    expect(screen.queryByText('Upload failed')).toBeNull();
+  });
+
+  it('closing and reopening the dialog starts clean', async () => {
+    locationService.uploadMap.mockRejectedValue({ response: { data: { detail: 'Nope' } } });
+    await openAndFill();
+    submit();
+    await screen.findByTestId('upload-failure');
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /upload map/i }));
+    expect(screen.queryByTestId('upload-failure')).toBeNull();
   });
 });

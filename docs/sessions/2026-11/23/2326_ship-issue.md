@@ -3,14 +3,14 @@ session_id: 05c19ffe-a208-44cb-8b78-2114ea1032e2
 title: /ship-it, T2 security, v0.2.0 release, T3 fixes
 date: 2026-11-23
 started: 23:26
-branch: feature/t3-smoke-test-fixes
+branch: feature/upload-banner-fix
 area: backend
 tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule]
 issues: []
-summary: /ship→/ship-it; T2 security (3 slices) released as v0.2.0; T3 smoke-test fixes (owner, search, tabs, player Locations)
-turns: 22
+summary: /ship→/ship-it; T2 security → v0.2.0; T3 fixes → v0.3.0; Locations upload-failure banner fix
+turns: 27
 stepped_in: false
-last_uuid: 00ec4464-592f-4bfe-9a39-63f06f87dba1
+last_uuid: 26b03e7a-521f-44c7-8b03-b0be2ae53842
 ---
 
 # /ship-it, T2 security, v0.2.0 release, T3 fixes
@@ -79,6 +79,11 @@ last_uuid: 00ec4464-592f-4bfe-9a39-63f06f87dba1
   - Built-in `/ship` turned off for the repo via `skillOverrides` in `.claude/settings.json` (Robert asked to remove it).
   - Verified: one-letter search + owner_username live; Playwright GM-side (hidden-map notice on Yaara's world map,
     "z" search, logout in tab 2 → tab 1 to /login). Player side not driven (no player password) — Robert to try.
+  - Shipped as `1cd83b9`; released as **v0.3.0** (no migration, so no backup/rehearsal; CI on production passed).
+- **T4 "Upload failed" banner** on `feature/upload-banner-fix`: a failed map upload set the PAGE banner (behind the open
+  dialog) and a later success never cleared it. Now `uploadFailure` shows inside the Upload dialog (`upload-failure`),
+  Upload stays enabled for a retry, it clears on retry/new file/close/success, and success clears any stale page banner.
+  3 tests (fail on old code). Verified live: a GIF upload shows the server's message in the dialog, no banner after close.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -137,6 +142,7 @@ last_uuid: 00ec4464-592f-4bfe-9a39-63f06f87dba1
 - `characters/service.py` functions still take an unused `is_admin` param (kept so callers didn't change) — drop it in
   a cleanup pass.
 - Released as v0.2.0. T3 (this ship) still needs a `/release`.
+- Next agreed: the shared axios client + token-expiry handling (T6), then password reset (needs an email provider).
 - Verify the `skillOverrides` key actually disables `/ship` (listed as "ship-local (ship)"); if `/ship` still runs, the key
   name didn't match.
 - Player-side check of T3 Locations: make Yaara's world map visible, log in as a player.
@@ -543,3 +549,84 @@ last_uuid: 00ec4464-592f-4bfe-9a39-63f06f87dba1
 >    - **Same page:** both location pages showed real players the GM's layout …
 
 **Commands run:** 5
+
+### 23. 2026-11-25 15:10
+
+**Robert:**
+> okay Lets delete the / ship command so we dont accidentally use it and then /ship-it
+
+**Claude:**
+> The T3 fixes are shipped: `main` is at **1cd83b9** and pushed to GitHub. The feature branch is deleted, and it was never pushed, so there was nothing to delete there. The commit holds all four T3 fixes, the release note on the ticket, and the setting that turns off `/ship`.
+> 
+> **About deleting `/ship`:** it's part of Claude Code itself, not a file in your project, so it can't be deleted outright. Instead I turned it off for this repo with a setting in `.claude/settings.json`, which hides it from me and from the `/` menu. That setting is now in the repo. The built-in shows up in my list as "ship-local (ship)", and I wasn't sure which of those two names the setting matches, so I turned off both. Neither affects `/ship-it`.
+> 
+> **To confirm it worked:** in a new session, type `/` and check that `ship` no longer appears. If it still runs the built-in, the name didn't match and I'll try another ap …
+
+**Files edited:** `.claude/settings.json`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/log_t3.py` · **Commands run:** 6
+
+### 24. 2026-11-25 15:14
+
+**Robert:**
+> /release
+
+**Claude:**
+> There are no blockers. This one needs no backup or rehearsal, because it has no database changes. Here's what I'd release:
+> 
+> **v0.3.0**, commits `v0.2.0..1cd83b9` (1 commit). It's a minor version bump because players will notice these changes.
+> 
+> **Features**
+> - **Character cards:** they show who plays each character ("Played by …") on every card that isn't yours.
+> - **Invite search:** it now finds usernames from the first letter you type.
+> - **Locations, players:** they now get the same page as the GM's Player View: the world map, the Hierarchy/A–Z toggle, and no GM buttons. An empty Maps tab says "No visible maps."
+> - **Locations, GM:** you're told when a map is hidden from players: a warning above the world map, a badge on each hidden map, and a note when uploading.
+> 
+> **Fixes**
+> - **Login across tabs:** logging in or out in one tab now switches your other open tabs too, so no window keeps acti …
+
+**Commands run:** 2
+
+### 25. 2026-11-25 15:23
+
+**Robert:**
+> yes
+
+**Claude:**
+> `v0.3.0` is tagged and pushed, and `production` is at `1cd83b9`. Now I'm waiting for the CI run on `production` and then Render's deploy, typically about 10 minutes. Once the new bundle is live, I'll run the outside checks.
+
+**Commands run:** 4
+
+### 26. 2026-11-25 15:32
+
+**Robert:**
+> should we wait or go on to the next ticket
+
+**Claude:**
+> Go on. The release check runs in the background, so nothing needs to wait for it. I'll report the live-site result when the deploy lands, around 10 minutes from now. The release needs nothing more from me, except the usual browser smoke test from you once it's up.
+> 
+> **What's left on the post-deploy ticket:**
+> 
+> **T4, feature requests**
+> - **"Upload failed" banner bug:** on Locations, the banner stays up after a later upload succeeds. A quick fix; I'd start here.
+> - **Account emails + password reset:** welcome email, admin notified of new accounts, forgot/reset password. This is the biggest item: it needs an email provider (Resend or Postmark have free tiers) and a reset-token table. Right now a forgotten password needs a database fix by hand.
+> - **Items deep dive:** includes moving the 34 potion-type magic items into Potions, which is a seed change plus deleting rows in production. It's medium …
+
+### 27. 2026-11-25 15:33
+
+**Robert:**
+> yep lets start.
+
+**Claude:**
+> The "Upload failed" banner bug is fixed on `feature/upload-banner-fix`, waiting for `/ship-it`.
+> 
+> **What was wrong:** a failed map upload put its message in the page-wide error banner, behind the still-open Upload dialog. A later successful upload never cleared it, so the "Upload failed" message stayed up.
+> 
+> **Fix** (in [LocationDetail.jsx](frontend/src/locations/pages/LocationDetail.jsx)):
+> - **Where it shows:** a failed upload shows its message inside the Upload dialog, where you're looking.
+> - **Retrying:** the Upload button stays enabled, so you can retry straight away.
+> - **Clearing:** the message goes away when you retry, pick a new file, close the dialog, or upload successfully.
+> - **On success:** any leftover error banner on the page is cleared.
+> 
+> **Checked:**
+> - **Tests:** three new ones in `LocationDetail.test.jsx`, all failing on the old code. The full frontend suite passes, 3,991 tes …
+
+**Commands run:** 14

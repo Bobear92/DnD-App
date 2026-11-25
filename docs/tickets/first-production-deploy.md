@@ -139,7 +139,7 @@ Code changes (T1–T5b) go on a feature branch and ship to `main` as usual. T6 o
 - [x] R2 proven on the live site 2026-11-20: a map upload stored and rendered from the r2.dev URL. The first try failed with
   `InvalidArgument: Credential access key has length 31, should be 32` (a character lost when the key was hand-copied); the
   token was recreated using the copy buttons. Still owed (T10): redeploy and confirm the map survives.
-- [ ] Follow-up (UI): the Locations "Upload failed" banner stays up after a later upload succeeds.
+- [x] Follow-up (UI): the Locations "Upload failed" banner stays up after a later upload succeeds. (Fixed 2026-11-25 — see post-deploy-followups.md › T4.)
 - [x] Create Render Postgres; note the internal URL.
 - [x] Python 3.12 pinned via `PYTHON_VERSION`.
 - [x] Create the backend Web Service from the repo, root `backend/`, start command `bash start.sh`, **deploying from the `production` branch**.
