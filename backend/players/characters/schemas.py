@@ -115,6 +115,7 @@ class CharacterListItem(BaseModel):
     alignment: Optional[str]
     campaign_id: int
     user_id: int
+    owner_username: Optional[str] = None  # who plays it (shown on the character cards)
     is_visible_to_players: bool
     experience_points: int
     level_up_pending: bool

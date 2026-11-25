@@ -232,3 +232,45 @@ describe('LocationDetail — Sessions card (player preview)', () => {
     await waitFor(() => expect(screen.getByText('The Arrival')).toBeTruthy());
   });
 });
+
+describe('LocationDetail — maps for a real player vs the GM (T3)', () => {
+  const MAP = { id: 30, location_id: 7, name: 'Harbour', image_path: 'uploads/maps/42/7/h.png', is_visible_to_players: false };
+
+  it("a real player sees 'No visible maps.' — never the GM's upload prompt", async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    renderDetail();
+    expect(await screen.findByText('No visible maps.')).toBeInTheDocument();
+    expect(screen.queryByText(/Upload one to get started/)).toBeNull();
+  });
+
+  it('a real player gets no GM chrome (preview button, banner, Visible/Hidden badge, upload)', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    renderDetail();
+    await screen.findByText('No visible maps.');
+    expect(screen.queryByTitle('Preview what players see')).toBeNull();
+    expect(screen.queryByText(/Previewing as player/)).toBeNull();
+    expect(screen.queryByText('Upload Map')).toBeNull();
+    expect(screen.queryByText('Visible')).toBeNull();
+  });
+
+  it('the GM sees a persistent "Hidden from players" badge on a hidden map', async () => {
+    locationService.getMaps.mockResolvedValue([MAP]);
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderDetail();
+    expect(await screen.findByTestId('map-hidden-badge-30')).toHaveTextContent('Hidden from players');
+  });
+
+  it('no badge once the map is visible', async () => {
+    locationService.getMaps.mockResolvedValue([{ ...MAP, is_visible_to_players: true }]);
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderDetail();
+    await screen.findAllByAltText('Harbour');
+    expect(screen.queryByTestId('map-hidden-badge-30')).toBeNull();
+  });
+
+  it("the GM's empty Maps tab still invites an upload", async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderDetail();
+    expect(await screen.findByText('No maps yet. Upload one to get started.')).toBeInTheDocument();
+  });
+});

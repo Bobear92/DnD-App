@@ -204,7 +204,7 @@ const campaignService = {
 
   // Search users by username (for invite flow) — the API never matches or returns emails
   searchUsers: async (q) => {
-    if (!q || q.length < 2) return { success: true, data: [] };
+    if (!q) return { success: true, data: [] };
     try {
       const response = await authApi.get('/users/search', { params: { q } });
       return { success: true, data: response.data };

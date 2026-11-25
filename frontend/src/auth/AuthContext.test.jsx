@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AuthProvider, useAuth } from './AuthContext';
+import { AuthProvider, useAuth, redirectOnTokenChange } from './AuthContext';
 
 // Mock authService so tests don't hit the real API
 vi.mock('./authService', () => ({
@@ -127,5 +127,50 @@ describe('AuthContext', () => {
     getByRole('button', { name: 'logout' }).click();
 
     expect(localStorage.getItem('selectedCampaign')).toBeNull();
+  });
+});
+
+describe('a login in another tab switches this tab (T3)', () => {
+  const ev = (key, oldValue, newValue) => ({ key, oldValue, newValue });
+
+  it('another account logging in sends this tab to /campaigns', () => {
+    const go = vi.fn();
+    redirectOnTokenChange(ev('token', 'token-for-A', 'token-for-B'), go);
+    expect(go).toHaveBeenCalledWith('/campaigns');
+  });
+
+  it('a login where this tab was logged out also goes to /campaigns', () => {
+    const go = vi.fn();
+    redirectOnTokenChange(ev('token', null, 'token-for-B'), go);
+    expect(go).toHaveBeenCalledWith('/campaigns');
+  });
+
+  it('a logout in another tab sends this tab to /login', () => {
+    const go = vi.fn();
+    redirectOnTokenChange(ev('token', 'token-for-A', null), go);
+    expect(go).toHaveBeenCalledWith('/login');
+    const go2 = vi.fn();
+    redirectOnTokenChange(ev(null, null, null), go2); // localStorage.clear()
+    expect(go2).toHaveBeenCalledWith('/login');
+  });
+
+  it('ignores other keys and unchanged tokens', () => {
+    const go = vi.fn();
+    redirectOnTokenChange(ev('selectedCampaign', '{}', '{"id":2}'), go);
+    redirectOnTokenChange(ev('token', 'same', 'same'), go);
+    expect(go).not.toHaveBeenCalled();
+  });
+
+  it('the provider listens for storage events and stops on unmount', async () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = renderWithProvider();
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+    const handler = add.mock.calls.find(([type]) => type === 'storage')?.[1];
+    expect(handler).toBeTypeOf('function');
+    unmount();
+    expect(remove).toHaveBeenCalledWith('storage', handler);
+    add.mockRestore();
+    remove.mockRestore();
   });
 });

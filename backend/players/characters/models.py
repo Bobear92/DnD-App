@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Boolean, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 from shared.database import Base
 
 class Character(Base):
@@ -29,6 +30,8 @@ class Character(Base):
 
     # Ownership & Campaign
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # Who plays it — read via owner_username (the GM's character cards show it). ORM-only, no column.
+    owner = relationship("User", lazy="selectin")
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
 
     # Leveling
@@ -57,6 +60,10 @@ class Character(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    @property
+    def owner_username(self):
+        return self.owner.username if self.owner else None
 
     def __repr__(self):
         return f"<Character(id={self.id}, name='{self.name}', class='{self.char_class}', level={self.level})>"

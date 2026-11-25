@@ -4,6 +4,8 @@ Moved out of CLAUDE.md on 2026-11-23. **Update the matching table in the same ch
 
 Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs` (only with `API_DOCS=true` — off by default and in production; liveness is `GET /health`)
 
+`GET /api/characters/campaign/{id}` list items carry `owner_username` (who plays it; never an email).
+
 **Login is throttled:** 10 failed logins for one email from one IP within 15 minutes → `429` with `Retry-After`; a success clears it (`auth/rate_limit.py`, in memory — one instance). **Register** requires a password of 8+ characters (422 otherwise). **Uploads** store a Content-Type and extension taken from the allow-list in `shared/file_storage.py`, never from the client.
 
 **Compendium reads are member-scoped** (races, backgrounds, feats, classes, bestiary, spells, the six item types): a
@@ -18,7 +20,7 @@ Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs` (only wit
 | POST | /api/auth/register | No |
 | POST | /api/auth/login | No |
 | GET | /api/auth/me | Yes |
-| GET | /api/auth/users/search?q=X | Yes — returns up to 10 `{id, username}` matching the **username only** (min 2 chars; never matches or returns emails); excludes requester; used in GM invite flow |
+| GET | /api/auth/users/search?q=X | Yes — returns up to 10 `{id, username}` matching the **username only** (from 1 char; never matches or returns emails); excludes requester; used in GM invite flow |
 
 ## Campaigns
 | Method | Endpoint | Auth Required |

@@ -43,7 +43,7 @@ def get_current_user_info(current_user: User = Depends(get_current_user)):
 
 @router.get("/users/search", response_model=List[UserSearchResult])
 def search_users(
-    q: str = Query(..., min_length=2),
+    q: str = Query(..., min_length=1),  # from the first letter (T3: browsable); still capped at 10 usernames
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

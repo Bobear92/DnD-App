@@ -449,10 +449,13 @@ export default function LocationDetail() {
   };
 
   const isGm = campaign?.userRole === 'gm';
+  // What a PLAYER sees: a real player always, or the GM previewing with Player View (T3 — real players used to get
+  // the GM-shaped page because these checks read only the GM's local preview toggle).
+  const asPlayer = !isGm || playerView;
 
-  const visibleMaps = playerView ? maps.filter(m => m.is_visible_to_players) : maps;
-  const visiblePins = playerView ? pins.filter(p => p.is_visible_to_players) : pins;
-  const visibleNpcs = playerView ? locationNpcs.filter(n => n.is_visible_to_players) : locationNpcs;
+  const visibleMaps = asPlayer ? maps.filter(m => m.is_visible_to_players) : maps;
+  const visiblePins = asPlayer ? pins.filter(p => p.is_visible_to_players) : pins;
+  const visibleNpcs = asPlayer ? locationNpcs.filter(n => n.is_visible_to_players) : locationNpcs;
 
   useEffect(() => {
     if (!campaign || !visibleMaps.length) return;
@@ -460,7 +463,7 @@ export default function LocationDetail() {
     if (!currentVisible) {
       selectMap(campaignId, locationId, visibleMaps[0]);
     }
-  }, [playerView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [asPlayer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Info tab helpers ──────────────────────────────────────────────────────
 
@@ -503,21 +506,23 @@ export default function LocationDetail() {
             <div className="flex gap-2 mt-1 flex-wrap">
               {location.location_type && <Badge variant="secondary">{location.location_type}</Badge>}
               {location.status && <Badge variant="outline">{location.status}</Badge>}
-              {location.is_visible_to_players
+              {!asPlayer && (location.is_visible_to_players
                 ? <Badge variant="secondary" className="text-xs gap-1"><Eye className="w-3 h-3" /> Visible</Badge>
-                : <Badge variant="outline" className="text-xs gap-1"><EyeOff className="w-3 h-3" /> Hidden</Badge>}
+                : <Badge variant="outline" className="text-xs gap-1"><EyeOff className="w-3 h-3" /> Hidden</Badge>)}
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button
-              variant={playerView ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPlayerView(v => !v)}
-              title="Preview what players see"
-            >
-              <Users className="w-4 h-4" />
-            </Button>
-            {isGm && !playerView && (
+            {isGm && (
+              <Button
+                variant={playerView ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPlayerView(v => !v)}
+                title="Preview what players see"
+              >
+                <Users className="w-4 h-4" />
+              </Button>
+            )}
+            {!asPlayer && (
               <Button variant="outline" size="sm" onClick={handleToggleLocationVisibility} title={location.is_visible_to_players ? 'Hide from players' : 'Show to players'}>
                 {location.is_visible_to_players ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </Button>
@@ -525,7 +530,7 @@ export default function LocationDetail() {
           </div>
         </div>
 
-        {playerView && (
+        {isGm && playerView && (
           <div className="mb-4 p-3 bg-muted rounded-md text-sm flex items-center gap-2">
             <Users className="w-4 h-4 shrink-0" />
             Previewing as player — only visible content is shown. GM notes are hidden.
@@ -550,7 +555,7 @@ export default function LocationDetail() {
             <div className="flex gap-4 h-[calc(100vh-300px)] min-h-[400px]">
               {/* Left: map thumbnail strip */}
               <div className="w-48 shrink-0 flex flex-col gap-2 overflow-y-auto pr-1">
-                {isGm && !playerView && (
+                {!asPlayer && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -562,7 +567,7 @@ export default function LocationDetail() {
                 )}
                 {visibleMaps.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center pt-4 px-2">
-                    {playerView ? 'No visible maps.' : 'No maps yet. Upload one to get started.'}
+                    {asPlayer ? 'No visible maps.' : 'No maps yet. Upload one to get started.'}
                   </p>
                 )}
                 {visibleMaps.map((m) => (
@@ -582,7 +587,16 @@ export default function LocationDetail() {
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
                       <p className="text-white text-xs font-medium truncate">{m.name}</p>
                     </div>
-                    {isGm && !playerView && (
+                    {/* Always shown (not just on hover): maps start hidden from players (T3) */}
+                    {!asPlayer && !m.is_visible_to_players && (
+                      <span
+                        data-testid={`map-hidden-badge-${m.id}`}
+                        className="absolute top-1 left-1 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-amber-200"
+                      >
+                        <EyeOff className="w-3 h-3" /> Hidden from players
+                      </span>
+                    )}
+                    {!asPlayer && (
                       <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => handleToggleMapVisibility(m.id, e)}
@@ -621,7 +635,7 @@ export default function LocationDetail() {
                           <ZoomIn className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      {isGm && !playerView && (
+                      {!asPlayer && (
                         <Button variant={addingPin ? 'default' : 'outline'} size="sm" onClick={() => { setAddingPin(a => !a); setMovingPin(null); }}>
                           <MapPin className="w-3.5 h-3.5 mr-1" />
                           {addingPin ? 'Cancel' : 'Add Pin'}
@@ -679,7 +693,7 @@ export default function LocationDetail() {
                                           <ExternalLink className="w-3 h-3" /> Go to {linkedLoc.name}
                                         </button>
                                       )}
-                                      {isGm && !playerView && (
+                                      {!asPlayer && (
                                         <div className="flex gap-1 mt-1">
                                           <button onClick={(e) => openEditPin(pin, e)} className="flex-1 flex items-center justify-center gap-1 text-xs py-1 rounded border hover:bg-muted">
                                             <Pencil className="w-3 h-3" /> Edit
@@ -715,7 +729,7 @@ export default function LocationDetail() {
                 ) : (
                   <div className="flex-1 flex flex-col items-center justify-center text-center rounded-lg border border-dashed bg-zinc-900/30">
                     <Map className="w-12 h-12 text-muted-foreground mb-3" />
-                    {playerView ? (
+                    {asPlayer ? (
                       <>
                         <p className="text-muted-foreground text-sm">No maps are visible to players yet.</p>
                         <p className="text-muted-foreground text-xs mt-1">Toggle off player view and use the <EyeOff className="w-3 h-3 inline" /> icon on a map thumbnail to make it visible.</p>
@@ -738,7 +752,7 @@ export default function LocationDetail() {
 
           {/* ───── INFO TAB ───── */}
           <TabsContent value="info">
-            {playerView ? (
+            {asPlayer ? (
               /* ── Player view: read-only, fields hidden if empty ── */
               <div className="space-y-6">
                 {/* Details */}
@@ -1250,6 +1264,9 @@ export default function LocationDetail() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Upload Map</DialogTitle>
+            <p className="text-xs text-muted-foreground" data-testid="upload-starts-hidden">
+              New maps start hidden from players. Show one with the eye on its thumbnail.
+            </p>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">

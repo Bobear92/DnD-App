@@ -48,7 +48,7 @@ function buildHierarchyTree(topLevel, locMap, locs) {
 
 // ── LocationTreeNode ─────────────────────────────────────────────────────────
 
-function LocationTreeNode({ node, depth, navigate, campaignId, isGm, playerView, onToggleVisibility }) {
+function LocationTreeNode({ node, depth, navigate, campaignId, isGm, asPlayer, onToggleVisibility }) {
   const [expanded, setExpanded] = useState(true);
   const { loc, children } = node;
 
@@ -78,7 +78,7 @@ function LocationTreeNode({ node, depth, navigate, campaignId, isGm, playerView,
           {loc.status && (
             <Badge variant="outline" className="text-xs">{loc.status}</Badge>
           )}
-          {isGm && !playerView && (
+          {!asPlayer && (
             <button
               onClick={(e) => { e.stopPropagation(); onToggleVisibility(loc.id, e); }}
               className="text-muted-foreground hover:text-foreground ml-1"
@@ -101,7 +101,7 @@ function LocationTreeNode({ node, depth, navigate, campaignId, isGm, playerView,
               navigate={navigate}
               campaignId={campaignId}
               isGm={isGm}
-              playerView={playerView}
+              asPlayer={asPlayer}
               onToggleVisibility={onToggleVisibility}
             />
           ))}
@@ -113,7 +113,7 @@ function LocationTreeNode({ node, depth, navigate, campaignId, isGm, playerView,
 
 // ── LocationCard (flat/grid view) ────────────────────────────────────────────
 
-function LocationCard({ loc, navigate, campaignId, isGm, playerView, onToggleVisibility }) {
+function LocationCard({ loc, navigate, campaignId, isGm, asPlayer, onToggleVisibility }) {
   return (
     <Card
       className="cursor-pointer hover:shadow-md transition-shadow"
@@ -122,7 +122,7 @@ function LocationCard({ loc, navigate, campaignId, isGm, playerView, onToggleVis
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base leading-tight">{loc.name}</CardTitle>
-          {isGm && !playerView && (
+          {!asPlayer && (
             <button
               onClick={(e) => onToggleVisibility(loc.id, e)}
               className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
@@ -245,11 +245,14 @@ export default function LocationList() {
   };
 
   const isGm = campaign?.userRole === 'gm';
+  // What a PLAYER sees: a real player always, or the GM previewing with Player View (T3 — real players used to get
+  // the GM-shaped page because these checks read only the GM's local preview toggle).
+  const asPlayer = !isGm || playerView;
 
   // ── Derived data ────────────────────────────────────────────────────────────
 
   const displayLocs = useMemo(() => {
-    const base = playerView ? locations.filter(l => l.is_visible_to_players) : locations;
+    const base = asPlayer ? locations.filter(l => l.is_visible_to_players) : locations;
     if (!searchQuery.trim()) return base;
     const q = searchQuery.toLowerCase();
     return base.filter(l =>
@@ -257,7 +260,7 @@ export default function LocationList() {
       (l.description || '').toLowerCase().includes(q) ||
       (l.location_type || '').toLowerCase().includes(q)
     );
-  }, [locations, playerView, searchQuery]);
+  }, [locations, asPlayer, searchQuery]);
 
   const locMap = useMemo(
     () => Object.fromEntries(displayLocs.map(l => [l.id, l])),
@@ -315,12 +318,12 @@ export default function LocationList() {
 
   // ── Top-level map derived data ───────────────────────────────────────────────
 
-  const visibleTopMaps = playerView ? topLevelMaps.filter(m => m.is_visible_to_players) : topLevelMaps;
+  const visibleTopMaps = asPlayer ? topLevelMaps.filter(m => m.is_visible_to_players) : topLevelMaps;
   const selectedTopMap = visibleTopMaps.find(m => m.id === selectedTopMapId) || visibleTopMaps[0] || null;
 
   // ── Handlers for toggle visibility in tree ──────────────────────────────────
 
-  const toggleProps = { campaignId, isGm, playerView, onToggleVisibility: handleToggleVisibility };
+  const toggleProps = { campaignId, isGm, asPlayer, onToggleVisibility: handleToggleVisibility };
 
   // ── Loading ─────────────────────────────────────────────────────────────────
 
@@ -337,7 +340,7 @@ export default function LocationList() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   const isSearching = searchQuery.trim().length > 0;
-  const showHierarchy = !isSearching && (playerView ? viewMode === 'hierarchy' : true);
+  const showHierarchy = !isSearching && (asPlayer ? viewMode === 'hierarchy' : true);
 
   return (
     <MainLayout>
@@ -351,20 +354,22 @@ export default function LocationList() {
               Locations
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              {campaign?.name} — {playerView ? 'showing player view' : 'manage campaign locations and maps'}
+              {campaign?.name} — {!isGm ? 'the places your party knows about' : asPlayer ? 'showing player view' : 'manage campaign locations and maps'}
             </p>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant={playerView ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPlayerView(v => !v)}
-              title="Preview what players see"
-            >
-              <Users className="w-4 h-4 mr-2" />
-              Player View
-            </Button>
-            {isGm && !playerView && (
+            {isGm && (
+              <Button
+                variant={playerView ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPlayerView(v => !v)}
+                title="Preview what players see"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Player View
+              </Button>
+            )}
+            {!asPlayer && (
               <Button onClick={() => setShowCreate(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 New Location
@@ -373,8 +378,8 @@ export default function LocationList() {
           </div>
         </div>
 
-        {/* Player view banner */}
-        {playerView && (
+        {/* Player view banner — the GM's preview only; a real player just sees their page */}
+        {isGm && playerView && (
           <div className="mb-4 p-3 bg-muted rounded-md text-sm flex items-center gap-2">
             <Users className="w-4 h-4 shrink-0" />
             Previewing as player — only visible locations are shown.
@@ -396,8 +401,8 @@ export default function LocationList() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          {/* Only show view-mode toggle in player view (or playerView preview) */}
-          {playerView && (
+          {/* Only show view-mode toggle in player view (or asPlayer preview) */}
+          {asPlayer && (
             <div className="flex rounded-md border overflow-hidden shrink-0">
               <button
                 className={cn('px-3 py-1.5 text-sm flex items-center gap-1.5', viewMode === 'hierarchy' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}
@@ -420,16 +425,16 @@ export default function LocationList() {
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <MapPin className="w-12 h-12 text-muted-foreground mb-4" />
             <h2 className="text-lg font-medium mb-1">
-              {isSearching ? 'No matching locations' : playerView ? 'No Visible Locations' : 'No Locations Yet'}
+              {isSearching ? 'No matching locations' : asPlayer ? 'No Visible Locations' : 'No Locations Yet'}
             </h2>
             <p className="text-muted-foreground text-sm mb-4">
               {isSearching
                 ? 'Try a different search term.'
-                : playerView
+                : asPlayer
                 ? 'No locations have been made visible to players yet.'
                 : 'Add your first location to start building your world.'}
             </p>
-            {isGm && !playerView && !isSearching && (
+            {!asPlayer && !isSearching && (
               <Button onClick={() => setShowCreate(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create First Location
@@ -448,7 +453,7 @@ export default function LocationList() {
         )}
 
         {/* ── Alphabetical view (player only, no search) */}
-        {!isSearching && playerView && viewMode === 'alphabetical' && displayLocs.length > 0 && (
+        {!isSearching && asPlayer && viewMode === 'alphabetical' && displayLocs.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...displayLocs].sort((a, b) => a.name.localeCompare(b.name)).map(loc => (
               <LocationCard key={loc.id} loc={loc} navigate={navigate} {...toggleProps} />
@@ -477,8 +482,18 @@ export default function LocationList() {
                   </div>
                 ) : visibleTopMaps.length > 0 && selectedTopMap ? (
                   <div className="mb-4">
+                    {/* Maps start hidden from players, separately from their location (T3) — say so where the GM looks */}
+                    {!asPlayer && topLevelMaps.every(m => !m.is_visible_to_players) && (
+                      <div
+                        data-testid="top-map-hidden-notice"
+                        className="mb-2 p-2.5 rounded-md border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200 flex items-center gap-2"
+                      >
+                        <EyeOff className="w-3.5 h-3.5 shrink-0" />
+                        Players can't see this map yet — maps start hidden from players. Use the eye on the map in {topLevel.name}'s Maps tab to show it.
+                      </div>
+                    )}
                     {/* GM toolbar above the map */}
-                    {isGm && !playerView && (
+                    {!asPlayer && (
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs text-muted-foreground">
                           Map preview — click pins to navigate. Edit info, maps, and pins in the location detail.
@@ -554,7 +569,7 @@ export default function LocationList() {
               ) : (
                 <div className="border rounded-md p-6 text-center text-muted-foreground text-sm">
                   <GitBranch className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  {isGm && !playerView
+                  {!asPlayer
                     ? 'No top-level location set. Open a location\'s Info tab and mark it as "Top Level" to start building the hierarchy.'
                     : 'No hierarchy configured yet.'}
                 </div>
@@ -562,7 +577,7 @@ export default function LocationList() {
             </div>
 
             {/* Unsorted — GM only, not player view */}
-            {!playerView && unsortedLocs.length > 0 && (
+            {!asPlayer && unsortedLocs.length > 0 && (
               <div>
                 <SectionHeader
                   icon={Layers}
@@ -616,7 +631,7 @@ export default function LocationList() {
                 />
                 {unknownOpen && (
                   <div className="space-y-1 border rounded-md p-3 bg-card">
-                    {!playerView && (
+                    {!asPlayer && (
                       <p className="text-xs text-muted-foreground mb-3 px-2">
                         Players can see these locations but don't know where they fit geographically.
                       </p>
@@ -631,7 +646,7 @@ export default function LocationList() {
                         <span className="text-sm flex-1 min-w-0 truncate">{loc.name}</span>
                         <div className="flex items-center gap-1.5 shrink-0">
                           {loc.location_type && <Badge variant="secondary" className="text-xs">{loc.location_type}</Badge>}
-                          {isGm && !playerView && (
+                          {!asPlayer && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleToggleVisibility(loc.id, e); }}
                               className="text-muted-foreground hover:text-foreground ml-1"

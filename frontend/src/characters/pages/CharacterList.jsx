@@ -414,6 +414,13 @@ function CharacterCard({ character, isGm, isOwner, displayAsPlayer, showCheckbox
         {character.race}{character.background ? ` · ${character.background}` : ''}
       </div>
 
+      {/* Who plays it — on every card that isn't your own (T3: the GM couldn't tell whose character was whose) */}
+      {!isOwner && character.owner_username && (
+        <div className={cn('text-xs text-muted-foreground', showCheckbox && 'pl-7')} data-testid={`char-owner-${character.id}`}>
+          Played by <span className="font-medium text-foreground">{character.owner_username}</span>
+        </div>
+      )}
+
       {/* Ability scores */}
       <div className="grid grid-cols-6 gap-1">
         {ABILITY_KEYS.map((key, i) => (

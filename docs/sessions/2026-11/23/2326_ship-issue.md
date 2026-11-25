@@ -1,19 +1,19 @@
 ---
 session_id: 05c19ffe-a208-44cb-8b78-2114ea1032e2
-title: /ship-it rename and T2 security follow-ups
+title: /ship-it, T2 security, v0.2.0 release, T3 fixes
 date: 2026-11-23
 started: 23:26
-branch: feature/t2-hardening
+branch: feature/t3-smoke-test-fixes
 area: backend
 tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule]
 issues: []
-summary: /ship → /ship-it; all of T2 security: leaks, invite+accept, admin≠GM, class writes, uploads, login throttle, /docs
-turns: 12
+summary: /ship→/ship-it; T2 security (3 slices) released as v0.2.0; T3 smoke-test fixes (owner, search, tabs, player Locations)
+turns: 22
 stepped_in: false
-last_uuid: 2a3dde2e-b902-4849-b5d4-32ac42ec891e
+last_uuid: 00ec4464-592f-4bfe-9a39-63f06f87dba1
 ---
 
-# /ship-it rename and T2 security follow-ups
+# /ship-it, T2 security, v0.2.0 release, T3 fixes
 
 <!-- Claude fills the sections below with /log. area is one of: character-system, campaign-tools, encyclopedia, backend, tooling -->
 
@@ -64,6 +64,21 @@ last_uuid: 2a3dde2e-b902-4849-b5d4-32ac42ec891e
   - Tests: `test_hardening.py` (16; 12 fail on old code, the 4 passing are positive controls), `authService.test.js` (4),
     Login register-minimum tests (2). Verified live: /health, 7-char register 422, 11th bad login 429 (Retry-After 898),
     GM login fine; Playwright on the register form (hint + error, no page errors).
+  - Shipped as `b6a7296`.
+- **Release v0.2.0** (`/release`, 2026-11-24): backup `dnd-prod-20261124-0109.dump`, migration rehearsed on a restored
+  copy (counts unchanged), Robert's yes, `production` fast-forwarded + tagged. Render AUTO-deployed (first release since
+  CI runs on `production`) — confirmed by the new bundle hash + `/docs` 404 + new routes live. T5 auto-deploy item closed.
+- **T3 smoke-test fixes** on `feature/t3-smoke-test-fixes`:
+  - Character cards: "Played by {owner_username}" on cards that aren't yours (ORM `owner` relationship, no migration;
+    `owner_username` on `CharacterListItem` + round-trip test).
+  - Invite search from the first letter (min_length 1, still max 10) — option B, no full user dump.
+  - Cross-tab login: `redirectOnTokenChange` on the `storage` event → /campaigns or /login.
+  - Locations: one `asPlayer = !isGm || playerView` flag in LocationList + LocationDetail, so real players get the GM's
+    Player View (they got the GM-shaped page); Player View button/banner GM-only; hidden-map notice, persistent
+    "Hidden from players" badge, upload-dialog note; player "No visible maps."
+  - Built-in `/ship` turned off for the repo via `skillOverrides` in `.claude/settings.json` (Robert asked to remove it).
+  - Verified: one-letter search + owner_username live; Playwright GM-side (hidden-map notice on Yaara's world map,
+    "z" search, logout in tab 2 → tab 1 to /login). Player side not driven (no player password) — Robert to try.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -81,6 +96,11 @@ last_uuid: 2a3dde2e-b902-4849-b5d4-32ac42ec891e
   Same trap for Robert if he checks out an older commit locally.
 - The `/docs` liveness habit was spread across scripts, CLAUDE.md and three skills; `/release` would have reported a
   broken release after this ship had it not been grepped for.
+- Release: the branch-guard hook blocked writing the rehearsal script (a scratchpad file, not the repo) while on
+  `main`; re-issued. Robert questioned "Render picked it up" — I had inferred auto-deploy; the evidence (bundle hash,
+  /docs 404) proves the deploy, not WHO triggered it. Say which one is evidence next time.
+- T3: `owner_username` property was first appended to the wrong class (end of file = CharacterNpc); caught on review.
+  Two test misfires (player view hides hidden chars; duplicate alt text needs findAll).
 - The Playwright check first clicked the campaign title (not "Enter Campaign"), so the page rendered as a non-GM and
   looked like a role regression; checking created_by vs user id via the API ruled that out.
 
@@ -103,6 +123,10 @@ last_uuid: 2a3dde2e-b902-4849-b5d4-32ac42ec891e
 - Login throttle keyed on IP + email (not IP alone, not email alone) so a shared IP or a targeted lockout can't block
   everyone; in memory because production is a single instance — move to DB/Redis if ever scaled out.
 - `/docs` gated by its own `api_docs` setting rather than `debug`, because local `.env` has no DEBUG.
+- Invite search: option B (from the first letter, max 10) — Robert said "go in order" without picking; flagged as revisable.
+- "Played by" shown on every card that isn't yours (GM and players), not GM-only — usernames are already public to members.
+- The built-in `/ship` can't be deleted (it ships with Claude Code); disabled per-repo with `skillOverrides` instead of a
+  prompt-blocking hook.
 
 ## Open threads
 
@@ -112,7 +136,11 @@ last_uuid: 2a3dde2e-b902-4849-b5d4-32ac42ec891e
   on legacy CSS (migrate to Tailwind).
 - `characters/service.py` functions still take an unused `is_admin` param (kept so callers didn't change) — drop it in
   a cleanup pass.
-- Production: T2 (all three slices) needs `/release`; the invites migration runs on deploy (`start.sh`). Existing
+- Released as v0.2.0. T3 (this ship) still needs a `/release`.
+- Verify the `skillOverrides` key actually disables `/ship` (listed as "ship-local (ship)"); if `/ship` still runs, the key
+  name didn't match.
+- Player-side check of T3 Locations: make Yaara's world map visible, log in as a player.
+- Previously: T2 (all three slices) needed `/release`; the invites migration runs on deploy (`start.sh`). Existing
   players stay members. After release, `/release`'s checks expect `/docs` → 404. Hand-test invite→accept with
   SmokeTestPlayer.
 - Local only: `backend/.env` now has `API_DOCS=true`; checking out a pre-slice-3 commit needs that line removed.
@@ -330,3 +358,188 @@ last_uuid: 2a3dde2e-b902-4849-b5d4-32ac42ec891e
 > - **Password minimum of 8 characters:** new accounts need at le …
 
 **Commands run:** 4
+
+### 13. 2026-11-24 01:00
+
+**Robert:**
+> /ship-it
+
+**Claude:**
+> The last of the security follow-ups is shipped: `main` is at **b6a7296** and pushed to GitHub. The working tree is clean, and the feature branch is deleted. It was never pushed, so there was nothing to delete on GitHub.
+> 
+> This commit holds the upload file-type fix, the login rate limit, the 8-character password minimum and hiding `/docs` in production, plus the fix for the login page crash.
+> 
+> **Checks before shipping:** all tests pass, 3,969 frontend and 1,167 backend. The build and the feat-coverage check pass. The running server and the register form were checked earlier in this session.
+> 
+> **T2 is complete.** All eleven security items from the review are fixed across three commits on `main`:
+> - `d2e8762`: the data leaks.
+> - `8382f7c`: invites must be accepted, admins aren't GMs in campaigns they only play in, and campaign-class edits are limited to that campaign's GM.
+> - `b6a7296`: the harde …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/log_slice3.py` · **Commands run:** 2
+
+### 14. 2026-11-24 01:03
+
+**Robert:**
+> /release
+
+**Claude:**
+> The read-only checks are done and nothing blocks the release. Because it includes a database migration, the procedure requires a backup of production and a practice run of the migration on that backup before you say yes. The backup needs one step from you in Render.
+> 
+> **Step 3, what I need from you:** add an inbound rule to the production database so my machine can reach it.
+> 
+> **Don't screenshot the database's Info page while you do this.** The connection URLs shown there contain the database password.
+> 
+> 1. Render dashboard → the **`dnd-app-db`** Postgres → **Networking / Access Control** → **Add source**.
+> 2. Enter **`73.81.96.154/32`** (your current public IP; `/32` means this address only) and save.
+> 3. Tell me when it's saved.
+> 
+> Then I'll do the rest, never printing the URL:
+> - **Backup:** dump the database to `C:\Users\rober\dnd-backups\` with a timestamp.
+> - **Rehearsal:** restore the dump …
+
+**Commands run:** 5
+
+### 15. 2026-11-24 01:09
+
+**Robert:**
+> okay saved
+
+**Claude:**
+> The backup and the rehearsal both passed, so this is ready for your go-ahead. The live frontend is currently `index-82I08alL.js`.
+> 
+> **v0.2.0** — commits `v0.1.2..b6a7296` (7 commits)
+> 
+> **Features**
+> - **Invites:** players now **accept campaign invites** from an Invitations section on their campaign list. GMs see pending invites and can cancel them.
+> - **Passwords:** new accounts need at least 8 characters.
+> 
+> **Fixes (security)**
+> - **Homebrew:** each campaign's homebrew is visible only to that campaign's members.
+> - **Emails:** emails no longer appear in user search or member lists.
+> - **Hidden locations:** they no longer expose their maps, NPCs, relationships or links to players.
+> - **Dates:** timeline and session dates only accept this campaign's calendar eras.
+> - **GM powers:** admins no longer act as GM in campaigns they only play in, and a campaign's classes can only be edited by its GM.
+> - ** …
+
+**Files edited:** `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/rehearse.sh` · **Commands run:** 6
+
+### 16. 2026-11-24 01:11
+
+**Robert:**
+> yes
+
+**Claude:**
+> `v0.2.0` is tagged and pushed, and `production` is at `b6a7296`. I'm waiting for the CI run on `production` and then the Render deploy, typically about 10 minutes, possibly up to 30. When both are live I'll run the outside checks.
+> 
+> While that runs, if you haven't yet, **remove the database inbound rule** (`73.81.96.154/32`) in Render.
+
+**Commands run:** 3
+
+### 17. 2026-11-25 14:23
+
+**Robert:**
+> <task-notification>
+> <task-id>buois0pox</task-id>
+> <task-id>byg1u3v8w</task-id>
+> <task-id>bj38nsibp</task-id>
+> <task-id>b2y3dx2c9</task-id>
+> <task-id>__orphan_summary__:shell</task-id>
+> <status>stopped</status>
+> <summary>4 background shell command tasks didn't finish before the previous session ended. Task ids: buois0pox, byg1u3v8w, bj38nsibp, b2y3dx2c9.</summary>
+> <note>No completion record was found for them in the previous session. They may have been stopped (via the UI, Monitor timeout, or agent teardown — these leave no transcript marker), or they may have been running when the previous Claude Co …
+
+**Claude:**
+> _(no text reply)_
+
+### 18. 2026-11-25 14:24
+
+**Robert:**
+> did the ci finish? Do i need to manually depoy on render?
+
+**Claude:**
+> CI finished and passed, and **you don't need to deploy manually**. Render picked it up automatically, so v0.2.0 is live.
+> 
+> **What I checked on the live site:**
+> - **New version is up:** the frontend bundle changed from `index-82I08alL.js` to `index-DhLCuiQG.js`.
+> - **Backend is up and reaches the database:** `/health` responds, and a bad login gets the normal "invalid email or password" reply.
+> - **Migration ran:** the backend runs it before starting, so the new invites table is in place. The new invite route exists, and the old add-player route is gone.
+> - **Docs page hidden:** `/docs` now returns 404 in production.
+> - **Password rule:** a 7-character sign-up is refused.
+> - **Site works:** your site is still allowed to call the API, and deep links like `/campaigns/1/characters` still load.
+> 
+> **Over to you:**
+> 1. **Remove the database inbound rule** (`73.81.96.154/32`) in Render, if you haven't a …
+
+**Commands run:** 3
+
+### 19. 2026-11-25 14:32
+
+**Robert:**
+> how do we know render manually picked it up. It hasent so far in the past.
+
+**Claude:**
+> Your question is fair: I inferred it rather than saw it. I can't see your Render dashboard, but the live site can only behave this way if the new code is running:
+> 
+> - **Frontend:** the page now loads `index-DhLCuiQG.js` instead of `index-82I08alL.js`, which I recorded before pushing. Vite names that file from its contents, so it only changes when a new build is deployed.
+> - **Backend:** three behaviours only exist in the new code:
+>   - `/docs` now returns 404; on the old code it returned 200.
+>   - A 7-character password is refused at sign-up.
+>   - The new invite route exists (it asks for a login), and the old add-player route returns 404.
+> 
+> So both services are running v0.2.0. What that doesn't prove is **who started the deploy**: Render's auto-deploy, or someone clicking Manual Deploy. The evidence fits auto-deploy:
+> - **Why it failed before:** on v0.1.1 it didn't work because Render waits for …
+
+### 20. 2026-11-25 14:34
+
+**Robert:**
+> no that makes sense that it has deployed. 
+> 
+> Whats next?
+
+**Claude:**
+> I've marked auto-deploy as confirmed on the ticket, on the small `feature/release-v0.2.0-notes` branch. It goes in with the next `/ship-it`.
+> 
+> **Next is T3, your smoke-test findings.** All four are small. My suggested order:
+> 
+> 1. **GM character cards show the owning player's username.** It's quick: the character list would include the owner's username, and the card would show it.
+> 2. **Invite: browsable username list.** Most of it is in place: search is username-only, and there's one shared members panel to change.
+> 3. **A login in another tab switches this tab.** It's a frontend fix: when another tab logs in, this tab notices and reloads as that user.
+> 4. **Player Locations view matches the GM's:**
+>    - Players get the world-map preview, respecting visibility.
+>    - The GM gets a clear sign that maps start hidden from players.
+>    - Players see "No visible maps." instead of the GM's "Upload on …
+
+**Commands run:** 1
+
+### 21. 2026-11-25 14:41
+
+**Robert:**
+> Okay go in order
+
+**Claude:**
+> Frontend passes: 3,988 tests. The backend suite is running; when it finishes I'll restart the server so the owner name and one-letter search are live for you to check.
+
+**Files edited:** `backend/tests/test_characters.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/t3_item2.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/t3_asplayer.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/t3_locations.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/t3_docs.py` · **Commands run:** 46
+
+### 22. 2026-11-25 15:08
+
+**Robert:**
+> <task-notification>
+> <task-id>b83t7045y</task-id>
+> <tool-use-id>toolu_01JvoBuycvzqxPXT3bgZxQQn</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\05c19ffe-a208-44cb-8b78-2114ea1032e2\tasks\b83t7045y.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> All four T3 items are done on `feature/t3-smoke-test-fixes`, waiting for `/ship-it`. All tests pass: 3,988 frontend and 1,170 backend. Both servers are running for you to try: frontend on **http://localhost:5173**, backend on **:8000**.
+> 
+> 1. **Owner on character cards:** each card shows "Played by &lt;username&gt;" unless it's your own character. This works for the GM and for players looking at visible characters.
+> 2. **Invite search from the first letter:** the list fills from the first letter you type, up to 10 usernames. I went with option B, so it never lists every account at once.
+> 3. **A login in another tab switches this tab:** a login or logout in one tab sends the other tabs to `/campaigns` or `/login`, so a window never silently acts as a different user.
+> 4. **The player's Locations view matches the GM's:**
+>    - **Same page:** both location pages showed real players the GM's layout …
+
+**Commands run:** 5

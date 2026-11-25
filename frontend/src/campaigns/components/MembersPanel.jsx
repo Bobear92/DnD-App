@@ -69,7 +69,7 @@ export default function MembersPanel({ campaignId, onMembersLoaded }) {
   }, []);
 
   useEffect(() => {
-    if (query.length < 2) {
+    if (query.length < 1) {  // from the first letter (T3)
       setSearchResults([]);
       setShowDropdown(false);
       return;

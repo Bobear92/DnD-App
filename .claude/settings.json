@@ -2,6 +2,10 @@
   "permissions": {
     "allow": ["Bash(git push origin main)"]
   },
+  "skillOverrides": {
+    "ship-local": "off",
+    "ship": "off"
+  },
   "hooks": {
     "SessionStart": [
       {

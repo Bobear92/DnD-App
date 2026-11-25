@@ -81,6 +81,14 @@ describe('MembersPanel — GM view', () => {
     expect(screen.getByTestId('invite-search')).toHaveAttribute('placeholder', 'Search by username…');
   });
 
+  it('searches from the first letter typed (T3)', async () => {
+    renderPanel();
+    await screen.findByTestId('invite-search');
+    fireEvent.change(screen.getByTestId('invite-search'), { target: { value: 'b' } });
+    expect(await screen.findByTestId('search-result-99')).toBeInTheDocument();
+    expect(campaignService.searchUsers).toHaveBeenCalledWith('b');
+  });
+
   it('search hides existing members and already-invited users', async () => {
     campaignService.getInvites.mockResolvedValue({ success: true, data: [BOB_INVITE] });
     campaignService.searchUsers.mockResolvedValue({

@@ -338,10 +338,23 @@ class TestUserSearch:
         assert resp.status_code == 200
         assert not any(u["id"] == uid1 for u in resp.json())
 
-    def test_search_requires_min_2_chars(self, client):
+    def test_search_works_from_one_character(self, client):
+        # T3: the invite list fills from the first letter typed.
         h1, _ = make_user(client, 1)
+        make_user(client, 2)
         resp = client.get("/api/auth/users/search?q=u", headers=h1)
-        assert resp.status_code == 422
+        assert resp.status_code == 200
+        assert [u["username"] for u in resp.json()] == ["user2"]
+
+    def test_search_requires_a_query(self, client):
+        h1, _ = make_user(client, 1)
+        assert client.get("/api/auth/users/search?q=", headers=h1).status_code == 422
+
+    def test_search_returns_at_most_ten(self, client):
+        h1, _ = make_user(client, 1)
+        for n in range(2, 14):
+            make_user(client, n)
+        assert len(client.get("/api/auth/users/search?q=u", headers=h1).json()) == 10
 
     def test_search_requires_auth(self, client):
         resp = client.get("/api/auth/users/search?q=user")

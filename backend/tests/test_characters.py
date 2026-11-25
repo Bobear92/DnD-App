@@ -267,6 +267,18 @@ class TestCharacterListFieldRoundTrip:
         items = self._list(client, cid, h_gm)
         assert any(c["name"] == "Balin" for c in items)
 
+    def test_owner_username_in_list(self, client):
+        # T3: the GM's character cards show who plays each character.
+        h_gm, h_player, cid = self._setup(client)
+        player_char = self._create(client, h_player, cid, name="Balin")
+        gm_char = self._create(client, h_gm, cid, name="Npc Hero")
+        for h in (h_gm, h_player):
+            items = {c["id"]: c for c in self._list(client, cid, h)}
+            assert items[player_char]["owner_username"] == "user2"
+            if gm_char in items:
+                assert items[gm_char]["owner_username"] == "user1"
+        assert "@" not in str(self._list(client, cid, h_gm))  # a username, never an email
+
     def test_race_in_list(self, client):
         h_gm, h_player, cid = self._setup(client)
         char_id = self._create(client, h_player, cid, race="Dwarf")

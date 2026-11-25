@@ -36,12 +36,12 @@ const CHARACTERS = [
   {
     id: 1, name: 'Arathorn', race: 'Human', char_class: 'Fighter', level: 5,
     strength: 16, dexterity: 12, constitution: 14, intelligence: 10, wisdom: 10, charisma: 8,
-    is_visible_to_players: true, user_id: 2,
+    is_visible_to_players: true, user_id: 2, owner_username: 'alice',
   },
   {
     id: 2, name: 'Mia Silverleaf', race: 'Elf', char_class: 'Wizard', level: 3,
     strength: 8, dexterity: 16, constitution: 12, intelligence: 18, wisdom: 12, charisma: 14,
-    is_visible_to_players: false, user_id: 3,
+    is_visible_to_players: false, user_id: 3, owner_username: 'bob',
   },
 ];
 
@@ -110,6 +110,22 @@ describe('CharacterList — character cards', () => {
     expect(screen.getByText('Mia Silverleaf')).toBeTruthy();
     expect(screen.getByText('Human')).toBeTruthy();
     expect(screen.getByText('Fighter')).toBeTruthy();
+  });
+
+  it("shows who plays each character on cards that aren't yours (T3)", async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderList();
+    expect(await screen.findByTestId('char-owner-1')).toHaveTextContent('Played by alice');
+    expect(screen.getByTestId('char-owner-2')).toHaveTextContent('Played by bob');
+  });
+
+  it('does not label your own character with your name', async () => {
+    useAuth.mockReturnValue({ user: { id: 2 } }); // the GM made Arathorn themselves
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderList();
+    await screen.findByText('Arathorn');
+    expect(screen.queryByTestId('char-owner-1')).toBeNull();
+    expect(screen.getByTestId('char-owner-2')).toHaveTextContent('Played by bob');
   });
 
   it('clicking a character card navigates to the character detail page', async () => {

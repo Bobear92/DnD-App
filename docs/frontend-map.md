@@ -24,7 +24,7 @@ frontend/src/
 │                                #   Badge, Textarea, Select, Tabs (do not edit)
 ├── auth/
 │   ├── pages/Login.jsx          # Login + Register (dual-mode toggle) ✅
-│   ├── AuthContext.jsx          # Calls /api/auth/me on load; exposes {user, loading, logout}
+│   ├── AuthContext.jsx          # Calls /api/auth/me on load; exposes {user, loading, logout}; `redirectOnTokenChange` — a login/logout in ANOTHER tab (the `storage` event on `token`) reloads this tab to /campaigns or /login
 │   └── authService.js               # + errorText (FastAPI detail string OR 422 list → text) and PASSWORD_MIN_LENGTH; authService.test.js (4 tests)
 ├── campaigns/
 │   ├── pages/CampaignSelection.jsx  # List campaigns, create modal, enter → sets CampaignContext ✅
@@ -364,12 +364,12 @@ frontend/src/
 - **Sessions card (Info tab):** loaded on mount via `GET /sessions?location_id=N`; GM view always shows (empty state: "No session notes linked to this location.") with Hidden badges; player view shows only when sessions exist; each row shows session title + real_world_date + Hidden badge (GM); clickable → SessionDetail
 - **Hierarchy card (GM only):** set top-level, set parent, mark as unknown; child list shows manually-set children (link icon) and pin-derived children (pin icon + "via map pin" label)
 - **LocationList — GM view:** three sections — World Hierarchy tree (from top-level), Unsorted (staging area, locations not placed anywhere), Unknown Locations. When the top-level location has maps, a GM toolbar row appears above the map with an "Edit [name]" button that navigates to that location's `LocationDetail` page for full editing (info, maps, pins).
-- **LocationList — Player view:** toggle Hierarchy / A–Z; search bar; Unknown Locations section at bottom of hierarchy view
+- **LocationList — Player view:** toggle Hierarchy / A–Z; search bar; Unknown Locations section at bottom of hierarchy view. **One flag, `asPlayer = !isGm || playerView`,** drives every player-facing check in LocationList AND LocationDetail, so a real player gets exactly the GM's Player View preview (they used to get the GM-shaped page). The Player View button and the "Previewing as player" banner are GM-only
 - **Hierarchy tree:** indented expandable tree; click node to navigate; pin-derived children included automatically from `map_pins.linked_location_id`
 - **Unsorted locations:** visible to GM only; any location with no parent, not top-level, not unknown, not pin-linked from any other location's map
 - **`pin_child_ids`:** computed at query time in `get_locations` — for each location, the IDs of locations linked via pins on that location's maps
 - **Pin → parent persistence:** when a GM creates or updates a pin with a `linked_location_id`, the service automatically sets the linked location's `parent_location_id` to the map's parent location — but only if the linked location has no parent yet, is not top-level, and is not unknown ("first pin wins"). This makes the hierarchy fully explicit in the DB.
-- **Top-level map on LocationList:** if a top-level location has maps, the first map is displayed above the hierarchy tree as a read-only image preview (no pins); multiple maps show a tab strip; a GM toolbar above the map shows an "Edit [name]" button to navigate to LocationDetail for full editing; respects player view filter (only visible maps shown to players)
+- **Top-level map on LocationList:** if a top-level location has maps, the first map is displayed above the hierarchy tree as a read-only image preview (no pins); multiple maps show a tab strip; a GM toolbar above the map shows an "Edit [name]" button to navigate to LocationDetail for full editing; respects player view filter (only visible maps shown to players). **Maps start hidden from players** (separately from their location): the GM sees `top-map-hidden-notice` above the preview while every top-level map is hidden, a persistent `map-hidden-badge-{id}` on each hidden map thumbnail in LocationDetail (the eye toggle is hover-only), and an `upload-starts-hidden` note in the Upload Map dialog. A player's empty Maps tab says "No visible maps."
 
 ### NPCs UI — Key Behaviours
 - **NPCList grid:** portrait thumbnail (placeholder icon when none), color-coded status badge (alive/dead/missing/unknown), race · occupation subtitle, summary text
@@ -394,7 +394,7 @@ frontend/src/
 ### Campaign Settings UI — Key Behaviours
 - **Route:** `/campaigns/:campaignId/settings` — wrapped in `<MainLayout>`; GM-only editing controls; accessible to all members (read-only for players); "Campaign Settings" link (Settings icon) in GM section of Sidebar
 - **General tab:** Campaign Identity section (name, description, edition select — 5e/5.5e), Roleplaying Options (alignment toggle — hides alignment from all character forms when off), Ability Score Assignment (method select: Standard Array / Point Buy / Dice Roll; conditional "Allow reroll 1s" toggle appears when Dice Roll chosen), Leveling section (Milestone / Experience XP select + Ability Score Improvements select — `data-testid="asi-feat-mode-select"`: "Ability score increase only" = `asi_only` | "...or a feat" = `asi_or_feat` | "...and a feat" = `asi_and_feat`; drives the LevelUpWizard ASI-level steps), Currency section (coin-types select — "Copper, Silver, Gold, Platinum" = `standard` vs "All five (adds Electrum)" = `full`; `data-testid="currency-type-select"`), Starting Equipment section (`data-testid="starting-equipment-select"` — "Class & background equipment" = `equipment` | "Equipment, or take starting gold" = `equipment_or_gold` | "Nothing (no equipment or gold)" = `none`; drives the CharacterCreate Equipment step); Save/Reset buttons appear per section when dirty; players see read-only view of settings (currency shows "CP, SP, GP, PP" / "CP, SP, EP, GP, PP"; starting equipment shows "Class & background equipment" / "Equipment or starting gold" / "None"; ASI mode shows "Ability score increase or a feat" etc. via `asi-feat-mode-readonly`)
-- **Members tab:** renders the shared `MembersPanel` (same as /members): GM section, players with remove, pending invites with cancel, invite search (≥2 chars). Players join only after accepting on /campaigns
+- **Members tab:** renders the shared `MembersPanel` (same as /members): GM section, players with remove, pending invites with cancel, invite search (from the first letter). Players join only after accepting on /campaigns
 
 ### Calendar/Timeline Settings UI — Key Behaviours
 - **Route:** `/campaigns/:campaignId/campaign-time` — wrapped in `<MainLayout>` in App.jsx (not internally); GM-only controls; "Campaign Time" link in GM section of Sidebar
@@ -458,11 +458,11 @@ frontend/src/
 - **Players section:** list of all players with avatar initials, username, email, join date; player count badge in card header; empty state with invite prompt if GM
 - **Remove button:** Trash icon per player row (GM only); disabled during removal; not shown for GM themselves; calls `removePlayer(campaignId, userId)` then reloads
 - **Invite section (GM only):** search input with magnifier icon; `searchUsers(q)` fires on change when `q ≥ 2 chars` (debounced via useEffect cancel); dropdown appears below input listing matching users; existing members are filtered out of results; selecting a user fills the input and shows a confirmation line ("Ready to invite username (email)"); Add button enabled only after selection; calls `addPlayer(campaignId, userId)` then reloads members
-- **`searchUsers(q)`:** calls `GET /api/auth/users/search?q=X` on the auth API; results include `{id, username, email}`; min 2 chars enforced client + server side; requester excluded server-side
+- **`searchUsers(q)`:** calls `GET /api/auth/users/search?q=X` on the auth API; results are `{id, username}` (never email); searches from the first letter (empty query → no call); requester excluded server-side
 - **`data-testid` attributes:** `invite-search` on the search input, `search-dropdown` on the results dropdown, `search-result-{id}` on each result row
 
 ### Characters UI — Key Behaviours
-- **CharacterList grid:** class color-coded header bar, ability score modifiers grid, level/class badge, race subtitle; clickable cards navigate to CharacterDetail; GM eye toggle + trash button appear on hover
+- **CharacterList grid:** class color-coded header bar, ability score modifiers grid, level/class badge, race subtitle, "Played by {owner_username}" (`char-owner-{id}`) on every card that isn't yours; clickable cards navigate to CharacterDetail; GM eye toggle + trash button appear on hover
 - **CharacterList — GM view:** title "All Characters"; sees all characters regardless of `is_visible_to_players`; Player View toggle (filters to visible-only, hides GM controls); visibility eye icon + delete dialog per card
 - **CharacterList — player view:** title "My Characters"; sees own characters + `is_visible_to_players=true` characters; no eye/delete controls; "Create Your First Character" empty state button
 - **CharacterList — Rest controls (GM only, hidden in Player View):** "Short Rest" and "Long Rest" buttons (`data-testid="short-rest-btn"`, `data-testid="long-rest-btn"`) appear in the top toolbar; both are disabled until at least one character is selected; "Select All / Deselect All" toggle button (`data-testid="select-all-btn"`); each character card shows a checkbox (`data-testid="char-checkbox-{id}"`) for selection; selected cards get a `ring-2 ring-primary` highlight; clicking a rest button opens a confirmation dialog showing the selected characters' names, class badges, levels, and a bullet list of what each rest resets — **a backend DRY RUN** fetched on open via `characterService.previewRest(campaignId, restType, ids)` (`rest-preview-{id}`; `rest-preview-loading-{id}` while it loads; a failed preview shows `rest-preview-error` and does NOT block Confirm; a request counter drops a stale preview for a dialog since closed or reopened); "Confirm" (`data-testid="confirm-rest-btn"`) calls `characterService.applyRest(campaignId, restType, [...selectedIds])` then reloads the character list; rest controls and checkboxes are hidden entirely for players and for GM in Player View mode
@@ -609,7 +609,7 @@ Co-locate test files next to the source file they test:
 frontend/src/
 ├── auth/
 │   ├── AuthContext.jsx
-│   ├── AuthContext.test.jsx          # context state, setUser exposure, logout + selectedCampaign clearing (6 tests)
+│   ├── AuthContext.test.jsx          # context state, setUser exposure, logout + selectedCampaign clearing, cross-tab token change → /campaigns or /login, other keys/unchanged token ignored, listener added + removed (11 tests)
 │   └── pages/
 │       ├── Login.jsx
 │       └── Login.test.jsx            # login flow, setUser call, navigation, error states, register 8-char minimum (hint + minLength, refused before the API), no length rule on login (10 tests)
@@ -639,8 +639,8 @@ frontend/src/
 ├── locations/
 │   └── pages/
 │       ├── LocationList.jsx
-│       ├── LocationList.test.jsx     # campaignId prop regression (tree/card navigate), GM toolbar show/hide/navigate (5 tests)
-│       └── LocationDetail.test.jsx  # Timeline Events card (9 tests) + Sessions card (7 tests); GM always-visible/empty/events/dates/hidden, player preview (no card when empty, shows card when exists), fetch params; uses Tabs mock + player-view toggle via title button
+│       ├── LocationList.test.jsx     # campaignId prop regression (tree/card navigate), GM toolbar show/hide/navigate, real player = GM's Player View (world-map preview, Hierarchy/A–Z toggle, no GM chrome), GM preview banner, hidden-map notice on/off (11 tests)
+│       └── LocationDetail.test.jsx  # Timeline Events card (9 tests) + Sessions card (7 tests); GM always-visible/empty/events/dates/hidden, player preview (no card when empty, shows card when exists), fetch params; real player "No visible maps." + no GM chrome, GM hidden-map badge on/off, GM empty upload prompt; uses Tabs mock + player-view toggle via title button
 ├── sessions/
 │   └── pages/
 │       ├── SessionList.jsx

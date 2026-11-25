@@ -3,7 +3,7 @@
 **Goal:** everything left open by the first production deploy ([first-production-deploy.md](first-production-deploy.md),
 complete 2026-11-23, live at v0.1.2) in one place, so a new session can pick it up without reading old session logs.
 
-**Status:** T1 done; T2 done (all three slices) 2026-11-24 — needs a `/release` to reach production. Collected 2026-11-23. Order is a suggestion. CLAUDE.md is now ~53 KB of a 60 KB cap
+**Status:** T1 done; T2 done (all three slices) and **released as v0.2.0** (2026-11-24, `b6a7296`; Render auto-deployed, live checks passed; backup `dnd-prod-20261124-0109.dump`). Next: T3. Collected 2026-11-23. Order is a suggestion. CLAUDE.md is now ~53 KB of a 60 KB cap
 (`claudeMdBudget.test.js`); doc lines go to the files its Docs index names.
 
 ## T1 — Clean up CLAUDE.md (do first)
@@ -30,11 +30,11 @@ hardening (upload Content-Type, login rate limit/password minimum, /docs).
 - [x] Every member's email is in `CampaignResponse` (the Members tab shows emails, including the GM's own).
 
 ## T3 — Robert's smoke-test findings (2026-11-23)
-- [ ] **Invite Player: browsable username list** — pick from usernames, never show emails.
-- [ ] **GM character cards show the owning player's username** for characters players made.
-- [ ] **A login in another tab should switch this tab.** The token is shared in localStorage, so two normal windows
+- [x] **Invite Player: browsable username list** — pick from usernames, never show emails. (Search from the first letter, max 10 — option B; not a full user dump.)
+- [x] **GM character cards show the owning player's username** for characters players made. ("Played by …" on every card that isn't yours.)
+- [x] **A login in another tab should switch this tab.** The token is shared in localStorage, so two normal windows
   silently act as whoever logged in last. Listen for the `storage` event and reload / re-read the user.
-- [ ] **Player Locations view should match the GM's:** players get the top-level world-map preview (respecting
+- [x] **Player Locations view should match the GM's:** players get the top-level world-map preview (respecting
   visibility). Maps start hidden from players (separately from their location) — make that obvious to the GM. A real
   player sees the GM's empty text "No maps yet. Upload one to get started." (`LocationDetail.jsx`); should be
   "No visible maps."
@@ -48,9 +48,9 @@ hardening (upload Content-Type, login rate limit/password minimum, /docs).
 ## T5 — Production operations
 - [ ] **Upgrade the free Render database before January.** It expires ~2026-12-18, but Robert (2026-11-23): nothing
   needs to persist until January, and then only the worldbuilding side, not character creation. Not urgent before then.
-- [ ] **Watch the next release that changes `backend/` or `frontend/`**: it should deploy both services with no manual
-  click (CI now runs on `production`). A release touching neither Root Directory deploys nothing, silently — that is
-  expected (deployment.md). If an app-code release doesn't deploy, set up Render Deploy Hooks called from `/release`.
+- [x] **Auto-deploy confirmed on v0.2.0** (2026-11-24): pushing `production` ran CI there, and Render deployed both
+  services on its own (new bundle + backend behaviour live, no manual click). A release touching neither Root Directory
+  still deploys nothing, silently — expected (deployment.md).
 - [ ] Decide on the prod "Smoke test" campaign + SmokeTestPlayer account: keep for release checks, or delete.
 - [ ] Robert: optionally delete `C:\Users\rober\dnd-prod-db.env`; keep `C:\Users\rober\dnd-backups\` off OneDrive.
 

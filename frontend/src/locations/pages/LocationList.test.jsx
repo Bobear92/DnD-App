@@ -117,3 +117,57 @@ describe('LocationList — GM toolbar on top-level map', () => {
     expect(screen.queryByText(/Edit The Known World/i)).toBeNull();
   });
 });
+
+describe("LocationList — a real player gets the same page as the GM's Player View (T3)", () => {
+  it('shows the world-map preview to a player when the map is visible', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    renderList();
+    expect(await screen.findByAltText('World Map')).toBeInTheDocument();
+    expect(locationService.getMaps).toHaveBeenCalledWith('42', 1);
+  });
+
+  it('gives the player the Hierarchy / A–Z toggle and no GM chrome', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    renderList();
+    await screen.findByAltText('World Map');
+    expect(screen.getByText('A–Z')).toBeInTheDocument();
+    expect(screen.queryByTitle('Preview what players see')).toBeNull();
+    expect(screen.queryByText(/Previewing as player/)).toBeNull();
+    expect(screen.queryByText('New Location')).toBeNull();
+  });
+
+  it('the A–Z toggle works for a player', async () => {
+    useCampaign.mockReturnValue({ campaign: PLAYER_CAMPAIGN });
+    renderList();
+    await screen.findByAltText('World Map');
+    fireEvent.click(screen.getByText('A–Z'));
+    expect(await screen.findByText('Neverwinter')).toBeInTheDocument();
+    expect(screen.queryByAltText('World Map')).toBeNull(); // the map belongs to the hierarchy view
+  });
+
+  it('the GM still has the Player View preview with its banner', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderList();
+    await screen.findByAltText('World Map');
+    expect(screen.queryByText('A–Z')).toBeNull();
+    fireEvent.click(screen.getByTitle('Preview what players see'));
+    expect(screen.getByText(/Previewing as player/)).toBeInTheDocument();
+    expect(screen.getByText('A–Z')).toBeInTheDocument();
+  });
+});
+
+describe('LocationList — GM is told when players cannot see the world map (T3)', () => {
+  it('warns when every top-level map is hidden from players', async () => {
+    locationService.getMaps.mockResolvedValue([{ ...MAP, is_visible_to_players: false }]);
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderList();
+    expect(await screen.findByTestId('top-map-hidden-notice')).toHaveTextContent(/maps start hidden/i);
+  });
+
+  it('no warning once a map is visible', async () => {
+    useCampaign.mockReturnValue({ campaign: GM_CAMPAIGN });
+    renderList();
+    await screen.findByAltText('World Map');
+    expect(screen.queryByTestId('top-map-hidden-notice')).toBeNull();
+  });
+});
