@@ -1,14 +1,8 @@
-import axios from 'axios';
+import { createApiClient } from '@/lib/apiClient';
 import { API_ORIGIN } from '@/lib/api';
 
 // Feats are mounted at /feats (no /api prefix) in the backend.
-const api = axios.create({ baseURL: API_ORIGIN });
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+const api = createApiClient(API_ORIGIN);
 
 const featService = {
   getFeats: async (campaignId, edition) => {

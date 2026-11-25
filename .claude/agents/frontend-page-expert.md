@@ -22,24 +22,22 @@ You are an expert on this D&D app's frontend architecture. You build new fronten
 
 ### Service Layer (`<module>Service.js`)
 ```js
-import axios from 'axios';
 // NEVER hardcode the backend URL — it comes from VITE_API_URL via @/lib/api
 // (noHardcodedApiUrl.test.js fails the build otherwise). Upload paths → uploadUrl(path).
 import { API_BASE } from '@/lib/api';
+// THE client factory: attaches the login token and sends the user to /login?expired=1 when it is
+// rejected. Never axios.create / interceptors / raw fetch / a hand-built Bearer header — the
+// singleApiClient.test.js guard fails the build.
+import { createApiClient } from '@/lib/apiClient';
 
-// Always attach the JWT from localStorage
-axios.interceptors.request.use(config => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+const api = createApiClient(`${API_BASE}/...`);
 
 const myService = {
-  getAll: (campaignId) => axios.get(`${API_BASE}/.../${campaignId}`).then(r => r.data),
-  getById: (id) => axios.get(`${API_BASE}/.../items/${id}`).then(r => r.data),
-  create: (data) => axios.post(`${API_BASE}/.../items`, data).then(r => r.data),
-  update: (id, data) => axios.put(`${API_BASE}/.../items/${id}`, data).then(r => r.data),
-  delete: (id) => axios.delete(`${API_BASE}/.../items/${id}`).then(r => r.data),
+  getAll: (campaignId) => api.get(`/${campaignId}`).then(r => r.data),
+  getById: (id) => api.get(`/items/${id}`).then(r => r.data),
+  create: (data) => api.post('/items', data).then(r => r.data),
+  update: (id, data) => api.put(`/items/${id}`, data).then(r => r.data),
+  delete: (id) => api.delete(`/items/${id}`).then(r => r.data),
 };
 
 export default myService;

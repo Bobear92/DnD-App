@@ -38,18 +38,15 @@ Example: `CharacterCreate /campaigns/:campaignId/characters/create Form page for
 - All layout via Tailwind utility classes; all interactive elements via shadcn/ui components
 
 ### 2. `frontend/src/<feature>/<featureName>Service.js`
-Only create if a service file doesn't already exist for this feature. Use axios with an auth interceptor:
+Only create if a service file doesn't already exist for this feature. Build the client with the shared factory
+(token + expired-session redirect; `singleApiClient.test.js` fails the build on `axios.create`, interceptors, raw
+`fetch` or a hand-built Bearer header anywhere else):
 ```js
-import axios from 'axios';
+import { API_BASE } from '@/lib/api';
+import { createApiClient } from '@/lib/apiClient';
 
-const BASE_URL = 'http://localhost:8000/api/gm/campaigns';
-const api = axios.create({ baseURL: BASE_URL });
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+const BASE_URL = `${API_BASE}/gm/campaigns`;
+const api = createApiClient(BASE_URL);
 
 const myService = {
   getAll: async (campaignId) => {

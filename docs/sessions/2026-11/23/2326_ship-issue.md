@@ -3,14 +3,14 @@ session_id: 05c19ffe-a208-44cb-8b78-2114ea1032e2
 title: /ship-it, T2 security, v0.2.0 release, T3 fixes
 date: 2026-11-23
 started: 23:26
-branch: feature/upload-banner-fix
+branch: feature/shared-api-client
 area: backend
 tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule]
 issues: []
-summary: /ship→/ship-it; T2 security → v0.2.0; T3 fixes → v0.3.0; Locations upload-failure banner fix
-turns: 27
+summary: /ship→/ship-it; T2 security → v0.2.0; T3 → v0.3.0; upload-banner fix; shared API client + login-expiry
+turns: 30
 stepped_in: false
-last_uuid: 26b03e7a-521f-44c7-8b03-b0be2ae53842
+last_uuid: 34864e52-45b2-421f-a509-b488e93764c2
 ---
 
 # /ship-it, T2 security, v0.2.0 release, T3 fixes
@@ -84,6 +84,13 @@ last_uuid: 26b03e7a-521f-44c7-8b03-b0be2ae53842
   dialog) and a later success never cleared it. Now `uploadFailure` shows inside the Upload dialog (`upload-failure`),
   Upload stays enabled for a retry, it clears on retry/new file/close/success, and success clears any stale page banner.
   3 tests (fail on old code). Verified live: a GIF upload shows the server's message in the dialog, no banner after close.
+  Shipped as `c5f292b` (unreleased — bundled with the next release).
+- **T6 shared API client + login expiry** on `feature/shared-api-client`: `lib/apiClient.js` `createApiClient(baseURL)`
+  (token + a 401 on a request that carried a token → clear login + selected campaign, `/login?expired=1`, once; wrong
+  password / anonymous 401 / 403 / 500 untouched). All 13 services migrated by a bracket-matching script (−156 lines);
+  the 2 raw portrait/music uploads and SpellList's raw `fetch` moved onto it. Login shows "Your session expired".
+  Guard `src/test/singleApiClient.test.js` (bans axios.create, interceptors, direct axios calls, raw fetch, hand-built
+  Bearer). Agent + `/new-frontend-page` + deployment.md updated. Verified live: invalid token → /login?expired=1 + notice.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -106,6 +113,8 @@ last_uuid: 26b03e7a-521f-44c7-8b03-b0be2ae53842
   /docs 404) proves the deploy, not WHO triggered it. Say which one is evidence next time.
 - T3: `owner_username` property was first appended to the wrong class (end of file = CharacterNpc); caught on review.
   Two test misfires (player view hides hidden chars; duplicate alt text needs findAll).
+- Client migration script left `;;` after each replaced client (kept the original `;`) — caught on diff review.
+  SpellList's raw fetch was found only by grepping for leftover `localStorage.getItem('token')`; that grep is now the guard.
 - The Playwright check first clicked the campaign title (not "Enter Campaign"), so the page rendered as a non-GM and
   looked like a role regression; checking created_by vs user id via the API ruled that out.
 
@@ -142,7 +151,9 @@ last_uuid: 26b03e7a-521f-44c7-8b03-b0be2ae53842
 - `characters/service.py` functions still take an unused `is_admin` param (kept so callers didn't change) — drop it in
   a cleanup pass.
 - Released as v0.2.0. T3 (this ship) still needs a `/release`.
-- Next agreed: the shared axios client + token-expiry handling (T6), then password reset (needs an email provider).
+- Next release should carry c5f292b (banner) + the shared API client together.
+- Next work: password reset / account emails (T4) — Robert must pick an email provider (Resend/Postmark) and create an account.
+- Unsaved sheet edits are still lost on expiry; refresh tokens would fix it (deployment.md).
 - Verify the `skillOverrides` key actually disables `/ship` (listed as "ship-local (ship)"); if `/ship` still runs, the key
   name didn't match.
 - Player-side check of T3 Locations: make Yaara's world map visible, log in as a player.
@@ -630,3 +641,54 @@ last_uuid: 26b03e7a-521f-44c7-8b03-b0be2ae53842
 > - **Tests:** three new ones in `LocationDetail.test.jsx`, all failing on the old code. The full frontend suite passes, 3,991 tes …
 
 **Commands run:** 14
+
+### 28. 2026-11-25 15:38
+
+**Robert:**
+> /ship-it
+
+**Claude:**
+> The banner fix is shipped: `main` is at **c5f292b** and pushed to GitHub. The feature branch is deleted, and it was never pushed, so there was nothing to delete there. The commit holds the fix, its three tests, and the ticked ticket items.
+> 
+> **Checks before shipping:** all 3,991 frontend tests pass and the build succeeds. In the real app, a failed upload now shows its message inside the Upload dialog and leaves no banner after closing. No backend files changed, so the backend checks were skipped.
+> 
+> **The v0.3.0 release:** CI on `production` passed, and I'm still waiting for Render to finish deploying the new frontend. I'll confirm the live-site checks as soon as it does. The banner fix isn't in v0.3.0; it goes out with the next `/release`.
+> 
+> Next, as agreed: the shared API client with login-expiry handling. Shall I start?
+
+**Commands run:** 2
+
+### 29. 2026-11-25 15:40
+
+**Robert:**
+> <task-notification>
+> <task-id>birzva6yi</task-id>
+> <tool-use-id>toolu_01BmRMbQNeErZ6CHco57xdcv</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\05c19ffe-a208-44cb-8b78-2114ea1032e2\tasks\birzva6yi.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for production CI and the Render deploy" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> v0.3.0 is live, and Render deployed it on its own again. The banner fix stays on `main` to go out with the next release. I've noted that in memory so a later session knows it hasn't been released.
+> 
+> Ready to start the shared API client with login-expiry handling when you say go.
+
+**Commands run:** 2
+
+### 30. 2026-11-25 15:42
+
+**Robert:**
+> yep start the shared API client with login-expiry handling
+
+**Claude:**
+> The shared API client with login-expiry handling is done on `feature/shared-api-client`, waiting for `/ship-it`.
+> 
+> **What changed:**
+> - **One client factory:** [lib/apiClient.js](frontend/src/lib/apiClient.js)'s `createApiClient()` attaches the login token. When the server rejects that token, the client clears the login and selected campaign, then sends you to `/login?expired=1`, just once even if several requests fail together.
+> - **Login page:** it then says **"Your session expired — please log in again."**
+> - **Not treated as expiry:** a wrong password, a 401 on a request sent without a token, and 403/500 errors all behave as before.
+> - **All 13 services now use it:** that's 156 lines of copied token code removed. The two raw portrait/music uploads moved onto it too.
+> - **`SpellList`:** it was using its own `fetch` with a hand-built token, so it would have missed expiry. It now goes through …
+
+**Files edited:** `frontend/src/lib/apiClient.js`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/migrate_clients.py`, `frontend/src/lib/apiClient.test.js`, `frontend/src/test/singleApiClient.test.js`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/docs_client.py` · **Commands run:** 27

@@ -9,10 +9,9 @@ vi.mock('@/encyclopedia/encyclopediaService', () => ({
   default: { getSpells: vi.fn(() => Promise.resolve(mockCatalog)) },
 }));
 
-// The inner SpellList fetches via global fetch for its detail dialog — stub it empty.
+// The inner SpellList reads the same mocked service for its detail dialog.
 beforeEach(() => {
   mockCatalog = [];
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) }));
 });
 
 // Class content just echoes the level it was asked to render (null = the flat "all levels" view).

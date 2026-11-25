@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // axios.create() is called at import, so the mock must exist before characterService loads.
 const put = vi.fn();
 vi.mock('axios', () => ({
-  default: { create: () => ({ put, interceptors: { request: { use: () => {} } } }) },
+  default: { create: () => ({ put, interceptors: { request: { use: () => {} }, response: { use: () => {} } } }) },
 }));
 
 const { default: characterService, toUpdatePayload } = await import('./characterService');

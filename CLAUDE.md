@@ -711,7 +711,8 @@ SECRET_KEY=your-secret-key-change-this-in-production
 # API_DOCS=true                             ← /docs, /redoc, /openapi.json; default OFF (set locally, never in prod)
 # ACCESS_TOKEN_EXPIRE_MINUTES=720          ← default 30
 ```
-Frontend: `VITE_API_URL` (build time) is read ONLY by `frontend/src/lib/api.js`; never hardcode the backend URL.
+Frontend: `VITE_API_URL` (build time) is read ONLY by `frontend/src/lib/api.js`; never hardcode the backend URL. Every
+request goes through `createApiClient` (`lib/apiClient.js`: token + expired-session redirect) — `singleApiClient.test.js` guards it.
 
 ---
 

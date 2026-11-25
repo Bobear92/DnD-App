@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import authService, { PASSWORD_MIN_LENGTH } from '../authService';
 import { useAuth } from '../AuthContext';
 import './Login.css';
@@ -20,6 +20,9 @@ function getPostLoginPath() {
 const Login = () => {
   const navigate = useNavigate();
   const { setUser } = useAuth();
+  // Set by the shared API client when the server rejected the stored login (src/lib/apiClient.js).
+  const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get('expired') === '1';
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -132,6 +135,15 @@ const Login = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="login-form">
+            {sessionExpired && !error && (
+              <div
+                role="status"
+                data-testid="session-expired"
+                className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200"
+              >
+                Your session expired — please log in again.
+              </div>
+            )}
             {error && (
               <div className="error-message">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

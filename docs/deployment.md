@@ -286,10 +286,9 @@ In order of danger for this app:
 
 ## Known production gaps (not blockers for a first deploy with friends)
 
-- **No token-expiry handling.** Production tokens last 12 hours (`ACCESS_TOKEN_EXPIRE_MINUTES=720`, ticket T5),
-  which covers a session. When one does expire, the frontend doesn't notice: every request fails with "Could not
-  validate credentials" while the player stays on the page, and only a reload sends them to login (losing unsaved
-  sheet edits). Real fix: a 401 → re-login flow (one shared axios client would make that one change, not ~15), or refresh tokens.
+- **Token expiry ends the session, it doesn't renew it.** Production tokens last 12 hours (`ACCESS_TOKEN_EXPIRE_MINUTES=720`).
+  When one expires, the shared client (`frontend/src/lib/apiClient.js`) sees the 401, clears the login and sends the
+  player to `/login?expired=1` ("Your session expired"). Unsaved sheet edits are still lost; refresh tokens would fix that.
 - **Open registration.** Anyone with the URL can sign up. Nobody is told when they do, and there is no forgot-password flow (a lost password needs SQL) — planned as "Account emails + password reset" in `docs/tickets/post-deploy-followups.md` › T4.
 - **No error monitoring** (Sentry or similar) and no uptime check.
 - **Free-tier cold starts**: the backend sleeps after ~15 idle minutes, so the first request after a break takes up to a minute (until the Starter upgrade).

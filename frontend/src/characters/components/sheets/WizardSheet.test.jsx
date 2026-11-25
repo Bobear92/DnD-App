@@ -4,6 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // These remain behavior tests — the bound wrapper has the same prop contract as the old sheet.
 import { WizardSheet5e as WizardSheet } from '@/characters/components/sheets/classSheet/configs';
 
+// SpellList reads its catalog through encyclopediaService; only getSpells is replaced.
+vi.mock('@/encyclopedia/encyclopediaService', async (importOriginal) => {
+  const mod = await importOriginal();
+  return { default: { ...mod.default, getSpells: vi.fn(() => Promise.resolve([])) } };
+});
+import encyclopediaService from '@/encyclopedia/encyclopediaService';
 vi.mock('react-router-dom', () => ({
   // SubclassDetails and the features section's class link read campaignId from the URL for their
   // encyclopedia links; stand in for a campaign route so those links render.
@@ -508,13 +514,10 @@ describe('WizardSheet Cast button on prepared spells', () => {
   ];
 
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(SPELL_CATALOG),
-    }));
+    encyclopediaService.getSpells.mockResolvedValue(SPELL_CATALOG);
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => encyclopediaService.getSpells.mockResolvedValue([]));
 
   it('shows Cast button on a prepared spell when not readOnly and slot is available', async () => {
     render(<WizardSheet

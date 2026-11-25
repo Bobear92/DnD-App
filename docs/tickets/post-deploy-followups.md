@@ -59,7 +59,9 @@ hardening (upload Content-Type, login rate limit/password minimum, /docs).
 ## T6 — Engineering follow-ups carried from the deploy
 - [ ] `CalendarTab.test.jsx › player sees "not set up" message` flaked once under load — check with `SLOW_MOCKS=1`.
 - [ ] Send only changed `character_data` keys on save (merge-on-save still carries a full stale copy).
-- [ ] One shared axios client + token-expiry handling (each service duplicates the client and interceptor).
+- [x] One shared axios client + token-expiry handling. (`lib/apiClient.js` `createApiClient`: all 13 services + SpellList's
+  raw fetch moved onto it; a 401 on a request that carried a token → clear login, `/login?expired=1`, once. Guard:
+  `src/test/singleApiClient.test.js`.)
 - [ ] R2 backups / versioning for uploads.
 - [ ] Local venv is Python 3.14; production is 3.12.
 - [ ] Optional app-level upload quota.

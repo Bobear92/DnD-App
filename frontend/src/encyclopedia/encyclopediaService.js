@@ -1,13 +1,7 @@
-import axios from 'axios';
+import { createApiClient } from '@/lib/apiClient';
 import { API_BASE } from '@/lib/api';
 
-const api = axios.create({ baseURL: API_BASE });
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+const api = createApiClient(API_BASE);
 
 const encyclopediaService = {
   // `edition` ('5e' | '5.5e') picks that edition's text; a spell with no entry for the

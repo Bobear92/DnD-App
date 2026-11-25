@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { createApiClient } from '@/lib/apiClient';
 import { API_BASE, uploadUrl } from '@/lib/api';
 
 const API_URL = `${API_BASE}/characters`;
@@ -23,19 +23,7 @@ export function toUpdatePayload(update) {
   };
 }
 
-const api = axios.create({
-  baseURL: API_URL,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+const api = createApiClient(API_URL, { headers: { 'Content-Type': 'application/json' } });
 
 const characterService = {
   getCharactersByCampaign: async (campaignId) => {
@@ -98,11 +86,8 @@ const characterService = {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const response = await axios.post(`${API_URL}/${characterId}/image`, formData, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'multipart/form-data',
-        },
+      const response = await api.post(`/${characterId}/image`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       return { success: true, data: response.data };
     } catch (error) {
@@ -125,11 +110,8 @@ const characterService = {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const response = await axios.post(`${API_URL}/${characterId}/music`, formData, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'multipart/form-data',
-        },
+      const response = await api.post(`/${characterId}/music`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       return { success: true, data: response.data };
     } catch (error) {

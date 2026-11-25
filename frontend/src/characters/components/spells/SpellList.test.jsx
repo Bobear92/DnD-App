@@ -7,6 +7,9 @@ let mockEdition = '5e';
 vi.mock('@/campaigns/CampaignContext', () => ({
   useCampaign: () => ({ campaign: { id: 42, edition: mockEdition } }),
 }));
+// The catalog comes through the shared encyclopediaService (one API client), not a raw fetch.
+vi.mock('@/encyclopedia/encyclopediaService', () => ({ default: { getSpells: vi.fn() } }));
+import encyclopediaService from '@/encyclopedia/encyclopediaService';
 
 const CATALOG = [
   {
@@ -60,22 +63,15 @@ const CATALOG = [
 ];
 
 function mockFetchCatalog() {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve(CATALOG),
-  }));
+  encyclopediaService.getSpells.mockResolvedValue(CATALOG);
 }
 
 function mockFetchEmpty() {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve([]),
-  }));
+  encyclopediaService.getSpells.mockResolvedValue([]);
 }
 
 describe('SpellList', () => {
   beforeEach(() => {
-    vi.unstubAllGlobals();
     vi.clearAllMocks();
     mockEdition = '5e';
     mockFetchEmpty();
@@ -88,17 +84,14 @@ describe('SpellList', () => {
     it("requests the campaign's edition", async () => {
       mockFetchCatalog();
       render(<SpellList spells={['Fireball']} label="Spells" />);
-      await waitFor(() => expect(fetch).toHaveBeenCalled());
-      expect(fetch.mock.calls[0][0]).toContain('edition=5e');
-      expect(fetch.mock.calls[0][0]).toContain('campaign_id=42');
+      await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(42, '5e'));
     });
 
     it('requests 5.5e text for a 2024 campaign', async () => {
       mockEdition = '5.5e';
       mockFetchCatalog();
       render(<SpellList spells={['Fireball']} label="Spells" />);
-      await waitFor(() => expect(fetch).toHaveBeenCalled());
-      expect(fetch.mock.calls[0][0]).toContain('edition=5.5e');
+      await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(42, '5.5e'));
     });
   });
 
@@ -122,10 +115,8 @@ describe('SpellList', () => {
   });
 
   it('still fetches the catalog when isCantrips=true (for the detail dialog)', () => {
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
-    vi.stubGlobal('fetch', fetchSpy);
     render(<SpellList spells={['Fire Bolt']} isCantrips label="Cantrips" />);
-    expect(fetchSpy).toHaveBeenCalled();
+    expect(encyclopediaService.getSpells).toHaveBeenCalled();
   });
 
   it('shows full cantrip details in the dialog when the cantrip is in the catalog', async () => {
@@ -251,15 +242,8 @@ describe('SpellList', () => {
 
   // ── API call ────────────────────────────────────────────────────────────
   it('calls the spells API with the campaign_id from context', async () => {
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
-    vi.stubGlobal('fetch', fetchSpy);
     render(<SpellList spells={['Fireball']} label="Spells" />);
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining('campaign_id=42'),
-        expect.anything(),
-      )
-    );
+    await waitFor(() => expect(encyclopediaService.getSpells).toHaveBeenCalledWith(42, expect.anything()));
   });
 
   // ── Spell detail dialog ─────────────────────────────────────────────────

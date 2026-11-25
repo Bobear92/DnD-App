@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { useSpellFocus } from '@/characters/components/spells/SpellFocusContext';
 import { useCampaign } from '@/campaigns/CampaignContext';
 import { summarizeUpcast, summarizeCantrip } from '@/characters/components/spells/spellUpcast';
-import { API_BASE } from '@/lib/api';
+import encyclopediaService from '@/encyclopedia/encyclopediaService';
 
 const LEVEL_LABELS = {
   0: 'Cantrips',
@@ -38,21 +38,9 @@ function castableSlotLevels(baseLevel, availableSlots) {
     .sort((a, b) => a - b);
 }
 
-async function fetchSpellCatalog(campaignId, edition) {
-  try {
-    const token = localStorage.getItem('token');
-    const params = new URLSearchParams();
-    if (campaignId) params.set('campaign_id', campaignId);
-    if (edition) params.set('edition', edition);
-    const qs = params.toString() ? `?${params}` : '';
-    const res = await fetch(`${API_BASE}/encyclopedia/spells${qs}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) return [];
-    return res.json();
-  } catch {
-    return [];
-  }
+// Through the shared service/client (token + expired-session handling) — not a raw fetch with its own token.
+function fetchSpellCatalog(campaignId, edition) {
+  return encyclopediaService.getSpells(campaignId, edition);
 }
 
 /**

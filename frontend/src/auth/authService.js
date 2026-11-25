@@ -1,29 +1,10 @@
-import axios from 'axios';
+import { createApiClient } from '@/lib/apiClient';
 import { API_BASE } from '@/lib/api';
 
 const API_URL = `${API_BASE}/auth`;
 
 // Create axios instance with base configuration
-const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add token to requests if it exists
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+const api = createApiClient(API_URL, { headers: { 'Content-Type': 'application/json' } });
 
 // FastAPI's `detail` is a string for an HTTPException but a LIST of {msg, ...} for a 422 validation error. Passing
 // the list to setError crashed the login page, so always hand the UI text.

@@ -1,49 +1,13 @@
-import axios from 'axios';
+import { createApiClient } from '@/lib/apiClient';
 import { API_BASE } from '@/lib/api';
 
 const API_URL = `${API_BASE}/gm/campaigns`;
 const AUTH_API_URL = `${API_BASE}/auth`;
 
-const authConfig = () => {
-  const token = localStorage.getItem('token');
-  return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-};
+// Clients come from the shared factory (token + expired-session handling): src/lib/apiClient.js
+const api = createApiClient(API_URL, { headers: { 'Content-Type': 'application/json' } });
 
-// Create axios instance with base configuration
-const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-const authApi = axios.create({
-  baseURL: AUTH_API_URL,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-// Add token to requests
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-authApi.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+const authApi = createApiClient(AUTH_API_URL, { headers: { 'Content-Type': 'application/json' } });
 
 const campaignService = {
   // Get all campaigns (admin sees all, players see only theirs)

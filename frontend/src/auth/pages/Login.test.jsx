@@ -30,9 +30,9 @@ import Login from './Login';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function renderLogin() {
+function renderLogin(initialEntries = ['/login']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <Login />
     </MemoryRouter>
   );
@@ -194,5 +194,17 @@ describe('Login — registration', () => {
 
     await waitFor(() => expect(screen.getByText('Email already taken')).toBeInTheDocument());
     expect(mockSetUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('Login — expired session (shared API client sends ?expired=1)', () => {
+  it('explains why the user is back at the login page', () => {
+    renderLogin(['/login?expired=1']);
+    expect(screen.getByTestId('session-expired')).toHaveTextContent('Your session expired');
+  });
+
+  it('shows nothing extra on a normal visit', () => {
+    renderLogin();
+    expect(screen.queryByTestId('session-expired')).toBeNull();
   });
 });

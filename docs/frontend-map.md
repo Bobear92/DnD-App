@@ -25,6 +25,7 @@ frontend/src/
 ├── auth/
 │   ├── pages/Login.jsx          # Login + Register (dual-mode toggle) ✅
 │   ├── AuthContext.jsx          # Calls /api/auth/me on load; exposes {user, loading, logout}; `redirectOnTokenChange` — a login/logout in ANOTHER tab (the `storage` event on `token`) reloads this tab to /campaigns or /login
+│   ├── (lib/apiClient.js)          # THE axios factory `createApiClient(baseURL)` — token + 401-with-token → clear login, /login?expired=1 (once); every service uses it; guard `src/test/singleApiClient.test.js`; tests `lib/apiClient.test.js` (9)
 │   └── authService.js               # + errorText (FastAPI detail string OR 422 list → text) and PASSWORD_MIN_LENGTH; authService.test.js (4 tests)
 ├── campaigns/
 │   ├── pages/CampaignSelection.jsx  # List campaigns, create modal, enter → sets CampaignContext ✅
@@ -612,7 +613,7 @@ frontend/src/
 │   ├── AuthContext.test.jsx          # context state, setUser exposure, logout + selectedCampaign clearing, cross-tab token change → /campaigns or /login, other keys/unchanged token ignored, listener added + removed (11 tests)
 │   └── pages/
 │       ├── Login.jsx
-│       └── Login.test.jsx            # login flow, setUser call, navigation, error states, register 8-char minimum (hint + minLength, refused before the API), no length rule on login (10 tests)
+│       └── Login.test.jsx            # login flow, setUser call, navigation, error states, register 8-char minimum (hint + minLength, refused before the API), no length rule on login, `?expired=1` shows `session-expired` (12 tests)
 ├── campaigns/
 │   └── pages/
 │       ├── CampaignSelection.jsx
