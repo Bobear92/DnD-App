@@ -17,7 +17,9 @@ Base URL: `http://localhost:8000` | Docs: `http://localhost:8000/docs` (only wit
 ## Auth
 | Method | Endpoint | Auth Required |
 |--------|----------|---------------|
-| POST | /api/auth/register | No |
+| POST | /api/auth/register | No — also sends a welcome email and an admin notice (ADMIN_NOTIFY_EMAIL), after the response |
+| POST | /api/auth/forgot-password | No — body `{email}`; ALWAYS the same 200 reply (no account enumeration); emails a one-time link; 5 per email per IP an hour → 429 |
+| POST | /api/auth/reset-password | No — body `{token, new_password}` (8+ chars); 400 if the link is invalid/used/expired; signs out every earlier session |
 | POST | /api/auth/login | No |
 | GET | /api/auth/me | Yes |
 | GET | /api/auth/users/search?q=X | Yes — returns up to 10 `{id, username}` matching the **username only** (from 1 char; never matches or returns emails); excludes requester; used in GM invite flow |

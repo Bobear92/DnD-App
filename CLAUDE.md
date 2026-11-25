@@ -242,11 +242,11 @@ Tables using this model: `races`, `backgrounds`, `feats`, `loot_tables`, `spells
 
 ---
 
-## Database Schema (45 Tables)
+## Database Schema (46 Tables)
 
 **The full column listing is [docs/schema.md](docs/schema.md); why each column is shaped the way it is goes in
 [docs/schema-notes.md](docs/schema-notes.md).** Read schema.md before touching a model or migration, and update it in
-the same change. Tables by area: core (`users`, `campaigns`, `campaign_members`, `campaign_invites`, `characters` + `character_timeline_events`,
+the same change. Tables by area: core (`users` + `password_reset_tokens`, `campaigns`, `campaign_members`, `campaign_invites`, `characters` + `character_timeline_events`,
 `character_npcs`); compendium (`races`, `backgrounds`, `feats`, `character_classes`, `class_features`, `spells`,
 `creatures`, the six item tables, `loot_tables`); GM tools (`npcs` + 2 relationship tables, `locations` + maps/pins/links/
 relationships/npcs, the calendar's 5 tables, `timeline_events` + 2 junctions, `session_notes` + 4 junctions, `encounters` +

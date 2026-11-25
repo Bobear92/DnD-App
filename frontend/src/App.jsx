@@ -5,6 +5,8 @@ import ProtectedRoute from './shared/components/ProtectedRoute';
 import FeatureRoute from './shared/components/FeatureRoute';
 import ErrorBoundary from './shared/components/ErrorBoundary';
 import Login from './auth/pages/Login';
+import ForgotPassword from './auth/pages/ForgotPassword';
+import ResetPassword from './auth/pages/ResetPassword';
 import CampaignSelection from './campaigns/pages/CampaignSelection';
 import Dashboard from './dashboard/Dashboard';
 import CharacterList from './characters/pages/CharacterList';
@@ -47,6 +49,8 @@ function App() {
           <ErrorBoundary>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/campaigns" element={<ProtectedRoute><CampaignSelection /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/characters" element={<ProtectedRoute><FeatureRoute feature="characters"><CharacterList /></FeatureRoute></ProtectedRoute>} />

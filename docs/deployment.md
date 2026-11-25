@@ -79,6 +79,11 @@ URL. To run something from a laptop (seeding, a dump), add that one IP there, do
 | backend | `STORAGE_BACKEND` | `r2` (default `local`, which production must not use) |
 | backend | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | from the Cloudflare dashboard; the backend refuses to start with `STORAGE_BACKEND=r2` if any is missing |
 | backend | `PYTHON_VERSION` | `3.12.8` (see Hosting) |
+| backend | `EMAIL_BACKEND` | `postmark` once a sender domain is verified (default `console` = nothing is sent; the message is only logged) |
+| backend | `POSTMARK_SERVER_TOKEN` | Postmark → Server → API Tokens. **Secret** — don't screenshot that page. Startup fails if `EMAIL_BACKEND=postmark` and this is missing |
+| backend | `EMAIL_FROM` | e.g. `Tavern <noreply@yourdomain>` — a Postmark-verified sender on a domain you own (Postmark refuses Yahoo/Gmail senders) |
+| backend | `FRONTEND_URL` | `https://dnd-app-ginj.onrender.com` — used to build the reset link in emails |
+| backend | `ADMIN_NOTIFY_EMAIL` | where "new account" notices go (blank = none) |
 | frontend | `NODE_VERSION` | `22` |
 | frontend | `VITE_API_URL` | the backend's public URL. Vite bakes it in at **build** time, so changing it needs a rebuild |
 | frontend | `VITE_UPLOADS_URL` | the R2 bucket's public URL (r2.dev subdomain or custom domain); uploaded images and music load from here |
@@ -289,6 +294,6 @@ In order of danger for this app:
 - **Token expiry ends the session, it doesn't renew it.** Production tokens last 12 hours (`ACCESS_TOKEN_EXPIRE_MINUTES=720`).
   When one expires, the shared client (`frontend/src/lib/apiClient.js`) sees the 401, clears the login and sends the
   player to `/login?expired=1` ("Your session expired"). Unsaved sheet edits are still lost; refresh tokens would fix that.
-- **Open registration.** Anyone with the URL can sign up. Nobody is told when they do, and there is no forgot-password flow (a lost password needs SQL) — planned as "Account emails + password reset" in `docs/tickets/post-deploy-followups.md` › T4.
+- **Open registration.** Anyone with the URL can sign up. The admin gets a "new account" email (ADMIN_NOTIFY_EMAIL) and players can reset a forgotten password — but only once `EMAIL_BACKEND=postmark` is set up (a domain you own + Postmark DNS records + account approval); until then emails are only logged and a lost password still needs SQL.
 - **No error monitoring** (Sentry or similar) and no uptime check.
 - **Free-tier cold starts**: the backend sleeps after ~15 idle minutes, so the first request after a break takes up to a minute (until the Starter upgrade).

@@ -51,9 +51,12 @@ def _create_tables():
 def _reset_login_rate_limit():
     """The failed-login throttle is process memory; never let one test's failures leak into the next."""
     from auth import rate_limit
+    from shared import email
     rate_limit.reset()
+    email.reset_outbox()
     yield
     rate_limit.reset()
+    email.reset_outbox()
 
 
 @pytest.fixture(autouse=True)

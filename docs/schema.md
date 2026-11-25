@@ -1,4 +1,4 @@
-# Database schema (45 tables)
+# Database schema (46 tables)
 
 Moved out of CLAUDE.md on 2026-11-23. **This file is the current column listing — update it in the same change as any model/migration.** Why a column is shaped the way it is goes in [schema-notes.md](schema-notes.md).
 
@@ -8,7 +8,12 @@ Columns and the constraints that affect how code is written. **Why** a column is
 -- Core
 users
   id, email (unique), username (unique), password_hash,
-  is_admin (boolean, default false), created_at, updated_at
+  is_admin (boolean, default false), created_at, updated_at,
+  password_changed_at (nullable)   ← set by a password reset; login tokens issued before it are rejected (get_current_user)
+
+password_reset_tokens            ← one-time reset links (migration a01182d8bd3b)
+  id, user_id (FK→users, CASCADE), token_hash (String(64), unique — SHA-256 of the emailed token; the raw token is never
+  stored), expires_at (PASSWORD_RESET_MINUTES, default 60), used_at (nullable — single use), created_at
 
 campaigns
   id, name, description, edition (String(10), default "5e"),

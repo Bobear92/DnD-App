@@ -26,7 +26,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     lifetime = expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
     expire = datetime.now(timezone.utc) + lifetime
 
-    to_encode.update({"exp": expire})
+    # iat as a float so a login straight after a password reset (same second) still counts as "after" it.
+    to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc).timestamp()})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
 

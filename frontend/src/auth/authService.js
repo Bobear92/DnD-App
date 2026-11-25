@@ -34,6 +34,26 @@ const authService = {
     }
   },
 
+  // Ask for a reset link. The server answers the same whether or not the account exists.
+  forgotPassword: async (email) => {
+    try {
+      const response = await api.post('/forgot-password', { email });
+      return { success: true, message: response.data.message };
+    } catch (error) {
+      return { success: false, error: errorText(error, 'Could not send the reset link') };
+    }
+  },
+
+  // Spend a reset link's token on a new password.
+  resetPassword: async (token, newPassword) => {
+    try {
+      const response = await api.post('/reset-password', { token, new_password: newPassword });
+      return { success: true, message: response.data.message };
+    } catch (error) {
+      return { success: false, error: errorText(error, 'Could not reset the password') };
+    }
+  },
+
   // Login user
   login: async (credentials) => {
     try {

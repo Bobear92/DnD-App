@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from config import settings
 from shared.dependencies import require_campaign_query_member
+from shared.email import check_email_config
 from shared.file_storage import LocalStorage, get_storage
 from auth.routes import router as auth_router
 from gm import campaigns_router, npcs_router, loot_tables_router, locations_router, calendar_router, timeline_router, session_notes_router, encounters_router
@@ -43,6 +44,7 @@ app.add_middleware(
 # with R2 (production) the browser loads them from the bucket's public URL and this mount is absent.
 # get_storage() also fails fast here if STORAGE_BACKEND=r2 is missing its credentials.
 _storage = get_storage()
+check_email_config()  # EMAIL_BACKEND=postmark without its token/sender stops startup
 if isinstance(_storage, LocalStorage):
     os.makedirs(_storage.root, exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=_storage.root), name="uploads")

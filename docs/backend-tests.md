@@ -12,6 +12,11 @@ backend/tests/
                                     #   ".." filenames; R2Storage against a fake S3 client (put key/content-type/cache header, delete reports
                                     #   existence, folder delete paginates and spares "1/20" when deleting "1/2", non-404 errors raised);
                                     #   backend selection (tests on local temp storage, r2 fails fast naming missing creds). Deploy ticket T4
+├── test_password_reset.py         # 16 tests: post-deploy T4 — forgot-password reply identical for known/unknown emails, link
+                                    #   to FRONTEND_URL, only the hash stored, case-insensitive, newer link revokes older, throttle
+                                    #   (also for unknown emails); reset works once, expired/garbage fail, 8-char min (refusal doesn't
+                                    #   spend the link), earlier sessions signed out; welcome + admin notice (no email in it), failing
+                                    #   email never fails a request; postmark config fail-fast + request shape
 ├── test_hardening.py               # 16 tests: post-deploy T2 slice 3 — upload Content-Type/extension come from the allow-list
                                     #   (music by ext, images by validated type; a client text/html or .html never stored); login
                                     #   throttle (11th try 429 + Retry-After even with the right password, case-insensitive email,

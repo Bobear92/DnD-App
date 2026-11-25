@@ -3,14 +3,14 @@ session_id: 05c19ffe-a208-44cb-8b78-2114ea1032e2
 title: /ship-it, T2 security, v0.2.0 release, T3 fixes
 date: 2026-11-23
 started: 23:26
-branch: feature/shared-api-client
+branch: feature/password-reset
 area: backend
 tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule]
 issues: []
-summary: /ship→/ship-it; T2 security → v0.2.0; T3 → v0.3.0; upload-banner fix; shared API client + login-expiry
-turns: 30
-stepped_in: false
-last_uuid: 34864e52-45b2-421f-a509-b488e93764c2
+summary: /ship→/ship-it; T2 → v0.2.0; T3 → v0.3.0; banner + API client → v0.3.1; password reset + account emails
+turns: 38
+stepped_in: true
+last_uuid: 5b51fdf3-06dc-46f4-9886-024ff6894da4
 ---
 
 # /ship-it, T2 security, v0.2.0 release, T3 fixes
@@ -91,6 +91,14 @@ last_uuid: 34864e52-45b2-421f-a509-b488e93764c2
   the 2 raw portrait/music uploads and SpellList's raw `fetch` moved onto it. Login shows "Your session expired".
   Guard `src/test/singleApiClient.test.js` (bans axios.create, interceptors, direct axios calls, raw fetch, hand-built
   Bearer). Agent + `/new-frontend-page` + deployment.md updated. Verified live: invalid token → /login?expired=1 + notice.
+  Shipped `8880e5e`; released with c5f292b as **v0.3.1** (auto-deployed, live checks passed).
+- **T4 password reset + account emails** on `feature/password-reset` (Robert chose Postmark): `shared/email.py`
+  (console | postmark, never raises, fail-fast config), `auth/emails.py` texts, `password_reset_tokens` table + nullable
+  `users.password_changed_at` (migration a01182d8bd3b, additive). Forgot-password: same reply for any email, link emailed
+  after the response, throttled (rate_limit turned into a `Throttle` class: LOGIN + FORGOT_PASSWORD). Reset: one-time,
+  60-min, hash-only storage, 8-char min, signs out every earlier session (JWT `iat` vs password_changed_at). Welcome +
+  admin notice (no email in it) on register. Frontend: Forgot link, /forgot-password, /reset-password pages.
+  Tests: test_password_reset.py (16), ForgotPassword (4), ResetPassword (5), Login (+1). Verified live end to end.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -113,6 +121,10 @@ last_uuid: 34864e52-45b2-421f-a509-b488e93764c2
   /docs 404) proves the deploy, not WHO triggered it. Say which one is evidence next time.
 - T3: `owner_username` property was first appended to the wrong class (end of file = CharacterNpc); caught on review.
   Two test misfires (player view hides hidden chars; duplicate alt text needs findAll).
+- Password reset: Postmark refuses free-mail senders — surfaced to Robert up front (needs a domain). The console-email
+  log line was INFO, invisible under uvicorn; first fix-up script failed its assertion silently in a combined command and
+  the suite run was hidden behind it — caught on re-check. Two Playwright script misfires (label substring, early fill).
+  A Login slow-mock failure turned out to pre-exist on main (known harness artifact).
 - Client migration script left `;;` after each replaced client (kept the original `;`) — caught on diff review.
   SpellList's raw fetch was found only by grepping for leftover `localStorage.getItem('token')`; that grep is now the guard.
 - The Playwright check first clicked the campaign title (not "Enter Campaign"), so the page rendered as a non-GM and
@@ -152,7 +164,10 @@ last_uuid: 34864e52-45b2-421f-a509-b488e93764c2
   a cleanup pass.
 - Released as v0.2.0. T3 (this ship) still needs a `/release`.
 - Next release should carry c5f292b (banner) + the shared API client together.
-- Next work: password reset / account emails (T4) — Robert must pick an email provider (Resend/Postmark) and create an account.
+- Postmark go-live (Robert): buy a domain (Cloudflare Registrar suggested), add Postmark DKIM + Return-Path records, get the
+  account approved, then set EMAIL_BACKEND=postmark, POSTMARK_SERVER_TOKEN, EMAIL_FROM, FRONTEND_URL, ADMIN_NOTIFY_EMAIL
+  in Render. Until then production logs emails instead of sending. The password-reset release needs the migration
+  backup + rehearsal.
 - Unsaved sheet edits are still lost on expiry; refresh tokens would fix it (deployment.md).
 - Verify the `skillOverrides` key actually disables `/ship` (listed as "ship-local (ship)"); if `/ship` still runs, the key
   name didn't match.
@@ -692,3 +707,128 @@ last_uuid: 34864e52-45b2-421f-a509-b488e93764c2
 > - **`SpellList`:** it was using its own `fetch` with a hand-built token, so it would have missed expiry. It now goes through …
 
 **Files edited:** `frontend/src/lib/apiClient.js`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/migrate_clients.py`, `frontend/src/lib/apiClient.test.js`, `frontend/src/test/singleApiClient.test.js`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/docs_client.py` · **Commands run:** 27
+
+### 31. 2026-11-25 15:49
+
+**Robert:**
+> /ship-it
+
+**Claude:**
+> The shared API client is shipped: `main` is at **8880e5e** and pushed to GitHub. The working tree is clean, and the feature branch is deleted; it was never pushed, so there was nothing to delete there. The commit holds the client factory, the 13 services moved onto it, the expired-login notice, the guard test and the doc updates.
+> 
+> **Checks before shipping:** all 4,005 frontend tests pass and the build succeeds. In the real app, an invalid token sent me to the login page with "Your session expired". No backend files changed, so the backend checks were skipped.
+> 
+> **Waiting for the next release**, both on `main`:
+> - `c5f292b`: a failed map upload now shows inside the Upload dialog instead of leaving a stuck banner.
+> - `8880e5e`: an expired login sends you to the login page with a message, instead of silently failing every request.
+> 
+> Neither has a database change, so `/release` won't need a back …
+
+**Commands run:** 2
+
+### 32. 2026-11-25 15:58
+
+**Robert:**
+> /release
+
+**Claude:**
+> There are no blockers, and this one needs no backup or rehearsal, because it has no database changes. Here's what I'd release:
+> 
+> **v0.3.1**, commits `v0.3.0..8880e5e` (2 commits). It's a patch bump, since both are fixes.
+> 
+> **Fixes**
+> - **Expired login:** when your login expires, you're now taken to the login page with "Your session expired — please log in again." Before, every action just failed silently until you reloaded.
+> - **Map upload:** a failed map upload now shows its message inside the Upload dialog, with a retry. It no longer leaves a stuck "Upload failed" banner behind.
+> 
+> **Behind the scenes**
+> - **One shared API client:** every part of the app now talks to the server through it, replacing 13 copies of the same code. A build check keeps new copies from appearing.
+> 
+> **Data:** no migrations, no seeds. How characters are saved is unchanged; only the connection code underneath was replac …
+
+**Commands run:** 3
+
+### 33. 2026-11-25 16:00
+
+**Robert:**
+> yes
+
+**Claude:**
+> `v0.3.1` is tagged and pushed, and `production` is at `8880e5e`. CI on `production` is running, and Render deploys once it passes, usually within about 10 minutes. A background check is waiting for the new frontend and will then run the live-site checks; I'll report the results when it finishes.
+> 
+> Meanwhile, pick an email service for password reset: Resend (simpler, 3,000 emails a month free) or Postmark (100 a month free, stronger delivery). Once it's live, also run the smoke test: save and reload a character, and upload a portrait.
+
+**Commands run:** 3
+
+### 34. 2026-11-25 16:10
+
+**Robert:**
+> We wont have many users so postmark should be fine.
+
+**Claude:**
+> The v0.3.1 check is still waiting on CI and Render, and the backend suite is still running. I'll finish both, then run the reset flow end to end in the real app, as soon as they report back.
+
+**Files edited:** `backend/shared/email.py`, `backend/auth/rate_limit.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/reset_backend.py`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/reset_service_routes.py`, `backend/tests/test_password_reset.py`, `frontend/src/auth/pages/ForgotPassword.jsx`, `frontend/src/auth/pages/ResetPassword.jsx`, `frontend/src/auth/pages/ForgotPassword.test.jsx`, `frontend/src/auth/pages/ResetPassword.test.jsx`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/docs_reset.py` · **Commands run:** 20
+
+### 35. 2026-11-25 16:21
+
+**Robert:**
+> we have 32 things not committed what are those?
+
+**Claude:**
+> All 32 are the password-reset work I'm doing now, on `feature/password-reset`. They stay uncommitted until you type `/ship-it`. Nothing is stray or left over. The breakdown:
+> 
+> **Backend: 15 files**
+> - **Changed (10):**
+>   - `auth/` models, schemas, service and routes: the new reset table, the forgot/reset endpoints, and the welcome and admin emails.
+>   - `auth/rate_limit.py`: turned into a reusable throttle so forgot-password gets its own limit.
+>   - `config.py`: the email settings.
+>   - `main.py`: a startup check for the email settings.
+>   - `shared/security.py` and `shared/dependencies.py`: logins issued before a password reset are rejected.
+>   - `tests/conftest.py`: clears the test outbox between tests.
+> - **New (5):**
+>   - `shared/email.py`: the sender, console or Postmark.
+>   - `auth/emails.py`: the email text.
+>   - The migration: the new table plus one column.
+>   - `tests/test_password_reset.py …
+
+**Commands run:** 1
+
+### 36. 2026-11-25 16:21 ⚠ interrupted by Robert
+
+**Robert:**
+> <task-notification>
+> <task-id>bfjg4rdfb</task-id>
+> <tool-use-id>toolu_01CA2mGgn3DPjydUkFx87QFW</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\05c19ffe-a208-44cb-8b78-2114ea1032e2\tasks\bfjg4rdfb.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Wait for production CI, deploy, then run live checks" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> _(no text reply)_
+
+**Commands run:** 1
+
+### 37. 2026-11-25 16:22
+
+**Robert:**
+> /ship-it
+
+**Claude:**
+> The backend suite is finishing in the background. When it's done I'll run the password-reset tests once more on the corrected log line, restart the server, and test the reset flow in the real app. Then I'll commit and merge.
+
+**Files edited:** `backend/shared/email.py` · **Commands run:** 2
+
+### 38. 2026-11-25 16:27
+
+**Robert:**
+> <task-notification>
+> <task-id>byb6iw9qc</task-id>
+> <summary>Monitor event: "Wait for the running pytest to finish"</summary>
+> <event>[Monitor expired after 5m with no events delivered. Re-arm it if you still need the watch — and widen the filter if silence was unexpected.]</event>
+> </task-notification>
+
+**Claude:**
+> The backend suite is still running, and I'm waiting for it to finish before the last checks and the commit.
+
+**Commands run:** 2

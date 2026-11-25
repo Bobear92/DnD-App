@@ -40,7 +40,10 @@ hardening (upload Content-Type, login rate limit/password minimum, /docs).
   "No visible maps."
 
 ## T4 — Feature requests (moved here from CLAUDE.md › Not Yet Built)
-- [ ] Account emails + password reset (welcome email, admin notified of new accounts, forgot/reset password). Needs an
+- [~] Account emails + password reset — **code done 2026-11-25** (welcome + admin notice on register, forgot/reset password,
+  reset signs out every session; `shared/email.py` console|postmark). **To go live (Robert):** buy a domain, verify it as
+  a Postmark sender (DKIM + Return-Path DNS), get the account approved, then set EMAIL_BACKEND/POSTMARK_SERVER_TOKEN/
+  EMAIL_FROM/FRONTEND_URL/ADMIN_NOTIFY_EMAIL in Render (deployment.md). Was: needs an
   email provider and a reset-token table; nothing sends email today.
 - [ ] Items deep dive, incl. moving the 34 potion-type magic items into Potions (seed change + delete the prod rows).
 - [x] Bug: the Locations "Upload failed" banner stays up after a later upload succeeds. (A failed upload now shows inside

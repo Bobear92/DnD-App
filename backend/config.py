@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     r2_secret_access_key: str = ""
     r2_bucket: str = ""
 
+    # Outgoing email (shared/email.py). "console" logs messages instead of sending (dev/tests); "postmark" sends via
+    # Postmark — production, with POSTMARK_SERVER_TOKEN and EMAIL_FROM (a verified sender on a domain you own).
+    email_backend: str = "console"
+    postmark_server_token: str = ""
+    email_from: str = ""
+    # Who is told about new accounts (blank = nobody).
+    admin_notify_email: str = ""
+    # The frontend's public URL, for links in emails (password reset). Production sets the site URL.
+    frontend_url: str = "http://localhost:5173"
+    # How long a password-reset link works.
+    password_reset_minutes: int = 60
+
     @property
     def cors_origins(self) -> list[str]:
         """ALLOWED_ORIGINS split into a list. Trailing slashes are dropped because a browser's

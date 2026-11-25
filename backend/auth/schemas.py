@@ -38,3 +38,16 @@ class UserSearchResult(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=10, max_length=200)
+    new_password: str = Field(..., min_length=PASSWORD_MIN_LENGTH)
+
+
+class MessageResponse(BaseModel):
+    message: str

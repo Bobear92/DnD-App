@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import authService, { PASSWORD_MIN_LENGTH } from '../authService';
 import { useAuth } from '../AuthContext';
 import './Login.css';
@@ -202,6 +202,13 @@ const Login = () => {
               {!isLogin && (
                 <p id="password-hint" className="mt-1 text-xs text-muted-foreground">
                   At least {PASSWORD_MIN_LENGTH} characters.
+                </p>
+              )}
+              {isLogin && (
+                <p className="mt-1 text-right text-xs">
+                  <Link to="/forgot-password" className="text-muted-foreground hover:text-foreground hover:underline">
+                    Forgot password?
+                  </Link>
                 </p>
               )}
             </div>

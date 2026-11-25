@@ -613,7 +613,9 @@ frontend/src/
 │   ├── AuthContext.test.jsx          # context state, setUser exposure, logout + selectedCampaign clearing, cross-tab token change → /campaigns or /login, other keys/unchanged token ignored, listener added + removed (11 tests)
 │   └── pages/
 │       ├── Login.jsx
-│       └── Login.test.jsx            # login flow, setUser call, navigation, error states, register 8-char minimum (hint + minLength, refused before the API), no length rule on login, `?expired=1` shows `session-expired` (12 tests)
+│       ├── ForgotPassword.jsx / .test.jsx  # email → authService.forgotPassword (trimmed); shows the server's same-for-everyone reply; error keeps the form; back-to-login link (4 tests)
+│       ├── ResetPassword.jsx / .test.jsx   # token from ?token=; 8-char + confirm-match checked before the API; success → Go to login; expired link → request a new one; no token → explanation (5 tests)
+│       └── Login.test.jsx            # login flow, setUser call, navigation, error states, register 8-char minimum (hint + minLength, refused before the API), no length rule on login, `?expired=1` shows `session-expired`, Forgot-password link on login mode only (13 tests)
 ├── campaigns/
 │   └── pages/
 │       ├── CampaignSelection.jsx
@@ -681,6 +683,8 @@ The one routes table (CLAUDE.md dropped its one-line copy on 2026-11-23), with e
 | Path | Component | Status |
 |------|-----------|--------|
 | `/login` | Login | ✅ Functional |
+| `/forgot-password` | ForgotPassword | ✅ Public — email a reset link (same reply whether or not the account exists) |
+| `/reset-password?token=` | ResetPassword | ✅ Public — set a new password from the emailed link; sends you to log in |
 | `/campaigns` | CampaignSelection | ✅ Any authenticated user can create |
 | `/campaigns/:campaignId/dashboard` | Dashboard | ⚠️ Static placeholder |
 | `/campaigns/:campaignId/characters` | CharacterList | ✅ Functional |

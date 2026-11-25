@@ -40,6 +40,15 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
         )
+
+    # A password reset signs out every session that logged in before it (post-deploy T4).
+    if user.password_changed_at is not None:
+        issued = payload.get("iat")
+        if issued is None or float(issued) < user.password_changed_at.timestamp():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session ended by a password change. Please log in again."
+            )
     
     return user
 

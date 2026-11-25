@@ -208,3 +208,12 @@ describe('Login — expired session (shared API client sends ?expired=1)', () =>
     expect(screen.queryByTestId('session-expired')).toBeNull();
   });
 });
+
+describe('Login — forgot password link (T4)', () => {
+  it('is offered on the login form only', async () => {
+    renderLogin();
+    expect(screen.getByRole('link', { name: /forgot password/i })).toHaveAttribute('href', '/forgot-password');
+    await userEvent.click(screen.getByRole('button', { name: /create an account/i }));
+    expect(screen.queryByRole('link', { name: /forgot password/i })).toBeNull();
+  });
+});
