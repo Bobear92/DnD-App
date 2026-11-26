@@ -3,14 +3,14 @@ session_id: 05c19ffe-a208-44cb-8b78-2114ea1032e2
 title: Post-deploy tickets T2-T6, releases v0.2-v0.4
 date: 2026-11-23
 started: 23:26
-branch: feature/items-potions
+branch: feature/items-magic-weapons
 area: backend
 tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule, auth, seed-data, items-tab, data-safety]
 issues: []
-summary: T2→v0.2.0; T3→v0.3.0; API client→v0.3.1; password reset→v0.4.0; links GM-only; items worklist + potions
-turns: 51
+summary: T2→v0.2.0; T3→v0.3.0; API client→v0.3.1; reset→v0.4.0; links GM-only; items T1 potions, T2 magic weapons
+turns: 55
 stepped_in: true
-last_uuid: 1e50d5a4-c260-4c5d-ba8a-b4a777fba5f5
+last_uuid: 0854632e-bfcb-4358-999b-1fed375f9860
 ---
 
 # Post-deploy tickets T2-T6, releases v0.2-v0.4
@@ -110,7 +110,14 @@ last_uuid: 1e50d5a4-c260-4c5d-ba8a-b4a777fba5f5
 - **Items T1 — potions only under Potions** on `feature/items-potions`: `seed_items` routes API potion-category records
   into Potions (curated names skipped); migration `ebff797e3878` creates missing Potions rows, re-points owned
   inventory snapshots, deletes the system potion rows from magic_items (homebrew kept; downgrade no-op).
-  `test_potions_move.py` (4). Dev: magic 362→322, potions 40. Unreleased (release with T2: one backup).
+  `test_potions_move.py` (4). Dev: magic 362→322, potions 40. Shipped `71d503e`.
+- **Items T2 — magic weapons vertical slice** (`/grill` GO) on `feature/items-magic-weapons`: `magic_items.effects`
+  JSON (migration `270df8351c14`, additive + fills Weapon +1/+2/+3), `seed_items.MAGIC_ITEM_EFFECTS`. A magic weapon is
+  a WEAPONS entry (base weapon snapshot, base name) + a `magic` block (`buildMagicWeaponEntry`); `computeAttack` adds
+  +N to hit and damage with an item-named breakdown term and names the row "Longsword, +1"; `magicalAttackSource`
+  item branch; `activeMagic` is the one attunement gate. Items tab: GM picks the magic item, then "Which weapon is the
+  …?" picker; players' Magic Items picker omits magic weapons. Tests: test_magic_item_effects.py (3), frontend +11.
+  Verified live (Playwright, no Save): Fighter L10 STR 10 → "+5 · 1d8 + 1" on both tabs, badge "Magic · Weapon, +1".
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -138,6 +145,10 @@ last_uuid: 1e50d5a4-c260-4c5d-ba8a-b4a777fba5f5
   the suite run was hidden behind it — caught on re-check. Two Playwright script misfires (label substring, early fill).
   A Login slow-mock failure turned out to pre-exist on main (known harness artifact).
 - v0.4.0: `gh run watch` in the foreground hit the 10-minute tool timeout (backend CI takes ~12 min) — background it.
+- T2: the first Playwright run tried campaign 1, which is world-building mode (no Characters page) and bounced to the
+  dashboard; campaign 2 is the full-mode test campaign. A Python-in-heredoc edit turned `` in a JS regex into a
+  backspace character, and a later bash heredoc with nested quotes failed to parse — test blocks then went through
+  Write-tool scratch files (the shell-edits memory's advice).
 - Location links: an inline Python edit on Windows wrote "…" and "—" in cp1252 (SyntaxError) — open files with
   `encoding='utf-8'`. The new test was inserted after an assert that wasn't the last line of the previous test, so that
   test's last two lines moved into the new one; one full-suite run wasted. Anchor insertions on the next `class`/`def`.
@@ -153,6 +164,9 @@ last_uuid: 1e50d5a4-c260-4c5d-ba8a-b4a777fba5f5
 - T8 (ammo auto-spend) and T9 (custom loot) left as Robert's calls — the app never rolls attacks, and custom-loot
   permissions/effects are undecided.
 - Release T1 together with T2 (one backup + rehearsal for both migrations); cut earlier if T2 drags.
+- T2 grill: a magic weapon is a weapons entry + `magic` block (not a magic-items entry made equippable) — the 39
+  `category === 'weapons'/'armor'` checks stay untouched. Robert: adding magic weapons/armor is GM-only; base-weapon
+  picker offers any weapon for now. Coverage report moved to T6.
 
 - Renamed rather than looking for a setting to disable the built-in: a rename is robust whatever the extension version does.
 - Picked `/ship-it`, the name proposed last session.
@@ -184,10 +198,11 @@ last_uuid: 1e50d5a4-c260-4c5d-ba8a-b4a777fba5f5
 ## Open threads
 
 - Robert's Windows PATH still has one empty entry (entry 39). It's harmless to the project and only the built-in `/ship` checks it. Cleaning it up is optional.
-- Production is v0.4.0. Unreleased on main: location links GM-only (27a04bc) and items T1 potions (DESTRUCTIVE data
-  migration ebff797e3878 → backup + rehearsal; expect prod potions 6 → ~40, magic_items −40).
-- Next: items T2 — run `/grill` on the magic-item effects design (effects JSONB on magic_items, base_item on the
-  inventory entry, one `itemEffects` resolver gated on equipped/attuned), then build "Weapon, +1".
+- Production is v0.4.0. Unreleased on main: location links GM-only (27a04bc), items T1 potions (DESTRUCTIVE data
+  migration ebff797e3878 → backup + rehearsal; expect prod potions 6 → ~40, magic_items −40), items T2 magic weapons
+  (migration 270df8351c14). `/release` next — one backup covers both migrations.
+- Then items T3 (magic armor + shields — same weapons-entry move with `category: 'armor'`, `computeArmorClass` reads
+  the bonus) and T4 (attunement UI for weapons/armor entries; Artificer limits).
 - After the items deep dive, T6 (send only changed
   character_data keys, CalendarTab flake, CampaignSelection.css → Tailwind, unused `is_admin` param, R2 backups,
   Python 3.14 vs 3.12, upload quota), T5 Smoke-test campaign decision, DB upgrade before January.
@@ -1113,3 +1128,83 @@ last_uuid: 1e50d5a4-c260-4c5d-ba8a-b4a777fba5f5
 > The session log is updated. Waiting on the backend suite before I commit.
 
 **Commands run:** 4
+
+### 52. 2026-11-25 19:59
+
+**Robert:**
+> <task-notification>
+> <task-id>bu07xrpkc</task-id>
+> <tool-use-id>toolu_01QkicV8wgPNsh5Lph66Gm4p</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\05c19ffe-a208-44cb-8b78-2114ea1032e2\tasks\bu07xrpkc.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend test suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> Shipped: `main` is at **71d503e** and pushed. That commit holds the items worklist and T1 (potions only under Potions), and the feature branch is deleted.
+> 
+> **Verified:**
+> - **Tests:** 1,191 backend and 4,015 frontend tests pass, and the feat coverage gate passes.
+> - **Running app:** Magic Items serves 322 with no potions, and Potions serves 40.
+> - **Dev migration:** ran cleanly, and the models still match the migrations.
+> 
+> **Waiting on main for the next release:**
+> - The location-links fix (27a04bc).
+> - Items T1 (71d503e). Its migration deletes production rows, so that release needs the backup and rehearsal. The plan is to release it together with T2.
+> 
+> **Next:** items T2, starting with `/grill` on the magic-item effects design. That covers how "Weapon, +1" learns its base weapon, where the bonuses are stored, and the one place every surface reads them from. Say when you want to start it.
+
+**Commands run:** 3
+
+### 53. 2026-11-25 20:01
+
+**Robert:**
+> /grill
+
+**Claude:**
+> The grill said **GO**, and T2's code is done: a GM can give a character "Weapon, +1" as a Longsword, and it attacks at +1. Nothing is committed; it's on the branch `feature/items-magic-weapons`. The full backend test run is going in the background, and I'll report the result when it finishes.
+> 
+> **Your two calls are in:** only the GM can add a magic weapon, and the base-weapon picker offers every weapon for now.
+> 
+> **How it works:** a "+1 longsword" is saved as an **ordinary Longsword** with a small "magic" note attached. So everything that already works for weapons works for it without changes: hands, proficiency, range, ammunition and the Action Economy tab. Two things read the magic note:
+> - **Attack and damage:** +1 to both, named "Weapon, +1" when you click the number to see the math.
+> - **The Magic badge:** reads "Magic · Weapon, +1".
+> 
+> An item that requires attunement does nothing until …
+
+**Files edited:** `backend/migrations/versions/270df8351c14_add_magic_items_effects.py`, `backend/tests/test_magic_item_effects.py`, `frontend/src/characters/components/inventory/inventoryData.js`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/t2_inventoryData.txt`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/t2_weaponMagic.txt`, `../../../AppData/Local/Temp/claude/045254e682df5b07/05c19ffe-a208-44cb-8b78-2114ea1032e2/scratchpad/t2_InventoryTab.txt`, `frontend/src/characters/components/combat/ActionEconomyTab.test.jsx` · **Commands run:** 45
+
+### 54. 2026-11-25 20:20
+
+**Robert:**
+> is it ready for /ship-it  ?
+
+**Claude:**
+> Not yet. The full backend test run is still going, and it takes about 13 minutes. The frontend side is ready: all 4,026 tests pass and the build passes. The 173 backend tests in the areas I touched already pass.
+> 
+> I'll tell you as soon as the full run finishes. If it's green, it's ready for `/ship-it`.
+> 
+> The browser check is optional, but it's the one thing tests can't tell me. Add "Weapon, +1" as a Longsword as the GM and look at the attack row. You can do that now while the tests run.
+
+**Commands run:** 1
+
+### 55. 2026-11-25 20:22
+
+**Robert:**
+> <task-notification>
+> <task-id>b734rpdnn</task-id>
+> <tool-use-id>toolu_01GsMZ8RdHytg4vbAJmrW9BF</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\05c19ffe-a208-44cb-8b78-2114ea1032e2\tasks\b734rpdnn.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend test suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> Yes, it's ready for `/ship-it`. The full backend run finished green: 1,194 passed, 1 skipped (that skip was already there), and nothing failed.
+> 
+> **Checked:**
+> - **Tests:** all 4,026 frontend tests pass, and the build passes.
+> - **Database:** the migration ran on dev, and the models still match the migrations.
+> - **Running server:** serves the `effects` field for "Weapon, +1/+2/+3".
+> 
+> **Not checked:** the flow in the browser (the GM adds "Weapon, +1" as a Longsword and holds it). The tests cover it, but I haven't clicked through it in the running app. You can do that first, or ship now and check it on dev afterwards.

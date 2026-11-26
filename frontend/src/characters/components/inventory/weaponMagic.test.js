@@ -61,3 +61,20 @@ describe('magicalAttackSource', () => {
     }
   });
 });
+
+describe('item-intrinsic magic (items deep dive T2)', () => {
+  const magic = { item_name: 'Weapon, +2', attunement_required: false, effects: [{ kind: 'weapon_bonus', amount: 2 }] };
+  const sword = { name: 'Longsword', category: 'weapons' };
+
+  it('a magic weapon is its own source, whatever the class', () => {
+    expect(magicalAttackSource({ ...sword, magic }, { charClass: 'Wizard', level: 1 }))
+      .toEqual(expect.objectContaining({ source: 'Weapon, +2' }));
+  });
+
+  it('is not magical while an attunement item is unattuned', () => {
+    const needs = { ...magic, attunement_required: true };
+    expect(magicalAttackSource({ ...sword, magic: needs }, { charClass: 'Wizard' })).toBeNull();
+    expect(magicalAttackSource({ ...sword, magic: needs, attuned: true }, { charClass: 'Wizard' }))
+      .toEqual(expect.objectContaining({ source: 'Weapon, +2' }));
+  });
+});

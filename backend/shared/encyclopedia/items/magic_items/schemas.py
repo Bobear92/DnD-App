@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from shared.enums import OwnerType
 
@@ -13,6 +13,7 @@ class MagicItemBase(BaseModel):
     cost: Optional[str] = Field(None, max_length=50)
     weight: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
+    effects: Optional[List[Dict[str, Any]]] = None
 
 
 class MagicItemCreate(MagicItemBase):
@@ -29,6 +30,7 @@ class MagicItemUpdate(BaseModel):
     cost: Optional[str] = Field(None, max_length=50)
     weight: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
+    effects: Optional[List[Dict[str, Any]]] = None
 
 
 class MagicItemResponse(MagicItemBase):

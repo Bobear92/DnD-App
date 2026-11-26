@@ -9,12 +9,10 @@
  * Three origins exist in the rules; this module currently answers for one:
  *   1. FEATURE-granted (here)      — Magic Arrow, Monk Ki-Empowered Strikes, Improved Pact Weapon…
  *                                    Each is a data entry in MAGIC_ATTACK_SOURCES.
- *   2. ITEM-intrinsic (not yet)    — a +1 longbow is magical on its own. Not reachable today: every
- *                                    equipped weapon comes from the `weapons` table and magic
- *                                    weapons live in `magic_items`, which `getAttacks` filters out
- *                                    (`category === 'weapons'`). So there are no false negatives to
- *                                    create yet. When magic weapons become equippable, add the
- *                                    branch here and both surfaces pick it up unchanged.
+ *   2. ITEM-intrinsic (here)       — a +1 longbow is magical on its own. A magic weapon is a weapons
+ *                                    entry carrying a `magic` block (inventoryData.buildMagicWeaponEntry);
+ *                                    while that block is active (attuned, if the item needs it) the
+ *                                    weapon's own magic is the source. Checked FIRST: it names the item.
  *   3. SPELL/temporary (declined)  — Magic Weapon, Shillelagh, Elemental Weapon. Deliberately NOT
  *                                    auto-tagged: the app tracks no buff duration, so claiming a
  *                                    weapon is magical "now" would be a promise it can't keep.
@@ -48,11 +46,30 @@ export const MAGIC_ATTACK_SOURCES = [
 ];
 
 /**
+ * The entry's magic block while it is WORKING, else null: an item that requires attunement does nothing until the
+ * character is attuned to it. Every reader of an inventory entry's `magic` goes through here (inventoryData
+ * re-exports it), so that rule lives once.
+ */
+export function activeMagic(entry) {
+  const magic = entry?.magic;
+  if (!magic) return null;
+  if (magic.attunement_required && !entry.attuned) return null;
+  return magic;
+}
+
+/**
  * The source making this weapon's attacks magical, or null.
  * Returns `{ source, note }` — never a bare boolean, so the surface can say WHY.
  */
 export function magicalAttackSource(weapon, { charClass, subclass, level = 1, edition = '5e' } = {}) {
   if (!weapon) return null;
+  const magic = activeMagic(weapon);
+  if (magic) {
+    return {
+      source: magic.item_name,
+      note: 'A magic weapon: its attacks overcome resistance and immunity to nonmagical attacks and damage.',
+    };
+  }
   const ctx = { charClass, subclass, level, edition };
   const match = MAGIC_ATTACK_SOURCES.find((s) => matchesGate(s, ctx) && s.appliesTo(weapon));
   return match ? { source: match.source, note: match.note } : null;

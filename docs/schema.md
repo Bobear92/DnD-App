@@ -352,6 +352,8 @@ potions
 
 magic_items
   id, name, item_type, rarity, attunement (boolean), description,
+  effects (JSON, nullable — structured mechanics, e.g. [{kind:'weapon_bonus', amount:1}]; authored in
+    seed_items.MAGIC_ITEM_EFFECTS; NULL = prose only),
   owner_type (ENUM), owner_id, created_at, updated_at
 
 food_drink

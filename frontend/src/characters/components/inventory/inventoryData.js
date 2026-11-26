@@ -15,7 +15,9 @@ import { getFeatAcMods } from '@/characters/components/feats/featEffects';
 import { styleToHitBonus, styleDamageBonus, styleAcBonus } from '@/characters/components/combat/fightingStyles';
 import { gatherProficiencies } from '@/characters/components/inventory/inventoryProficiencies';
 import { CLASS_PROFICIENCIES_5E } from '@/characters/components/classData/classProficienciesData';
-import { magicalAttackSource } from '@/characters/components/inventory/weaponMagic';
+import { magicalAttackSource, activeMagic } from '@/characters/components/inventory/weaponMagic';
+
+export { activeMagic };
 import { abilityMod, profBonus, formatSigned } from '@/characters/components/shared/abilityMath';
 import { isEdition2024 } from '@/characters/components/shared/featureGate';
 
@@ -63,6 +65,51 @@ export function buildEntry(categoryId, item, quantity = 1) {
     quantity: Math.max(1, Math.floor(Number(quantity) || 1)),
     equipped: false,
     attuned: false,
+  };
+}
+
+// ─── Magic weapons (items deep dive T2) ─────────────────────────────────────────
+//
+// A magic weapon such as "Weapon, +1" is stored as an ordinary WEAPONS entry — a snapshot of the base weapon the
+// GM chose (a Longsword), whose `name` stays the base name — plus a `magic` block snapshotted from the magic item:
+//   magic: { item_id, item_name, rarity, attunement_required, effects: [{ kind: 'weapon_bonus', amount }] }
+// Keeping it a real weapon is the point: hands, proficiency, range, ammunition, Action Economy and every
+// equipment-gated feature already work off `category === 'weapons'` and the base weapon's name, unchanged. Only
+// the readers of the item's effects (to-hit/damage here, the Magic badge in weaponMagic.js) know about `magic`.
+
+/** The +N a magic item's effects give to attack and damage rolls (0 when it has none). */
+export function weaponBonusFromEffects(effects) {
+  return (Array.isArray(effects) ? effects : [])
+    .filter((e) => e?.kind === 'weapon_bonus')
+    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+}
+
+/** A magic item that can be turned into a weapon entry (it carries a weapon_bonus effect). */
+export function isMagicWeaponItem(item) {
+  return weaponBonusFromEffects(item?.effects) > 0;
+}
+
+/** "Weapon, +1" on a Longsword → "Longsword, +1"; any other item name is shown beside the base name. */
+export function magicDisplayName(entry) {
+  const magic = entry?.magic;
+  if (!magic) return entry?.name;
+  const generic = /^weapon\b/i;
+  return generic.test(magic.item_name || '')
+    ? magic.item_name.replace(generic, entry.name)
+    : `${entry.name} (${magic.item_name})`;
+}
+
+/** A weapons entry for `magicItem` built on `baseWeapon` (both encyclopedia rows). */
+export function buildMagicWeaponEntry(magicItem, baseWeapon) {
+  return {
+    ...buildEntry('weapons', baseWeapon, 1),
+    magic: {
+      item_id: magicItem?.id ?? null,
+      item_name: magicItem?.name || 'Magic weapon',
+      rarity: magicItem?.rarity ?? null,
+      attunement_required: !!magicItem?.attunement_required,
+      effects: Array.isArray(magicItem?.effects) ? magicItem.effects : [],
+    },
   };
 }
 
@@ -602,11 +649,15 @@ export function computeAttack(weapon, { scores = {}, level = 1, proficient = fal
   const abilityLabel = `${ABILITY_ABBR[ability] || ability}${abilityReason ? ` (${abilityReason})` : ''}`;
   const { bonus: toHitStyle, sources: toHitSources, parts: toHitParts } = styleToHitBonus(weapon, styles);
   const { bonus: dmgStyle, sources: dmgSources, parts: dmgParts } = styleDamageBonus(weapon, styles, { soloWeapon });
-  const toHit = formatSigned(mod + (proficient ? profBonus(level) : 0) + toHitStyle);
+  // A magic weapon's +N (items deep dive T2) — to attack AND damage, named after the item in both breakdowns.
+  const magic = activeMagic(weapon);
+  const magicBonus = magic ? weaponBonusFromEffects(magic.effects) : 0;
+  const toHit = formatSigned(mod + (proficient ? profBonus(level) : 0) + toHitStyle + magicBonus);
   const toHitBreakdown = [{ label: abilityLabel, value: mod }];
   if (proficient) toHitBreakdown.push({ label: 'Proficiency', value: profBonus(level) });
   for (const p of toHitParts) toHitBreakdown.push({ label: `${p.source} fighting style`, value: p.amount });
-  const flat = mod + dmgStyle;
+  if (magicBonus) toHitBreakdown.push({ label: magic.item_name, value: magicBonus });
+  const flat = mod + dmgStyle + magicBonus;
   const dmgBonus = flat === 0 ? '' : ` ${flat > 0 ? '+' : '-'} ${Math.abs(flat)}`;
   const dmgType = weapon.damage_type ? ` ${weapon.damage_type}` : '';
   // A Versatile weapon uses its larger die when held two-handed (the other hand is free).
@@ -620,13 +671,14 @@ export function computeAttack(weapon, { scores = {}, level = 1, proficient = fal
     { label: versDie ? 'two-handed grip' : 'weapon die', value: versDie || weapon.damage || '—' },
     { label: abilityLabel, value: mod },
     ...dmgParts.map((p) => ({ label: `${p.source} fighting style`, value: p.amount })),
+    ...(magicBonus ? [{ label: magic.item_name, value: magicBonus }] : []),
   ];
   const warning = weaponAttackWarning(weapon, { size, scores, edition });
   const loadingNote = weaponLoadingNote(weapon, { feats, proficient, edition });
   const styleNotes = [...new Set([...toHitSources, ...dmgSources])];
   // Hex Warrior actually drove the numbers (CHA beat STR/DEX) — surface the source.
   const hexNote = hex ? 'Uses Charisma for attack & damage (Hex Warrior).' : null;
-  return { name: weapon.name, toHit, toHitBreakdown, damage, damageBreakdown, ability, proficient, disadvantage: !!warning, warning, loadingNote, styleNotes, hexNote };
+  return { name: magicDisplayName(weapon), toHit, toHitBreakdown, damage, damageBreakdown, ability, proficient, disadvantage: !!warning, warning, loadingNote, styleNotes, hexNote, magicBonus };
 }
 
 /**

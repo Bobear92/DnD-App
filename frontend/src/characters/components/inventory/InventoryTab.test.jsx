@@ -1008,3 +1008,52 @@ describe('Rune Carving on the item cards (Rune Knight)', () => {
     expect(onChange).toHaveBeenCalledWith({ rune_items: {} });
   });
 });
+
+describe('magic weapons (items deep dive T2)', () => {
+  const plusOne = { id: 51, name: 'Weapon, +1', item_type: 'Weapon', rarity: 'Uncommon', attunement_required: false,
+    effect: 'You have a +1 bonus.', effects: [{ kind: 'weapon_bonus', amount: 1 }], owner_type: 'system' };
+  const bag = { id: 52, name: 'Bag of Holding', item_type: 'Wondrous Items', rarity: 'Uncommon', effect: 'Big.',
+    effects: null, owner_type: 'system' };
+  const baseLongsword = { id: 9, name: 'Longsword', weapon_category: 'Martial', weapon_type: 'Melee', damage: '1d8',
+    damage_type: 'Slashing', owner_type: 'system' };
+
+  beforeEach(() => {
+    itemService.getItems.mockImplementation((cat) =>
+      Promise.resolve(cat === 'magic-items' ? [plusOne, bag] : [baseLongsword]));
+  });
+
+  it('the GM adds "Weapon, +1" by choosing its base weapon; it lands as a weapon', async () => {
+    const onChange = vi.fn();
+    renderTab({ onChange, isGm: true });
+    fireEvent.click(screen.getByTestId('inv-category-magic-items'));
+    fireEvent.click(screen.getByTestId('inv-add-btn'));
+    fireEvent.click(await screen.findByTestId('item-picker-option-51'));
+    expect(await screen.findByText('Which weapon is the Weapon, +1?')).toBeInTheDocument();
+    fireEvent.click(await screen.findByTestId('item-picker-option-9'));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const added = onChange.mock.calls.at(-1)[0].inventory.at(-1);
+    expect(added).toEqual(expect.objectContaining({ category: 'weapons', name: 'Longsword', source_id: 9 }));
+    expect(added.magic).toEqual(expect.objectContaining({ item_id: 51, item_name: 'Weapon, +1' }));
+  });
+
+  it('a player cannot add a magic weapon (stocking weapons is GM-only) but still adds other magic items', async () => {
+    renderTab({ isGm: false });
+    fireEvent.click(screen.getByTestId('inv-category-magic-items'));
+    fireEvent.click(screen.getByTestId('inv-add-btn'));
+    expect(await screen.findByTestId('item-picker-option-52')).toBeInTheDocument();
+    expect(screen.queryByTestId('item-picker-option-51')).toBeNull();
+  });
+
+  it('a held +1 longsword shows its name, +1 to hit and damage, the source, and the Magic badge', () => {
+    const held = { uid: 'mw1', category: 'weapons', name: 'Longsword', weapon_category: 'Martial', weapon_type: 'Melee',
+      damage: '1d8', damage_type: 'Slashing', quantity: 1, equipped: true, hand: 'main',
+      magic: { item_id: 51, item_name: 'Weapon, +1', attunement_required: false, effects: [{ kind: 'weapon_bonus', amount: 1 }] } };
+    renderTab({ inventory: [held] });
+    const row = screen.getByTestId('attack-mw1');
+    expect(row).toHaveTextContent('Longsword, +1');
+    expect(row).toHaveTextContent('+6 · 1d8 + 4 Slashing'); // STR +3, prof +2, +1
+    expect(screen.getByTestId('attack-magic-bonus-mw1')).toHaveTextContent('Includes +1 to attack and damage from Weapon, +1');
+    expect(screen.getByTestId('attack-magical-mw1')).toBeInTheDocument();
+    expect(screen.getByTestId('inv-row-mw1')).toHaveTextContent('Longsword, +1');
+  });
+});

@@ -1213,6 +1213,21 @@ describe('ActionEconomyTab — Weapon Bond + Hex Warrior', () => {
       ...props,
     });
 
+    // Items deep dive T2: a magic weapon is its own source, and the card shows the SAME numbers as the Items tab
+    // (both come from getAttacks).
+    it('a held +1 longsword: same +1 to hit and damage as the Items tab, tagged by the item', () => {
+      const plusOneSword = {
+        uid: 'mw1', category: 'weapons', equipped: true, hand: 'main', name: 'Longsword',
+        weapon_category: 'Martial', weapon_type: 'Melee', damage: '1d8', damage_type: 'Slashing',
+        magic: { item_id: 51, item_name: 'Weapon, +1', attunement_required: false, effects: [{ kind: 'weapon_bonus', amount: 1 }] },
+      };
+      renderTab({ level: 1, inventory: [plusOneSword], scores: { strength: 16, dexterity: 10 } });
+      expect(screen.getByText('Longsword, +1')).toBeInTheDocument();
+      expect(screen.getByTestId('ae-tohit-weapon:mw1:0')).toHaveTextContent('+6'); // STR +3, prof +2, item +1
+      expect(screen.getByTestId('ae-damage-weapon:mw1:0')).toHaveTextContent('1d8 + 4 Slashing');
+      expect(screen.getByTestId('ae-magical-weapon:mw1:0')).toHaveTextContent('Magic · Weapon, +1');
+    });
+
     it('tags the bow with its source and leaves the dagger untagged', () => {
       archer();
       expect(screen.getByTestId('ae-magical-weapon:lb1:0')).toHaveTextContent('Magic · Magic Arrow');

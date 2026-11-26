@@ -50,6 +50,9 @@ import {
   EQUIPPABLE_CATEGORIES,
   ATTUNABLE_CATEGORIES,
   MAX_ATTUNED,
+  isMagicWeaponItem,
+  buildMagicWeaponEntry,
+  magicDisplayName,
 } from '@/characters/components/inventory/inventoryData';
 import {
   weaponBondCapacity, bondedWeaponUids, isWeaponBonded, toggleBondedWeapon, WEAPON_BOND_NOTE,
@@ -141,6 +144,8 @@ export default function InventoryTab({
   const [activeId, setActiveId] = useState(CATEGORIES[0].id);
   // picker = { category (config obj), filter, defaultQty } | null
   const [picker, setPicker] = useState(null);
+  // A magic weapon ("Weapon, +1") picked from Magic Items, waiting for the GM to choose its base weapon.
+  const [pendingMagicWeapon, setPendingMagicWeapon] = useState(null);
 
   // Weapons are individual items (no stacking) — normalize so a "Handaxe ×2" stack shows
   // as two separate rows; then migrate any legacy `equipped` weapons/shields into hand
@@ -217,7 +222,11 @@ export default function InventoryTab({
   const openTabPicker = () => {
     const categoryId = activeId === 'tools' ? 'adventuring-gear' : activeId;
     const cfg = getItemCategory(categoryId) ?? activeCategory;
-    const filter = activeId === 'adventuring-gear' ? (it) => !isAmmoItem(it) : null;
+    // A magic WEAPON is stocked like any weapon — by the GM only (items deep dive T2), so a player's Magic Items
+    // picker leaves those out.
+    const filter = activeId === 'adventuring-gear' ? (it) => !isAmmoItem(it)
+      : activeId === 'magic-items' && !isGm ? (it) => !isMagicWeaponItem(it)
+      : null;
     setPicker({ category: cfg, filter, defaultQty: null });
   };
   const openAmmoPicker = () => setPicker({
@@ -227,6 +236,11 @@ export default function InventoryTab({
   });
 
   const handleAdd = (item) => {
+    if ((picker?.category?.id ?? activeId) === 'magic-items' && isMagicWeaponItem(item)) {
+      setPicker(null);
+      setPendingMagicWeapon(item); // next: which weapon is it?
+      return;
+    }
     const qty = picker?.defaultQty ? picker.defaultQty(item) : 1;
     push([...inventory, buildEntry(picker?.category?.id ?? activeId, item, qty)]);
     setPicker(null);
@@ -322,7 +336,7 @@ export default function InventoryTab({
             <option value="">Free hand</option>
             {options.map((it) => (
               <option key={it.uid} value={it.uid}>
-                {it.name}{isTwoHandedWeapon(it) ? ' (two-handed)' : isShieldEntry(it) ? ' (shield)' : ''}
+                {magicDisplayName(it)}{isTwoHandedWeapon(it) ? ' (two-handed)' : isShieldEntry(it) ? ' (shield)' : ''}
               </option>
             ))}
           </select>
@@ -407,6 +421,11 @@ export default function InventoryTab({
                   </div>
                   {a.warning && (
                     <span className="text-[11px] text-amber-600 leading-tight" data-testid={`attack-warning-${a.uid}`}>{a.warning}</span>
+                  )}
+                  {a.magicBonus > 0 && (
+                    <span className="text-[11px] text-emerald-600 leading-tight" data-testid={`attack-magic-bonus-${a.uid}`}>
+                      Includes +{a.magicBonus} to attack and damage from {a.magical?.source || 'the magic weapon'}.
+                    </span>
                   )}
                   {a.styleNotes?.length > 0 && (
                     <span className="text-[11px] text-emerald-600 leading-tight" data-testid={`attack-style-${a.uid}`}>
@@ -572,7 +591,7 @@ export default function InventoryTab({
                   <div className={cn('w-1.5 h-9 rounded-full shrink-0', activeCategory.accent)} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-medium text-sm">{e.name}</span>
+                      <span className="font-medium text-sm">{magicDisplayName(e)}</span>
                       {isHandCapable(e) && e.hand ? (
                         <Badge className="text-xs bg-emerald-600 text-white" data-testid={`hand-badge-${e.uid}`}>{HAND_LABELS[e.hand]}</Badge>
                       ) : e.equipped ? (
@@ -803,6 +822,15 @@ export default function InventoryTab({
         filter={picker?.filter}
         onClose={() => setPicker(null)}
         onAdd={handleAdd}
+      />
+      {/* Second step of adding a magic weapon: the GM picks the base weapon it is ("any weapon" for now). */}
+      <ItemPickerDialog
+        category={getItemCategory('weapons')}
+        campaignId={campaignId}
+        open={!!pendingMagicWeapon}
+        title={pendingMagicWeapon ? `Which weapon is the ${pendingMagicWeapon.name}?` : undefined}
+        onClose={() => setPendingMagicWeapon(null)}
+        onAdd={(base) => push([...inventory, buildMagicWeaponEntry(pendingMagicWeapon, base)])}
       />
     </div>
   );

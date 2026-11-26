@@ -11,7 +11,7 @@ weight/ammo/custom loot. Origin: post-deploy ticket T4 "Items deep dive" ([post-
 16 Wand, 12 Staff, 11 Scroll, 6 Rod, 5 Ammunition) + `docs/systems/inventory.md` › "Remaining polish". From T2 on, the
 machine worklist is the magic-item coverage report T2 creates (same shape as `report_feat_effects.py`).
 
-**Status:** 1/9 done.
+**Status:** 2/9 done.
 
 **What exists today** (read `docs/systems/inventory.md` first): the Items tab adds encyclopedia items per category with
 quantity / equip / **attune toggle** / remove; AC comes from equipped armor and attack rows from equipped weapons
@@ -37,7 +37,11 @@ Standalone data fix, not part of the pattern below.
 - done: Encyclopedia › Magic Items shows no potions; Potions shows all of them once; a character who owned a magic-item
   potion still has it (now under Potions). **Release needs backup + rehearsal (deletes prod rows).**
 
-## T2 — Vertical slice: "Weapon, +1" equipped and attacking  ⬜
+## T2 — Vertical slice: "Weapon, +1" equipped and attacking  ✅ (code done 2026-11-25)
+- **Grill GO + Robert's calls:** a magic weapon is stored as a WEAPONS entry (base weapon snapshot, base `name`) plus a
+  `magic` block — so the 39 `category === 'weapons'/'armor'` checks needed no change; adding one is **GM-only** (same
+  rule as weapons); the base-weapon picker offers **any weapon** for now (per-item narrowing is later data). The
+  coverage report moved to T6, where the remaining items are walked.
 Proves the new mechanism under its hardest case: a generic magic item that needs a BASE item.
 - deps: none (T1 independent). **Run `/grill` first** — this is a new abstraction (magic-item effects ≈ feat effects).
 - design to settle in the grill: (a) `magic_items.effects` JSONB (additive migration) authored in the seed, reusing the
@@ -49,8 +53,7 @@ Proves the new mechanism under its hardest case: a generic magic item that needs
   base weapon), `getAttacks` (bonus folded into to-hit/damage, the TOTAL coloured with the source named; a
   `MAGIC_ATTACK_SOURCES` entry so the badge says "Magic · Weapon, +1"), `BreakdownValue` terms.
 - guard: backend round-trip test for `effects`; frontend tests — held +1 longsword raises to-hit/damage on BOTH Items
-  tab and Action Economy (one resolution point), not held → no bonus, badge present; a magic-item coverage report +
-  ratchet baseline (`report_magic_item_effects`), started here.
+  tab and Action Economy (one resolution point), not held → no bonus, badge present.
 - done: in the app — add "Weapon, +1" as a Longsword, hold it, see +1 to hit and damage with the breakdown, the Magic
   badge, same numbers in Action Economy; drop it from the hand and the bonus goes.
 
@@ -85,7 +88,8 @@ Proves the new mechanism under its hardest case: a generic magic item that needs
 
 ## T6 — Replication: author the remaining stat-bearing magic items  ⬜
 - deps: T3, T5
-- scope: walk the coverage report's PENDING list; each is a data row. Items whose effect needs a model the app lacks
+- scope: build the magic-item coverage report + ratchet baseline (`report_magic_item_effects`, moved here from T2),
+  then walk its PENDING list; each is a data row. Items whose effect needs a model the app lacks
   (charges with spells, sentience, conditions, distance/target) go to Robert as a prose-only sign-off list with the
   MISSING MODEL named (CLAUDE.md › Prose-only needs sign-off) — never self-assigned "narrative".
 - guard: bump the baseline per batch.

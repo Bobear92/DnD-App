@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, JSON, Enum as SQLEnum
 from sqlalchemy.sql import func
 from shared.database import Base
 from shared.enums import OwnerType
@@ -19,6 +19,12 @@ class MagicItem(Base):
     weight = Column(String(50), nullable=True)
 
     description = Column(Text)
+
+    # Structured mechanical effects (items deep dive T2) — what the item DOES on the sheet, read by the frontend
+    # resolvers. Same idea as feats.effects. Kinds so far:
+    #   {kind: 'weapon_bonus', amount: N}   +N to attack and damage rolls with this magic weapon
+    # NULL = no structured effects yet (prose only).
+    effects = Column(JSON, nullable=True)
 
     owner_type = Column(SQLEnum(OwnerType), nullable=False, default=OwnerType.system)
     owner_id = Column(Integer, nullable=True)

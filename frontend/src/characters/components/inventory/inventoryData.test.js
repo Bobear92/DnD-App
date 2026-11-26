@@ -1049,3 +1049,61 @@ describe('getAttacks — reach', () => {
     expect(getAttacks({ ...base, level: 18 })[0].reach).toBeNull();
   });
 });
+
+// ─── Magic weapons (items deep dive T2) ─────────────────────────────────────────
+import {
+  buildMagicWeaponEntry, isMagicWeaponItem, weaponBonusFromEffects, magicDisplayName,
+  computeAttack as computeAttackMagic, getAttacks as getAttacksMagic,
+} from '@/characters/components/inventory/inventoryData';
+
+describe('magic weapons', () => {
+  const plusOne = { id: 51, name: 'Weapon, +1', rarity: 'Uncommon', attunement_required: false,
+    effects: [{ kind: 'weapon_bonus', amount: 1 }] };
+  const baseLongsword = { id: 9, name: 'Longsword', weapon_category: 'Martial', weapon_type: 'Melee',
+    damage: '1d8', damage_type: 'Slashing', properties: '["Versatile (1d10)"]', owner_type: 'system' };
+  const scores = { strength: 16, dexterity: 10 };
+
+  it('builds a WEAPONS entry that stays a Longsword and carries the item as `magic`', () => {
+    const e = buildMagicWeaponEntry(plusOne, baseLongsword);
+    expect(e.category).toBe('weapons');
+    expect(e.name).toBe('Longsword'); // every rule keyed on the weapon's name keeps working
+    expect(e.source_id).toBe(9);
+    expect(e.magic).toEqual({ item_id: 51, item_name: 'Weapon, +1', rarity: 'Uncommon',
+      attunement_required: false, effects: [{ kind: 'weapon_bonus', amount: 1 }] });
+    expect(magicDisplayName(e)).toBe('Longsword, +1');
+  });
+
+  it('recognises a magic weapon item by its weapon_bonus effect', () => {
+    expect(isMagicWeaponItem(plusOne)).toBe(true);
+    expect(isMagicWeaponItem({ name: 'Flame Tongue', effects: null })).toBe(false);
+    expect(weaponBonusFromEffects([{ kind: 'weapon_bonus', amount: 3 }])).toBe(3);
+  });
+
+  it('adds the bonus to attack AND damage, named after the item in both breakdowns', () => {
+    const plain = computeAttackMagic({ ...baseLongsword }, { scores, level: 1, proficient: true });
+    const magic = computeAttackMagic(buildMagicWeaponEntry(plusOne, baseLongsword), { scores, level: 1, proficient: true });
+    expect(plain.toHit).toBe('+5');
+    expect(magic.toHit).toBe('+6');
+    expect(magic.damage).toBe('1d8 + 4 Slashing');
+    expect(magic.toHitBreakdown).toContainEqual({ label: 'Weapon, +1', value: 1 });
+    expect(magic.damageBreakdown).toContainEqual({ label: 'Weapon, +1', value: 1 });
+    expect(magic.name).toBe('Longsword, +1');
+    expect(magic.magicBonus).toBe(1);
+  });
+
+  it('an item that needs attunement does nothing until attuned', () => {
+    const needsAttune = { ...plusOne, name: 'Weapon of Testing', attunement_required: true };
+    const entry = buildMagicWeaponEntry(needsAttune, baseLongsword);
+    expect(computeAttackMagic(entry, { scores, proficient: true }).toHit).toBe('+5');
+    expect(computeAttackMagic({ ...entry, attuned: true }, { scores, proficient: true }).toHit).toBe('+6');
+  });
+
+  it('only a HELD magic weapon makes an attack row, and that row is marked magical by the item', () => {
+    const held = { ...buildMagicWeaponEntry(plusOne, baseLongsword), equipped: true, hand: 'main' };
+    const rows = getAttacksMagic({ inventory: [held], scores, level: 1, weaponProfText: 'Simple weapons, martial weapons' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].toHit).toBe('+6');
+    expect(rows[0].magical).toEqual(expect.objectContaining({ source: 'Weapon, +1' }));
+    expect(getAttacksMagic({ inventory: [{ ...held, equipped: false, hand: null }], scores })).toHaveLength(0);
+  });
+});

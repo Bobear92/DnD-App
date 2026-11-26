@@ -12,6 +12,8 @@ backend/tests/
                                     #   ".." filenames; R2Storage against a fake S3 client (put key/content-type/cache header, delete reports
                                     #   existence, folder delete paginates and spares "1/20" when deleting "1/2", non-404 errors raised);
                                     #   backend selection (tests on local temp storage, r2 fails fast naming missing creds). Deploy ticket T4
+├── test_magic_item_effects.py     # 3 tests: items deep dive T2 — magic_items.effects round-trips through list + detail and
+                                    #   update (null by default); seed_items authors weapon_bonus for "Weapon, +1/+2/+3", null otherwise
 ├── test_potions_move.py           # 4 tests: items deep dive T1 — seed_items sends API potions to Potions (curated name skipped,
                                     #   re-run settles); migration ebff797e3878 moves system potion rows, re-points owned potions
                                     #   (uid/qty kept), leaves real magic items + campaign homebrew alone, re-run is a no-op

@@ -212,6 +212,7 @@ def seed_magic_items(db, client, delay=0.03, failures=None) -> Counter:
             "cost": None,
             "weight": None,
             "description": None,
+            "effects": MAGIC_ITEM_EFFECTS.get(name),
         })
         counts[status] += 1
         if i % 25 == 0:
@@ -259,6 +260,14 @@ POTIONS = [
 ]
 
 CURATED_POTION_NAMES = {p["name"] for p in POTIONS}
+
+# Structured effects for API magic items, by name (items deep dive). The API has the prose only; this is what the
+# sheet computes from. A name not listed here seeds with effects=None (prose only).
+MAGIC_ITEM_EFFECTS = {
+    "Weapon, +1": [{"kind": "weapon_bonus", "amount": 1}],
+    "Weapon, +2": [{"kind": "weapon_bonus", "amount": 2}],
+    "Weapon, +3": [{"kind": "weapon_bonus", "amount": 3}],
+}
 
 FOOD_DRINK = [
     {"name": "Ale (Mug)", "item_type": "Drink", "category": "Tavern", "cost": "4 cp", "weight": "—"},
