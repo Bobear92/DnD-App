@@ -191,20 +191,21 @@ class TestSeedItems:
 
     def test_a_name_listed_twice_by_the_api_settles_instead_of_flip_flopping(self, db):
         # The real API lists "Potion of Healing" twice; without first-wins, every run rewrote the row.
-        def potion(rarity):
-            return {"name": "Potion of Healing", "equipment_category": {"name": "Potion"},
-                    "rarity": {"name": rarity}, "desc": [f"{rarity} healing."]}
+        # (Potions now seed into Potions and Healing is curated, so a non-potion name stands in.)
+        def ring(rarity):
+            return {"name": "Ring of Warmth", "equipment_category": {"name": "Ring"},
+                    "rarity": {"name": rarity}, "desc": [f"{rarity} warmth."]}
         api = FakeApi({
-            "/api/magic-items": {"results": [{"index": "poh", "name": "Potion of Healing"},
-                                             {"index": "poh-common", "name": "Potion of Healing"}]},
-            "/api/magic-items/poh": potion("Uncommon"),
-            "/api/magic-items/poh-common": potion("Common"),
+            "/api/magic-items": {"results": [{"index": "row", "name": "Ring of Warmth"},
+                                             {"index": "row-common", "name": "Ring of Warmth"}]},
+            "/api/magic-items/row": ring("Uncommon"),
+            "/api/magic-items/row-common": ring("Common"),
         })
         seed_items.seed_magic_items(db, api, delay=0)
         second = seed_items.seed_magic_items(db, api, delay=0)
         assert second[UPDATED] == 0 and second[UNCHANGED] == 1 and second["skipped"] == 1
         from shared.encyclopedia.items.magic_items.models import MagicItem
-        assert _system(db, MagicItem, "Potion of Healing")[0].rarity == "Uncommon"  # first record wins
+        assert _system(db, MagicItem, "Ring of Warmth")[0].rarity == "Uncommon"  # first record wins
 
     def test_curated_lists_are_idempotent(self, db):
         first = seed_items.seed_curated(db)

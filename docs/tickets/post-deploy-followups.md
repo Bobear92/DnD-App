@@ -45,7 +45,8 @@ hardening (upload Content-Type, login rate limit/password minimum, /docs).
   a Postmark sender (DKIM + Return-Path DNS), get the account approved, then set EMAIL_BACKEND/POSTMARK_SERVER_TOKEN/
   EMAIL_FROM/FRONTEND_URL/ADMIN_NOTIFY_EMAIL in Render (deployment.md). Was: needs an
   email provider and a reset-token table; nothing sends email today.
-- [ ] Items deep dive, incl. moving the 34 potion-type magic items into Potions (seed change + delete the prod rows).
+- [ ] Items deep dive — **now its own worklist: [items-deep-dive.md](items-deep-dive.md)** (potions cleanup, magic
+  weapons/armor, worn items + attunement, weight/ammo/custom loot; scope chosen by Robert 2026-11-25).
 - [x] Bug: the Locations "Upload failed" banner stays up after a later upload succeeds. (A failed upload now shows inside
   the Upload dialog — `upload-failure` — and is cleared by a retry, a new file, closing, or success; success also clears any
   stale page banner.)

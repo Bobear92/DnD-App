@@ -12,6 +12,9 @@ backend/tests/
                                     #   ".." filenames; R2Storage against a fake S3 client (put key/content-type/cache header, delete reports
                                     #   existence, folder delete paginates and spares "1/20" when deleting "1/2", non-404 errors raised);
                                     #   backend selection (tests on local temp storage, r2 fails fast naming missing creds). Deploy ticket T4
+├── test_potions_move.py           # 4 tests: items deep dive T1 — seed_items sends API potions to Potions (curated name skipped,
+                                    #   re-run settles); migration ebff797e3878 moves system potion rows, re-points owned potions
+                                    #   (uid/qty kept), leaves real magic items + campaign homebrew alone, re-run is a no-op
 ├── test_password_reset.py         # 16 tests: post-deploy T4 — forgot-password reply identical for known/unknown emails, link
                                     #   to FRONTEND_URL, only the hash stored, case-insensitive, newer link revokes older, throttle
                                     #   (also for unknown emails); reset works once, expired/garbage fail, 8-char min (refusal doesn't

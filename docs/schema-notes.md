@@ -412,6 +412,14 @@ food_drink
     armor 13, adventuring_gear 116, magic_items 362, potions 40, food_drink 8. (A one-time cleanup removed
     59 corrupt magic-weapon/armor duplicate rows — empty category + mojibake fields — that already existed
     in magic_items and were 500-ing the weapons/armor list endpoints.)
+  Potions (items deep dive T1, 2026-11-25; Robert: potion-type items belong under Potions): the API files
+    potions/oils/philters under /api/magic-items. seed_items now upserts a potion-category record into
+    `potions` (cost "—", weight "0.5 lb.", duration NULL) and skips a name that has a curated POTIONS row.
+    Migration ebff797e3878 moved what was stored: each system magic_items row with item_type 'Potion' got a
+    system potions row of its name (existing curated rows kept), owned inventory snapshots were re-pointed
+    (category 'potions', new source_id, item_type/attunement_required dropped, uid/quantity kept), then the
+    system rows were deleted. Campaign homebrew potions under magic_items were left alone. Its downgrade is
+    a no-op on purpose. magic_items is now 322 system rows, none of type Potion.
 ```
 
 **Note:** Encyclopedia tables (spells, creatures, all item tables) DO have `owner_type`/`owner_id` and

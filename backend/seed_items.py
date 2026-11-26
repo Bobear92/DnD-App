@@ -1,7 +1,10 @@
 """
 Seed script: populates the encyclopedia item tables (weapons, armor, adventuring
-gear, magic items) from the D&D 5e API, plus a curated set of potions and food/drink
-(the SRD API does not cleanly expose those).
+gear, magic items, potions) from the D&D 5e API, plus curated potions and food/drink.
+
+The API files potions under magic items; they are seeded into the POTIONS table instead (items
+deep dive T1 — Robert: potion-type items belong under Potions). The curated POTIONS rows below
+have hand-written effect/duration text and win over the API record of the same name.
 
 Run: python seed_items.py
 
@@ -156,8 +159,16 @@ def seed_equipment(db, client, delay=0.03, failures=None) -> Counter:
     return counts
 
 
+def _is_potion(data: dict) -> bool:
+    cat = data.get("equipment_category") or {}
+    return (cat.get("index") or "").lower() == "potion" or (cat.get("name") or "").lower() == "potion"
+
+
 def seed_magic_items(db, client, delay=0.03, failures=None) -> Counter:
-    """Failure handling as in seed_equipment."""
+    """
+    Failure handling as in seed_equipment. A potion-category record is seeded into Potions, not
+    Magic Items, and skipped entirely when a curated POTIONS row of that name exists.
+    """
     counts = Counter()
     failures = [] if failures is None else failures
     listing = _fetch(client, "/api/magic-items")
@@ -179,6 +190,20 @@ def seed_magic_items(db, client, delay=0.03, failures=None) -> Counter:
         if data is None:
             continue
         effect = _desc(data)
+        if _is_potion(data):
+            if name in CURATED_POTION_NAMES:
+                counts["skipped"] += 1
+                continue
+            _, status = upsert_system_row(db, Potion, {"name": name}, {
+                "rarity": (data.get("rarity") or {}).get("name") or "Unknown",
+                "effect": effect or name,
+                "duration": None,
+                "cost": "—",
+                "weight": "0.5 lb.",
+                "description": None,
+            })
+            counts[status] += 1
+            continue
         _, status = upsert_system_row(db, MagicItem, {"name": name}, {
             "item_type": (data.get("equipment_category") or {}).get("name") or "Wondrous Item",
             "rarity": (data.get("rarity") or {}).get("name") or "Unknown",
@@ -232,6 +257,8 @@ POTIONS = [
     {"name": "Potion of Climbing", "rarity": "Common", "effect": "You gain a climbing speed equal to your walking speed. You can climb difficult surfaces, including upside down on ceilings, without making an ability check. You also gain advantage on Strength (Athletics) checks made to climb.", "duration": "1 hour", "cost": "75 gp", "weight": "0.5 lb."},
     {"name": "Potion of Water Breathing", "rarity": "Uncommon", "effect": "You can breathe underwater for 1 hour.", "duration": "1 hour", "cost": "180 gp", "weight": "0.5 lb."},
 ]
+
+CURATED_POTION_NAMES = {p["name"] for p in POTIONS}
 
 FOOD_DRINK = [
     {"name": "Ale (Mug)", "item_type": "Drink", "category": "Tavern", "cost": "4 cp", "weight": "—"},

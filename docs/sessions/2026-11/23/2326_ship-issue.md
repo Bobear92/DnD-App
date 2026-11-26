@@ -3,14 +3,14 @@ session_id: 05c19ffe-a208-44cb-8b78-2114ea1032e2
 title: Post-deploy tickets T2-T6, releases v0.2-v0.4
 date: 2026-11-23
 started: 23:26
-branch: feature/location-links-visibility
+branch: feature/items-potions
 area: backend
-tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule, auth]
+tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule, auth, seed-data, items-tab, data-safety]
 issues: []
-summary: /ship-it; T2→v0.2.0; T3→v0.3.0; API client→v0.3.1; password reset→v0.4.0; location links GM-only
-turns: 46
+summary: T2→v0.2.0; T3→v0.3.0; API client→v0.3.1; password reset→v0.4.0; links GM-only; items worklist + potions
+turns: 51
 stepped_in: true
-last_uuid: 16be384d-e377-4a17-bb03-091bc50faefb
+last_uuid: 1e50d5a4-c260-4c5d-ba8a-b4a777fba5f5
 ---
 
 # Post-deploy tickets T2-T6, releases v0.2-v0.4
@@ -103,7 +103,14 @@ last_uuid: 16be384d-e377-4a17-bb03-091bc50faefb
   unchanged, migration b24c002b0ad5 → a01182d8bd3b). Live checks passed, new bundle `index-CCHqBOk_.js`.
 - **T6 location links leak** on `feature/location-links-visibility`: `get_links` is now GM-only (no frontend reads
   links; they carry GM notes and point at hidden NPCs/loot tables with no visibility flag). Test
-  `TestLocationLinksAreGmOnly` (fails on old code); api.md, backend-tests.md, ticket updated. Unreleased.
+  `TestLocationLinksAreGmOnly` (fails on old code); api.md, backend-tests.md, ticket updated. Shipped `27a04bc`.
+- **Items deep dive worklist** (`/to-tickets`): Robert picked all four areas (potions, magic weapons/armor, worn items +
+  attunement, weight/ammo/custom loot) → `docs/tickets/items-deep-dive.md`, 9 tickets; T2 ("Weapon, +1") is the
+  vertical slice for a new magic-item effects mechanism and starts with `/grill`.
+- **Items T1 — potions only under Potions** on `feature/items-potions`: `seed_items` routes API potion-category records
+  into Potions (curated names skipped); migration `ebff797e3878` creates missing Potions rows, re-points owned
+  inventory snapshots, deletes the system potion rows from magic_items (homebrew kept; downgrade no-op).
+  `test_potions_move.py` (4). Dev: magic 362→322, potions 40. Unreleased (release with T2: one backup).
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -141,6 +148,12 @@ last_uuid: 16be384d-e377-4a17-bb03-091bc50faefb
 
 ## Decisions
 
+- Items deep dive: magic items are generic text rows ("Weapon, +1", no base weapon), so weapons/armor/worn items share one
+  new mechanism (structured effects + base item) proven on "Weapon, +1" before replication.
+- T8 (ammo auto-spend) and T9 (custom loot) left as Robert's calls — the app never rolls attacks, and custom-loot
+  permissions/effects are undecided.
+- Release T1 together with T2 (one backup + rehearsal for both migrations); cut earlier if T2 drags.
+
 - Renamed rather than looking for a setting to disable the built-in: a rename is robust whatever the extension version does.
 - Picked `/ship-it`, the name proposed last session.
 - Kept old retros and session logs saying `/ship`, since they are history.
@@ -171,9 +184,11 @@ last_uuid: 16be384d-e377-4a17-bb03-091bc50faefb
 ## Open threads
 
 - Robert's Windows PATH still has one empty entry (entry 39). It's harmless to the project and only the built-in `/ship` checks it. Cleaning it up is optional.
-- Production is v0.4.0. Unreleased on main after this ship: location links GM-only (bundle with the next release; no
-  migration).
-- Next on the ticket in order: T4 items deep dive (start with `/to-tickets`), then T6 (send only changed
+- Production is v0.4.0. Unreleased on main: location links GM-only (27a04bc) and items T1 potions (DESTRUCTIVE data
+  migration ebff797e3878 → backup + rehearsal; expect prod potions 6 → ~40, magic_items −40).
+- Next: items T2 — run `/grill` on the magic-item effects design (effects JSONB on magic_items, base_item on the
+  inventory entry, one `itemEffects` resolver gated on equipped/attuned), then build "Weapon, +1".
+- After the items deep dive, T6 (send only changed
   character_data keys, CalendarTab flake, CampaignSelection.css → Tailwind, unused `is_admin` param, R2 backups,
   Python 3.14 vs 3.12, upload quota), T5 Smoke-test campaign decision, DB upgrade before January.
 - Robert's browser smoke test of v0.4.0: save + reload a character, open a portrait/map, try Forgot password.
@@ -1021,3 +1036,80 @@ last_uuid: 16be384d-e377-4a17-bb03-091bc50faefb
 > - **New test:** in [test_security_leaks.py](backend/tests/test_security_leaks.py). A player gets refused and never sees the note, and th …
 
 **Commands run:** 7
+
+### 47. 2026-11-25 19:32
+
+**Robert:**
+> /ship-it
+
+**Claude:**
+> Shipped: `main` is at **27a04bc** and pushed. The fix makes listing location links GM-only, and the feature branch is deleted.
+> 
+> **Verified:**
+> - **Tests:** 4,015 frontend tests and 1,187 backend tests pass, including the new one. The feat coverage gate passes.
+> - **Running app:** the GM still gets the links list (200), and a request with no login is refused (401). Your dev campaign has no player accounts, so the player refusal is checked by the new test, not in the app.
+> 
+> The session log is filled in, with a new `auth` tag added to the tag list.
+> 
+> **Not released yet.** Production is still v0.4.0. This fix has no migration, so I'd bundle it into the next release rather than releasing it on its own.
+> 
+> Next on the list in order is the **items deep dive**, which I'd start with `/to-tickets`. When you have a minute, please also do the v0.4.0 browser smoke test: save and reload a character, open a …
+
+**Commands run:** 12
+
+### 48. 2026-11-25 19:37
+
+**Robert:**
+> /to-tickets
+
+**Claude:**
+> I've written the items worklist: [docs/tickets/items-deep-dive.md](docs/tickets/items-deep-dive.md), with 9 tickets covering the four areas you picked. The post-deploy ticket now links to it. Nothing is committed; it's on the branch `feature/items-deep-dive-tickets`.
+> 
+> **What I found:** magic items in the encyclopedia are generic. "Weapon, +1" or "Ring of Protection" have no base weapon, and their bonus exists only as text. A magic item also can't be equipped as a weapon or armor today, and the attune toggle has no limit and doesn't change anything. So magic weapons, armor and worn items all need one new mechanism first: **structured magic-item effects**, much like feat effects.
+> 
+> **The order:**
+> 1. **T1, potions only under Potions:** a standalone data fix. Before deleting anything, any character who owns a potion from Magic Items gets moved to the matching Potions entry. Releasing it will …
+
+**Files edited:** `docs/tickets/items-deep-dive.md` · **Commands run:** 7
+
+### 49. 2026-11-25 19:42
+
+**Robert:**
+> Start with T1
+
+**Claude:**
+> T1's code is done and works on dev: potions now live only under Potions. Nothing is committed; it's on the branch `feature/items-potions`. The full backend test run (about 12 minutes) is going in the background, and I'll report the result when it finishes.
+> 
+> **What changed:**
+> - **The seed** ([seed_items.py](backend/seed_items.py)): potions, oils and philters from the D&D API now go into **Potions** instead of Magic Items. The 6 hand-written potions (the healing potions, Climbing, Water Breathing) keep their own text.
+> - **A migration** ([ebff797e3878](backend/migrations/versions/ebff797e3878_move_potion_magic_items_into_potions.py)) moves what's already stored:
+>   1. It creates a Potions entry for any potion that only existed under Magic Items.
+>   2. Any character who owns one of those potions has it moved to the Potions entry, keeping quantity and its place in the inventory.
+>   3. It deletes …
+
+**Files edited:** `backend/migrations/versions/ebff797e3878_move_potion_magic_items_into_potions.py`, `backend/tests/test_potions_move.py` · **Commands run:** 23
+
+### 50. 2026-11-25 19:47
+
+**Robert:**
+> Should we release first or finish T2 then release?
+
+**Claude:**
+> I'd ship T1 to main now and release it together with T2.
+> 
+> - **One backup instead of two.** T1 deletes production rows, so its release needs the database IP rule, a backup and a rehearsal. T2 will almost certainly add a migration too (the new effects column), which would mean doing all of that again. Releasing them together covers both migrations with one round.
+> - **Nobody is waiting on it.** Production has very few users until January, and the duplicate potions are a tidiness problem, not a bug anyone is hitting.
+> - **It matches what you said earlier:** bundle small fixes into a later release. The location-links fix (27a04bc) is already waiting on main for the next release.
+> - **Shipping T1 now still matters.** It keeps main current, and T2 starts from a clean branch.
+> 
+> **The one reason to release T1 first:** if T2 drags on for weeks. T2 starts with `/grill` and a new mechanism, so it could …
+
+### 51. 2026-11-25 19:48
+
+**Robert:**
+> /ship-it
+
+**Claude:**
+> The session log is updated. Waiting on the backend suite before I commit.
+
+**Commands run:** 4
