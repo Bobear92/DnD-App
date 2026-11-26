@@ -1,19 +1,19 @@
 ---
 session_id: 05c19ffe-a208-44cb-8b78-2114ea1032e2
-title: /ship-it, T2 security, v0.2.0 release, T3 fixes
+title: Post-deploy tickets T2-T6, releases v0.2-v0.4
 date: 2026-11-23
 started: 23:26
-branch: feature/password-reset
+branch: feature/location-links-visibility
 area: backend
-tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule]
+tags: [tooling, docs, bugfix, security, deployment, campaign-tools, encyclopedia, migration, consolidation, user-rule, auth]
 issues: []
-summary: /ship→/ship-it; T2 → v0.2.0; T3 → v0.3.0; banner + API client → v0.3.1; password reset + account emails
-turns: 38
+summary: /ship-it; T2→v0.2.0; T3→v0.3.0; API client→v0.3.1; password reset→v0.4.0; location links GM-only
+turns: 46
 stepped_in: true
-last_uuid: 5b51fdf3-06dc-46f4-9886-024ff6894da4
+last_uuid: 16be384d-e377-4a17-bb03-091bc50faefb
 ---
 
-# /ship-it, T2 security, v0.2.0 release, T3 fixes
+# Post-deploy tickets T2-T6, releases v0.2-v0.4
 
 <!-- Claude fills the sections below with /log. area is one of: character-system, campaign-tools, encyclopedia, backend, tooling -->
 
@@ -99,6 +99,11 @@ last_uuid: 5b51fdf3-06dc-46f4-9886-024ff6894da4
   60-min, hash-only storage, 8-char min, signs out every earlier session (JWT `iat` vs password_changed_at). Welcome +
   admin notice (no email in it) on register. Frontend: Forgot link, /forgot-password, /reset-password pages.
   Tests: test_password_reset.py (16), ForgotPassword (4), ResetPassword (5), Login (+1). Verified live end to end.
+  Shipped `41224b1`; released as **v0.4.0** after a prod backup (`dnd-prod-20261125-1852.dump`) and rehearsal (counts
+  unchanged, migration b24c002b0ad5 → a01182d8bd3b). Live checks passed, new bundle `index-CCHqBOk_.js`.
+- **T6 location links leak** on `feature/location-links-visibility`: `get_links` is now GM-only (no frontend reads
+  links; they carry GM notes and point at hidden NPCs/loot tables with no visibility flag). Test
+  `TestLocationLinksAreGmOnly` (fails on old code); api.md, backend-tests.md, ticket updated. Unreleased.
 
 ## Where Claude struggled / where Robert stepped in
 
@@ -125,6 +130,10 @@ last_uuid: 5b51fdf3-06dc-46f4-9886-024ff6894da4
   log line was INFO, invisible under uvicorn; first fix-up script failed its assertion silently in a combined command and
   the suite run was hidden behind it — caught on re-check. Two Playwright script misfires (label substring, early fill).
   A Login slow-mock failure turned out to pre-exist on main (known harness artifact).
+- v0.4.0: `gh run watch` in the foreground hit the 10-minute tool timeout (backend CI takes ~12 min) — background it.
+- Location links: an inline Python edit on Windows wrote "…" and "—" in cp1252 (SyntaxError) — open files with
+  `encoding='utf-8'`. The new test was inserted after an assert that wasn't the last line of the previous test, so that
+  test's last two lines moved into the new one; one full-suite run wasted. Anchor insertions on the next `class`/`def`.
 - Client migration script left `;;` after each replaced client (kept the original `;`) — caught on diff review.
   SpellList's raw fetch was found only by grepping for leftover `localStorage.getItem('token')`; that grep is now the guard.
 - The Playwright check first clicked the campaign title (not "Enter Campaign"), so the page rendered as a non-GM and
@@ -151,30 +160,33 @@ last_uuid: 5b51fdf3-06dc-46f4-9886-024ff6894da4
 - `/docs` gated by its own `api_docs` setting rather than `debug`, because local `.env` has no DEBUG.
 - Invite search: option B (from the first letter, max 10) — Robert said "go in order" without picking; flagged as revisable.
 - "Played by" shown on every card that isn't yours (GM and players), not GM-only — usernames are already public to members.
+- Release v0.4.0 = MINOR (players notice the Forgot-password link) even though emails are only logged until Postmark.
+- Robert: buy the domain / go live on Postmark near January with the other paid upgrades. Meanwhile a locked-out
+  player's reset link can be copied from Render's backend logs (console email backend).
+- Location links: GM-only rather than filtered per link — there's no visibility model on links and no player UI; a
+  player view later means a per-link flag (same rule as Encounters).
 - The built-in `/ship` can't be deleted (it ships with Claude Code); disabled per-repo with `skillOverrides` instead of a
   prompt-blocking hook.
 
 ## Open threads
 
 - Robert's Windows PATH still has one empty entry (entry 39). It's harmless to the project and only the built-in `/ship` checks it. Cleaning it up is optional.
-- T2 slice 3: music upload Content-Type, login rate limit + password minimum, public `/docs`.
-- Logged on the ticket (T6): location links shown to players can point at hidden NPCs; `CampaignSelection.jsx` still
-  on legacy CSS (migrate to Tailwind).
+- Production is v0.4.0. Unreleased on main after this ship: location links GM-only (bundle with the next release; no
+  migration).
+- Next on the ticket in order: T4 items deep dive (start with `/to-tickets`), then T6 (send only changed
+  character_data keys, CalendarTab flake, CampaignSelection.css → Tailwind, unused `is_admin` param, R2 backups,
+  Python 3.14 vs 3.12, upload quota), T5 Smoke-test campaign decision, DB upgrade before January.
+- Robert's browser smoke test of v0.4.0: save + reload a character, open a portrait/map, try Forgot password.
 - `characters/service.py` functions still take an unused `is_admin` param (kept so callers didn't change) — drop it in
   a cleanup pass.
-- Released as v0.2.0. T3 (this ship) still needs a `/release`.
-- Next release should carry c5f292b (banner) + the shared API client together.
 - Postmark go-live (Robert): buy a domain (Cloudflare Registrar suggested), add Postmark DKIM + Return-Path records, get the
   account approved, then set EMAIL_BACKEND=postmark, POSTMARK_SERVER_TOKEN, EMAIL_FROM, FRONTEND_URL, ADMIN_NOTIFY_EMAIL
-  in Render. Until then production logs emails instead of sending. The password-reset release needs the migration
-  backup + rehearsal.
+  in Render — deferred to ~January. Until then production logs emails instead of sending.
 - Unsaved sheet edits are still lost on expiry; refresh tokens would fix it (deployment.md).
 - Verify the `skillOverrides` key actually disables `/ship` (listed as "ship-local (ship)"); if `/ship` still runs, the key
   name didn't match.
 - Player-side check of T3 Locations: make Yaara's world map visible, log in as a player.
-- Previously: T2 (all three slices) needed `/release`; the invites migration runs on deploy (`start.sh`). Existing
-  players stay members. After release, `/release`'s checks expect `/docs` → 404. Hand-test invite→accept with
-  SmokeTestPlayer.
+- Hand-test invite→accept with SmokeTestPlayer in production.
 - Local only: `backend/.env` now has `API_DOCS=true`; checking out a pre-slice-3 commit needs that line removed.
 
 ## Turn log
@@ -832,3 +844,180 @@ last_uuid: 5b51fdf3-06dc-46f4-9886-024ff6894da4
 > The backend suite is still running, and I'm waiting for it to finish before the last checks and the commit.
 
 **Commands run:** 2
+
+### 39. 2026-11-25 16:29
+
+**Robert:**
+> <task-notification>
+> <task-id>bsd39na8x</task-id>
+> <tool-use-id>toolu_017SJrfuSCLojPwkWEobkwhK</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\05c19ffe-a208-44cb-8b78-2114ea1032e2\tasks\bsd39na8x.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Make console emails visible; run full backend suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> Password reset and account emails are shipped: `main` is at **41224b1** and pushed to GitHub. The working tree is clean, and the branch is deleted; it was never pushed, so there was nothing to delete there. All 32 files from earlier are in that one commit.
+> 
+> **Checks before shipping:**
+> - **Tests:** they pass, 1,186 backend and 4,015 frontend, with 16 new backend tests and 10 new frontend tests for this feature. The build and the feat gate pass, and the database models match the migrations.
+> - **Real app:** I ran the whole flow on the test GM account, resetting its password to the same `password123`, so nothing changed for you. "Forgot password?" sent a link (it showed up in the backend log). Using it set the password, using it a second time was refused, and logging in afterwards worked.
+> 
+> Also, **v0.3.1 is live**: the bundle changed to `index-B3L5hwP1.js` and every live check passed.
+> 
+> **Abo …
+
+**Commands run:** 8
+
+### 40. 2026-11-25 18:32
+
+**Robert:**
+> /release
+
+**Claude:**
+> The release checks all pass. Before I can take the backup, I need you to open the database to this laptop for a few minutes.
+> 
+> **Checks so far:**
+> - `main` (41224b1) is pushed, CI passed, and `production` (v0.3.1) is directly behind it.
+> - The release is one commit: password reset and account emails.
+> - **Migration:** additive only. It adds a `password_reset_tokens` table and a nullable `users.password_changed_at` column. The "drop" lines are only in the rollback path.
+> - No seeds to run, and no change to how characters save.
+> - Live bundle right now: `index-B3L5hwP1.js`.
+> 
+> **Your step:** In Render, open the **database → Networking → Inbound IP Rules**, add `70.21.228.188/32`, and save. That's the same thing you did for the last backup. Tell me "saved".
+> 
+> Once it's saved, I'll take the dump without showing the connection URL and rehearse the migration on a local copy. Then I'll ask you to remove …
+
+**Commands run:** 3
+
+### 41. 2026-11-25 18:51
+
+**Robert:**
+> okay ip address update
+
+**Claude:**
+> I have the backup and the rehearsal passed. Please **remove the `70.21.228.188/32` rule** in Render now, since I'm done with the database.
+> 
+> **Backup:** saved as `C:\Users\rober\dnd-backups\dnd-prod-20261125-1852.dump` (380 KB).
+> 
+> **Rehearsal:** I restored that backup into a scratch local database and ran the migration. It ran from `b24c002b0ad5` to `a01182d8bd3b` with no errors. I've deleted the scratch database.
+> 
+> | | Users | Campaigns | Characters | Locations | Spells |
+> |---|---|---|---|---|---|
+> | Before | 2 | 2 | 3 | 2 | 322 |
+> | After | 2 | 2 | 3 | 2 | 322 |
+> 
+> The new column is empty for both users, so nobody gets signed out by the deploy.
+> 
+> ## Proposed release: **v0.4.0** (v0.3.1 → 41224b1)
+> 
+> **Features**
+> - **"Forgot password?" link on the login page.** It emails a link to choose a new password. The link works once and expires after an hour.
+> - **Resetting a password signs out every other …
+
+**Commands run:** 3
+
+### 42. 2026-11-25 18:56
+
+**Robert:**
+> yes
+
+**Claude:**
+> v0.4.0 is tagged and pushed: `production` now points at 41224b1. It isn't live yet. Production CI is still running: the frontend job passed and the backend job is still going. Render deploys about 10 minutes after CI passes.
+> 
+> While that runs, please make sure you **removed the `70.21.228.188/32` inbound rule** in Render.
+> 
+> Once the new bundle appears, I'll run the live checks (health, API docs off, login and the database, CORS, page routing) and report back.
+
+**Commands run:** 5
+
+### 43. 2026-11-25 19:09
+
+**Robert:**
+> okay what is next?
+
+**Claude:**
+> v0.4.0 is still waiting on production CI (the backend tests). I'll run the live checks when it finishes.
+> 
+> What's left on the ticket list, in order:
+> 
+> **T4**
+> - **Postmark go-live** (your part): buy a domain, add the DNS records, get the account approved, then add the settings in Render. Until then, reset emails are only logged.
+> - **Items deep dive**, including moving the 34 potion-type magic items into Potions. This is a big one: a seed change plus deleting those rows in production.
+> 
+> **T5: operations**
+> - **Database upgrade** before January.
+> - **"Smoke test" campaign:** keep it for release checks, or delete it?
+> - **Your local files:** optionally delete `C:\Users\rober\dnd-prod-db.env`, and keep `dnd-backups` off OneDrive.
+> 
+> **T6: engineering**
+> - **Location links leak (do this next):** they return their `notes` and the linked content to players, even for things the GM has hidden. That's a pri …
+
+**Commands run:** 1
+
+### 44. 2026-11-25 19:11
+
+**Robert:**
+> <task-notification>
+> <task-id>bmit9bnk9</task-id>
+> <tool-use-id>toolu_012SgvGvPbThFEYscvm7ytrb</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\05c19ffe-a208-44cb-8b78-2114ea1032e2\tasks\bmit9bnk9.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Watch production CI run until it finishes" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> **v0.4.0 is live.** Production CI passed, Render deployed it, and the new bundle `index-CCHqBOk_.js` is being served.
+> 
+> **Live checks, all as expected:**
+> - Health check: 200
+> - API docs: 404 (still off)
+> - Login with a bad password: 401, which means the database is reachable
+> - Forgot password: gives the same reply for an unknown email
+> - CORS: allows the site
+> - Page routes, including `/reset-password`: 200
+> 
+> **Your browser smoke test:**
+> 1. Log in, open a character, save it, reload it, and check nothing went missing.
+> 2. Open a portrait or a map.
+> 3. Click "Forgot password?" on the login page. The form should work. No email will arrive yet; that's expected.
+> 
+> **On the domain:** yes, waiting until January is fine.
+> - **Cost:** about **$10–15 a year** for a `.com`. Cloudflare sells at cost, about $10.50. Some endings cost more, and `.xyz` or `.app` deals can be cheaper in the first year.
+> - **Postmar …
+
+**Commands run:** 5
+
+### 45. 2026-11-25 19:13
+
+**Robert:**
+> Lets close the location-links leak
+
+**Claude:**
+> Nothing in the agents mentions the old behaviour. Waiting for the backend suite to finish.
+
+**Commands run:** 11
+
+### 46. 2026-11-25 19:26
+
+**Robert:**
+> <task-notification>
+> <task-id>bpuq6b3yc</task-id>
+> <tool-use-id>toolu_01Fk32vQdToCHXmjpG8rfvHG</tool-use-id>
+> <output-file>C:\Users\rober\AppData\Local\Temp\claude\045254e682df5b07\05c19ffe-a208-44cb-8b78-2114ea1032e2\tasks\bpuq6b3yc.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Run full backend test suite" completed (exit code 0)</summary>
+> </task-notification>
+
+**Claude:**
+> I've closed the location-links leak on the branch `feature/location-links-visibility`. Nothing is committed yet; it's ready for `/ship-it`.
+> 
+> **The fix:** only the GM can list a location's links now. Before, any player could fetch them on a visible location, including the GM's notes and links to hidden NPCs or loot tables. Players never saw links in the app (nothing in the frontend reads them), so nothing changes on their screens. It only closes the direct API route.
+> 
+> If you ever want players to see some links, the right way is to add a show/hide setting to each link, the same way locations and NPCs already work.
+> 
+> **Changes:**
+> - **The fix:** [service.py](backend/gm/campaigns/campaign_tools/locations/service.py#L526) now requires the GM for listing links.
+> - **New test:** in [test_security_leaks.py](backend/tests/test_security_leaks.py). A player gets refused and never sees the note, and th …
+
+**Commands run:** 7

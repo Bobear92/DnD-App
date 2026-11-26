@@ -26,10 +26,10 @@ backend/tests/
                                     #   member until accepting; decline/cancel; nobody else can accept/decline; no direct add route;
                                     #   duplicate/member/unknown-user invites refused; campaign delete clears invites); is_admin is not
                                     #   GM over characters; campaign classes + features writable by that campaign's GM only
-├── test_security_leaks.py          # 57 tests: post-deploy T2 slice 1 — all 12 compendium modules refuse a non-member the
+├── test_security_leaks.py          # 58 tests: post-deploy T2 slice 1 — all 12 compendium modules refuse a non-member the
                                     #   ?campaign_id list and a campaign row's detail (members + system rows still read); no emails in
                                     #   user search or member payloads; players can't list a hidden location's maps/NPCs/relationships/
-                                    #   links or a hidden map's pins; timeline/session/character events refuse another campaign's era
+                                    #   links or a hidden map's pins; location links are GM-only even on a visible location; timeline/session/character events refuse another campaign's era
 ├── test_security_review.py         # 15 tests: deploy-T10 security review regressions — a GM of campaign B can't reach A's
                                     #   maps/pins/NPC links/relationships/links by id under B's URL, nor link a pin to A's location;
                                     #   a music field pointed at another upload never deletes it (character/NPC/session); players

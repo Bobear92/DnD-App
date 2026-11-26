@@ -8,6 +8,8 @@ Anyone can register and create a campaign, so "a stranger" below is any account 
   - TestNoEmailsLeak: user search matches and returns usernames only; campaign member payloads carry no email.
   - TestHiddenLocationChildren: a player cannot list a hidden location's maps, NPCs, relationships or links, a
     hidden map's pins, or see a hidden location as the other side of a visible one's relationship.
+  - TestLocationLinksAreGmOnly: links (to NPCs, loot tables, creatures - with GM notes) have no visibility flag, so a
+    player cannot list them even on a visible location; the GM still can.
   - TestErasMustBeThisCampaigns: timeline events, sessions and character timeline events refuse another
     campaign's era id (with or without a year).
 """
@@ -200,6 +202,23 @@ class TestHiddenLocationChildren:
         assert [r["location_b_id"] for r in player_rels] == [other]
         gm_rels = client.get(f"{LOC(cid)}/{shown}/relationships", headers=h_gm).json()
         assert {r["location_b_id"] for r in gm_rels} == {hidden, other}
+
+
+class TestLocationLinksAreGmOnly:
+    def test_player_cannot_list_links_on_a_visible_location(self, client):
+        h_gm, _ = make_user(client, 1)
+        h_p, uid_p = make_user(client, 2)
+        cid = make_campaign(client, h_gm)
+        invite_player(client, h_gm, cid, uid_p)
+        shown = _location(client, h_gm, cid, "Town", visible=True)
+        r = client.post(f"{LOC(cid)}/{shown}/links",
+                        json={"content_type": "loot_table", "content_id": 7, "notes": "the real treasure"}, headers=h_gm)
+        assert r.status_code == 201, r.text
+        resp = client.get(f"{LOC(cid)}/{shown}/links", headers=h_p)
+        assert resp.status_code == 403
+        assert "the real treasure" not in resp.text
+        gm = client.get(f"{LOC(cid)}/{shown}/links", headers=h_gm)
+        assert gm.status_code == 200 and gm.json()[0]["notes"] == "the real treasure"
 
 
 def _era(client, h, cid):

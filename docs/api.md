@@ -133,7 +133,7 @@ System classes are seeded via `backend/seed_classes.py` (upserts — re-run to a
 | PATCH | /api/gm/campaigns/{id}/locations/{lid}/maps/{map_id}/visibility | Yes (GM) |
 | GET/POST | /api/gm/campaigns/{id}/locations/{lid}/maps/{map_id}/pins | Yes (member / GM) |
 | PUT/DELETE | /api/gm/campaigns/{id}/locations/{lid}/maps/{map_id}/pins/{pin_id} | Yes (GM) |
-| GET/POST/DELETE | /api/gm/campaigns/{id}/locations/{lid}/links | Yes (member / GM) |
+| GET/POST/DELETE | /api/gm/campaigns/{id}/locations/{lid}/links | Yes (GM only — links have no player visibility) |
 
 `gm_notes` is always stripped from location responses for players.
 

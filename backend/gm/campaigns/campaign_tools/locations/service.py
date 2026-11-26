@@ -524,8 +524,10 @@ def create_link(
 
 
 def get_links(db: Session, campaign_id: int, location_id: int, user_id: int) -> List[LocationLink]:
-    member = _require_member(db, campaign_id, user_id)
-    _get_readable_location(db, member, campaign_id, location_id)
+    # GM-only: a link (to an NPC, loot table, creature...) has no visibility flag of its own and carries GM notes, so
+    # showing it to players would leak hidden content. Give players a view later via a flag, not by loosening this.
+    _require_gm(db, campaign_id, user_id)
+    _get_campaign_location(db, campaign_id, location_id)
     return db.query(LocationLink).filter(LocationLink.location_id == location_id).all()
 
 

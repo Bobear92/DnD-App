@@ -71,5 +71,6 @@ hardening (upload Content-Type, login rate limit/password minimum, /docs).
 - [x] The two near-identical invite/member UIs are one `campaigns/components/MembersPanel.jsx` (T2 slice 2).
 - [ ] `CampaignSelection.jsx` still uses the legacy `CampaignSelection.css` — migrate to Tailwind and delete it (the
   new Invitations block there is already Tailwind).
-- [ ] Location links (`/locations/{id}/links`) return every `content_type`/`content_id` + `notes` to players on a
-  visible location, including links to hidden NPCs. Decide whether players should see links at all (security, low).
+- [x] Location links (`/locations/{id}/links`) returned every `content_type`/`content_id` + `notes` to players on a
+  visible location — **done 2026-11-25: listing links is GM-only** (no frontend reads them; links have no visibility
+  flag). A player view later = add a per-link visibility flag, not loosen the check.
